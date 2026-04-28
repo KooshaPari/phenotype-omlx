@@ -1,5 +1,20 @@
 version: "3"
 
+vars:
+  PROJECT_LANGUAGE:
+    sh: |
+      if [ -f pyproject.toml ]; then
+        echo python
+      elif [ -f package.json ]; then
+        echo node
+      elif [ -f go.mod ]; then
+        echo go
+      elif [ -f Cargo.toml ]; then
+        echo rust
+      else
+        echo unknown
+      fi
+
 tasks:
   default:
     desc: List available tasks
@@ -7,23 +22,78 @@ tasks:
       - task --list
 
   build:
-    desc: Build the Python package distribution
+    desc: Build the project using the detected language toolchain
     cmds:
-      - uv build
+      - |
+        case "{{.PROJECT_LANGUAGE}}" in
+          python)
+            uv build
+            ;;
+          node)
+            npm run build
+            ;;
+          go)
+            go build ./...
+            ;;
+          rust)
+            cargo build
+            ;;
+          *)
+            echo "No build command configured for {{.PROJECT_LANGUAGE}}" >&2
+            exit 1
+            ;;
+        esac
 
   test:
-    desc: Run the test suite
+    desc: Run the project test suite using the detected language toolchain
     cmds:
-      - uv run pytest
+      - |
+        case "{{.PROJECT_LANGUAGE}}" in
+          python)
+            uv run pytest
+            ;;
+          node)
+            npm test
+            ;;
+          go)
+            go test ./...
+            ;;
+          rust)
+            cargo test
+            ;;
+          *)
+            echo "No test command configured for {{.PROJECT_LANGUAGE}}" >&2
+            exit 1
+            ;;
+        esac
 
   lint:
-    desc: Run Ruff formatting and lint checks
+    desc: Run formatting and lint checks using the detected language toolchain
     cmds:
-      - uv run ruff check .
-      - uv run ruff format --check .
+      - |
+        case "{{.PROJECT_LANGUAGE}}" in
+          python)
+            uv run ruff check .
+            uv run ruff format --check .
+            ;;
+          node)
+            npm run lint
+            ;;
+          go)
+            go vet ./...
+            ;;
+          rust)
+            cargo fmt --check
+            cargo clippy --all-targets --all-features -- -D warnings
+            ;;
+          *)
+            echo "No lint command configured for {{.PROJECT_LANGUAGE}}" >&2
+            exit 1
+            ;;
+        esac
 
   clean:
     desc: Remove build artifacts and caches
     cmds:
       - find . -type d -name "__pycache__" -prune -exec rm -rf {} +
-      - find . -type d \( -name ".pytest_cache" -o -name ".ruff_cache" -o -name ".mypy_cache" -o -name "build" -o -name "dist" -o -name "*.egg-info" \) -prune -exec rm -rf {} +
+      - find . -type d \( -name ".pytest_cache" -o -name ".ruff_cache" -o -name ".mypy_cache" -o -name "build" -o -name "dist" -o -name "*.egg-info" -o -name "node_modules" -o -name "target" \) -prune -exec rm -rf {} +
