@@ -26,7 +26,7 @@ tasks:
     desc: Remove build artifacts and caches
     cmds:
       - |
-        python - <<'PY'
+        uv run --no-sync python - <<'PY'
         from pathlib import Path
         import shutil
 
