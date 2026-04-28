@@ -7,20 +7,20 @@ tasks:
       - task --list
 
   build:
-    desc: Build the Python package
+    desc: Build the Python package from pyproject.toml
     cmds:
-      - python -m build
+      - uv build
 
   test:
     desc: Run the pytest suite
     cmds:
-      - python -m pytest
+      - uv run --extra dev pytest
 
   lint:
     desc: Run Ruff lint and format checks
     cmds:
-      - python -m ruff check .
-      - python -m ruff format --check .
+      - uvx ruff check .
+      - uvx ruff format --check .
 
   clean:
     desc: Remove build artifacts and caches
