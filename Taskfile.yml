@@ -1,6 +1,11 @@
 version: "3"
 
 tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
   build:
     desc: Build the Python package distribution
     cmds:
@@ -12,12 +17,13 @@ tasks:
       - uv run pytest
 
   lint:
-    desc: Run Ruff linting
+    desc: Run Ruff formatting and lint checks
     cmds:
       - uv run ruff check .
+      - uv run ruff format --check .
 
   clean:
     desc: Remove build artifacts and caches
     cmds:
       - find . -type d -name "__pycache__" -prune -exec rm -rf {} +
-      - rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
+      - find . -type d \( -name ".pytest_cache" -o -name ".ruff_cache" -o -name ".mypy_cache" -o -name "build" -o -name "dist" -o -name "*.egg-info" \) -prune -exec rm -rf {} +
