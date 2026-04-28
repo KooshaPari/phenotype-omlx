@@ -7,12 +7,12 @@ tasks:
       - task --list
 
   build:
-    desc: Build the Python package from pyproject.toml
+    desc: Build the Python package from pyproject.toml with uv
     cmds:
       - uv build
 
   test:
-    desc: Run the pytest suite
+    desc: Run the Python pytest suite with dev dependencies
     cmds:
       - uv run --extra dev pytest
 
@@ -23,7 +23,7 @@ tasks:
       - uv run --extra dev ruff format --check .
 
   clean:
-    desc: Remove build artifacts and caches
+    desc: Remove Python build artifacts and test/lint caches
     cmds:
       - |
         uv run --no-sync python - <<'PY'
