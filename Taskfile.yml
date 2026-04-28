@@ -1,0 +1,23 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build the Python package distribution
+    cmds:
+      - uv build
+
+  test:
+    desc: Run the test suite
+    cmds:
+      - uv run pytest
+
+  lint:
+    desc: Run Ruff linting
+    cmds:
+      - uv run ruff check .
+
+  clean:
+    desc: Remove build artifacts and caches
+    cmds:
+      - find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+      - rm -rf .pytest_cache .ruff_cache .mypy_cache build dist *.egg-info
