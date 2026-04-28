@@ -25,6 +25,26 @@ tasks:
   clean:
     desc: Remove build artifacts and caches
     cmds:
-      - find . -type f \( -name "*.pyc" -o -name ".coverage" \) -delete
-      - find . -type d -name "__pycache__" -prune -exec rm -rf {} +
-      - find . -type d \( -name ".pytest_cache" -o -name ".ruff_cache" -o -name ".mypy_cache" -o -name "htmlcov" -o -name "build" -o -name "dist" -o -name "*.egg-info" \) -prune -exec rm -rf {} +
+      - |
+        python - <<'PY'
+        from pathlib import Path
+        import shutil
+
+        root = Path(".")
+        file_names = {".coverage"}
+        dir_names = {
+            "__pycache__",
+            ".pytest_cache",
+            ".ruff_cache",
+            ".mypy_cache",
+            "htmlcov",
+            "build",
+            "dist",
+        }
+
+        for path in root.rglob("*"):
+            if path.is_file() and (path.name in file_names or path.suffix == ".pyc"):
+                path.unlink()
+            elif path.is_dir() and (path.name in dir_names or path.name.endswith(".egg-info")):
+                shutil.rmtree(path)
+        PY
