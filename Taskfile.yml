@@ -17,10 +17,10 @@ tasks:
       - uv run --extra dev pytest
 
   lint:
-    desc: Run Ruff lint and format checks
+    desc: Run Ruff lint and format checks through the Python dev environment
     cmds:
-      - uvx ruff check .
-      - uvx ruff format --check .
+      - uv run --extra dev ruff check .
+      - uv run --extra dev ruff format --check .
 
   clean:
     desc: Remove build artifacts and caches
