@@ -33,7 +33,9 @@ class TestInstallDetection:
 class TestIsHomebrew:
     def test_not_homebrew_in_dev(self):
         """Dev/pip install should not detect as Homebrew."""
-        assert not is_homebrew()
+        with patch("omlx.utils.install.sys") as mock_sys:
+            mock_sys.prefix = "/opt/miniforge3/envs/omlx"
+            assert not is_homebrew()
 
     def test_cellar_prefix(self):
         """Homebrew Cellar path detected."""
@@ -67,5 +69,7 @@ class TestGetInstallMethod:
             assert get_install_method() == "homebrew"
 
     def test_pip_default(self):
-        """Default install method is pip."""
-        assert get_install_method() == "pip"
+        """Default install method is pip (when not in .app bundle or homebrew prefix)."""
+        with patch("omlx.utils.install.sys") as mock_sys:
+            mock_sys.prefix = "/opt/miniforge3/envs/omlx"
+            assert get_install_method() == "pip"
