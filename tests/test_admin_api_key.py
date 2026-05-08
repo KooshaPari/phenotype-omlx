@@ -48,6 +48,7 @@ class TestListModelsSettings:
             is_default=False,
             display_name="Test Model",
             description="A test model",
+            turboquant_skip_last=True,
         )
 
         mock_settings_manager = MagicMock()

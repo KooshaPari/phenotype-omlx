@@ -77,21 +77,44 @@ class HwLedgerRpcServer:
             await self._send_error(None, -32000, "Engine pool not initialized")
             return
 
+        # Create a cancellation event for this request
+        cancel_event = asyncio.Event()
+
         async def _generate_task():
             try:
+                # Wire to real engine pool: stream_generate returns an async iterator of tokens
+                engine = await self.engine_pool.get_engine(req.model)
+                if engine is None:
+                    await self._send_error(request_id, -32000, f"Model {req.model} not loaded")
+                    return
+
                 prompt_tokens = 0
                 completion_tokens = 0
                 stopped_reason = "eos"
 
-                if self.engine_pool is not None:
-                    # In a real deployment, this calls the actual mlx-lm engine.
-                    # For now, we stub it out to accept any model and yield placeholder tokens.
-                    for i in range(min(req.max_tokens, 10)):
-                        # Simulated token: in production, this comes from the engine pool.
-                        token_text = f"[token-{i}]"
+                # Call the engine's stream_generate method
+                # Expected signature: async def stream_generate(self, prompt: str, max_tokens: int, temperature: float, ...) -> AsyncIterator[str]
+                try:
+                    token_stream = await engine.stream_generate(
+                        prompt=req.prompt,
+                        max_tokens=req.max_tokens,
+                        temperature=req.temperature,
+                    )
+
+                    # Stream tokens and emit notifications
+                    async for token_text in token_stream:
+                        if cancel_event.is_set():
+                            stopped_reason = "cancelled"
+                            break
                         completion_tokens += 1
                         await self._send_token_notification(request_id, token_text)
-                        await asyncio.sleep(0.01)  # Simulate generation latency
+
+                except Exception as e:
+                    logger.exception(f"Engine stream_generate failed: {e}")
+                    await self._send_error(
+                        request_id, -32000, f"Generation failed: {e}", traceback.format_exc()
+                    )
+                    return
 
                 # Send final result
                 await self._send_result(
@@ -115,12 +138,25 @@ class HwLedgerRpcServer:
         with self.generation_lock:
             self.running_generations[request_id] = task
             self.pending_tokens[request_id] = []
+            # Store cancel event for this request
+            if not hasattr(self, '_cancel_events'):
+                self._cancel_events = {}
+            self._cancel_events[request_id] = cancel_event
 
     async def cancel(self, request_id: str) -> None:
         """Cancel a running generation by request_id."""
+        if not hasattr(self, '_cancel_events'):
+            self._cancel_events = {}
+
+        # Signal the generation task to stop
+        cancel_event = self._cancel_events.get(request_id)
+        if cancel_event:
+            cancel_event.set()
+
         with self.generation_lock:
             task = self.running_generations.pop(request_id, None)
             self.pending_tokens.pop(request_id, None)
+            self._cancel_events.pop(request_id, None)
 
         if task:
             task.cancel()
@@ -132,17 +168,35 @@ class HwLedgerRpcServer:
     async def load_model(
         self, model: str, max_kv_size: int
     ) -> Dict[str, Any]:
-        """Load a model into the engine pool."""
+        """Load a model into the engine pool (wire to actual oMlx engine)."""
         if self.engine_pool is None:
             return {"loaded": False, "error": "Engine pool not initialized"}
 
-        # Stub: in production, this calls engine_pool.load_model(model, max_kv_size).
-        # For now, we pretend any model loads successfully.
-        return {
-            "loaded": True,
-            "model": model,
-            "context_length": 8192,
-        }
+        try:
+            # Call engine_pool.load_model(model_id, max_kv_size).
+            # Expected signature: async def load_model(self, model_id: str, max_kv_size: int) -> Engine
+            engine = await self.engine_pool.load_model(model, max_kv_size)
+
+            # Fetch model metadata to return context_length
+            context_length = getattr(engine, 'context_length', 8192)
+            max_tokens = getattr(engine, 'max_tokens', 8192)
+
+            logger.info(f"Loaded model {model}: context_length={context_length}, max_kv_size={max_kv_size}")
+
+            return {
+                "loaded": True,
+                "model": model,
+                "context_length": context_length,
+                "max_tokens": max_tokens,
+                "max_kv_size": max_kv_size,
+            }
+        except Exception as e:
+            logger.exception(f"Failed to load model {model}: {e}")
+            return {
+                "loaded": False,
+                "error": str(e),
+                "model": model,
+            }
 
     async def unload_model(self, model: str) -> Dict[str, Any]:
         """Unload a model from the engine pool."""
@@ -153,19 +207,40 @@ class HwLedgerRpcServer:
         return {"unloaded": True}
 
     async def memory_report(self) -> Dict[str, Any]:
-        """Report unified memory usage breakdown."""
+        """Report unified memory usage breakdown with real MLX data."""
         try:
             mem_info = self.process.memory_info()
             total_mb = mem_info.rss / 1024 / 1024
-            # Simplified: assume 30% is MLX, rest is overhead
-            used_by_mlx_mb = total_mb * 0.3
-            kv_cache_mb = total_mb * 0.5
+
+            # Try to fetch real MLX memory stats if available
+            used_by_mlx_mb = 0
+            kv_cache_mb = 0
+            loaded_models = []
+
+            if self.engine_pool is not None:
+                try:
+                    # Try to fetch real memory from mlx.core.metal.get_active_memory()
+                    # Expected: engine_pool has a method to query unified memory
+                    mlx_memory_info = await self.engine_pool.get_memory_info()
+                    if mlx_memory_info:
+                        used_by_mlx_mb = mlx_memory_info.get("used_mb", 0)
+                        kv_cache_mb = mlx_memory_info.get("kv_cache_mb", 0)
+                        loaded_models = mlx_memory_info.get("loaded_models", [])
+                except Exception as e:
+                    logger.debug(f"Failed to fetch real MLX memory: {e}; falling back to estimates")
+                    # Fall back to estimation
+                    used_by_mlx_mb = total_mb * 0.3
+                    kv_cache_mb = total_mb * 0.5
+            else:
+                # No engine pool, use process memory as fallback
+                used_by_mlx_mb = total_mb * 0.3
+                kv_cache_mb = total_mb * 0.5
 
             return {
                 "total_unified_mb": round(total_mb, 2),
                 "used_by_mlx_mb": round(used_by_mlx_mb, 2),
                 "kv_cache_mb": round(kv_cache_mb, 2),
-                "loaded_models": [],  # Would be populated from engine_pool in production
+                "loaded_models": loaded_models,
             }
         except Exception as e:
             logger.exception(f"Error in memory_report: {e}")

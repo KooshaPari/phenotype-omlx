@@ -1376,6 +1376,7 @@ async def list_models(is_admin: bool = Depends(require_admin)):
                 "index_cache_freq": settings.index_cache_freq,
                 "turboquant_kv_enabled": settings.turboquant_kv_enabled,
                 "turboquant_kv_bits": settings.turboquant_kv_bits,
+                "turboquant_skip_last": settings.turboquant_skip_last,
                 "specprefill_enabled": settings.specprefill_enabled,
                 "specprefill_draft_model": settings.specprefill_draft_model,
                 "specprefill_keep_pct": settings.specprefill_keep_pct,
