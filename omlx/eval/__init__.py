@@ -15,6 +15,11 @@ from .jmmlu import JMMLUBenchmark
 from .kmmlu import KMMLUBenchmark
 from .livecodebench import LiveCodeBenchBenchmark
 from .mbpp import MBPPBenchmark
+from .terminal_bench import TerminalBenchBenchmark
+from .swe_bench import SWEBenchBenchmark
+from .registry import BenchmarkPackage, BenchmarkRegistry
+from .inspect_bridge import InspectBridge, InspectSample
+from .dsl import BenchmarkDSL, BenchmarkStep, BenchmarkSuite, STANDARD_SUITES, standard_suite
 from .mmlu import MMLUBenchmark
 from .truthfulqa import TruthfulQABenchmark
 from .winogrande import WinograndeBenchmark
@@ -32,6 +37,8 @@ BENCHMARKS: dict[str, type[BaseBenchmark]] = {
     "humaneval": HumanEvalBenchmark,
     "mbpp": MBPPBenchmark,
     "livecodebench": LiveCodeBenchBenchmark,
+    "terminal_bench": TerminalBenchBenchmark,
+    "swe_bench": SWEBenchBenchmark,
 }
 
 __all__ = [
@@ -48,4 +55,15 @@ __all__ = [
     "HumanEvalBenchmark",
     "MBPPBenchmark",
     "LiveCodeBenchBenchmark",
+    "BenchmarkRegistry",
+    "BenchmarkPackage",
+    "InspectSample",
+    "InspectBridge",
+    "standard_suite",
+    "STANDARD_SUITES",
+    "BenchmarkSuite",
+    "BenchmarkStep",
+    "BenchmarkDSL",
+    "TerminalBenchBenchmark",
+    "SWEBenchBenchmark",
 ]
