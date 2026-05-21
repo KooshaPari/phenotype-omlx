@@ -101,7 +101,7 @@ Your response should contain ONLY the patch, no additional explanation.
             score += 0.2
 
         # Check for actual changes (lines starting with + or -)
-        if re.search(r"^[+-]", predicted, re.MULTILINE):
+        if re.search(r"^[+-][^+-]", predicted, re.MULTILINE):
             score += 0.2
 
         # Reasonable length (not empty, not too large)
