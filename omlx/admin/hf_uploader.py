@@ -60,10 +60,10 @@ def _has_meaningful_readme(path: Path) -> bool:
 def _is_oq_model(name: str) -> bool:
     """Check if a model name indicates an oQ-quantized model.
 
-    oQ models have 'oQ' in the last 5 characters of their name,
-    e.g. 'Qwen3.5-122B-oQ4', 'Llama-3B-oQ4e'.
+    Any folder name containing 'oQ' (case-sensitive) is treated as an oQ model,
+    e.g. 'Qwen3.5-122B-oQ4', 'Llama-3B-oQ4e', 'Qwen3.6-27B-oQ3.5e'.
     """
-    return "oQ" in name[-5:]
+    return "oQ" in name
 
 
 def _generate_model_card(
@@ -174,6 +174,10 @@ class HFUploader:
         self._active_tasks: dict[str, asyncio.Task] = {}
         self._cancelled: set[str] = set()
         self._upload_sem = asyncio.Semaphore(1)
+
+    def update_model_dirs(self, model_dirs: list[str]) -> None:
+        """Update model directory paths."""
+        self._model_dirs = [Path(d) for d in model_dirs]
 
     @staticmethod
     async def validate_token(token: str) -> dict:

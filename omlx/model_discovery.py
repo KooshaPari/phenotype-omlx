@@ -38,6 +38,7 @@ VLM_MODEL_TYPES = {
     "llava",
     "llava_next",
     "llava-qwen2",
+    "llava_qwen2",  # underscore form — matches FastVLM checkpoints on disk
     "mllama",
     "idefics3",
     "internvl_chat",
@@ -46,6 +47,7 @@ VLM_MODEL_TYPES = {
     "mistral3",
     "pixtral",
     "molmo",
+    "molmo2",
     "bunny_llama",
     "multi_modality",
     "florence2",
@@ -56,6 +58,7 @@ VLM_MODEL_TYPES = {
     "minicpmv",
     "phi4_siglip",
     "phi4mm",
+    "youtu_vl",
 }
 
 # Known VLM architectures
@@ -73,6 +76,8 @@ VLM_ARCHITECTURES = {
     "Phi3VForCausalLM",
     "Pixtral",
     "MolmoForCausalLM",
+    "Molmo2ForConditionalGeneration",
+    "LlavaQwen2ForCausalLM",  # apple/FastVLM (all sizes)
     "Florence2ForConditionalGeneration",
 }
 
@@ -129,6 +134,20 @@ CAUSAL_LM_RERANKER_ARCHITECTURES = {
 # (no lm_head weights). Detected by architecture + directory name heuristic.
 CAUSAL_LM_EMBEDDING_ARCHITECTURES = {
     "Qwen3ForCausalLM",  # Qwen3-Embedding uses CausalLM arch without lm_head
+}
+
+# Multimodal (VLM-based) reranker architectures.
+# These share an architecture with VLM chat models but are fine-tuned for
+# reranking. Loaded via mlx-embeddings' model.process() API. Distinguished
+# from VLM chat by directory name heuristic.
+MULTIMODAL_RERANKER_ARCHITECTURES = {
+    "Qwen3VLForConditionalGeneration",  # Qwen3-VL-Reranker
+}
+
+# Multimodal (VLM-based) embedding architectures.
+# Same arch as the reranker variant; distinguished by directory name hint.
+MULTIMODAL_EMBEDDING_ARCHITECTURES = {
+    "Qwen3VLForConditionalGeneration",  # Qwen3-VL-Embedding
 }
 
 # Unsupported reranker architectures (future support)
@@ -257,6 +276,7 @@ class DiscoveredModel:
     estimated_size: int  # Estimated memory usage in bytes
     config_model_type: str = ""  # Raw model_type from config.json (e.g., "deepseekocr_2")
     thinking_default: bool | None = None  # True if model thinks by default, False if not, None if unknown
+    preserve_thinking_default: bool | None = None  # True when template supports preserve_thinking (Qwen 3.6+)
 
 
 def _is_unsupported_model(model_path: Path) -> bool:
@@ -352,6 +372,29 @@ def _has_sentence_transformers_embedding_pipeline(model_path: Path) -> bool:
     )
 
 
+def _has_vision_subconfig(config: dict) -> bool:
+    """
+    Return True if ``config`` carries evidence of a vision sub-config.
+
+    Three keys cover the conventions in the wild:
+
+    - ``vision_config`` — most VLMs (Qwen2-VL, Gemma3, LLaVA-Next, ...).
+    - ``vit_config`` — Molmo / Molmo2 family.
+    - ``mm_vision_tower`` — older LLaVA family including FastVLM's
+      ``llava_qwen2``. The check is non-empty-only: a config-stub text-only
+      quant could in principle declare a tower path it doesn't ship weights
+      for, but in practice bf16 FastVLM ships a real path string.
+
+    Used by the VLM classifier in :func:`detect_model_type` and by other
+    paths (``oq``, admin model info) that need to ask "is this a VLM?".
+    """
+    return (
+        "vision_config" in config
+        or "vit_config" in config
+        or bool(config.get("mm_vision_tower"))
+    )
+
+
 def detect_model_type(model_path: Path) -> ModelType:
     """
     Detect model type from config.json.
@@ -362,7 +405,9 @@ def detect_model_type(model_path: Path) -> ModelType:
     3. sentence-transformers pipeline detection via modules.json
     4. architectures field for embedding-specific classes
     5. model_type field against known embedding types (unambiguous only)
-    6. VLM detection via architectures, model_type, or vision_config presence
+    6. VLM detection via architectures, model_type, or vision sub-config
+       presence (``vision_config`` / ``vit_config`` / non-empty
+       ``mm_vision_tower`` — see :func:`_has_vision_subconfig`)
     7. Audio model detection (STT/TTS/STS)
 
     Args:
@@ -403,6 +448,16 @@ def detect_model_type(model_path: Path) -> ModelType:
             if _is_causal_lm_embedding(model_path):
                 return "embedding"
 
+    # Check for multimodal (VLM-based) rerankers and embeddings.
+    # Same architecture string as VLM chat models; distinguished by the
+    # directory name heuristic. Must come before VLM detection below so
+    # the reranker/embedding hint wins over default VLM classification.
+    for arch in architectures:
+        if arch in MULTIMODAL_RERANKER_ARCHITECTURES and _is_causal_lm_reranker(model_path):
+            return "reranker"
+        if arch in MULTIMODAL_EMBEDDING_ARCHITECTURES and _is_causal_lm_embedding(model_path):
+            return "embedding"
+
     if _has_sentence_transformers_embedding_pipeline(model_path):
         return "embedding"
 
@@ -435,31 +490,36 @@ def detect_model_type(model_path: Path) -> ModelType:
     # Check for VLM: architectures field
     # Some text-only quants (e.g., unsloth/gemma-4-31b-it-MLX-8bit) keep the VLM
     # architecture name but strip vision_config and vision weights.
-    # For model families known to have text-only variants, require vision_config.
+    # For model families known to have text-only variants, require evidence
+    # of a vision sub-config — see :func:`_has_vision_subconfig` for the
+    # three keys we accept (``vision_config``, ``vit_config``,
+    # ``mm_vision_tower``).
     for arch in architectures:
         if arch in VLM_ARCHITECTURES:
-            if normalized_type in VLM_MODEL_TYPES and "vision_config" not in config:
+            if normalized_type in VLM_MODEL_TYPES and not _has_vision_subconfig(config):
                 logger.info(
-                    f"Architecture '{arch}' is a VLM architecture but no vision_config "
-                    "found — treating as LLM (text-only quant)"
+                    f"Architecture '{arch}' is a VLM architecture but no "
+                    "vision_config / vit_config / mm_vision_tower found — "
+                    "treating as LLM (text-only quant)"
                 )
                 break
             return "vlm"
 
     # Check for VLM: model_type field (only if vision capabilities are present)
     # Some model families (e.g., qwen3_5_moe) have both VLM and text-only variants.
-    # Text-only quants won't have vision_config in their config.json.
+    # Text-only quants won't carry a vision sub-config.
     if normalized_type in VLM_MODEL_TYPES:
-        if "vision_config" in config:
+        if _has_vision_subconfig(config):
             return "vlm"
         logger.info(
-            f"Model type '{model_type}' is in VLM_MODEL_TYPES but no vision_config found — "
+            f"Model type '{model_type}' is in VLM_MODEL_TYPES but no "
+            "vision_config / vit_config / mm_vision_tower found — "
             "treating as LLM (text-only quant)"
         )
 
-    # Check for VLM: presence of vision_config (fallback heuristic)
+    # Check for VLM: presence of a vision sub-config (fallback heuristic).
     # Catch-all for VLMs that aren't yet listed in VLM_MODEL_TYPES.
-    if "vision_config" in config:
+    if _has_vision_subconfig(config):
         return "vlm"
 
     # Check for audio models — architectures take priority over model_type.
@@ -537,6 +597,40 @@ def detect_thinking_default(model_path: Path) -> bool | None:
         return False  # OFF by default (Gemma pattern)
 
     return None
+
+
+def detect_preserve_thinking(model_path: Path) -> bool | None:
+    """Detect whether a model's chat template supports ``preserve_thinking``.
+
+    Qwen 3.6+ templates strip ``<think>`` blocks from historical assistant
+    turns by default and only keep them when ``preserve_thinking`` is true.
+    Stripping breaks KV prefix cache reuse, so we default to True when the
+    template supports this flag.
+
+    Returns:
+        True if the template references ``preserve_thinking`` (should be
+        enabled), None otherwise (template has no such flag).
+    """
+    template_text = None
+    jinja_path = model_path / "chat_template.jinja"
+    if jinja_path.exists():
+        with contextlib.suppress(OSError):
+            template_text = jinja_path.read_text(encoding="utf-8")
+
+    if template_text is None:
+        tc_path = model_path / "tokenizer_config.json"
+        if tc_path.exists():
+            try:
+                with open(tc_path) as f:
+                    tc = json.load(f)
+                template_text = tc.get("chat_template")
+            except Exception:
+                pass
+
+    if not template_text or "preserve_thinking" not in template_text:
+        return None
+
+    return True
 
 
 def estimate_model_size(model_path: Path) -> int:
@@ -653,6 +747,7 @@ def _register_model(
             pass
 
         thinking_default = detect_thinking_default(model_dir)
+        preserve_thinking_default = detect_preserve_thinking(model_dir)
 
         models[model_id] = DiscoveredModel(
             model_id=model_id,
@@ -662,6 +757,7 @@ def _register_model(
             estimated_size=estimated_size,
             config_model_type=config_model_type,
             thinking_default=thinking_default,
+            preserve_thinking_default=preserve_thinking_default,
         )
 
         size_gb = estimated_size / (1024**3)

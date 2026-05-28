@@ -176,6 +176,33 @@ class BatchingError(SchedulerError):
     pass
 
 
+class SchedulerQueueFullError(SchedulerError):
+    """
+    Waiting queue depth cap exceeded.
+
+    Raised when admission control rejects a request because the scheduler's
+    waiting queue is already at the configured depth cap. Server layer maps
+    this to HTTP 503 with a short Retry-After.
+
+    Attributes:
+        current_depth: Current number of waiting requests.
+        max_depth: Configured queue depth cap.
+    """
+
+    def __init__(
+        self,
+        current_depth: int,
+        max_depth: int,
+        details: Optional[dict] = None,
+    ):
+        super().__init__(
+            f"Scheduler waiting queue full: {current_depth} >= {max_depth}",
+            details,
+        )
+        self.current_depth = current_depth
+        self.max_depth = max_depth
+
+
 # =============================================================================
 # Model-related Exceptions
 # =============================================================================
@@ -366,18 +393,19 @@ class ModelNotFoundError(EnginePoolError):
 
 
 class ModelTooLargeError(EnginePoolError):
-    """Raised when a model exceeds the memory limit."""
+    """Raised when a model cannot fit under the current memory ceiling."""
 
-    def __init__(self, model_id: str, model_size: int, max_memory: int):
+    def __init__(self, model_id: str, model_size: int, ceiling: int):
         self.model_id = model_id
         self.model_size = model_size
-        self.max_memory = max_memory
+        self.ceiling = ceiling
         # Import here to avoid circular dependency
         from .model_discovery import format_size
 
         message = (
             f"Model '{model_id}' ({format_size(model_size)}) "
-            f"exceeds max-model-memory ({format_size(max_memory)})"
+            f"does not fit under the memory ceiling ({format_size(ceiling)}). "
+            f"Free system memory or lower memory_guard_tier."
         )
         super().__init__(message)
 
@@ -429,6 +457,14 @@ class MCPToolExecutionError(MCPError):
 # Patterns that indicate cache corruption (used by scheduler recovery logic)
 CACHE_CORRUPTION_PATTERNS = [
     "'NoneType' object is not subscriptable",
+    # Heterogeneous-batch crash: when one row has logits_processors=[proc]
+    # and another has None, mlx-lm's GenerationBatch._step does
+    # ``for p in self.logits_processors[e]`` over a None slot and raises
+    # this exact message.  Without matching it here, the error bubbles
+    # past recovery and into engine_loop's bare except, presenting as a
+    # request hang.  See vllm-mlx-patched commit 8d4052b for the same
+    # root cause in a sibling project.  Issue #934.
+    "'NoneType' object is not iterable",
     "BatchKVCache",
     "KVCache",
     "cache.keys",

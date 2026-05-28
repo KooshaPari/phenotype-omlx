@@ -267,11 +267,11 @@ class TestEnginePoolExceptions:
         error = ModelTooLargeError(
             model_id="huge-model",
             model_size=100 * 1024**3,
-            max_memory=32 * 1024**3,
+            ceiling=32 * 1024**3,
         )
         assert error.model_id == "huge-model"
         assert error.model_size == 100 * 1024**3
-        assert error.max_memory == 32 * 1024**3
+        assert error.ceiling == 32 * 1024**3
         assert isinstance(error, EnginePoolError)
 
     def test_insufficient_memory_error(self):
@@ -345,6 +345,18 @@ class TestIsCacheCorruptionError:
         error = AttributeError("'NoneType' object has no attribute 'shape'")
         assert is_cache_corruption_error(error) is True
 
+    def test_none_type_not_iterable_pattern(self):
+        """Test detection of NoneType iterable error.
+
+        Triggered by mlx-lm GenerationBatch._step at
+        ``for p in self.logits_processors[e]`` when the merged
+        logits_processors list contains a None slot from heterogeneous
+        request mixing.  Without this pattern the error escapes
+        recovery and presents as a hang. See issue #934.
+        """
+        error = TypeError("'NoneType' object is not iterable")
+        assert is_cache_corruption_error(error) is True
+
     def test_value_error_not_broadcastable(self):
         """Test detection of shape broadcast error."""
         error = ValueError(
@@ -392,6 +404,7 @@ class TestCacheCorruptionPatterns:
         """Test that patterns contains expected strings."""
         expected_patterns = [
             "'NoneType' object is not subscriptable",
+            "'NoneType' object is not iterable",
             "BatchKVCache",
             "KVCache",
             "cache.keys",

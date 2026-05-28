@@ -112,7 +112,8 @@ class TestModelConfig:
         """Test default configuration values."""
         config = ModelConfig()
         assert config.model_name == ""
-        assert config.trust_remote_code is True
+        # Issue #926: defaults to False so HF repos can't auto-execute custom Python.
+        assert config.trust_remote_code is False
         assert config.model_path is None
 
     def test_custom_values(self):
@@ -163,6 +164,7 @@ class TestSchedulerConfig:
         config = SchedulerConfig()
         assert config.max_num_seqs == 8
         assert config.completion_batch_size == 8
+        assert config.embedding_batch_size == 32
         assert config.stream_interval == 1
         assert config.enable_thinking is None
 
@@ -171,11 +173,13 @@ class TestSchedulerConfig:
         config = SchedulerConfig(
             max_num_seqs=128,
             completion_batch_size=16,
+            embedding_batch_size=12,
             stream_interval=2,
             enable_thinking=True,
         )
         assert config.max_num_seqs == 128
         assert config.completion_batch_size == 16
+        assert config.embedding_batch_size == 12
         assert config.stream_interval == 2
         assert config.enable_thinking is True
 
@@ -253,6 +257,8 @@ class TestOMLXConfig:
             config = OMLXConfig.from_env()
             assert config.server.host == "0.0.0.0"
             assert config.server.port == 8000
+            # Issue #926: env default must be False to keep RCE surface closed.
+            assert config.model.trust_remote_code is False
 
     def test_from_env_with_variables(self):
         """Test from_env with environment variables set."""

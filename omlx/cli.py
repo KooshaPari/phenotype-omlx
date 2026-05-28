@@ -8,15 +8,17 @@ Commands:
 
 Usage:
     # Multi-model serving
-    omlx serve --model-dir /path/to/models --max-model-memory 32GB
+    omlx serve --model-dir /path/to/models
 
     # With pinned models
-    omlx serve --model-dir /path/to/models --max-model-memory 48GB --pin llama-3b,qwen-7b
+    omlx serve --model-dir /path/to/models --pin llama-3b,qwen-7b
 """
 
 import argparse
 import faulthandler
 import sys
+
+from ._version import __version__
 
 
 def _has_cli_overrides(args) -> bool:
@@ -29,13 +31,11 @@ def _has_cli_overrides(args) -> bool:
         return True
     if hasattr(args, "port") and args.port is not None:
         return True
-    if hasattr(args, "max_model_memory") and args.max_model_memory is not None:
-        return True
-    if hasattr(args, "max_process_memory") and args.max_process_memory is not None:
-        return True
     if hasattr(args, "host") and args.host is not None:
         return True
     if hasattr(args, "log_level") and args.log_level is not None:
+        return True
+    if hasattr(args, "embedding_batch_size") and args.embedding_batch_size is not None:
         return True
     if hasattr(args, "mcp_config") and args.mcp_config is not None:
         return True
@@ -132,6 +132,14 @@ def serve_command(args):
         os.environ["REQUESTS_CA_BUNDLE"] = settings.network.ca_bundle
         os.environ["SSL_CERT_FILE"] = settings.network.ca_bundle
 
+    # Validate before persisting CLI overrides, so invalid flags never poison
+    # settings.json.
+    errors = settings.validate()
+    if errors:
+        for error in errors:
+            print(f"Configuration error: {error}")
+        sys.exit(1)
+
     # Save CLI args to settings.json if non-default values provided
     if _has_cli_overrides(args):
         try:
@@ -157,13 +165,6 @@ def serve_command(args):
     _crash_file = open(crash_log_path, "a")
     faulthandler.enable(file=_crash_file, all_threads=True)
 
-    # Validate settings
-    errors = settings.validate()
-    if errors:
-        for error in errors:
-            print(f"Configuration error: {error}")
-        sys.exit(1)
-
     # Import server and config
     from .server import app, init_server
     from .config import parse_size
@@ -171,8 +172,7 @@ def serve_command(args):
     model_dirs = settings.model.get_model_dirs(settings.base_path)
     print(f"Base path: {settings.base_path}")
     print(f"Model directories: {', '.join(str(d) for d in model_dirs)}")
-    print(f"Max model memory: {settings.model.max_model_memory}")
-    print(f"Max process memory: {settings.memory.max_process_memory}")
+    print(f"Memory guard tier: {settings.memory.memory_guard_tier}")
 
     # Store MCP config path for FastAPI startup
     # Priority: CLI arg > settings.json
@@ -252,7 +252,6 @@ def serve_command(args):
     # Sampling parameters (max_tokens, temperature, etc.) are per-model settings
     init_server(
         model_dirs=[str(d) for d in model_dirs],
-        max_model_memory=settings.model.get_max_model_memory_bytes(),
         scheduler_config=scheduler_config,
         api_key=settings.auth.api_key,
         global_settings=settings,
@@ -274,8 +273,12 @@ def serve_command(args):
 
 
 
-def launch_command(args):
-    """Launch an external tool integrated with oMLX."""
+def launch_command(args, extra_args: list[str] | None = None):
+    """Launch an external tool integrated with oMLX.
+
+    extra_args are unknown CLI tokens forwarded to the underlying tool binary
+    (e.g. ``-r`` / ``--resume <id>`` for Claude Code).
+    """
     import requests
 
     from .integrations import get_integration, list_integrations
@@ -301,8 +304,13 @@ def launch_command(args):
     host = args.host or settings.server.host
     port = args.port or settings.server.port
 
+    # 0.0.0.0 is a valid bind address but not a valid connect address.
+    # Fall back to localhost so launch can reach the server regardless
+    # of which interface it was bound to.
+    connect_host = host if host and host != "0.0.0.0" else "127.0.0.1"
+
     # Check if oMLX server is running
-    base_url = f"http://{host}:{port}"
+    base_url = f"http://{connect_host}:{port}"
     try:
         resp = requests.get(f"{base_url}/health", timeout=3)
         resp.raise_for_status()
@@ -311,13 +319,23 @@ def launch_command(args):
         print("Start the server first: omlx serve")
         sys.exit(1)
 
-    # Get API key from CLI args
-    api_key = getattr(args, "api_key", None) or ""
+    # Get API key: CLI args > settings.json > empty
+    api_key = getattr(args, "api_key", None) or settings.auth.api_key or ""
 
     # Build headers for authenticated requests
     headers = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
+
+    # Pre-fetch model status (context_window, max_tokens, model_type per model)
+    models_status_map: dict[str, dict] = {}
+    try:
+        resp = requests.get(f"{base_url}/v1/models/status", headers=headers, timeout=5)
+        if resp.ok:
+            for m in resp.json().get("models", []):
+                models_status_map[m["id"]] = m
+    except Exception:
+        pass
 
     # Determine model
     model = args.model
@@ -343,19 +361,13 @@ def launch_command(args):
             model = models[0]
             print(f"Using model: {model}")
         else:
-            print("Available models:")
-            for i, m in enumerate(models, 1):
-                print(f"  {i}. {m}")
-            while True:
-                try:
-                    choice = input("Select model number: ").strip()
-                    idx = int(choice) - 1
-                    if 0 <= idx < len(models):
-                        model = models[idx]
-                        break
-                    print(f"Please enter 1-{len(models)}")
-                except (ValueError, EOFError):
-                    print(f"Please enter 1-{len(models)}")
+            models_info_list = [
+                {"id": m_id, **models_status_map.get(m_id, {})}
+                for m_id in models
+            ]
+            model = integration.select_model(
+                models_info_list, integration.display_name
+            )
 
     # Check if tool is installed
     if not integration.is_installed():
@@ -363,21 +375,11 @@ def launch_command(args):
         print(f"Install: {integration.install_hint}")
         sys.exit(1)
 
-    # Fetch model limits from server
-    context_window = None
-    max_tokens = None
-    model_type = None
-    try:
-        resp = requests.get(f"{base_url}/v1/models/status", headers=headers, timeout=5)
-        if resp.ok:
-            for m in resp.json().get("models", []):
-                if m["id"] == model:
-                    context_window = m.get("max_context_window")
-                    max_tokens = m.get("max_tokens")
-                    model_type = m.get("model_type")
-                    break
-    except Exception:
-        pass
+    # Resolve model limits from pre-fetched status
+    model_info = models_status_map.get(model, {})
+    context_window = model_info.get("max_context_window")
+    max_tokens = model_info.get("max_tokens")
+    model_type = model_info.get("model_type")
 
     # Launch
     print(f"Launching {integration.display_name} with model {model}...")
@@ -386,11 +388,12 @@ def launch_command(args):
         port=port,
         api_key=api_key,
         model=model,
-        host=host,
+        host=connect_host,
         tools_profile=tools_profile,
         context_window=context_window,
         max_tokens=max_tokens,
         model_type=model_type,
+        extra_args=extra_args,
     )
 
 
@@ -411,14 +414,14 @@ def diagnose_menubar() -> int:
 
     mac_ver = platform.mac_ver()[0] or "unknown"
     print(f"macOS:          {mac_ver}")
-    print(f"Bundle ID:      com.omlx.app")
+    print(f"Bundle ID:      app.omlx")
 
     app_path = Path("/Applications/oMLX.app")
     print(f"App installed:  {'yes' if app_path.exists() else 'NO (install DMG first)'}")
 
     try:
         res = subprocess.run(
-            ["pgrep", "-af", "omlx_app"],
+            ["pgrep", "-af", "oMLX"],
             capture_output=True, text=True, timeout=5,
         )
         running = bool(res.stdout.strip())
@@ -430,10 +433,11 @@ def diagnose_menubar() -> int:
     except (subprocess.SubprocessError, FileNotFoundError) as e:
         print(f"Menubar app:    check failed ({e})")
 
+    # The Swift app writes `server.log` (stdout/stderr of the Python child).
+    # No separate menubar.log — visibility-probe lines are logged into the
+    # same file via OSLog.
     log_dir = Path.home() / "Library" / "Application Support" / "oMLX" / "logs"
-    # menubar.log captures the visibility probe (frame + isVisible);
-    # server.log may carry fallback warnings for older builds.
-    log_candidates = [log_dir / "menubar.log", log_dir / "server.log"]
+    log_candidates = [log_dir / "server.log"]
     print(f"Log dir:        {log_dir}")
 
     hits: list[tuple[str, str]] = []
@@ -470,7 +474,7 @@ def diagnose_menubar() -> int:
     print("  1. Open System Settings > Menu Bar")
     print("     open 'x-apple.systempreferences:com.apple.ControlCenter-Settings.extension?MenuBar'")
     print("  2. Find 'oMLX' and set it to 'Show in Menu Bar'")
-    print("  3. If oMLX isn't in the list, quit the menubar app and relaunch oMLX.app")
+    print("  3. If oMLX isn't in the list, quit the app and relaunch oMLX.app")
     print()
     print("Note: Apple's sandbox policy prevents third-party apps from")
     print("programmatically re-enabling their own menubar visibility on Tahoe.")
@@ -496,6 +500,12 @@ Examples:
   omlx serve mlx-community/Llama-3.2-3B-Instruct-4bit --port 8000
   omlx launch codex --model qwen3.5
         """,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+        help="Print the oMLX version and exit",
     )
     subparsers = parser.add_subparsers(dest="command", help="Commands")
 
@@ -527,22 +537,6 @@ Example directory structure:
         default=None,
         help="Directory containing model subdirectories (default: ~/.omlx/models)",
     )
-    serve_parser.add_argument(
-        "--max-model-memory",
-        type=str,
-        default=None,
-        help="Maximum memory for loaded models (e.g., 32GB, 'disabled'). Default: 80%% of system memory.",
-    )
-    serve_parser.add_argument(
-        "--max-process-memory",
-        type=str,
-        default=None,
-        help=(
-            "Max total process memory as percentage of system RAM (10-99%%), "
-            "'auto' (RAM - 8GB), or 'disabled'. Default: auto."
-        ),
-    )
-
     # Server options
     serve_parser.add_argument("--host", type=str, default=None, help="Host to bind (default: 127.0.0.1)")
     serve_parser.add_argument("--port", type=int, default=None, help="Port to bind (default: 8000)")
@@ -553,6 +547,16 @@ Example directory structure:
         default=None,
         help="Log level (default: info). trace includes full message content",
     )
+    serve_parser.add_argument(
+        "--sse-keepalive-mode",
+        type=str,
+        choices=["chunk", "comment", "off"],
+        default=None,
+        help="SSE keepalive emission mode (default: chunk). 'chunk' emits "
+        "protocol-aware no-op events compatible with strict clients like "
+        "OpenClaw / WorkBuddy; 'comment' emits the legacy ': keep-alive' SSE "
+        "comment; 'off' disables keepalive entirely",
+    )
 
     # Scheduler options (for BatchedEngine)
     serve_parser.add_argument(
@@ -560,6 +564,12 @@ Example directory structure:
         type=int,
         default=None,
         help="Max requests processed simultaneously. Higher values increase throughput but use more memory. (default: 8)",
+    )
+    serve_parser.add_argument(
+        "--embedding-batch-size",
+        type=int,
+        default=None,
+        help="Max embedding inputs processed in one forward pass. Higher values increase throughput but use more memory. (default: 32)",
     )
 
     # paged SSD cache options
@@ -662,13 +672,13 @@ Example directory structure:
     launch_parser = subparsers.add_parser(
         "launch",
         help="Launch an external tool with oMLX integration",
-        description="Configure and launch external coding tools (Codex, OpenCode, OpenClaw, Pi) "
+        description="Configure and launch external coding tools (Claude Code, Copilot, Codex, OpenCode, OpenClaw, Hermes Agent, Pi) "
         "to use the running oMLX server.",
     )
     launch_parser.add_argument(
         "tool",
         type=str,
-        help="Tool to launch: codex, opencode, openclaw, pi, or 'list' to show available",
+        help="Tool to launch: claude, copilot, codex, opencode, openclaw, hermes, pi, or 'list' to show available",
     )
     launch_parser.add_argument(
         "--model",
@@ -715,17 +725,23 @@ Example directory structure:
         help="What to diagnose. 'menubar' checks Tahoe ControlCenter visibility.",
     )
 
-    args = parser.parse_args()
+    # Use parse_known_args so `omlx launch <tool> -- ...` can forward unknown
+    # tokens (e.g. `-r`, `--resume <id>`) to the underlying tool binary.
+    # Non-launch commands keep the previous strictness by rejecting unknowns.
+    args, extra_args = parser.parse_known_args()
 
-    if args.command == "serve":
-        serve_command(args)
-    elif args.command == "launch":
-        launch_command(args)
-    elif args.command == "diagnose":
-        sys.exit(diagnose_command(args))
+    if args.command == "launch":
+        launch_command(args, extra_args=extra_args)
     else:
-        parser.print_help()
-        sys.exit(1)
+        if extra_args:
+            parser.error(f"unrecognized arguments: {' '.join(extra_args)}")
+        if args.command == "serve":
+            serve_command(args)
+        elif args.command == "diagnose":
+            sys.exit(diagnose_command(args))
+        else:
+            parser.print_help()
+            sys.exit(1)
 
 
 if __name__ == "__main__":

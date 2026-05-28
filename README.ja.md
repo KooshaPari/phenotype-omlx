@@ -10,10 +10,13 @@
 <p align="center"><b>Mac向けに最適化されたLLM推論サーバー</b><br>連続バッチングと階層型KVキャッシュを、メニューバーから直接管理します。</p>
 
 <p align="center">
+<a href="https://www.buymeacoffee.com/jundot"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40"></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License">
   <img src="https://img.shields.io/badge/python-3.10+-green" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/platform-Apple%20Silicon-black?logo=apple" alt="Apple Silicon">
-  <a href="https://buymeacoffee.com/jundot"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 <p align="center">
@@ -84,7 +87,7 @@ Python 3.10+とApple Silicon（M1/M2/M3/M4）が必要です。
 
 ### macOSアプリ
 
-ApplicationsフォルダからoMLXを起動します。ウェルカム画面が3つのステップを案内します — モデルディレクトリの設定、サーバー起動、最初のモデルダウンロード。以上です。
+ApplicationsフォルダからoMLXを起動します。ウェルカム画面が3つのステップを案内します — モデルディレクトリの設定、サーバー起動、最初のモデルダウンロード。以上です。OpenClaw、OpenCode、Codex、Hermes Agent、Copilotに接続するには、[統合](#統合)を参照してください。
 
 <p align="center">
   <img src="docs/images/Screenshot 2026-02-10 at 00.36.32.png" alt="oMLX ウェルカム画面" width="360">
@@ -122,7 +125,7 @@ Apple SiliconでテキストLLM、ビジョン言語モデル（VLM）、OCRモ�
 
 ### 管理画面
 
-`/admin`でリアルタイム監視、モデル管理、チャット、ベンチマーク、モデル別設定のためのWeb UIを提供します。英語、韓国語、日本語、中国語に対応。すべてのCDN依存関係がバンドルされ、完全オフラインでの運用が可能です。
+`/admin`でリアルタイム監視、モデル管理、チャット、ベンチマーク、モデル別設定のためのWeb UIを提供します。英語、韓国語、日本語、中国語、ロシア語に対応。すべてのCDN依存関係がバンドルされ、完全オフラインでの運用が可能です。
 
 <p align="center">
   <img src="docs/images/Screenshot 2026-02-10 at 00.45.34.png" alt="oMLX 管理画面" width="720">
@@ -189,6 +192,14 @@ Claude Codeで小さなコンテキストモデルを実行するためのコン
   <img src="docs/images/downloader_omlx.png" alt="oMLX モデルダウンロード" width="720">
 </p>
 
+### 統合
+
+管理画面からOpenClaw、OpenCode、Codex、Hermes Agent、Copilot、Piをワンクリックで設定できます。設定ファイルを手動で編集する必要はありません。
+
+<p align="center">
+  <img src="docs/images/omlx_integrations.png" alt="oMLX 統合" width="720">
+</p>
+
 ### パフォーマンスベンチマーク
 
 管理画面からワンクリックでベンチマークを実行します。プリフィル（PP）とトークン生成（TG）の毎秒トークン数を測定し、現実的なパフォーマンス数値のための部分的プレフィックスキャッシュヒットテストも含まれます。
@@ -199,7 +210,7 @@ Claude Codeで小さなコンテキストモデルを実行するためのコン
 
 ### macOSメニューバーアプリ
 
-ネイティブPyObjCメニューバーアプリ（Electronではありません）。ターミナルを開かずにサーバーの起動、停止、監視が可能です。永続的な配信統計（再起動後も維持）、クラッシュ時の自動再起動、アプリ内自動アップデートを含みます。
+ネイティブ Swift / SwiftUI メニューバーアプリ（Electron ではありません）。ターミナルを開かずにサーバーの起動、停止、監視が可能です。永続的な配信統計（再起動後も維持）、クラッシュ時の自動再起動、Sparkle による自動アップデートを含みます。
 
 <p align="center">
   <img src="docs/images/Screenshot 2026-02-10 at 00.51.54.png" alt="oMLX メニューバー統計" width="400">
@@ -324,22 +335,20 @@ pytest -m "not slow"
 
 ### macOSアプリ
 
-Python 3.11+と[venvstacks](https://venvstacks.lmstudio.ai)（`pip install venvstacks`）が必要です。
+ネイティブ SwiftUI アプリは `apps/omlx-mac/` にあります。Xcode 26.5+ と Python 3.11+ が必要です。venvstacks は dev 依存として宣言されているため、`pip install -e ".[dev]"`（または `uv sync --dev`）でピン留めされたバージョンが入ります。ホスト全体のツールランナーを使いたい場合は `uvx venvstacks` や `pipx run venvstacks` でも動作します。
 
 ```bash
-cd packaging
+# 実行可能な oMLX.app をステージング（xcodebuild + venvstacks Python レイヤー + ad-hoc 署名）
+apps/omlx-mac/Scripts/build.sh release
 
-# フルビルド（venvstacks + アプリバンドル + DMG）
-python build.py
+# 出力は apps/omlx-mac/build/Stage/oMLX.app
+open apps/omlx-mac/build/Stage/oMLX.app
 
-# venvstacksをスキップ（コード変更のみ）
-python build.py --skip-venv
-
-# DMGのみ
-python build.py --dmg-only
+# venvstacks を強制的に再ビルド（通常は fingerprint でキャッシュ）
+apps/omlx-mac/Scripts/build.sh release --rebuild-donor
 ```
 
-アプリバンドルの構造とレイヤー設定の詳細は[packaging/README.md](packaging/README.md)を参照してください。
+初回 cold ビルドは 10–20 分かかります（venvstacks Python レイヤーの組み立て）。以降のビルドは `packaging/_export/` のキャッシュを再利用し、約 4 分で完了します。レイヤー構成は [packaging/README.md](packaging/README.md)、Swift ソースは [apps/omlx-mac/](apps/omlx-mac/) を参照してください。
 
 ## コントリビューション
 
@@ -360,3 +369,4 @@ python build.py --dmg-only
 - [vllm-mlx](https://github.com/waybarrios/vllm-mlx) - oMLXはvllm-mlx v0.1.0からスタートし、マルチモデルサービング、階層型KVキャッシュ、完全なページドキャッシュ対応のVLM、管理画面、macOSメニューバーアプリへと大きく進化しました
 - [venvstacks](https://venvstacks.lmstudio.ai) - macOSアプリバンドルのためのポータブルPython環境レイヤリング
 - [mlx-embeddings](https://github.com/Blaizzy/mlx-embeddings) - Apple Silicon向けエンベディングモデルサポート
+- [dflash-mlx](https://github.com/bstnxbt/dflash-mlx) - Apple Siliconでのブロック拡散 speculative decoding

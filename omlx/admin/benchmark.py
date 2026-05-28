@@ -68,20 +68,68 @@ class BenchmarkRequest(BaseModel):
 
 @dataclass
 class BenchmarkRun:
-    """Tracks the state of a running benchmark."""
+    """Tracks the state of a running benchmark.
+
+    SSE delivery model: events are appended to `events` (append-only
+    log) under `cond`. Subscribers replay `events` from offset 0 then
+    wait on `cond` for new entries. `terminal` is set once the final
+    event (`upload_done` / `error`) has been published so subscribers
+    know to close their stream rather than wait for a follow-up.
+    """
 
     bench_id: str
     request: BenchmarkRequest
     status: str = "running"  # running, completed, cancelled, error
-    queue: asyncio.Queue = field(default_factory=asyncio.Queue)
+    events: list[dict] = field(default_factory=list)
+    cond: asyncio.Condition = field(default_factory=asyncio.Condition)
+    terminal: bool = False
     task: Optional[asyncio.Task] = None
     results: list[dict] = field(default_factory=list)
     error_message: str = ""
+    # Experimental flags active when the benchmark started. When non-empty
+    # the run's results are not uploaded to omlx.ai community benchmarks
+    # because experimental features skew the numbers.
+    experimental_features: list[str] = field(default_factory=list)
+    # Mirror of the upload SSE events so REST consumers (e.g. native Swift
+    # app polling /results) can render leaderboard status without opening
+    # the stream. Phases: "idle" → "uploading" → "done" | "skipped". The
+    # browser HTML still consumes the SSE stream directly; this is purely
+    # additive state that lives alongside it.
+    upload_state: dict = field(default_factory=lambda: {
+        "phase": "idle",
+        "results": [],          # per-context-length: {context_length, id?, url?, duplicate?, error?}
+        "total": 0,
+        "success_count": 0,
+        "failed_count": 0,
+        "owner_hash": None,     # display hash, populated on upload_done
+        "skipped_reason": None, # e.g. "experimental_features"
+        "skipped_features": [],
+    })
+
+
+# Event types that close the SSE stream for a bench run. `done` is NOT
+# terminal — it marks "tests finished, upload starting"; the real end of
+# stream is `upload_done` (or `error`).
+_BENCH_TERMINAL_TYPES = frozenset({"upload_done", "error"})
 
 
 def get_run(bench_id: str) -> Optional[BenchmarkRun]:
     """Get a benchmark run by ID."""
     return _benchmark_runs.get(bench_id)
+
+
+def get_active_run() -> Optional[BenchmarkRun]:
+    """Return the currently-running throughput benchmark, if any.
+
+    Discovery surface for clients that need to attach to an in-progress
+    run without knowing the bench_id upfront (page refresh, second tab).
+    Returns the first run with status == "running"; throughput benches
+    are 1-at-a-time so there's never more than one.
+    """
+    for run in _benchmark_runs.values():
+        if run.status == "running":
+            return run
+    return None
 
 
 def create_run(request: BenchmarkRequest) -> BenchmarkRun:
@@ -166,8 +214,16 @@ def _compute_single_metrics(
 
 
 async def _send_event(run: BenchmarkRun, event: dict) -> None:
-    """Send an SSE event to the run's queue."""
-    await run.queue.put(event)
+    """Append an event to the run's log and wake any subscribers.
+
+    Sets `run.terminal` when the event ends the stream so subscribers
+    can return rather than wait for an event that will never come.
+    """
+    async with run.cond:
+        run.events.append(event)
+        if event.get("type") in _BENCH_TERMINAL_TYPES:
+            run.terminal = True
+        run.cond.notify_all()
 
 
 async def _run_single_test(
@@ -374,6 +430,51 @@ def _clean_model_name(model_id: str, quantization: str) -> str:
     return name.strip("-_ ")
 
 
+def _sanitize_upload_error(resp: Any) -> str:
+    """Extract a user-presentable error string from a failed upload response.
+
+    Avoids dumping raw HTML bodies (e.g. Cloudflare's "Just a moment..."
+    challenge interstitial) into the dashboard's red-x error column.
+    Detects CF mitigation specifically so users get actionable context
+    instead of a 5KB markup blob.
+
+    Resolution order:
+    1. Cloudflare challenge — header ``cf-mitigated: challenge`` is
+       authoritative; a body sniff for "just a moment" / "cf-chl" covers
+       edge transports that strip the header.
+    2. JSON envelope — the omlx.ai API's normal error shape; extract
+       ``error`` / ``detail`` / ``message`` if present, truncated.
+    3. Plain-text body — short responses only; HTML-looking bodies are
+       collapsed to a one-line "non-JSON response (N bytes)" hint.
+    4. Fallback to the bare HTTP status code.
+    """
+    headers = getattr(resp, "headers", {}) or {}
+    cf_mitigated = str(headers.get("cf-mitigated", "")).lower()
+    body = getattr(resp, "text", "") or ""
+    status = getattr(resp, "status_code", "?")
+
+    body_head = body[:512].lower()
+    if cf_mitigated == "challenge" or "just a moment" in body_head or "cf-chl" in body_head:
+        return (
+            f"Upload blocked by Cloudflare (HTTP {status}). "
+            f"This is a server-side issue with omlx.ai — retry later or "
+            f"report it to the maintainer."
+        )
+
+    try:
+        data = resp.json()
+        msg = data.get("error") or data.get("detail") or data.get("message")
+        if msg:
+            return str(msg)[:300]
+    except Exception:
+        pass
+
+    text = body.strip()
+    if "<" in text and ">" in text:
+        return f"HTTP {status} — unexpected non-JSON response ({len(body)} bytes)"
+    return text[:300] or f"HTTP {status}"
+
+
 async def _upload_to_omlx_ai(run: BenchmarkRun, engine_pool: Any) -> None:
     """Upload benchmark results to omlx.ai community benchmarks.
 
@@ -394,6 +495,25 @@ async def _upload_to_omlx_ai(run: BenchmarkRun, engine_pool: Any) -> None:
         parse_chip_info,
     )
 
+    # Skip upload when experimental features were active during the run.
+    # These features (DFlash, SpecPrefill, TurboQuant KV) skew throughput
+    # and would pollute the community leaderboard if mixed in unmarked.
+    if run.experimental_features:
+        run.upload_state["phase"] = "skipped"
+        run.upload_state["skipped_reason"] = "experimental_features"
+        run.upload_state["skipped_features"] = list(run.experimental_features)
+        await _send_event(run, {
+            "type": "upload_skipped",
+            "reason": "experimental_features",
+            "features": list(run.experimental_features),
+        })
+        logger.info(
+            f"Benchmark upload skipped: experimental features active: "
+            f"{run.experimental_features}"
+        )
+        return
+
+    run.upload_state["phase"] = "uploading"
     await _send_event(run, {
         "type": "progress",
         "phase": "upload",
@@ -496,56 +616,73 @@ async def _upload_to_omlx_ai(run: BenchmarkRun, engine_pool: Any) -> None:
             if resp.status_code == 201:
                 data = resp.json()
                 success_count += 1
+                result_dict = {
+                    "context_length": context_length,
+                    "id": data.get("id"),
+                    "url": data.get("url"),
+                }
+                run.upload_state["results"].append(result_dict)
                 await _send_event(run, {
                     "type": "upload",
-                    "data": {
-                        "context_length": context_length,
-                        "id": data.get("id"),
-                        "url": data.get("url"),
-                    },
+                    "data": result_dict,
                 })
             elif resp.status_code == 409:
                 data = resp.json()
                 success_count += 1  # Duplicate is still ok
+                result_dict = {
+                    "context_length": context_length,
+                    "id": data.get("existing_id"),
+                    "url": data.get("existing_url"),
+                    "duplicate": True,
+                }
+                run.upload_state["results"].append(result_dict)
                 await _send_event(run, {
                     "type": "upload",
-                    "data": {
-                        "context_length": context_length,
-                        "id": data.get("existing_id"),
-                        "url": data.get("existing_url"),
-                        "duplicate": True,
-                    },
+                    "data": result_dict,
                 })
             else:
                 failed_count += 1
-                error_msg = ""
-                try:
-                    error_msg = resp.json().get("error", resp.text)
-                except Exception:
-                    error_msg = resp.text
+                error_msg = _sanitize_upload_error(resp)
+                result_dict = {
+                    "context_length": context_length,
+                    "error": error_msg,
+                }
+                run.upload_state["results"].append(result_dict)
                 await _send_event(run, {
                     "type": "upload",
-                    "data": {
-                        "context_length": context_length,
-                        "error": error_msg,
-                    },
+                    "data": result_dict,
                 })
+                # Surface the sanitized message to ops; the full body
+                # (truncated) goes to debug so it can still be retrieved
+                # from the log file if needed.
                 logger.warning(
                     f"Benchmark upload failed for pp{context_length}: "
                     f"{resp.status_code} {error_msg}"
                 )
+                if (resp.text or "")[:1] not in ("{", "["):
+                    logger.debug(
+                        "Benchmark upload non-JSON body (truncated): %r",
+                        (resp.text or "")[:500],
+                    )
 
         except Exception as e:
             failed_count += 1
+            result_dict = {
+                "context_length": context_length,
+                "error": str(e),
+            }
+            run.upload_state["results"].append(result_dict)
             await _send_event(run, {
                 "type": "upload",
-                "data": {
-                    "context_length": context_length,
-                    "error": str(e),
-                },
+                "data": result_dict,
             })
             logger.warning(f"Benchmark upload error for pp{context_length}: {e}")
 
+    run.upload_state["phase"] = "done"
+    run.upload_state["total"] = len(single_results)
+    run.upload_state["success_count"] = success_count
+    run.upload_state["failed_count"] = failed_count
+    run.upload_state["owner_hash"] = owner_hash_display
     await _send_event(run, {
         "type": "upload_done",
         "data": {
@@ -577,6 +714,25 @@ async def run_benchmark(run: BenchmarkRun, engine_pool: Any) -> None:
     overall_start = time.perf_counter()
 
     try:
+        # Snapshot experimental flags at run start. Settings can change mid-run
+        # (user toggling DFlash/SpecPrefill/TurboQuant), and the produced
+        # numbers are tied to whatever was active when generation actually ran.
+        sm = getattr(engine_pool, "_settings_manager", None)
+        if sm is not None:
+            try:
+                s = sm.get_settings(request.model_id)
+                if getattr(s, "dflash_enabled", False):
+                    run.experimental_features.append("dflash")
+                if getattr(s, "specprefill_enabled", False):
+                    run.experimental_features.append("specprefill")
+                if getattr(s, "turboquant_kv_enabled", False):
+                    run.experimental_features.append("turboquant")
+            except Exception as e:
+                logger.warning(
+                    f"Benchmark: failed to read experimental flags for "
+                    f"{request.model_id}: {e}"
+                )
+
         # Phase 1: Unload all loaded models
         loaded_ids = engine_pool.get_loaded_model_ids()
         if loaded_ids:

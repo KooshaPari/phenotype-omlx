@@ -30,37 +30,33 @@
             // Global settings
             globalSettings: {
                 base_path: '',
-                server: { host: '127.0.0.1', port: 8000, log_level: 'info' },
-                model: { model_dirs: [''], max_model_memory: '' },
-                memory: { max_process_memory: 'auto', prefill_memory_guard: true },
-                scheduler: { max_concurrent_requests: 8 },
-                cache: { enabled: true, ssd_cache_dir: '', ssd_cache_max_size: 'auto', hot_cache_max_size: '0', initial_cache_blocks: 256 },
+                server: { host: '127.0.0.1', port: 8000, log_level: 'info', sse_keepalive_mode: 'chunk' },
+                model: { model_dirs: [''] },
+                memory: { prefill_memory_guard: true, memory_guard_tier: 'balanced', memory_guard_custom_ceiling_gb: 0 },
+                scheduler: { max_concurrent_requests: 8, embedding_batch_size: 32, chunked_prefill: false },
+                cache: { enabled: true, ssd_cache_dir: '', ssd_cache_max_size: 'auto', hot_cache_max_size: '0', initial_cache_blocks: 256, hot_cache_only: false },
                 sampling: { max_context_window: 32768, max_tokens: 32768, temperature: 1.0, top_p: 0.95, top_k: 0, repetition_penalty: 1.0 },
                 mcp: { config_path: '' },
                 huggingface: { endpoint: '' },
                 network: { http_proxy: '', https_proxy: '', no_proxy: '', ca_bundle: '' },
                 auth: { api_key_set: false, api_key: '', skip_api_key_verification: false, sub_keys: [] },
                 claude_code: { context_scaling_enabled: false, target_context_size: 200000, mode: 'cloud', opus_model: null, sonnet_model: null, haiku_model: null },
-                integrations: { codex_model: null, opencode_model: null, openclaw_model: null, pi_model: null, openclaw_tools_profile: 'full' },
+                integrations: { copilot_model: null, codex_model: null, opencode_model: null, openclaw_model: null, hermes_model: null, pi_model: null, openclaw_tools_profile: 'full' },
                 ui: { language: 'en' },
+                idle_timeout: { idle_timeout_seconds: null },
                 system: { total_memory_bytes: 0, total_memory: '', auto_model_memory: '', ssd_total_bytes: 0, ssd_total: '' },
             },
 
-            // Process memory slider (10-99%)
-            processMemoryPercent: 90,
-            processMemoryAuto: true,
-            // Memory slider (0-100%)
-            memoryPercent: 80,
-            modelMemoryAuto: true,
             // Cache slider (0-100%)
             cachePercent: 10,
             editingCache: false,
             // Hot cache slider (0-50%)
             hotCachePercent: 0,
-            // Editing states for direct GB input
-            editingProcessMemory: false,
-            editingModelMemory: false,
+            // Editing state for direct GB input
             editingHotCache: false,
+
+            // Idle timeout string value for select binding (null ↔ '')
+            idleTimeoutValue: '',
 
             // Models
             models: [],
@@ -103,10 +99,31 @@
                 enableToolResultLimit: false,
                 max_tool_result_tokens: null,
                 ctKwargEntries: [],
+                trust_remote_code: false,
             },
             savingModelSettings: false,
             loadingGenDefaults: false,
             reasoningParsers: [],
+
+            // Profile / template / preset state
+            profiles: [],                // per-model profiles for selectedModel
+            templates: [],               // global templates
+            presets: [],                 // curated presets (bundled + remote refresh)
+            profileFields: { universal: [], model_specific: [] },  // loaded from /api/profile-fields
+            profileScope: 'model',       // 'preset' | 'global' | 'model'
+            refreshingPresets: false,
+            activeProfileName: null,     // currently-active profile for the form
+            profilesDrift: false,        // true if form values differ from active profile
+            _applySeq: 0,               // monotonic counter for apply race guard
+            profileError: '',
+            showNewProfileForm: false,
+            newProfile: { name: '', display_name: '', description: '', also_as_template: false },
+            showNewTemplateForm: false,
+            newTemplate: { name: '', display_name: '', description: '' },
+            editingProfile: null,        // profile name being edited inline
+            editingTemplate: null,       // template name being edited inline
+            profileDeleteConfirm: null,
+            templateDeleteConfirm: null,
 
             // Status tab state
             stats: {
@@ -124,6 +141,13 @@
                     models: [],
                     model_memory_used: 0,
                     model_memory_max: 0,
+                    memory_pressure: {
+                        enabled: false,
+                        current_bytes: 0,
+                        soft_bytes: 0,
+                        hard_bytes: 0,
+                        pressure_level: 'ok',
+                    },
                     total_active_requests: 0,
                     total_waiting_requests: 0,
                 },
@@ -135,6 +159,10 @@
                     total_num_files: 0,
                     total_size_bytes: 0,
                     effective_block_sizes: [],
+                    hot_cache_size_bytes: 0,
+                    hot_cache_entries: 0,
+                    hot_cache_max_bytes: 0,
+                    disk_max_bytes: 0,
                 },
             },
             alltimeStats: {
@@ -149,11 +177,23 @@
             serverAliases: [],
             selectedAlias: '',
 
+            // Server-restart state machine (driven by Settings > Server > Restart).
+            // status transitions: idle → restarting → waiting → idle (success)
+            //                   |                   |
+            //                   |                   └─→ error (timeout / non-200)
+            //                   └─→ unsupported (no menubar supervisor)
+            //                   └─→ error (POST failed)
+            restartServer: {
+                status: 'idle',
+                message: '',
+            },
+
             statsScope: 'session',
             selectedStatsModel: '',
             showClearStatsConfirm: false,
             showClearAlltimeConfirm: false,
             showClearSsdCacheConfirm: false,
+            showClearHotCacheConfirm: false,
             _statsRefreshTimer: null,
 
             // Log viewer state
@@ -168,6 +208,7 @@
             logAvailableFiles: ['server.log'],
             logTotalLines: 0,
             logLastUpdated: '',
+            logMinLevel: 'TRACE',
             _logRefreshTimer: null,
 
             // Models sub-tab state
@@ -216,6 +257,20 @@
             hfSearchLoading: false,
             hfSearchLoaded: false,
             hfSearchDebounceTimer: null,
+            // Search filters
+            hfSearchFiltersOpen: false,
+            hfSearchMinParams: '',
+            hfSearchMaxParams: '',
+            hfSearchMaxSize: '',
+            hfSearchMinSize: '',
+            // Table sort state for Browse Models
+            hfTableSort: 'downloads',
+            hfTableSortDir: 'desc',
+
+            // Computed: check if any filters are active
+            get hfSearchFiltersActive() {
+                return this.hfSearchMinParams || this.hfSearchMaxParams || this.hfSearchMaxSize || this.hfSearchMinSize;
+            },
 
             // Search history
             hfSearchHistory: JSON.parse(localStorage.getItem('hfSearchHistory') || '[]'),
@@ -278,6 +333,7 @@
             oqTextOnly: false,
             oqDtype: 'bfloat16',
             oqSensitivityModelPath: '',
+            oqPreserveMtp: false,
 
             // oQ Uploader state
             uploadHfToken: localStorage.getItem('omlx-hf-upload-token') || '',
@@ -322,6 +378,12 @@
             benchUploadResults: [],
             benchUploadDone: null,
             benchUploading: false,
+            benchUploadSkipped: null,  // { features: [...] } when upload was skipped due to experimental features
+            // { bench_id, model_id } when the server reports a running bench
+            // that is NOT the one this tab is displaying. Drives the "another
+            // bench is running" banner + disables Start so the user doesn't
+            // race a 409 on the server.
+            benchOtherActive: null,
 
             // Bench sub-tab & dropdown
             benchTab: 'throughput',
@@ -329,21 +391,50 @@
 
             // Accuracy benchmark state
             accModelId: '',
-            accBenchmarks: { mmlu: true, kmmlu: false, cmmlu: false, jmmlu: false, hellaswag: false, truthfulqa: true, arc_challenge: false, winogrande: false, gsm8k: false, humaneval: true, mbpp: false, livecodebench: false },
-            accSampleSizes: { mmlu: 1000, kmmlu: 300, cmmlu: 300, jmmlu: 300, hellaswag: 200, truthfulqa: 0, arc_challenge: 300, winogrande: 300, gsm8k: 100, humaneval: 0, mbpp: 200, livecodebench: 100 },
-            accBenchmarkList: [
-                { key: 'mmlu', label: 'MMLU', desc: 'Knowledge · 57 subjects', fullSize: 14042, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
-                { key: 'kmmlu', label: 'KMMLU', desc: '한국어 지식 · 45 과목', fullSize: 35030, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
-                { key: 'cmmlu', label: 'CMMLU', desc: '中文知识 · 67 科目', fullSize: 11582, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
-                { key: 'jmmlu', label: 'JMMLU', desc: '日本語知識 · 112 科目', fullSize: 7536, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
-                { key: 'hellaswag', label: 'HellaSwag', desc: 'Commonsense reasoning', fullSize: 10042, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
-                { key: 'truthfulqa', label: 'TruthfulQA', desc: 'Truthfulness', fullSize: 817, sizes: [30, 50, 100, 200, 300] },
-                { key: 'arc_challenge', label: 'ARC-C', desc: 'Science reasoning', fullSize: 1172, sizes: [30, 50, 100, 200, 300] },
-                { key: 'winogrande', label: 'Winogrande', desc: 'Coreference resolution', fullSize: 1267, sizes: [30, 50, 100, 200, 300] },
-                { key: 'gsm8k', label: 'GSM8K', desc: 'Math reasoning', fullSize: 1319, sizes: [30, 50, 100, 200, 300] },
-                { key: 'humaneval', label: 'HumanEval', desc: 'Function completion', fullSize: 164, sizes: [30, 50, 100] },
-                { key: 'mbpp', label: 'MBPP', desc: 'Python problems', fullSize: 500, sizes: [30, 50, 100, 200, 300] },
-                { key: 'livecodebench', label: 'LiveCodeBench', desc: 'Code generation', fullSize: 1055, sizes: [30, 50, 100, 200, 300] },
+            accBenchmarks: { mmlu: true, mmlu_pro: false, kmmlu: false, cmmlu: false, jmmlu: false, hellaswag: false, truthfulqa: true, arc_challenge: false, winogrande: false, gsm8k: false, mathqa: false, humaneval: true, mbpp: false, livecodebench: false, bbq: false, safetybench: false },
+            accSampleSizes: { mmlu: 1000, mmlu_pro: 300, kmmlu: 300, cmmlu: 300, jmmlu: 300, hellaswag: 200, truthfulqa: 0, arc_challenge: 300, winogrande: 300, gsm8k: 100, mathqa: 300, humaneval: 0, mbpp: 200, livecodebench: 100, bbq: 300, safetybench: 300 },
+            accBenchmarkGroups: [
+                {
+                    name: 'Knowledge',
+                    benchmarks: [
+                        { key: 'mmlu', label: 'MMLU', desc: 'Knowledge · 57 subjects', fullSize: 14042, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                        { key: 'mmlu_pro', label: 'MMLU-Pro', desc: 'Hard knowledge · 14 subjects (10-way)', fullSize: 12032, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                        { key: 'kmmlu', label: 'KMMLU', desc: '한국어 지식 · 45 과목', fullSize: 35030, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                        { key: 'cmmlu', label: 'CMMLU', desc: '中文知识 · 67 科目', fullSize: 11582, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                        { key: 'jmmlu', label: 'JMMLU', desc: '日本語知識 · 112 科目', fullSize: 7536, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                    ],
+                },
+                {
+                    name: 'Commonsense & Reasoning',
+                    benchmarks: [
+                        { key: 'hellaswag', label: 'HellaSwag', desc: 'Commonsense reasoning', fullSize: 10042, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                        { key: 'arc_challenge', label: 'ARC-C', desc: 'Science reasoning', fullSize: 1172, sizes: [30, 50, 100, 200, 300] },
+                        { key: 'winogrande', label: 'Winogrande', desc: 'Coreference resolution', fullSize: 1267, sizes: [30, 50, 100, 200, 300] },
+                        { key: 'truthfulqa', label: 'TruthfulQA', desc: 'Truthfulness', fullSize: 817, sizes: [30, 50, 100, 200, 300] },
+                    ],
+                },
+                {
+                    name: 'Math',
+                    benchmarks: [
+                        { key: 'gsm8k', label: 'GSM8K', desc: 'Math reasoning', fullSize: 1319, sizes: [30, 50, 100, 200, 300] },
+                        { key: 'mathqa', label: 'MathQA', desc: 'Quantitative reasoning · 5-way', fullSize: 2985, sizes: [30, 50, 100, 200, 300, 500, 1000] },
+                    ],
+                },
+                {
+                    name: 'Coding',
+                    benchmarks: [
+                        { key: 'humaneval', label: 'HumanEval', desc: 'Function completion', fullSize: 164, sizes: [30, 50, 100] },
+                        { key: 'mbpp', label: 'MBPP', desc: 'Python problems', fullSize: 500, sizes: [30, 50, 100, 200, 300] },
+                        { key: 'livecodebench', label: 'LiveCodeBench', desc: 'Code generation', fullSize: 1055, sizes: [30, 50, 100, 200, 300] },
+                    ],
+                },
+                {
+                    name: 'Safety & Alignment',
+                    benchmarks: [
+                        { key: 'bbq', label: 'BBQ', desc: 'Social bias · 11 categories', fullSize: 10864, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                        { key: 'safetybench', label: 'SafetyBench', desc: 'Safety · 7 categories', fullSize: 11435, sizes: [30, 50, 100, 200, 300, 500, 1000, 2000] },
+                    ],
+                },
             ],
             accBatchSize: 1,
             accEnableThinking: false,
@@ -367,6 +458,8 @@
                     this.loadGlobalSettings(),
                     this.loadModels(),
                     this.loadServerInfo(),
+                    this.loadProfileFields(),
+                    this.loadPresets(),
                     this.checkForUpdate()
                 ]);
 
@@ -377,6 +470,17 @@
                 // Watch for main tab changes to manage refresh timers
                 this.$watch('mainTab', (value) => {
                     this.handleMainTabChange(value);
+                });
+
+                // When the user returns to this browser tab after looking
+                // elsewhere, re-check whether a different bench just started
+                // in another tab. Fires the banner without requiring an
+                // in-app tab switch.
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState !== 'visible') return;
+                    if (this.mainTab === 'bench' && this.benchTab === 'throughput') {
+                        this.loadBenchState();
+                    }
                 });
 
                 this.$watch('hfMlxOnly', () => {
@@ -457,6 +561,7 @@
                 }
                 if (value === 'bench') {
                     if (!this.benchDeviceInfo) await this.loadBenchDeviceInfo();
+                    await this.loadBenchState();
                     await this.loadAccState();
                 }
             },
@@ -577,35 +682,21 @@
                             auth: { ...this.globalSettings.auth, ...data.auth },
                             claude_code: { ...this.globalSettings.claude_code, ...data.claude_code },
                             integrations: { ...this.globalSettings.integrations, ...data.integrations },
+                            idle_timeout: { ...this.globalSettings.idle_timeout, ...data.idle_timeout },
                             system: { ...this.globalSettings.system, ...data.system },
                         };
                         this.globalSettings.ui = data.ui || { language: 'en' };
 
-                        // Calculate memory percent from stored value
-                        if (this.globalSettings.model.max_model_memory === 'auto') {
-                            this.modelMemoryAuto = true;
-                            this.memoryPercent = 90;
-                        } else if (this.globalSettings.model.max_model_memory === 'disabled') {
-                            this.modelMemoryAuto = false;
-                            this.memoryPercent = 0;
-                        } else {
-                            this.modelMemoryAuto = false;
-                            this.memoryPercent = this.parseMemoryToPercent(
-                                this.globalSettings.model.max_model_memory,
-                                this.globalSettings.system.total_memory_bytes
-                            );
+                        // Sync idle timeout select value
+                        this.idleTimeoutValue = this.globalSettings.idle_timeout?.idle_timeout_seconds != null
+                            ? String(this.globalSettings.idle_timeout.idle_timeout_seconds)
+                            : '';
+
+                        // Normalize memory guard tier to one of the known values.
+                        const validTiers = ['safe', 'balanced', 'aggressive', 'custom'];
+                        if (!validTiers.includes(this.globalSettings.memory.memory_guard_tier)) {
+                            this.globalSettings.memory.memory_guard_tier = 'balanced';
                         }
-                        // Sync the memory string value from percent
-                        this.updateMemoryFromSlider();
-
-                        // Calculate process memory slider state from stored value
-                        const pmState = this.parseProcessMemoryToState(
-                            this.globalSettings.memory.max_process_memory,
-                            this.globalSettings.system.total_memory_bytes
-                        );
-                        this.processMemoryAuto = pmState.auto;
-                        this.processMemoryPercent = pmState.percent;
-
 
                         // Calculate cache percent from stored value (based on total capacity)
                         this.cachePercent = this.parseCacheToPercent(
@@ -640,6 +731,7 @@
                 if (!s.server.port) errors.push('Port');
                 if (!s.model.model_dirs || !s.model.model_dirs.some(d => d.trim())) errors.push('Model Directory');
                 if (!s.scheduler.max_concurrent_requests) errors.push('Max Concurrent Requests');
+                if (!s.scheduler.embedding_batch_size) errors.push('Embedding Batch Size');
                 if (!s.cache.ssd_cache_max_size) errors.push('Max Cache Size');
                 if (!s.sampling.max_context_window) errors.push('Max Context Window');
                 if (!s.sampling.max_tokens) errors.push('Max Tokens');
@@ -672,17 +764,21 @@
                             host: this.globalSettings.server.host,
                             port: this.globalSettings.server.port,
                             log_level: this.globalSettings.server.log_level,
+                            sse_keepalive_mode: this.globalSettings.server.sse_keepalive_mode,
                             model_dirs: this.globalSettings.model.model_dirs.filter(d => d.trim()),
-                            max_model_memory: this.globalSettings.model.max_model_memory,
                             model_fallback: this.globalSettings.model.model_fallback,
-                            max_process_memory: this.globalSettings.memory.max_process_memory,
                             memory_prefill_memory_guard: this.globalSettings.memory.prefill_memory_guard,
+                            memory_guard_tier: this.globalSettings.memory.memory_guard_tier,
+                            memory_guard_custom_ceiling_gb: this.globalSettings.memory.memory_guard_custom_ceiling_gb,
                             max_concurrent_requests: this.globalSettings.scheduler.max_concurrent_requests,
+                            embedding_batch_size: this.globalSettings.scheduler.embedding_batch_size,
+                            chunked_prefill: this.globalSettings.scheduler.chunked_prefill,
                             cache_enabled: this.globalSettings.cache.enabled,
                             ssd_cache_dir: this.globalSettings.cache.ssd_cache_dir,
                             ssd_cache_max_size: this.globalSettings.cache.ssd_cache_max_size,
                             hot_cache_max_size: this.globalSettings.cache.hot_cache_max_size,
                             initial_cache_blocks: this.globalSettings.cache.initial_cache_blocks,
+                            hot_cache_only: this.globalSettings.cache.hot_cache_only,
                             sampling_max_context_window: this.globalSettings.sampling.max_context_window,
                             sampling_max_tokens: this.globalSettings.sampling.max_tokens,
                             sampling_temperature: this.globalSettings.sampling.temperature,
@@ -696,6 +792,7 @@
                             network_ca_bundle: this.globalSettings.network.ca_bundle,
                             ...(this.globalSettings.auth.api_key ? { api_key: this.globalSettings.auth.api_key } : {}),
                             skip_api_key_verification: this.globalSettings.auth.skip_api_key_verification,
+                            idle_timeout_seconds: this.globalSettings.idle_timeout?.idle_timeout_seconds ?? null,
                         }),
                     });
 
@@ -897,7 +994,540 @@
                 }
             },
 
+            // ===== Profiles / Templates =====
+            formValuesForProfile() {
+                const ms = this.modelSettings;
+                const out = {};
+
+                for (const k of this.profileFields.universal.concat(this.profileFields.model_specific)) {
+                    if (k === 'chat_template_kwargs' || k === 'forced_ct_kwargs') continue;  // handle below
+                    if (k === 'thinking_budget_enabled') {
+                        if (ms.enableThinkingBudget) out.thinking_budget_tokens = ms.thinking_budget_tokens ?? null;
+                        continue;
+                    }
+                    if (k === 'index_cache_freq') {
+                        if (ms.enableIndexCache) out.index_cache_freq = ms.index_cache_freq || 4;
+                        continue;
+                    }
+                    if (k === 'max_tool_result_tokens') {
+                        if (ms.enableToolResultLimit) out.max_tool_result_tokens = ms.max_tool_result_tokens || null;
+                        continue;
+                    }
+                    // Standard field: apply nullish coalescing; coerce string numerics
+                    let v = ms[k] ?? null;
+                    if (typeof v === 'string' && v !== '' && !isNaN(Number(v))) v = Number(v);
+                    out[k] = v;
+                }
+
+                // Build chat_template_kwargs and forced_ct_kwargs from ctKwargEntries
+                const ctk = {};
+                const forced = [];
+                for (const e of (ms.ctKwargEntries || [])) {
+                    if (e.type === 'enable_thinking') {
+                        ctk.enable_thinking = e.value === 'true';
+                        if (e.force) forced.push('enable_thinking');
+                    } else if (e.type === 'reasoning_effort') {
+                        ctk.reasoning_effort = e.value;
+                        if (e.force) forced.push('reasoning_effort');
+                    } else if (e.type === 'custom' && e.key && e.key.trim()) {
+                        let v = e.value;
+                        if (v === 'true') v = true;
+                        else if (v === 'false') v = false;
+                        else if (!isNaN(Number(v)) && String(v).trim() !== '') v = Number(v);
+                        ctk[e.key.trim()] = v;
+                        if (e.force) forced.push(e.key.trim());
+                    }
+                }
+                if (Object.keys(ctk).length > 0) out.chat_template_kwargs = ctk;
+                if (forced.length > 0) out.forced_ct_kwargs = forced;
+
+                return out;
+            },
+            formValuesForTemplate() {
+                const full = this.formValuesForProfile();
+                const out = {};
+                for (const k of this.profileFields.universal) {
+                    if (k in full) out[k] = full[k];
+                }
+                return out;
+            },
+            computeDrift() {
+                if (!this.activeProfileName) { this.profilesDrift = false; return; }
+                const active = this.profiles.find(p => p.name === this.activeProfileName);
+                if (!active) { this.profilesDrift = false; return; }
+                const form = this.formValuesForProfile();
+                for (const [k, v] of Object.entries(active.settings || {})) {
+                    if (JSON.stringify(form[k]) !== JSON.stringify(v)) {
+                        this.profilesDrift = true;
+                        return;
+                    }
+                }
+                this.profilesDrift = false;
+            },
+            matchedPreset(settings) {
+                // Return the preset whose universal-field settings match the current model
+                // settings exactly, otherwise null. Used by the models list to show "which
+                // preset was applied" as a pill without any server-side tracking.
+                if (!settings || !this.presets || this.presets.length === 0) return null;
+                const universal = this.profileFields.universal || [];
+                if (universal.length === 0) return null;
+                const canonical = v => {
+                    if (v === undefined || v === null || v === false) return null;
+                    if (typeof v === 'object') {
+                        return JSON.stringify(v, Object.keys(v).sort());
+                    }
+                    return v;
+                };
+                for (const p of this.presets) {
+                    const ps = p.settings || {};
+                    let ok = true;
+                    for (const k of universal) {
+                        if (canonical(ps[k]) !== canonical(settings[k])) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (ok) return p;
+                }
+                return null;
+            },
+            async loadProfilesForModel(modelId) {
+                this.profiles = [];
+                try {
+                    const r = await fetch(`/admin/api/models/${encodeURIComponent(modelId)}/profiles`);
+                    if (r.ok) {
+                        const data = await r.json();
+                        this.profiles = data.profiles || [];
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    }
+                } catch (e) {
+                    console.error('Failed to load profiles:', e);
+                }
+            },
+            async loadTemplates() {
+                try {
+                    const r = await fetch('/admin/api/profile-templates');
+                    if (r.ok) {
+                        const data = await r.json();
+                        this.templates = data.templates || [];
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    }
+                } catch (e) {
+                    console.error('Failed to load templates:', e);
+                }
+            },
+            async loadProfileFields() {
+                try {
+                    const r = await fetch('/admin/api/profile-fields');
+                    if (r.ok) {
+                        const data = await r.json();
+                        this.profileFields = {
+                            universal: data.universal || [],
+                            model_specific: data.model_specific || [],
+                        };
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    }
+                } catch (e) {
+                    console.error('Failed to load profile field definitions:', e);
+                }
+            },
+
+            async loadPresets() {
+                // Use localStorage cache if present, otherwise fall back to the bundled file.
+                const cached = localStorage.getItem('omlx_preset_cache');
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        this.presets = parsed.presets || [];
+                        return;
+                    } catch (e) { /* corrupted, fall through */ }
+                }
+                try {
+                    const r = await fetch('/admin/static/omlx_preset.json');
+                    if (r.ok) {
+                        const data = await r.json();
+                        this.presets = data.presets || [];
+                    }
+                } catch (e) {
+                    console.error('Failed to load bundled presets:', e);
+                }
+            },
+
+            async refreshPresets() {
+                if (this.refreshingPresets) return;
+                this.refreshingPresets = true;
+                try {
+                    const r = await fetch('/admin/api/presets/refresh', { method: 'POST' });
+                    if (r.ok) {
+                        const data = await r.json();
+                        this.presets = data.presets || [];
+                        localStorage.setItem('omlx_preset_cache', JSON.stringify(data));
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    }
+                } catch (e) {
+                    console.error('Preset refresh failed:', e);
+                } finally {
+                    this.refreshingPresets = false;
+                }
+            },
+
+            // Floating tooltip shared by preset/profile pills (position:fixed escapes
+            // the scroll container's overflow clipping, unlike absolute+group-hover).
+            tip: { visible: false, text: '', x: 0, y: 0 },
+
+            showTip(el, text) {
+                if (!text) return;
+                const rect = el.getBoundingClientRect();
+                this.tip = {
+                    visible: true,
+                    text: text,
+                    x: rect.left + rect.width / 2,
+                    y: rect.bottom + 6,
+                };
+            },
+            hideTip() {
+                this.tip.visible = false;
+            },
+
+            _resetPresetApplicableFields() {
+                // Reset all fields a preset can touch so switching presets does not leave
+                // stale values. Intentionally does NOT touch model_alias / model_type_override
+                // / is_pinned / is_default / turboquant_* / dflash_* / specprefill_* / index_cache_*.
+                const ms = this.modelSettings;
+                ms.temperature = null;
+                ms.top_p = null;
+                ms.top_k = null;
+                ms.min_p = null;
+                ms.repetition_penalty = null;
+                ms.presence_penalty = null;
+                ms.force_sampling = false;
+                ms.max_context_window = null;
+                ms.max_tokens = null;
+                ms.reasoning_parser = null;
+                ms.ttl_seconds = null;
+                ms.enable_thinking = null;
+                ms.enableThinkingBudget = false;
+                ms.thinking_budget_tokens = null;
+                ms.enableToolResultLimit = false;
+                ms.max_tool_result_tokens = null;
+                ms.ctKwargEntries = [];
+            },
+
+            applyPresetToForm(preset) {
+                // Reset first so previous preset's fields (e.g. presence_penalty) do not stick.
+                this._resetPresetApplicableFields();
+                const s = preset.settings || {};
+                const ms = this.modelSettings;
+                for (const k of Object.keys(s)) {
+                    if (k === 'thinking_budget_enabled') {
+                        ms.enableThinkingBudget = !!s[k];
+                    } else if (k === 'max_tool_result_tokens') {
+                        ms.enableToolResultLimit = s[k] != null;
+                        ms.max_tool_result_tokens = s[k] ?? null;
+                    } else if (k === 'chat_template_kwargs' || k === 'forced_ct_kwargs') {
+                        const ctk = s.chat_template_kwargs || {};
+                        const forced = new Set(s.forced_ct_kwargs || []);
+                        const entries = [];
+                        for (const [key, value] of Object.entries(ctk)) {
+                            if (key === 'enable_thinking') {
+                                entries.push({type:'enable_thinking', value:String(value), force:forced.has('enable_thinking')});
+                            } else if (key === 'reasoning_effort') {
+                                entries.push({type:'reasoning_effort', value:String(value), force:forced.has('reasoning_effort')});
+                            } else {
+                                entries.push({type:'custom', key, value:String(value), force:forced.has(key)});
+                            }
+                        }
+                        ms.ctKwargEntries = entries;
+                    } else {
+                        ms[k] = s[k];
+                    }
+                }
+                this.activeProfileName = null;
+                this.profilesDrift = false;
+            },
+
+            setScope(scope) {
+                this.profileScope = scope;
+                try { localStorage.setItem('omlx_profile_scope', scope); } catch (e) {}
+            },
+
+            async createProfile() {
+                if (!this.selectedModel) return;
+                this.profileError = '';
+                const displayName = this.newProfile.display_name.trim();
+                if (!displayName) {
+                    this.profileError = 'Name required';
+                    return;
+                }
+                // Auto-generate short unique slug (matches backend ^[a-z0-9][a-z0-9_-]{0,31}$)
+                const autoId = 'p-' + Date.now().toString(36) + '-' +
+                               Math.random().toString(36).slice(2, 6);
+                const body = {
+                    name: autoId,
+                    display_name: displayName,
+                    description: this.newProfile.description.trim() || null,
+                    settings: this.formValuesForProfile(),
+                    also_save_as_template: false,
+                };
+                try {
+                    const r = await fetch(
+                        `/admin/api/models/${encodeURIComponent(this.selectedModel.id)}/profiles`,
+                        { method: 'POST', headers: {'Content-Type': 'application/json'},
+                          body: JSON.stringify(body) }
+                    );
+                    if (r.ok) {
+                        await this.loadProfilesForModel(this.selectedModel.id);
+                        if (body.also_save_as_template) await this.loadTemplates();
+                        this.showNewProfileForm = false;
+                        this.newProfile = { name: '', display_name: '', description: '', also_as_template: false };
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    } else {
+                        const data = await r.json().catch(() => ({}));
+                        this.profileError = data.detail || 'Failed to save profile';
+                    }
+                } catch (e) {
+                    this.profileError = String(e);
+                }
+            },
+            async applyProfileToForm(profile) {
+                // Merge all profile fields into the form (no server call — user clicks Save to persist).
+                const s = profile.settings || {};
+                const ms = this.modelSettings;
+                for (const k of this.profileFields.universal.concat(this.profileFields.model_specific)) {
+                    if (!(k in s)) continue;
+                    if (k === 'thinking_budget_enabled') {
+                        ms.enableThinkingBudget = !!s[k];
+                    } else if (k === 'index_cache_freq') {
+                        ms.enableIndexCache = !!s[k];
+                        ms.index_cache_freq = s[k] || null;
+                    } else if (k === 'max_tool_result_tokens') {
+                        ms.enableToolResultLimit = !!s[k];
+                        ms.max_tool_result_tokens = s[k] || null;
+                    } else if (k === 'chat_template_kwargs' || k === 'forced_ct_kwargs') {
+                        // Rebuild ctKwargEntries
+                        const ctk = s.chat_template_kwargs || {};
+                        const forced = new Set(s.forced_ct_kwargs || []);
+                        const entries = [];
+                        for (const [key, value] of Object.entries(ctk)) {
+                            if (key === 'enable_thinking') {
+                                entries.push({type:'enable_thinking', value:String(value), force:forced.has('enable_thinking')});
+                            } else if (key === 'reasoning_effort') {
+                                entries.push({type:'reasoning_effort', value:String(value), force:forced.has('reasoning_effort')});
+                            } else {
+                                entries.push({type:'custom', key, value:String(value), force:forced.has(key)});
+                            }
+                        }
+                        ms.ctKwargEntries = entries;
+                    } else {
+                        ms[k] = s[k];
+                    }
+                }
+                // Persist active_profile_name to backend before updating UI state
+                const seq = ++this._applySeq;
+                try {
+                    const r = await fetch(
+                        `/admin/api/models/${encodeURIComponent(this.selectedModel.id)}/profiles/${encodeURIComponent(profile.name)}/apply`,
+                        { method: 'POST' }
+                    );
+                    if (seq !== this._applySeq) return;  // superseded by a newer click
+                    if (r.ok) {
+                        this.activeProfileName = profile.name;
+                        this.profilesDrift = false;
+                        // Update the models list so the profile badge reflects the change
+                        const m = this.models.find(m => m.id === this.selectedModel.id);
+                        if (m) m.settings = { ...m.settings, active_profile_name: profile.name };
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    }
+                } catch (e) {
+                    console.error('Failed to apply profile:', e);
+                }
+            },
+            async applyTemplateToForm(template) {
+                // Check if a profile with this template's name already exists
+                const existingProfile = this.profiles.find(p => p.name === template.name);
+
+                if (existingProfile) {
+                    // Profile exists, just apply it (preserve user customizations)
+                    await this.applyProfileToForm(existingProfile);
+                } else {
+                    // Create a new profile from the template
+                    const body = {
+                        name: template.name,
+                        display_name: template.display_name,
+                        description: template.description || null,
+                        settings: template.settings,
+                        source_template: template.name,
+                    };
+                    
+                    try {
+                        const r = await fetch(
+                            `/admin/api/models/${encodeURIComponent(this.selectedModel.id)}/profiles`,
+                            { method: 'POST', headers: {'Content-Type': 'application/json'},
+                              body: JSON.stringify(body) }
+                        );
+                        if (r.ok) {
+                            // Reload profiles first to include the new one
+                            await this.loadProfilesForModel(this.selectedModel.id);
+                            // Find the newly created profile in the refreshed list
+                            const newProfile = this.profiles.find(p => p.name === template.name);
+                            if (newProfile) {
+                                await this.applyProfileToForm(newProfile);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Failed to create profile from template:', e);
+                    }
+                }
+            },
+            async deleteProfile(name) {
+                if (!this.selectedModel) return;
+                try {
+                    const r = await fetch(
+                        `/admin/api/models/${encodeURIComponent(this.selectedModel.id)}/profiles/${encodeURIComponent(name)}`,
+                        { method: 'DELETE' }
+                    );
+                    if (r.ok) {
+                        if (this.activeProfileName === name) this.activeProfileName = null;
+                        await this.loadProfilesForModel(this.selectedModel.id);
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    }
+                } catch (e) {
+                    console.error('Delete profile failed:', e);
+                } finally {
+                    this.profileDeleteConfirm = null;
+                }
+            },
+            async updateProfile(name, patch) {
+                // patch: { new_name?, display_name?, description?, settings?, also_save_as_template? }
+                if (!this.selectedModel) return;
+                this.profileError = '';
+                try {
+                    const r = await fetch(
+                        `/admin/api/models/${encodeURIComponent(this.selectedModel.id)}/profiles/${encodeURIComponent(name)}`,
+                        { method: 'PUT', headers: {'Content-Type':'application/json'},
+                          body: JSON.stringify(patch) }
+                    );
+                    if (r.ok) {
+                        const data = await r.json();
+                        if (this.activeProfileName === name && patch.new_name) {
+                            this.activeProfileName = patch.new_name;
+                        }
+                        await this.loadProfilesForModel(this.selectedModel.id);
+                        if (patch.also_save_as_template) await this.loadTemplates();
+                        this.editingProfile = null;
+                        return data.profile;
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    } else {
+                        const data = await r.json().catch(() => ({}));
+                        this.profileError = data.detail || 'Failed to update profile';
+                    }
+                } catch (e) {
+                    this.profileError = String(e);
+                }
+            },
+            async createTemplate() {
+                this.profileError = '';
+                const displayName = this.newTemplate.display_name.trim();
+                if (!displayName) {
+                    this.profileError = 'Name required';
+                    return;
+                }
+                const autoId = 't-' + Date.now().toString(36) + '-' +
+                               Math.random().toString(36).slice(2, 6);
+                const body = {
+                    name: autoId,
+                    display_name: displayName,
+                    description: this.newTemplate.description.trim() || null,
+                    // Only universal fields — server will filter again defensively.
+                    settings: this.formValuesForTemplate(),
+                };
+                try {
+                    const r = await fetch('/admin/api/profile-templates', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify(body),
+                    });
+                    if (r.ok) {
+                        await this.loadTemplates();
+                        this.showNewTemplateForm = false;
+                        this.newTemplate = { name: '', display_name: '', description: '' };
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    } else {
+                        const data = await r.json().catch(() => ({}));
+                        this.profileError = data.detail || 'Failed to save template';
+                    }
+                } catch (e) {
+                    this.profileError = String(e);
+                }
+            },
+            async updateTemplate(name, patch) {
+                this.profileError = '';
+                try {
+                    const r = await fetch(
+                        `/admin/api/profile-templates/${encodeURIComponent(name)}`,
+                        { method: 'PUT', headers: {'Content-Type':'application/json'},
+                          body: JSON.stringify(patch) }
+                    );
+                    if (r.ok) {
+                        await this.loadTemplates();
+                        this.editingTemplate = null;
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    } else {
+                        const data = await r.json().catch(() => ({}));
+                        this.profileError = data.detail || 'Failed to update template';
+                    }
+                } catch (e) {
+                    this.profileError = String(e);
+                }
+            },
+            async deleteTemplate(name) {
+                try {
+                    const r = await fetch(
+                        `/admin/api/profile-templates/${encodeURIComponent(name)}`,
+                        { method: 'DELETE' }
+                    );
+                    if (r.ok) {
+                        await this.loadTemplates();
+                    } else if (r.status === 401) {
+                        window.location.href = '/admin';
+                    }
+                } catch (e) {
+                    console.error('Delete template failed:', e);
+                } finally {
+                    this.templateDeleteConfirm = null;
+                }
+            },
+
             async openModelSettings(model) {
+                this.profileError = '';
+                this.showNewProfileForm = false;
+                this.showNewTemplateForm = false;
+                this.editingProfile = null;
+                this.editingTemplate = null;
+                this.profileDeleteConfirm = null;
+                this.templateDeleteConfirm = null;
+                this.activeProfileName = (model.settings && model.settings.active_profile_name) || null;
+                try {
+                    const saved = localStorage.getItem('omlx_profile_scope');
+                    if (saved === 'preset' || saved === 'global' || saved === 'model') {
+                        this.profileScope = saved;
+                    }
+                } catch (e) {}
+                await Promise.all([
+                    this.loadProfilesForModel(model.id),
+                    this.loadTemplates(),
+                ]);
+                this.computeDrift();
                 if (this.reasoningParsers.length === 0) {
                     try {
                         const resp = await fetch('/admin/api/grammar/parsers');
@@ -952,8 +1582,36 @@
                     specprefill_threshold: settings.specprefill_threshold || null,
                     dflash_enabled: settings.dflash_enabled || false,
                     dflash_draft_model: settings.dflash_draft_model || '',
-                    dflash_draft_quant_bits: settings.dflash_draft_quant_bits ? String(settings.dflash_draft_quant_bits) : '',
+                    dflash_draft_quant_enabled: settings.dflash_draft_quant_enabled || false,
+                    dflash_draft_quant_weight_bits: settings.dflash_draft_quant_weight_bits || 4,
+                    dflash_draft_quant_activation_bits: settings.dflash_draft_quant_activation_bits || 16,
+                    dflash_draft_quant_group_size: settings.dflash_draft_quant_group_size || 64,
+                    dflash_max_ctx: settings.dflash_max_ctx ?? null,
+                    dflash_in_memory_cache: settings.dflash_in_memory_cache !== false,
+                    dflash_in_memory_cache_max_entries: settings.dflash_in_memory_cache_max_entries || 4,
+                    dflash_in_memory_cache_max_gib: settings.dflash_in_memory_cache_max_bytes
+                        ? Math.round(settings.dflash_in_memory_cache_max_bytes / (1024 ** 3))
+                        : 8,
+                    dflash_ssd_cache: settings.dflash_ssd_cache || false,
+                    dflash_ssd_cache_max_gib: settings.dflash_ssd_cache_max_bytes
+                        ? Math.round(settings.dflash_ssd_cache_max_bytes / (1024 ** 3))
+                        : 20,
+                    dflash_draft_window_size: settings.dflash_draft_window_size ?? null,
+                    dflash_draft_sink_size: settings.dflash_draft_sink_size ?? null,
+                    dflash_verify_mode: settings.dflash_verify_mode || 'adaptive',
+                    dflash_compatible: model.dflash_compatible !== false,
+                    dflash_compatibility_reason: model.dflash_compatibility_reason || '',
+                    dflash_ssd_cache_available: !!model.dflash_ssd_cache_available,
+                    mtp_enabled: settings.mtp_enabled || false,
+                    mtp_compatible: model.mtp_compatible === true,
+                    mtp_compatibility_reason: model.mtp_compatibility_reason || '',
+                    is_paroquant: model.is_paroquant === true,
+                    paroquant_reason: model.paroquant_reason || '',
+                    vlm_mtp_enabled: settings.vlm_mtp_enabled || false,
+                    vlm_mtp_draft_model: settings.vlm_mtp_draft_model || '',
+                    vlm_mtp_draft_block_size: settings.vlm_mtp_draft_block_size ?? null,
                     ctKwargEntries,
+                    trust_remote_code: settings.trust_remote_code || false,
                 };
                 this.showModelSettingsModal = true;
             },
@@ -1030,30 +1688,76 @@
                                     : null,
                                 dflash_enabled: this.modelSettings.dflash_enabled,
                                 dflash_draft_model: this.modelSettings.dflash_draft_model || null,
-                                dflash_draft_quant_bits: this.modelSettings.dflash_enabled && this.modelSettings.dflash_draft_quant_bits
-                                    ? parseInt(this.modelSettings.dflash_draft_quant_bits)
+                                dflash_draft_quant_enabled: this.modelSettings.dflash_enabled && !!this.modelSettings.dflash_draft_quant_enabled,
+                                dflash_draft_quant_weight_bits: this.modelSettings.dflash_enabled && this.modelSettings.dflash_draft_quant_enabled
+                                    ? parseInt(this.modelSettings.dflash_draft_quant_weight_bits)
                                     : null,
+                                dflash_draft_quant_activation_bits: this.modelSettings.dflash_enabled && this.modelSettings.dflash_draft_quant_enabled
+                                    ? parseInt(this.modelSettings.dflash_draft_quant_activation_bits)
+                                    : null,
+                                dflash_draft_quant_group_size: this.modelSettings.dflash_enabled && this.modelSettings.dflash_draft_quant_enabled
+                                    ? parseInt(this.modelSettings.dflash_draft_quant_group_size)
+                                    : null,
+                                dflash_max_ctx: this.modelSettings.dflash_enabled && this.modelSettings.dflash_max_ctx
+                                    ? parseInt(this.modelSettings.dflash_max_ctx)
+                                    : null,
+                                dflash_in_memory_cache: this.modelSettings.dflash_enabled
+                                    ? !!this.modelSettings.dflash_in_memory_cache
+                                    : true,
+                                dflash_in_memory_cache_max_entries: this.modelSettings.dflash_enabled
+                                    ? (parseInt(this.modelSettings.dflash_in_memory_cache_max_entries) || 4)
+                                    : 4,
+                                dflash_in_memory_cache_max_bytes: this.modelSettings.dflash_enabled
+                                    ? Math.max(1, parseInt(this.modelSettings.dflash_in_memory_cache_max_gib) || 8) * (1024 ** 3)
+                                    : 8 * (1024 ** 3),
+                                dflash_ssd_cache: this.modelSettings.dflash_enabled
+                                    && !!this.modelSettings.dflash_in_memory_cache
+                                    && !!this.modelSettings.dflash_ssd_cache_available
+                                    && !!this.modelSettings.dflash_ssd_cache,
+                                dflash_ssd_cache_max_bytes: this.modelSettings.dflash_enabled
+                                    ? Math.max(1, parseInt(this.modelSettings.dflash_ssd_cache_max_gib) || 20) * (1024 ** 3)
+                                    : 20 * (1024 ** 3),
+                                // Long-context tuning. Null → server keeps it null → dflash-mlx default.
+                                dflash_draft_window_size: this.modelSettings.dflash_enabled
+                                    && this.modelSettings.dflash_draft_window_size
+                                    ? parseInt(this.modelSettings.dflash_draft_window_size)
+                                    : null,
+                                dflash_draft_sink_size: this.modelSettings.dflash_enabled
+                                    && this.modelSettings.dflash_draft_sink_size !== null
+                                    && this.modelSettings.dflash_draft_sink_size !== undefined
+                                    && this.modelSettings.dflash_draft_sink_size !== ''
+                                    ? parseInt(this.modelSettings.dflash_draft_sink_size)
+                                    : null,
+                                dflash_verify_mode: this.modelSettings.dflash_enabled
+                                    ? (this.modelSettings.dflash_verify_mode || 'adaptive')
+                                    : null,
+                                mtp_enabled: !!this.modelSettings.mtp_enabled,
+                                vlm_mtp_enabled: !!this.modelSettings.vlm_mtp_enabled,
+                                vlm_mtp_draft_model: this.modelSettings.vlm_mtp_enabled
+                                    ? (this.modelSettings.vlm_mtp_draft_model || null)
+                                    : null,
+                                vlm_mtp_draft_block_size: this.modelSettings.vlm_mtp_enabled
+                                    && this.modelSettings.vlm_mtp_draft_block_size
+                                    ? parseInt(this.modelSettings.vlm_mtp_draft_block_size)
+                                    : null,
+                                trust_remote_code: this.modelSettings.trust_remote_code,
                             };
                         })()),
                     });
 
                     if (response.ok) {
-                        // Update local model data from server response
+                        // Refresh the model list to update badges
+                        await this.loadModels();
                         const data = await response.json();
-                        const model = this.models.find(m => m.id === this.selectedModel.id);
-                        if (model) {
-                            model.settings = data.settings || {};
-                            // Update effective model_type/engine_type from server
-                            if (data.model_type) {
-                                model.model_type = data.model_type;
-                            }
-                            if (data.engine_type) {
-                                model.engine_type = data.engine_type;
-                            }
-                        }
                         this.showModelSettingsModal = false;
                         if (data.requires_reload) {
-                            alert(window.t('js.info.model_type_reload_required'));
+                            if (data.auto_reloaded) {
+                                alert(window.t('js.info.model_settings_auto_reloaded'));
+                            } else if (data.auto_unloaded) {
+                                alert(window.t('js.info.model_settings_auto_unloaded'));
+                            } else {
+                                alert(window.t('js.info.model_type_reload_required'));
+                            }
                         }
                     } else if (response.status === 401) {
                         window.location.href = '/admin';
@@ -1082,6 +1786,43 @@
                         this.modelSettings.top_p = data.top_p ?? null;
                         this.modelSettings.top_k = data.top_k ?? null;
                         this.modelSettings.repetition_penalty = data.repetition_penalty ?? null;
+                        this.modelSettings.max_tokens = null;
+                        this.modelSettings.min_p = null;
+                        this.modelSettings.presence_penalty = null;
+                        this.modelSettings.force_sampling = false;
+                        this.modelSettings.reasoning_parser = null;
+                        this.modelSettings.ttl_seconds = null;
+                        this.modelSettings.enableIndexCache = false;
+                        this.modelSettings.index_cache_freq = 0;
+                        this.modelSettings.enable_thinking = false;
+                        this.modelSettings.enableThinkingBudget = false;
+                        this.modelSettings.thinking_budget_tokens = 0;
+                        this.modelSettings.enableToolResultLimit = false;
+                        this.modelSettings.max_tool_result_tokens = 0;
+                        this.modelSettings.ctKwargEntries = [];
+                        this.modelSettings.turboquant_kv_enabled = false;
+                        this.modelSettings.turboquant_kv_bits = 4;
+                        this.modelSettings.specprefill_enabled = false;
+                        this.modelSettings.specprefill_draft_model = null;
+                        this.modelSettings.specprefill_keep_pct = 0.2;
+                        this.modelSettings.specprefill_threshold = null;
+                        this.modelSettings.dflash_enabled = false;
+                        this.modelSettings.dflash_draft_model = null;
+                        this.modelSettings.dflash_draft_quant_enabled = false;
+                        this.modelSettings.dflash_draft_quant_weight_bits = null;
+                        this.modelSettings.dflash_draft_quant_activation_bits = null;
+                        this.modelSettings.dflash_draft_quant_group_size = null;
+                        this.modelSettings.dflash_max_ctx = null;
+                        this.modelSettings.dflash_in_memory_cache = true;
+                        this.modelSettings.dflash_in_memory_cache_max_entries = 4;
+                        this.modelSettings.dflash_in_memory_cache_max_gib = 8;
+                        this.modelSettings.dflash_ssd_cache = false;
+                        this.modelSettings.dflash_ssd_cache_max_gib = 20;
+                        this.modelSettings.dflash_draft_window_size = null;
+                        this.modelSettings.dflash_draft_sink_size = null;
+                        this.modelSettings.dflash_verify_mode = 'adaptive';
+                        this.modelSettings.mtp_enabled = false;
+                        this.modelSettings.trust_remote_code = false;
                     } else if (response.status === 404) {
                         alert(window.t('js.error.no_config_defaults'));
                     } else if (response.status === 401) {
@@ -1096,6 +1837,8 @@
                 } finally {
                     this.loadingGenDefaults = false;
                 }
+                this.activeProfileName = null;
+                this.profilesDrift = false;
             },
 
             // Status tab functions
@@ -1124,6 +1867,15 @@
                 return this.formatDisplayHost(host);
             },
 
+            get ttlPlaceholder() {
+                if (this.selectedModel?.pinned) return window.t('modal.model_settings.ttl_pinned');
+                const globalTtl = this.globalSettings.idle_timeout?.idle_timeout_seconds;
+                if (globalTtl) {
+                    return window.t('modal.model_settings.ttl_global_fallback').replace('{seconds}', globalTtl);
+                }
+                return window.t('modal.model_settings.ttl_no_ttl');
+            },
+
             async loadServerInfo() {
                 try {
                     const response = await fetch('/admin/api/server-info');
@@ -1145,6 +1897,109 @@
                 } catch (err) {
                     console.error('Failed to load server info:', err);
                 }
+            },
+
+            async restartServerStart() {
+                if (this.restartServer.status === 'restarting'
+                    || this.restartServer.status === 'waiting') {
+                    return;
+                }
+                if (!window.confirm(window.t('settings.server.restart_confirm'))) {
+                    return;
+                }
+
+                this.restartServer = {
+                    status: 'restarting',
+                    message: window.t('settings.server.restart_status_sending'),
+                };
+
+                let response;
+                try {
+                    response = await fetch('/admin/api/server/restart', { method: 'POST' });
+                } catch (err) {
+                    // Network errors mid-restart are expected if the server
+                    // dies before sending the 202; fall through to polling.
+                    this.restartServer = {
+                        status: 'waiting',
+                        message: window.t('settings.server.restart_status_waiting'),
+                    };
+                    this._restartServerPoll();
+                    return;
+                }
+
+                if (response.status === 503) {
+                    let msg = window.t('settings.server.restart_status_unavailable');
+                    try {
+                        const data = await response.json();
+                        if (data && data.detail) msg = data.detail;
+                    } catch (e) { /* ignore */ }
+                    this.restartServer = { status: 'unsupported', message: msg };
+                    return;
+                }
+
+                if (response.status === 401) {
+                    window.location.href = '/admin';
+                    return;
+                }
+
+                if (response.status !== 202) {
+                    this.restartServer = {
+                        status: 'error',
+                        message: window.t('settings.server.restart_status_unexpected')
+                            .replace('{status}', String(response.status)),
+                    };
+                    return;
+                }
+
+                this.restartServer = {
+                    status: 'waiting',
+                    message: window.t('settings.server.restart_status_waiting'),
+                };
+                this._restartServerPoll();
+            },
+
+            _restartServerPoll() {
+                const deadline = Date.now() + 60000;  // 60s max wait
+                let sawDownAt = 0;
+                const tick = async () => {
+                    if (Date.now() > deadline) {
+                        this.restartServer = {
+                            status: 'error',
+                            message: window.t('settings.server.restart_status_timeout'),
+                        };
+                        return;
+                    }
+                    let alive = false;
+                    try {
+                        const r = await fetch('/health', { cache: 'no-store' });
+                        alive = r.ok;
+                    } catch (e) {
+                        alive = false;
+                    }
+                    if (!alive) {
+                        // First time we see it down — record it. We require a
+                        // down-then-up transition before declaring success, so
+                        // a fast supervisor that hasn't killed the old process
+                        // yet doesn't trick us into "instant success".
+                        if (!sawDownAt) sawDownAt = Date.now();
+                        setTimeout(tick, 1000);
+                        return;
+                    }
+                    // Alive again. If we never observed the down state, the
+                    // restart hasn't actually fired yet — keep polling.
+                    if (!sawDownAt) {
+                        setTimeout(tick, 1000);
+                        return;
+                    }
+                    this.restartServer = {
+                        status: 'idle',
+                        message: window.t('settings.server.restart_status_back'),
+                    };
+                    // Small delay so the user sees the success state, then
+                    // reload to ensure all caches/sessions re-sync.
+                    setTimeout(() => window.location.reload(), 500);
+                };
+                tick();
             },
 
             get llmModels() {
@@ -1207,46 +2062,41 @@
                 }
             },
 
-            get codexCommand() {
+            _launchCmd(tool) {
+                // cli_prefix is always "omlx" or an app-bundle path with no
+                // spaces, so skip shellQuote to avoid rendering `'omlx' launch ...`
+                // in the dashboard command display.
                 const cli = this.stats.cli_prefix || 'omlx';
-                const model = this.globalSettings.integrations.codex_model || 'select-a-model';
-                const parts = [`${this.shellQuote(cli)} launch codex --model ${this.shellQuote(model)}`];
-                if (this.stats.api_key) {
-                    parts.push(`--api-key ${this.shellQuote(this.stats.api_key)}`);
-                }
-                return parts.join(' ');
+                return `${cli} launch ${tool}`;
+            },
+
+            get claudeCommand() {
+                return this._launchCmd('claude');
+            },
+
+            get codexCommand() {
+                return this._launchCmd('codex');
+            },
+
+            get copilotCommand() {
+                return this._launchCmd('copilot');
             },
 
             get opencodeCommand() {
-                const cli = this.stats.cli_prefix || 'omlx';
-                const model = this.globalSettings.integrations.opencode_model || 'select-a-model';
-                const parts = [`${this.shellQuote(cli)} launch opencode --model ${this.shellQuote(model)}`];
-                if (this.stats.api_key) {
-                    parts.push(`--api-key ${this.shellQuote(this.stats.api_key)}`);
-                }
-                return parts.join(' ');
+                return this._launchCmd('opencode');
             },
 
             get openclawCommand() {
-                const cli = this.stats.cli_prefix || 'omlx';
-                const model = this.globalSettings.integrations.openclaw_model || 'select-a-model';
-                const profile = this.globalSettings.integrations.openclaw_tools_profile || 'full';
-                const parts = [`${this.shellQuote(cli)} launch openclaw --model ${this.shellQuote(model)}`];
-                if (this.stats.api_key) {
-                    parts.push(`--api-key ${this.shellQuote(this.stats.api_key)}`);
-                }
-                parts.push(`--tools-profile ${this.shellQuote(profile)}`);
-                return parts.join(' ');
+                const profile = this.globalSettings.integrations.openclaw_tools_profile || 'coding';
+                return `${this._launchCmd('openclaw')} --tools-profile ${profile}`;
+            },
+
+            get hermesCommand() {
+                return this._launchCmd('hermes');
             },
 
             get piCommand() {
-                const cli = this.stats.cli_prefix || 'omlx';
-                const model = this.globalSettings.integrations.pi_model || 'select-a-model';
-                const parts = [`${this.shellQuote(cli)} launch pi --model ${this.shellQuote(model)}`];
-                if (this.stats.api_key) {
-                    parts.push(`--api-key ${this.shellQuote(this.stats.api_key)}`);
-                }
-                return parts.join(' ');
+                return this._launchCmd('pi');
             },
 
             async saveIntegrationSettings() {
@@ -1255,9 +2105,11 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
+                            integrations_copilot_model: this.globalSettings.integrations.copilot_model,
                             integrations_codex_model: this.globalSettings.integrations.codex_model,
                             integrations_opencode_model: this.globalSettings.integrations.opencode_model,
                             integrations_openclaw_model: this.globalSettings.integrations.openclaw_model,
+                            integrations_hermes_model: this.globalSettings.integrations.hermes_model,
                             integrations_pi_model: this.globalSettings.integrations.pi_model,
                             integrations_openclaw_tools_profile: this.globalSettings.integrations.openclaw_tools_profile,
                         }),
@@ -1287,7 +2139,7 @@
                 }
             },
 
-            async loadStats() {
+            async loadStats(includeAlltime = true) {
                 try {
                     const params = new URLSearchParams();
                     if (this.selectedStatsModel) {
@@ -1300,6 +2152,10 @@
                         this.stats = { ...this.stats, ...data };
                     } else if (response.status === 401) {
                         window.location.href = '/admin';
+                    }
+
+                    if (!includeAlltime) {
+                        return;
                     }
 
                     // Load all-time stats
@@ -1342,7 +2198,8 @@
 
             async clearSsdCache() {
                 try {
-                    await fetch('/admin/api/ssd-cache/clear', { method: 'POST' });
+                    const resp = await fetch('/admin/api/ssd-cache/clear', { method: 'POST' });
+                    if (!resp.ok) console.error('SSD cache clear failed:', resp.status);
                     this.showClearSsdCacheConfirm = false;
                     await this.loadStats();
                 } catch (err) {
@@ -1351,11 +2208,24 @@
                 }
             },
 
+            async clearHotCache() {
+                try {
+                    const resp = await fetch('/admin/api/hot-cache/clear', { method: 'POST' });
+                    if (!resp.ok) console.error('Hot cache clear failed:', resp.status);
+                    this.showClearHotCacheConfirm = false;
+                    await this.loadStats();
+                } catch (err) {
+                    console.error('Failed to clear hot cache:', err);
+                    this.showClearHotCacheConfirm = false;
+                }
+            },
+
             startStatsRefresh() {
                 this.stopStatsRefresh();
+                this.loadStats();
                 this._statsRefreshTimer = setInterval(() => {
-                    this.loadStats();
-                }, 1000);
+                    this.loadStats(false);
+                }, 500);
             },
 
             stopStatsRefresh() {
@@ -1371,6 +2241,36 @@
                 return num.toLocaleString();
             },
 
+            cacheObsCumulative(stats, selectedModel) {
+                const entries = stats.runtime_cache?.models || [];
+                if (entries.length === 0) return {};
+
+                if (selectedModel) {
+                    const entry = entries.find(m => m.id === selectedModel);
+                    return entry?.cache_rates?.cumulative || {};
+                }
+
+                const sumKeys = ['prefix_hits', 'prefix_misses', 'evictions', 'ssd_hot_hits', 'ssd_disk_loads', 'ssd_saves', 'hot_cache_evictions', 'hot_cache_promotions'];
+                let agg = {};
+
+                for (const m of entries) {
+                    const c = m.cache_rates?.cumulative;
+                    if (!c || Object.keys(c).length === 0) continue;
+                    for (const k of sumKeys) {
+                        agg[k] = (agg[k] || 0) + (c[k] || 0);
+                    }
+                }
+
+                const ph = agg.prefix_hits || 0;
+                const pm = agg.prefix_misses || 0;
+                const sh = agg.ssd_hot_hits || 0;
+                const sd = agg.ssd_disk_loads || 0;
+                agg.prefix_hit_rate = (ph + pm) > 0 ? ph / (ph + pm) : 0;
+                agg.ssd_hot_rate = (sh + sd) > 0 ? sh / (sh + sd) : 0;
+
+                return agg;
+            },
+
             getStatFontClass(value) {
                 if (value >= 1000000000) return 'text-2xl';
                 if (value >= 1000000) return 'text-3xl';
@@ -1383,16 +2283,121 @@
                 return '0';
             },
 
+            formatByteCount(bytes) {
+                if (bytes == null || !Number.isFinite(bytes)) return '';
+                if (bytes >= 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+                if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+                if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+                return Math.max(0, Math.round(bytes)) + ' B';
+            },
+
             formatTokenCount(n) {
                 if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
                 if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
                 return String(n);
             },
 
-            get activeModelsMemoryPercent() {
-                const am = this.stats.active_models;
-                if (!am || !am.model_memory_max) return 0;
-                return Math.min(100, (am.model_memory_used / am.model_memory_max) * 100);
+            formatDurationShort(seconds) {
+                if (seconds == null || !Number.isFinite(seconds)) return '—';
+                if (seconds < 1) return seconds.toFixed(1) + 's';
+                if (seconds < 60) return Math.round(seconds) + 's';
+                const minutes = Math.floor(seconds / 60);
+                const rem = Math.round(seconds % 60);
+                if (minutes < 60) return minutes + 'm ' + rem + 's';
+                const hours = Math.floor(minutes / 60);
+                return hours + 'h ' + (minutes % 60) + 'm';
+            },
+
+            formatActivityAge(seconds) {
+                if (seconds == null || !Number.isFinite(seconds)) return '';
+                return 'last token ' + this.formatDurationShort(seconds) + ' ago';
+            },
+
+            formatActivityMetadata(activity) {
+                const parts = [];
+                if (activity.input_count != null) parts.push(activity.input_count + ' inputs');
+                if (activity.document_count != null) parts.push(activity.document_count + ' docs');
+                if (activity.token_count != null) parts.push(this.formatTokenCount(activity.token_count) + ' tok');
+                if (activity.text_length != null) parts.push(activity.text_length + ' chars');
+                if (activity.chunk_count != null) parts.push(activity.chunk_count + ' chunks');
+                if (activity.output_bytes != null) parts.push(this.formatByteCount(activity.output_bytes));
+                if (activity.file_size_bytes != null && activity.file_size_bytes > 0) parts.push(this.formatByteCount(activity.file_size_bytes));
+                return parts.join(' · ');
+            },
+
+            activityDotClass(seconds) {
+                if (seconds == null || !Number.isFinite(seconds)) return 'bg-green-400 animate-pulse';
+                if (seconds < 15) return 'bg-green-400 animate-pulse';
+                if (seconds < 30) return 'bg-amber-400 animate-pulse';
+                return 'bg-red-400';
+            },
+
+            get runtimeHotCachePercent() {
+                const rc = this.stats.runtime_cache;
+                if (!rc || !rc.hot_cache_max_bytes) return 0;
+                return Math.min(100, (rc.hot_cache_size_bytes / rc.hot_cache_max_bytes) * 100);
+            },
+
+            get runtimeSsdCachePercent() {
+                const rc = this.stats.runtime_cache;
+                if (!rc || !rc.disk_max_bytes) return 0;
+                return Math.min(100, (rc.total_size_bytes / rc.disk_max_bytes) * 100);
+            },
+
+            get activeModelsPressurePercent() {
+                const mp = this.stats.active_models?.memory_pressure;
+                if (!mp || !mp.hard_bytes) return 0;
+                return Math.min(100, (mp.current_bytes / mp.hard_bytes) * 100);
+            },
+
+            get activeModelsSoftPercent() {
+                const mp = this.stats.active_models?.memory_pressure;
+                if (!mp || !mp.hard_bytes || !mp.soft_bytes) return 0;
+                return Math.min(100, (mp.soft_bytes / mp.hard_bytes) * 100);
+            },
+
+            get activeModelsPressureBarColor() {
+                const pct = this.activeModelsPressurePercent;
+                if (pct >= 90) return '#ef4444';
+                if (pct >= 80) return '#f97316';
+                if (pct >= 70) return '#f59e0b';
+                if (pct >= 60) return '#facc15';
+                return '#22c55e';
+            },
+
+            get activeModelsPressureBarStyle() {
+                return `width: ${this.activeModelsPressurePercent}%; height: 100%; display: block; background-color: ${this.activeModelsPressureBarColor};`;
+            },
+
+            get activeModelsSoftMarkerStyle() {
+                return `left: ${this.activeModelsSoftPercent}%; width: 1px; background-color: rgba(64, 64, 64, 0.6);`;
+            },
+
+            activeModelsPressureLabel() {
+                const mp = this.stats.active_models?.memory_pressure;
+                if (!mp || !mp.enabled || !mp.hard_bytes) {
+                    return window.t('status.active_models.enforcer_disabled');
+                }
+                return `${this.formatSizeBytes(mp.current_bytes)} / ${this.formatSizeBytes(mp.soft_bytes)} soft / ${this.formatSizeBytes(mp.hard_bytes)} hard`;
+            },
+
+            modelSizeLabel(model) {
+                if (!model) return '-';
+                const estimated = model.estimated_size_formatted || '-';
+                if (model.is_loading) {
+                    return estimated;
+                }
+                // actual_size is a rough phys_footprint delta captured at load
+                // time and can include neighboring KV growth — mark with ~obs
+                // so it doesn't read as exact.
+                const actual = model.actual_size_formatted;
+                if (!actual) {
+                    return estimated;
+                }
+                if (!estimated || estimated === actual) {
+                    return `~${actual} obs`;
+                }
+                return `~${actual} obs / ${estimated} est`;
             },
 
             copyToClipboard(text) {
@@ -1464,6 +2469,7 @@
                 this.benchUploadResults = [];
                 this.benchUploadDone = null;
                 this.benchUploading = false;
+                this.benchUploadSkipped = null;
 
                 try {
                     const response = await fetch('/admin/api/bench/start', {
@@ -1519,10 +2525,24 @@
                                 total: data.total,
                             };
                         } else if (data.type === 'result') {
+                            // SSE replay-on-subscribe re-delivers every event on
+                            // every reconnect (incl. page refresh), so append-only
+                            // arrays must dedupe. Single rows are keyed by
+                            // (pp, tg); batch rows by batch_size.
                             if (data.data.test_type === 'single') {
-                                this.benchSingleResults = [...this.benchSingleResults, data.data];
+                                const exists = this.benchSingleResults.some(
+                                    r => r.pp === data.data.pp && r.tg === data.data.tg
+                                );
+                                if (!exists) {
+                                    this.benchSingleResults = [...this.benchSingleResults, data.data];
+                                }
                             } else if (data.data.test_type === 'batch') {
-                                this.benchBatchResults = [...this.benchBatchResults, data.data];
+                                const exists = this.benchBatchResults.some(
+                                    r => r.batch_size === data.data.batch_size
+                                );
+                                if (!exists) {
+                                    this.benchBatchResults = [...this.benchBatchResults, data.data];
+                                }
                             }
                         } else if (data.type === 'done') {
                             // Benchmark tests done, uploading starts
@@ -1535,7 +2555,13 @@
                             };
                             this.loadModels();
                         } else if (data.type === 'upload') {
-                            this.benchUploadResults = [...this.benchUploadResults, data.data];
+                            // Dedupe on replay: upload entries are unique by context_length.
+                            const exists = this.benchUploadResults.some(
+                                r => r.context_length === data.data.context_length
+                            );
+                            if (!exists) {
+                                this.benchUploadResults = [...this.benchUploadResults, data.data];
+                            }
                         } else if (data.type === 'upload_done') {
                             this.benchUploadDone = data.data;
                             this.benchUploading = false;
@@ -1543,6 +2569,14 @@
                             this.benchProgress = null;
                             es.close();
                             this.benchEventSource = null;
+                        } else if (data.type === 'upload_skipped') {
+                            this.benchUploadSkipped = { features: data.features || [] };
+                            this.benchUploading = false;
+                            this.benchRunning = false;
+                            this.benchProgress = null;
+                            es.close();
+                            this.benchEventSource = null;
+                            this.loadModels();
                         } else if (data.type === 'error') {
                             this.benchError = data.message;
                             this.benchRunning = false;
@@ -1698,6 +2732,88 @@
                 }
             },
 
+            async loadBenchState() {
+                // Discover an in-progress throughput run on tab/page load so
+                // a second tab (or a refresh) can attach to its SSE stream
+                // and replay the run's full event history.
+                //
+                // Three cases:
+                //   1. No active run → clear any stale banner state.
+                //   2. Active run, this tab is already attached → no-op.
+                //   3. Active run, this tab is fresh → auto-attach.
+                //   4. Active run, this tab is displaying a *different*
+                //      completed bench → show banner; let the user decide
+                //      whether to clobber their result view.
+                try {
+                    const resp = await fetch('/admin/api/bench/active');
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+
+                    if (!data.running || !data.bench_id) {
+                        this.benchOtherActive = null;
+                        return;
+                    }
+
+                    // Already attached to this bench — nothing to do.
+                    if (this.benchBenchId === data.bench_id && this.benchEventSource) {
+                        return;
+                    }
+
+                    // We have completed results from a DIFFERENT bench on
+                    // screen — don't silently swap them out. Show a banner
+                    // so the user can explicitly accept the new bench.
+                    const hasStaleResults = !this.benchRunning
+                        && this.benchBenchId
+                        && this.benchBenchId !== data.bench_id
+                        && (this.benchSingleResults.length > 0
+                            || this.benchBatchResults.length > 0);
+                    if (hasStaleResults) {
+                        this.benchOtherActive = {
+                            bench_id: data.bench_id,
+                            model_id: data.model_id,
+                        };
+                        return;
+                    }
+
+                    // Fresh slate: attach.
+                    this.benchBenchId = data.bench_id;
+                    this.benchModelId = data.model_id;
+                    this.benchRunning = true;
+                    this.benchOtherActive = null;
+                    this.connectBenchSSE(data.bench_id);
+                } catch (err) {
+                    console.error('Failed to load bench state:', err);
+                }
+            },
+
+            // User clicked "View live" on the banner — clear the stale
+            // result display, attach to the active run. The replay-on-
+            // subscribe stream re-delivers every event so the new bench
+            // populates its table from the start.
+            acceptOtherBench() {
+                if (!this.benchOtherActive) return;
+                const other = this.benchOtherActive;
+                this.benchOtherActive = null;
+                this.benchBenchId = other.bench_id;
+                this.benchModelId = other.model_id;
+                this.benchRunning = true;
+                this.benchSingleResults = [];
+                this.benchBatchResults = [];
+                this.benchUploadResults = [];
+                this.benchUploadDone = null;
+                this.benchUploadSkipped = null;
+                this.benchProgress = null;
+                this.benchError = '';
+                this.connectBenchSSE(other.bench_id);
+            },
+
+            dismissOtherBench() {
+                // Hide for now; the banner reappears next loadBenchState if
+                // the run is still active. Use case: user wants to keep
+                // reviewing their previous result for a moment.
+                this.benchOtherActive = null;
+            },
+
             // Bench sub-tab
             setBenchTab(tab) {
                 if (!DASHBOARD_BENCH_TABS.has(tab)) return;
@@ -1706,6 +2822,7 @@
                 this.syncTabStateToUrl();
                 if (tab === 'throughput') {
                     this.loadBenchDeviceInfo();
+                    this.loadBenchState();
                 }
             },
 
@@ -1821,8 +2938,18 @@
                                 this.accCurrentModel = data.model_id || this.accCurrentModel;
                                 break;
                             case 'result':
-                                data.data._showCategories = false;
-                                this.accAllResults.push(data.data);
+                                // Dedupe on replay: accuracy results are unique by
+                                // (model_id, benchmark).
+                                {
+                                    const exists = this.accAllResults.some(
+                                        r => r.model_id === data.data.model_id
+                                          && r.benchmark === data.data.benchmark
+                                    );
+                                    if (!exists) {
+                                        data.data._showCategories = false;
+                                        this.accAllResults.push(data.data);
+                                    }
+                                }
                                 break;
                             case 'done':
                                 this.accProgress = null;
@@ -1940,7 +3067,9 @@
 
                 // Full sizes lookup
                 const fullSizes = {};
-                for (const bl of this.accBenchmarkList) fullSizes[bl.key] = bl.fullSize;
+                for (const grp of this.accBenchmarkGroups) {
+                    for (const bl of grp.benchmarks) fullSizes[bl.key] = bl.fullSize;
+                }
 
                 // Determine column widths
                 const modelWidth = Math.max(12, ...models.map(m => m.length + 2));
@@ -2036,9 +3165,9 @@
                     mime = 'application/json';
                 } else if (format === 'csv') {
                     const esc = s => '"' + (s || '').replace(/"/g, '""') + '"';
-                    const lines = ['id,correct,expected,predicted,question,raw_response,time_s'];
+                    const lines = ['id,category,correct,expected,predicted,question,raw_response,time_s'];
                     for (const q of qr) {
-                        lines.push([q.id, q.correct, esc(q.expected), esc(q.predicted), esc(q.question), esc(q.raw_response), q.time_s].join(','));
+                        lines.push([q.id, esc(q.category || ''), q.correct, esc(q.expected), esc(q.predicted), esc(q.question), esc(q.raw_response), q.time_s].join(','));
                     }
                     content = lines.join('\n');
                     mime = 'text/csv';
@@ -2052,6 +3181,7 @@
                     ];
                     for (const q of qr) {
                         lines.push(`--- Q${q.id} [${q.correct ? 'CORRECT' : 'WRONG'}] ---`);
+                        if (q.category) lines.push(`Category: ${q.category}`);
                         lines.push(`Question: ${q.question || ''}`);
                         lines.push(`Expected: ${q.expected}`);
                         lines.push(`Predicted: ${q.predicted}`);
@@ -2073,6 +3203,28 @@
             },
 
             // Log viewer functions
+            filteredLogContent() {
+                const LEVELS = ['TRACE', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
+                const minIdx = LEVELS.indexOf(this.logMinLevel);
+                if (minIdx <= 0) return this.logContent;
+                const levelRe = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - \S+ - (TRACE|DEBUG|INFO|WARNING|ERROR|CRITICAL) - /;
+                let visible = true;
+                return this.logContent.split('\n').filter(line => {
+                    const m = line.match(levelRe);
+                    if (m) visible = LEVELS.indexOf(m[1]) >= minIdx;
+                    return visible;
+                }).join('\n');
+            },
+
+            levelButtonClass(lvl) {
+                const LEVELS = ['TRACE', 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'];
+                const idx = LEVELS.indexOf(lvl);
+                const minIdx = LEVELS.indexOf(this.logMinLevel);
+                if (idx < minIdx) return 'bg-neutral-100 text-neutral-300';
+                if (idx === minIdx) return 'bg-neutral-900 text-white';
+                return 'bg-neutral-200 text-neutral-700';
+            },
+
             async loadLogs() {
                 this.logLoading = true;
                 this.logError = '';
@@ -2142,127 +3294,6 @@
                 }
             },
 
-            // Parse process memory setting to slider state
-            parseProcessMemoryToState(value, totalBytes) {
-                if (!value || value === 'disabled') {
-                    return { auto: false, percent: 0 };
-                }
-                if (value === 'auto') {
-                    // auto = (total - 8GB) / total * 100
-                    if (!totalBytes || totalBytes === 0) return { auto: true, percent: 90 };
-                    const reserved = 8 * 1024 * 1024 * 1024;
-                    const autoBytes = Math.max(totalBytes - reserved, totalBytes * 0.1);
-                    const percent = Math.round((autoBytes / totalBytes) * 100);
-                    return { auto: true, percent: Math.min(99, Math.max(10, percent)) };
-                }
-                // Handle GB/TB/MB format (e.g., "69GB")
-                const sizeMatch = value.match(/^(\d+(?:\.\d+)?)\s*(GB|MB|TB)$/i);
-                if (sizeMatch && totalBytes > 0) {
-                    let bytes = parseFloat(sizeMatch[1]);
-                    const unit = sizeMatch[2].toUpperCase();
-                    if (unit === 'TB') bytes *= 1024 * 1024 * 1024 * 1024;
-                    else if (unit === 'GB') bytes *= 1024 * 1024 * 1024;
-                    else if (unit === 'MB') bytes *= 1024 * 1024;
-                    const percent = Math.round((bytes / totalBytes) * 100);
-                    return { auto: false, percent: Math.min(99, Math.max(1, percent)) };
-                }
-                // Handle percent format (e.g., "69%")
-                const percent = parseInt(value.replace('%', ''));
-                if (isNaN(percent)) return { auto: false, percent: 90 };
-                return { auto: false, percent: Math.min(99, Math.max(0, percent)) };
-            },
-
-            // Update process memory setting from slider
-            updateProcessMemoryFromSlider() {
-                if (this.processMemoryPercent === 0) {
-                    this.globalSettings.memory.max_process_memory = 'disabled';
-                } else {
-                    this.globalSettings.memory.max_process_memory =
-                        this.processMemoryPercent + '%';
-                }
-            },
-
-            // Get formatted process memory for display
-            getProcessMemoryDisplay() {
-                const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                if (!totalBytes) return '-';
-                if (this.processMemoryPercent === 0 && !this.processMemoryAuto) return '-';
-                if (this.processMemoryAuto) {
-                    const reserved = 8 * 1024 * 1024 * 1024;
-                    const autoBytes = Math.max(totalBytes - reserved, totalBytes * 0.1);
-                    const gb = Math.round(autoBytes / (1024 * 1024 * 1024));
-                    return `${gb}GB`;
-                }
-                const bytes = Math.floor((this.processMemoryPercent / 100) * totalBytes);
-                const gb = Math.round(bytes / (1024 * 1024 * 1024));
-                return `${gb}GB`;
-            },
-
-            // Parse stored memory value (e.g., "102GB") to percent of usable memory
-            parseMemoryToPercent(memoryStr, totalBytes) {
-                if (memoryStr === 'disabled') return 0;
-                const usableBytes = Math.max(0, totalBytes - 8 * 1024 * 1024 * 1024);
-                if (!memoryStr || !usableBytes || usableBytes === 0) {
-                    return 80; // Default 80%
-                }
-
-                // Parse memory string like "102GB", "50GB", etc.
-                const match = memoryStr.match(/^(\d+(?:\.\d+)?)\s*(GB|MB|TB)?$/i);
-                if (!match) {
-                    return 80; // Default if not parseable
-                }
-
-                let bytes = parseFloat(match[1]);
-                const unit = (match[2] || 'GB').toUpperCase();
-
-                if (unit === 'TB') bytes *= 1024 * 1024 * 1024 * 1024;
-                else if (unit === 'GB') bytes *= 1024 * 1024 * 1024;
-                else if (unit === 'MB') bytes *= 1024 * 1024;
-
-                const percent = Math.round((bytes / usableBytes) * 100);
-                return Math.min(100, Math.max(0, percent));
-            },
-
-            // Get max usable memory (total - 8GB reserved for system)
-            get maxUsableMemoryBytes() {
-                const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                const reservedBytes = 8 * 1024 * 1024 * 1024; // 8GB
-                return Math.max(0, totalBytes - reservedBytes);
-            },
-
-            // Convert percent to memory string (e.g., 80 -> "102GB")
-            // Percent is based on usable memory (total - 8GB)
-            percentToMemoryString(percent, totalBytes) {
-                const usableBytes = Math.max(0, totalBytes - 8 * 1024 * 1024 * 1024);
-                if (!usableBytes || usableBytes === 0) return 'auto';
-                const bytes = Math.floor((percent / 100) * usableBytes);
-                const gb = Math.floor(bytes / (1024 * 1024 * 1024));
-                return `${gb}GB`;
-            },
-
-            // Get formatted memory for display
-            getMemoryDisplay() {
-                const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                if (!totalBytes) return '-';
-                if (this.memoryPercent === 0 && !this.modelMemoryAuto) return '-';
-                const usableBytes = Math.max(0, totalBytes - 8 * 1024 * 1024 * 1024);
-                const bytes = Math.floor((this.memoryPercent / 100) * usableBytes);
-                const gb = Math.round(bytes / (1024 * 1024 * 1024));
-                return `${gb}GB`;
-            },
-
-            // Update memory value when slider changes
-            updateMemoryFromSlider() {
-                if (this.modelMemoryAuto) {
-                    this.globalSettings.model.max_model_memory = 'auto';
-                } else if (this.memoryPercent === 0) {
-                    this.globalSettings.model.max_model_memory = 'disabled';
-                } else {
-                    const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                    this.globalSettings.model.max_model_memory = this.percentToMemoryString(this.memoryPercent, totalBytes);
-                }
-            },
-
             // Parse cache size string (e.g., "10GB") to percent of SSD total capacity
             parseCacheToPercent(cacheStr, totalBytes) {
                 if (!cacheStr || cacheStr === 'auto' || !totalBytes || totalBytes === 0) {
@@ -2303,73 +3334,162 @@
                 return Math.round(num);
             },
 
-            // Computed process memory size in GB (for manual input)
-            // Reads from settings value directly to avoid percent round-trip precision loss
-            get processMemorySizeGB() {
-                const val = this.globalSettings.memory?.max_process_memory;
-                // If stored as GB/TB/MB, parse directly
-                const parsed = this._parseSettingsGB(val);
-                if (parsed !== null) return parsed;
-                // Otherwise derive from percent (for "XX%" format or auto)
-                const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                if (!totalBytes) return 0;
-                if (this.processMemoryAuto) {
-                    const reserved = 8 * 1024 * 1024 * 1024;
-                    const autoBytes = Math.max(totalBytes - reserved, totalBytes * 0.1);
-                    return Math.round(autoBytes / (1024 * 1024 * 1024));
-                }
-                if (this.processMemoryPercent === 0) return 0;
-                const bytes = Math.floor((this.processMemoryPercent / 100) * totalBytes);
-                return Math.round(bytes / (1024 * 1024 * 1024));
+            // Memory guard tier → live hard ceiling (GB) for the selected tier.
+            // Mirrors ProcessMemoryEnforcer._get_hard_limit_bytes:
+            //   static_ceiling  = total - tier.static_reserve
+            //   dynamic_ceiling = omlx_phys_footprint + system_available - tier.other_app_reserve
+            //   final = min(static, dynamic)
+            // The static / dynamic inputs come from the global-settings
+            // response and reflect the moment that response was fetched.
+            // Warning shown below the breakdown when the kernel
+            // iogpu.wired_limit_mb is lower than what oMLX asked Metal
+            // to allow at start. Returns an HTML string with the exact
+            // sysctl command the user can paste into Terminal, or "" when
+            // the kernel cap is fine.
+            // True when the kernel iogpu.wired_limit_mb (or Apple default
+            // working set) caps oMLX below its desired static ceiling.
+            get memoryGuardShowWiredLimitWarning() {
+                const sys = this.globalSettings.system || {};
+                const kernelBytes = sys.iogpu_wired_limit_bytes || 0;
+                const requestedBytes = sys.omlx_wired_limit_request_bytes || 0;
+                if (kernelBytes <= 0 || requestedBytes <= 0) return false;
+                return kernelBytes < requestedBytes;
             },
 
-            // Update process memory from manual GB input
-            updateProcessMemoryFromInput(gbValue) {
-                const gb = parseInt(gbValue) || 0;
-                const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                if (gb === 0) {
-                    this.processMemoryPercent = 0;
-                    this.globalSettings.memory.max_process_memory = 'disabled';
+            // Red bold warning text (no copy button). The button is a
+            // separate sibling in the template so Alpine can wire @click.
+            get memoryGuardWiredLimitWarningHTML() {
+                if (!this.memoryGuardShowWiredLimitWarning) return '';
+                const sys = this.globalSettings.system;
+                const kernelGB = (sys.iogpu_wired_limit_bytes / (1024 ** 3)).toFixed(1);
+                const template = window.t('settings.resource.guard_tier.wired_limit_warning');
+                return template.replaceAll(
+                    '{kernel}',
+                    `<strong>${kernelGB} GB</strong>`,
+                );
+            },
+
+            // The sysctl command rendered in the dark bold <code> chip.
+            get memoryGuardWiredLimitCommand() {
+                if (!this.memoryGuardShowWiredLimitWarning) return '';
+                const requested = this.globalSettings.system.omlx_wired_limit_request_bytes;
+                const requestedMB = Math.ceil(requested / (1024 ** 2));
+                return `sudo sysctl iogpu.wired_limit_mb=${requestedMB}`;
+            },
+
+            // 2-second "Copied!" affordance after the clipboard button is
+            // pressed. Reset by the same setTimeout so it's harmless if
+            // the user clicks rapidly.
+            wiredLimitCopied: false,
+
+            copyWiredLimitCommand() {
+                const text = this.memoryGuardWiredLimitCommand;
+                if (!text) return;
+                const onSuccess = () => {
+                    this.wiredLimitCopied = true;
+                    setTimeout(() => { this.wiredLimitCopied = false; }, 2000);
+                };
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(onSuccess).catch(() => {
+                        onSuccess();
+                    });
                 } else {
-                    // Store as GB string (backend supports parse_size fallback)
-                    this.globalSettings.memory.max_process_memory = `${gb}GB`;
-                    // Sync slider position
-                    if (totalBytes > 0) {
-                        const bytes = gb * 1024 * 1024 * 1024;
-                        this.processMemoryPercent = Math.min(99, Math.max(1, Math.round((bytes / totalBytes) * 100)));
-                    }
+                    onSuccess();
                 }
             },
 
-            // Computed model memory size in GB (for manual input)
-            get modelMemorySizeGB() {
-                const val = this.globalSettings.model?.max_model_memory;
-                if (val === 'disabled') return 0;
-                const parsed = this._parseSettingsGB(val);
-                if (parsed !== null) return parsed;
-                // Fallback: derive from percent
-                const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                if (!totalBytes) return 0;
-                const usableBytes = Math.max(0, totalBytes - 8 * 1024 * 1024 * 1024);
-                const bytes = Math.floor((this.memoryPercent / 100) * usableBytes);
-                return Math.round(bytes / (1024 * 1024 * 1024));
+            // Description text shown next to the Memory guard tier dropdown.
+            // safe / balanced / aggressive get a "free + inactive + N% of
+            // active (via macOS reclaim_method)" sentence. custom shows the
+            // user-supplied ceiling.
+            get memoryGuardTierDescription() {
+                const tier = this.globalSettings.memory?.memory_guard_tier || 'balanced';
+                const tierLabel = window.t('settings.resource.guard_tier.' + tier);
+                if (tier === 'custom') {
+                    const gb = Number(
+                        this.globalSettings.memory?.memory_guard_custom_ceiling_gb || 0
+                    ).toFixed(1);
+                    return window
+                        .t('settings.resource.guard_tier.description_custom')
+                        .replace('{custom_gb}', gb);
+                }
+                const pct = { safe: 20, balanced: 50, aggressive: 80 }[tier] ?? 50;
+                const method = window.t(
+                    'settings.resource.guard_tier.reclaim_method.' + tier
+                );
+                return window
+                    .t('settings.resource.guard_tier.description_template')
+                    .replace('{tier}', tierLabel)
+                    .replace('{active_pct}', pct)
+                    .replace('{reclaim_method}', method);
             },
 
-            // Update model memory from manual GB input
-            updateModelMemoryFromInput(gbValue) {
-                const gb = parseInt(gbValue) || 0;
-                if (gb === 0) {
-                    this.memoryPercent = 0;
-                    this.globalSettings.model.max_model_memory = 'disabled';
-                    return;
+            // Breakdown line. For ratio tiers: `Free X, inactive Y, active Z
+            // × N% = R → ceiling C`. For custom: `Custom ceiling X GB →
+            // effective ceiling C` (after clamp by static / metal cap).
+            get memoryGuardBreakdownHTML() {
+                const sys = this.globalSettings.system || {};
+                const GB = 1024 ** 3;
+                const tier = this.globalSettings.memory?.memory_guard_tier || 'balanced';
+                const fmt = (gb) => Number(gb).toFixed(1);
+                const bold = (gb) => `<strong>${fmt(gb)} GB</strong>`;
+
+                // Static / metal cap for the final clamp shown to the user.
+                const totalGB = (sys.total_memory_bytes || 0) / GB;
+                const staticReserveGB =
+                    totalGB < 16
+                        ? 4
+                        : { safe: 12, balanced: 8, aggressive: 6, custom: 8 }[tier] ?? 8;
+                const staticCeiling = Math.max(0, totalGB - staticReserveGB);
+                const metalCapGB = (sys.iogpu_wired_limit_bytes || 0) / GB;
+
+                // Helper: is the kernel iogpu.wired_limit_mb the smallest
+                // of the three candidates? When yes we swap "→ ceiling" for
+                // "/ effective ceiling X (kernel limit)" so the user knows
+                // why the value isn't what their tier math suggested.
+                const kernelBinds = (candidates, finalCeiling) =>
+                    metalCapGB > 0 &&
+                    Math.abs(metalCapGB - finalCeiling) < 1e-6 &&
+                    candidates.every((c) => c >= metalCapGB - 1e-6);
+
+                if (tier === 'custom') {
+                    const custom = Number(
+                        this.globalSettings.memory?.memory_guard_custom_ceiling_gb || 0
+                    );
+                    const candidates = [custom, staticCeiling];
+                    if (metalCapGB > 0) candidates.push(metalCapGB);
+                    const ceiling = Math.max(0, Math.min(...candidates));
+                    const tmpl = kernelBinds([custom, staticCeiling], ceiling)
+                        ? 'settings.resource.guard_tier.breakdown_custom_kernel_limit'
+                        : 'settings.resource.guard_tier.breakdown_custom';
+                    return window
+                        .t(tmpl)
+                        .replace('{custom_gb}', bold(custom))
+                        .replace('{ceiling}', bold(ceiling));
                 }
-                const totalBytes = this.globalSettings.system?.total_memory_bytes || 0;
-                const usableBytes = Math.max(0, totalBytes - 8 * 1024 * 1024 * 1024);
-                if (usableBytes > 0) {
-                    const bytes = gb * 1024 * 1024 * 1024;
-                    this.memoryPercent = Math.min(100, Math.max(0, Math.round((bytes / usableBytes) * 100)));
-                }
-                this.globalSettings.model.max_model_memory = `${gb}GB`;
+
+                const freeGB = (sys.free_memory_bytes || 0) / GB;
+                const inactiveGB = (sys.inactive_memory_bytes || 0) / GB;
+                const activeGB = (sys.active_memory_bytes || 0) / GB;
+                const ratio = { safe: 0.2, balanced: 0.5, aggressive: 0.8 }[tier] ?? 0.5;
+                const pct = Math.round(ratio * 100);
+                const reclaim = activeGB * ratio;
+                const omlxGB = (sys.omlx_phys_footprint_bytes || 0) / GB;
+                const dynamicCeiling = omlxGB + freeGB + inactiveGB + reclaim;
+                const candidates = [dynamicCeiling, staticCeiling];
+                if (metalCapGB > 0) candidates.push(metalCapGB);
+                const ceiling = Math.max(0, Math.min(...candidates));
+                const tmpl = kernelBinds([dynamicCeiling, staticCeiling], ceiling)
+                    ? 'settings.resource.guard_tier.breakdown_kernel_limit'
+                    : 'settings.resource.guard_tier.breakdown';
+                return window
+                    .t(tmpl)
+                    .replace('{free}', bold(freeGB))
+                    .replace('{inactive}', bold(inactiveGB))
+                    .replace('{active}', bold(activeGB))
+                    .replace(/{active_pct}/g, pct)
+                    .replace('{reclaim}', bold(reclaim))
+                    .replace('{ceiling}', bold(ceiling));
             },
 
             // Computed hot cache size in GB (for manual input)
@@ -2801,6 +3921,7 @@
                             sensitivity_model_path: this.oqSensitivityModelPath,
                             text_only: this.oqTextOnly,
                             dtype: this.oqDtype,
+                            preserve_mtp: this.oqSelectedModelHasMtp() ? this.oqPreserveMtp : false,
                         }),
                     });
                     const data = await response.json().catch(() => ({}));
@@ -2905,6 +4026,11 @@
                 return model?.is_vlm || false;
             },
 
+            oqSelectedModelHasMtp() {
+                const model = this.oqModels.find(m => m.path === this.oqSelectedModelPath);
+                return model?.has_mtp_heads || false;
+            },
+
             oqEstimatedMemory() {
                 // Use precise estimate from API if available
                 if (this.oqEstimate) {
@@ -2948,6 +4074,7 @@
                         const params = new URLSearchParams({
                             model_path: this.oqSelectedModelPath,
                             oq_level: this.oqLevel,
+                            preserve_mtp: this.oqSelectedModelHasMtp() && this.oqPreserveMtp ? 'true' : 'false',
                         });
                         const resp = await fetch(`/admin/api/oq/estimate?${params}`);
                         if (resp.ok) {
@@ -3122,10 +4249,18 @@
                 try {
                     const response = await fetch(`/admin/api/hf/recommended?mlx_only=${this.hfMlxOnly}`, { signal: controller.signal });
                     if (response.ok) {
-                        this.hfRecommended = await response.json();
+                        const data = await response.json();
+                        // Attach original rank so the # column survives column-header re-sorts
+                        this.hfRecommended = {
+                            trending: (data.trending || []).map((m, i) => ({ ...m, rank: i + 1 })),
+                            popular: (data.popular || []).map((m, i) => ({ ...m, rank: i + 1 })),
+                        };
                         this.hfRecommendedLoaded = true;
                         this.hfPage.trending = 1;
                         this.hfPage.popular = 1;
+                        // Default sort for trending/popular is original rank
+                        this.hfTableSort = 'rank';
+                        this.hfTableSortDir = 'asc';
                     } else if (response.status === 401) {
                         window.location.href = '/admin';
                     } else {
@@ -3167,6 +4302,56 @@
                 return count.toString();
             },
 
+            // Table sort helpers for Browse Models
+            sortModels(list) {
+                const sortBy = this.hfTableSort;
+                const dir = this.hfTableSortDir === 'asc' ? 1 : -1;
+                return [...list].sort((a, b) => {
+                    if (sortBy === 'rank') {
+                        return dir * ((a.rank || 0) - (b.rank || 0));
+                    } else if (sortBy === 'name') {
+                        return dir * (a.name || '').localeCompare(b.name || '');
+                    } else if (sortBy === 'downloads') {
+                        return dir * ((a.downloads || 0) - (b.downloads || 0));
+                    } else if (sortBy === 'likes') {
+                        return dir * ((a.likes || 0) - (b.likes || 0));
+                    } else if (sortBy === 'size') {
+                        return dir * ((a.size || 0) - (b.size || 0));
+                    } else if (sortBy === 'params') {
+                        return dir * ((a.params || 0) - (b.params || 0));
+                    }
+                    return 0;
+                });
+            },
+
+            toggleTableSort(column) {
+                if (this.hfTableSort === column) {
+                    this.hfTableSortDir = this.hfTableSortDir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    this.hfTableSort = column;
+                    // Name and rank read more naturally as ascending by default
+                    this.hfTableSortDir = (column === 'name' || column === 'rank') ? 'asc' : 'desc';
+                }
+            },
+
+            syncTableSortToDropdown() {
+                const map = {
+                    largest:      { col: 'size',      dir: 'desc' },
+                    smallest:     { col: 'size',      dir: 'asc'  },
+                    most_params:  { col: 'params',    dir: 'desc' },
+                    least_params: { col: 'params',    dir: 'asc'  },
+                    downloads:    { col: 'downloads', dir: 'desc' },
+                    trending:     { col: 'downloads', dir: 'desc' },
+                    created:      { col: 'downloads', dir: 'desc' },
+                    updated:      { col: 'downloads', dir: 'desc' },
+                };
+                const m = map[this.hfSearchSort];
+                if (m) {
+                    this.hfTableSort = m.col;
+                    this.hfTableSortDir = m.dir;
+                }
+            },
+
             // Pagination helpers
             getPagedModels(tab) {
                 const page = this.hfPage[tab] || 1;
@@ -3175,7 +4360,9 @@
                 if (tab === 'trending') list = this.hfRecommended.trending || [];
                 else if (tab === 'popular') list = this.hfRecommended.popular || [];
                 else list = this.hfSearchResults || [];
-                return list.slice((page - 1) * size, page * size);
+                // Apply table sorting
+                const sorted = this.sortModels(list);
+                return sorted.slice((page - 1) * size, page * size);
             },
 
             getTotalPages(tab) {
@@ -3197,6 +4384,9 @@
                 this.hfSearchLoading = true;
                 this.hfRecommendedTab = 'search';
                 this.hfPage.search = 1;
+                // Sync table sort with dropdown choice so the frontend re-sort
+                // does not override what the backend returned
+                this.syncTableSortToDropdown();
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 15000);
                 try {
@@ -3206,6 +4396,23 @@
                         limit: '100',
                         mlx_only: this.hfMlxOnly,
                     });
+                    // Add filter parameters if set. Sizes use binary GiB to match
+                    // _format_model_size on the backend.
+                    const GIB = 1024 * 1024 * 1024;
+                    if (this.hfSearchMinParams) params.set('min_params', (parseFloat(this.hfSearchMinParams) * 1e9).toString());
+                    if (this.hfSearchMaxParams) params.set('max_params', (parseFloat(this.hfSearchMaxParams) * 1e9).toString());
+                    if (this.hfSearchMaxSize) params.set('max_size', (parseFloat(this.hfSearchMaxSize) * GIB).toString());
+                    if (this.hfSearchMinSize) params.set('min_size', (parseFloat(this.hfSearchMinSize) * GIB).toString());
+                    // Wire largest/smallest sort params to backend
+                    if (this.hfSearchSort === 'largest') {
+                        params.set('sort_by_size', 'true');
+                        params.set('sort_ascending', 'false');
+                    } else if (this.hfSearchSort === 'smallest') {
+                        params.set('sort_by_size', 'true');
+                        params.set('sort_ascending', 'true');
+                    }
+
+
                     const response = await fetch(`/admin/api/hf/search?${params}`, { signal: controller.signal });
                     if (response.ok) {
                         const data = await response.json();
@@ -3232,6 +4439,14 @@
                     clearTimeout(timeoutId);
                     this.hfSearchLoading = false;
                 }
+            },
+
+            clearHFSearchFilters() {
+                this.hfSearchMinParams = '';
+                this.hfSearchMaxParams = '';
+                this.hfSearchMaxSize = '';
+                this.hfSearchMinSize = '';
+                if (this.hfSearchQuery.trim()) this.immediateSearch();
             },
 
             debounceSearch() {

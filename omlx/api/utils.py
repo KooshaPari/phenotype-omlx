@@ -184,6 +184,35 @@ def _extract_multimodal_content_list(content: list) -> list:
 _MERGEABLE_ROLES = {"user", "assistant"}
 _PRESERVE_BOUNDARY_KEY = "_preserve_role_boundary"
 
+# Match `role == "tool"` / `role == 'tool'` in a chat template.
+_TOOL_ROLE_CHECK_RE = re.compile(r"==\s*['\"]tool['\"]")
+
+
+def _chat_template_supports_tool_role(tokenizer: Any) -> bool:
+    """Check whether the tokenizer's chat template renders tool messages natively.
+
+    mlx-lm / mlx-vlm only set ``has_tool_calling`` when their marker-based
+    ``_infer_tool_parser`` recognises the chat template (qwen3_coder, json_tools,
+    gemma4, etc.). Templates that branch on ``role == "tool"`` and render
+    ``tool_calls`` but don't match any known marker (Qwen3 VL variants, custom
+    fine-tunes) get flattened to ``role: "user"`` — making the model treat tool
+    output as user instructions and breaking multi-turn tool flows (#1290).
+
+    Strict superset of ``has_tool_calling``: if the tokenizer already flags
+    itself, return True immediately. Otherwise probe the chat_template string
+    for both a ``role == "tool"`` equality and the ``tool_calls`` variable —
+    both together keep false positives down (a stray ``"tool"`` literal in a
+    comment isn't enough).
+    """
+    if getattr(tokenizer, "has_tool_calling", False):
+        return True
+    chat_template = getattr(tokenizer, "chat_template", None)
+    if not isinstance(chat_template, str):
+        return False
+    if not _TOOL_ROLE_CHECK_RE.search(chat_template):
+        return False
+    return "tool_calls" in chat_template
+
 
 def _drop_void_assistant_messages(messages: list[dict]) -> list[dict]:
     """Drop assistant messages that have no content and no tool_calls.
@@ -193,8 +222,9 @@ def _drop_void_assistant_messages(messages: list[dict]) -> list[dict]:
     carry no information and can appear when a client echoes back a response
     that had only tool calls which were not preserved in its history.
 
-    Messages with ``tool_responses`` (Gemma 4 format) are never dropped even
-    when content is empty — they carry tool result data.
+    Messages with ``tool_responses`` (Gemma 4 format) or ``reasoning_content``
+    (Qwen 3.6+ native reasoning field) are never dropped even when content is
+    empty — they carry their own payload the template renders.
     """
     return [
         msg
@@ -204,6 +234,7 @@ def _drop_void_assistant_messages(messages: list[dict]) -> list[dict]:
             and not msg.get("content")
             and not msg.get("tool_calls")
             and not msg.get("tool_responses")
+            and not msg.get("reasoning_content")
         )
     ]
 
@@ -285,10 +316,42 @@ def _merge_consecutive_roles(messages: list[dict]) -> list[dict]:
     return merged
 
 
+def _apply_reasoning_reconstruction(
+    role: str,
+    content: Any,
+    reasoning: str | None,
+    native: bool,
+) -> tuple[Any, str | None]:
+    """Reconstruct reasoning on a historical assistant message.
+
+    External clients echo reasoning back via the OpenAI ``reasoning_content``
+    field (or Anthropic ``thinking`` blocks).  Chat templates fall into two
+    camps:
+
+    * ``native=True`` — template understands ``message.reasoning_content``
+      as a top-level field (Qwen 3.6+).  Content stays clean and reasoning
+      travels separately.
+    * ``native=False`` — template only parses ``<think>...</think>`` embedded
+      in content.  Reasoning is inlined into content as a fallback.
+
+    Returns ``(new_content, reasoning_out)`` where ``reasoning_out`` is the
+    string to attach as a ``reasoning_content`` field, or ``None`` to skip.
+    """
+    if role != "assistant" or not reasoning:
+        return content, None
+    text = content if isinstance(content, str) else ""
+    if isinstance(content, list):
+        text = _extract_text_from_content_list(content)
+    if native:
+        return text, reasoning
+    return f"<think>\n{reasoning}\n</think>\n\n{text}", None
+
+
 def extract_text_content(
     messages: List[Message],
     max_tool_result_tokens: int | None = None,
     tokenizer: Any | None = None,
+    native_reasoning_content: bool = False,
 ) -> List[dict]:
     """
     Extract text content from OpenAI-format messages.
@@ -303,6 +366,9 @@ def extract_text_content(
         messages: List of Message objects
         max_tool_result_tokens: Maximum token count for tool results.
         tokenizer: Tokenizer instance for token counting and truncation.
+        native_reasoning_content: If True, pass ``reasoning_content`` through
+            as a message-level field (Qwen 3.6+ templates).  If False, inline
+            ``<think>...</think>`` into content as a fallback.
 
     Returns:
         List of {"role": str, "content": str}
@@ -312,6 +378,14 @@ def extract_text_content(
     for msg in messages:
         role = msg.role
         content = msg.content
+
+        # Reconstruct reasoning for historical assistant messages.  Native
+        # mode passes reasoning as a separate field; fallback inlines it as
+        # <think>...</think> in content.
+        reasoning = getattr(msg, "reasoning_content", None)
+        content, reasoning_out = _apply_reasoning_reconstruction(
+            role, content, reasoning, native_reasoning_content
+        )
 
         # Normalize "developer" role to "system" (OpenAI API compatibility)
         if role == "developer":
@@ -334,7 +408,7 @@ def extract_text_content(
                 )
             # Preserve structured format for models with native tool calling
             # so the chat template renders tool results in the model's native format
-            if getattr(tokenizer, "has_tool_calling", False):
+            if _chat_template_supports_tool_role(tokenizer):
                 processed_messages.append(
                     {
                         "role": "tool",
@@ -357,14 +431,18 @@ def extract_text_content(
             if isinstance(content, list):
                 content = _extract_text_from_content_list(content)
             msg_dict = {"role": role, "content": content if content else ""}
+            if reasoning_out is not None:
+                msg_dict["reasoning_content"] = reasoning_out
             if getattr(msg, "name", None):
                 msg_dict["name"] = msg.name
+            if getattr(msg, "partial", False):
+                msg_dict["partial"] = True
 
             # Preserve structured tool_calls for models with native tool calling
             # so the chat template renders them in the model's native format.
             # Without this, models mimic text-formatted tool calls from history
             # instead of generating their native parseable format.
-            if getattr(tokenizer, "has_tool_calling", False):
+            if _chat_template_supports_tool_role(tokenizer):
                 tool_calls_list = []
                 for tc in msg.tool_calls:
                     if isinstance(tc, dict):
@@ -424,6 +502,8 @@ def extract_text_content(
             _extra["name"] = msg.name
         if getattr(msg, "partial", False):
             _extra["partial"] = True
+        if reasoning_out is not None:
+            _extra["reasoning_content"] = reasoning_out
 
         # Handle None content
         if content is None:
@@ -452,6 +532,7 @@ def extract_multimodal_content(
     messages: List[Message],
     max_tool_result_tokens: int | None = None,
     tokenizer: Any | None = None,
+    native_reasoning_content: bool = False,
 ) -> List[dict]:
     """
     Extract content from messages, preserving image_url parts for VLM.
@@ -463,6 +544,8 @@ def extract_multimodal_content(
         messages: List of Message objects
         max_tool_result_tokens: Maximum token count for tool results.
         tokenizer: Tokenizer instance for token counting and truncation.
+        native_reasoning_content: If True, pass ``reasoning_content`` through
+            as a message-level field.  See ``extract_text_content``.
 
     Returns:
         List of message dicts. Messages with images have content as list.
@@ -472,6 +555,12 @@ def extract_multimodal_content(
     for msg in messages:
         role = msg.role
         content = msg.content
+
+        # Reconstruct reasoning (see extract_text_content).
+        reasoning = getattr(msg, "reasoning_content", None)
+        content, reasoning_out = _apply_reasoning_reconstruction(
+            role, content, reasoning, native_reasoning_content
+        )
 
         if role == "developer":
             role = "system"
@@ -490,7 +579,7 @@ def extract_multimodal_content(
                 tool_content = truncate_tool_result(
                     tool_content, max_tool_result_tokens, tokenizer
                 )
-            if getattr(tokenizer, "has_tool_calling", False):
+            if _chat_template_supports_tool_role(tokenizer):
                 processed_messages.append(
                     {
                         "role": "tool",
@@ -513,10 +602,14 @@ def extract_multimodal_content(
             if isinstance(content, list):
                 content = _extract_text_from_content_list(content)
             msg_dict = {"role": role, "content": content if content else ""}
+            if reasoning_out is not None:
+                msg_dict["reasoning_content"] = reasoning_out
             if getattr(msg, "name", None):
                 msg_dict["name"] = msg.name
+            if getattr(msg, "partial", False):
+                msg_dict["partial"] = True
 
-            if getattr(tokenizer, "has_tool_calling", False):
+            if _chat_template_supports_tool_role(tokenizer):
                 tool_calls_list = []
                 for tc in msg.tool_calls:
                     if isinstance(tc, dict):
@@ -575,6 +668,8 @@ def extract_multimodal_content(
             _extra["name"] = msg.name
         if getattr(msg, "partial", False):
             _extra["partial"] = True
+        if reasoning_out is not None:
+            _extra["reasoning_content"] = reasoning_out
 
         if content is None:
             processed_messages.append({"role": role, "content": "", **_extra})

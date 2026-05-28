@@ -9,6 +9,7 @@ from omlx.api.openai_models import (
     ChatCompletionChunk,
     ChatCompletionRequest,
     CompletionRequest,
+    PromptTokensDetails,
     StreamOptions,
     Usage,
 )
@@ -66,14 +67,14 @@ class TestUsageExtendedFields:
     def test_basic_usage_unchanged(self):
         usage = Usage(prompt_tokens=10, completion_tokens=5)
         assert usage.total_tokens == 15
-        assert usage.cached_tokens is None
+        assert usage.prompt_tokens_details is None
         assert usage.time_to_first_token is None
 
     def test_usage_with_timing(self):
         usage = Usage(
             prompt_tokens=100,
             completion_tokens=50,
-            cached_tokens=20,
+            prompt_tokens_details=PromptTokensDetails(cached_tokens=20),
             time_to_first_token=0.5,
             total_time=2.0,
             prompt_eval_duration=0.5,
@@ -82,7 +83,7 @@ class TestUsageExtendedFields:
             generation_tokens_per_second=33.33,
         )
         assert usage.total_tokens == 150
-        assert usage.cached_tokens == 20
+        assert usage.prompt_tokens_details.cached_tokens == 20
         assert usage.time_to_first_token == 0.5
         assert usage.generation_tokens_per_second == 33.33
 
@@ -90,7 +91,7 @@ class TestUsageExtendedFields:
         """None timing fields should be excluded with exclude_none."""
         usage = Usage(prompt_tokens=10, completion_tokens=5)
         dumped = usage.model_dump(exclude_none=True)
-        assert "cached_tokens" not in dumped
+        assert "prompt_tokens_details" not in dumped
         assert "time_to_first_token" not in dumped
         assert "model_load_duration" not in dumped
         # Standard fields should still be present
@@ -106,7 +107,7 @@ class TestUsageExtendedFields:
         )
         dumped = usage.model_dump(exclude_none=True)
         assert dumped["model_load_duration"] == 55.93
-        assert "cached_tokens" not in dumped
+        assert "prompt_tokens_details" not in dumped
 
 
 class TestUsageChunkFormat:
@@ -138,6 +139,48 @@ class TestUsageChunkFormat:
         assert data["usage"]["generation_tokens_per_second"] == 36.23
         assert "model_load_duration" not in data["usage"]
 
+    def test_non_streaming_usage_only_total_time(self):
+        """Non-streaming responses know elapsed but not TTFT/decode split.
+
+        Usage should serialize total_time and drop fields that would require
+        per-token instrumentation (TTFT, prompt_eval_duration, generation_duration,
+        prompt_tokens_per_second, generation_tokens_per_second).
+        """
+        usage = Usage(
+            prompt_tokens=18,
+            completion_tokens=6,
+            total_tokens=24,
+            prompt_tokens_details=PromptTokensDetails(cached_tokens=0),
+            total_time=0.43,
+        )
+        dumped = json.loads(usage.model_dump_json(exclude_none=True))
+        assert dumped["total_time"] == 0.43
+        assert dumped["prompt_tokens"] == 18
+        assert dumped["completion_tokens"] == 6
+        for absent in (
+            "time_to_first_token",
+            "prompt_eval_duration",
+            "generation_duration",
+            "prompt_tokens_per_second",
+            "generation_tokens_per_second",
+            "model_load_duration",
+        ):
+            assert absent not in dumped, f"{absent} should be excluded when None"
+
+    def test_non_streaming_usage_with_model_load(self):
+        """model_load_duration appears only when > 1.0s (matches streaming gate)."""
+        usage = Usage(
+            prompt_tokens=18,
+            completion_tokens=6,
+            total_tokens=24,
+            prompt_tokens_details=PromptTokensDetails(cached_tokens=0),
+            model_load_duration=12.34,
+            total_time=15.67,
+        )
+        dumped = json.loads(usage.model_dump_json(exclude_none=True))
+        assert dumped["model_load_duration"] == 12.34
+        assert dumped["total_time"] == 15.67
+
     def test_usage_chunk_with_all_fields(self):
         chunk = ChatCompletionChunk(
             id="chatcmpl-test",
@@ -147,7 +190,7 @@ class TestUsageChunkFormat:
                 prompt_tokens=9752,
                 completion_tokens=554,
                 total_tokens=10306,
-                cached_tokens=0,
+                prompt_tokens_details=PromptTokensDetails(cached_tokens=0),
                 model_load_duration=55.93,
                 time_to_first_token=115.05,
                 total_time=182.47,
@@ -162,7 +205,7 @@ class TestUsageChunkFormat:
         assert usage["prompt_tokens"] == 9752
         assert usage["completion_tokens"] == 554
         assert usage["total_tokens"] == 10306
-        assert usage["cached_tokens"] == 0
+        assert usage["prompt_tokens_details"]["cached_tokens"] == 0
         assert usage["model_load_duration"] == 55.93
         assert usage["time_to_first_token"] == 115.05
         assert usage["total_time"] == 182.47

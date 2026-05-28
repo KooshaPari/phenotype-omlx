@@ -25,6 +25,21 @@ class TestModelSettings:
         assert settings.force_sampling is False
         assert settings.is_pinned is False
         assert settings.is_default is False
+        # Issue #926: opt-in per model. Default off.
+        assert settings.trust_remote_code is False
+
+    def test_trust_remote_code_roundtrip(self):
+        """Test trust_remote_code field survives to_dict -> from_dict roundtrip."""
+        original = ModelSettings(trust_remote_code=True)
+        d = original.to_dict()
+        assert d["trust_remote_code"] is True
+        restored = ModelSettings.from_dict(d)
+        assert restored.trust_remote_code is True
+
+    def test_trust_remote_code_excluded_from_profiles(self):
+        """Security flag must never propagate via profiles or templates."""
+        from omlx.model_profiles import EXCLUDED_FROM_PROFILES
+        assert "trust_remote_code" in EXCLUDED_FROM_PROFILES
 
     def test_max_context_window(self):
         """Test max_context_window field."""
@@ -232,6 +247,50 @@ class TestModelSettingsManager:
             # Verify file was created
             settings_file = Path(tmpdir) / "model_settings.json"
             assert settings_file.exists()
+
+    def test_delete_settings_releases_alias(self):
+        """Deleting a model's settings frees its alias for reuse (issue #1321)."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = ModelSettingsManager(Path(tmpdir))
+
+            manager.set_settings("model-a", ModelSettings(model_alias="shared"))
+
+            # Alias is held by model-a
+            aliases = {
+                mid: s.model_alias for mid, s in manager.get_all_settings().items()
+            }
+            assert aliases["model-a"] == "shared"
+
+            # Delete model-a, alias should be released
+            assert manager.delete_settings("model-a") is True
+            assert "model-a" not in manager.get_all_settings()
+
+            # Reusing the alias on another model now works
+            manager.set_settings("model-b", ModelSettings(model_alias="shared"))
+            assert manager.get_settings("model-b").model_alias == "shared"
+
+            # Survives reload
+            manager2 = ModelSettingsManager(Path(tmpdir))
+            assert "model-a" not in manager2.get_all_settings()
+            assert manager2.get_settings("model-b").model_alias == "shared"
+
+    def test_delete_settings_removes_profiles(self):
+        """Deleting settings also drops the model's profiles."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = ModelSettingsManager(Path(tmpdir))
+
+            manager.set_settings("model-a", ModelSettings(temperature=0.5))
+            manager.save_profile("model-a", "fast", "Fast", None, {"temperature": 0.1})
+            assert manager.list_profiles("model-a")
+
+            assert manager.delete_settings("model-a") is True
+            assert manager.list_profiles("model-a") == []
+
+    def test_delete_settings_missing_model(self):
+        """Deleting a model with no stored state returns False."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manager = ModelSettingsManager(Path(tmpdir))
+            assert manager.delete_settings("nope") is False
 
     def test_zero_values_persist(self):
         """Test zero sampling values survive save/load cycle."""

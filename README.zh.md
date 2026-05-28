@@ -10,10 +10,13 @@
 <p align="center"><b>LLM 推理，为你的 Mac 优化</b><br>连续批处理和分层 KV 缓存，直接从菜单栏管理。</p>
 
 <p align="center">
+<a href="https://www.buymeacoffee.com/jundot"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="40"></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="License">
   <img src="https://img.shields.io/badge/python-3.10+-green" alt="Python 3.10+">
   <img src="https://img.shields.io/badge/platform-Apple%20Silicon-black?logo=apple" alt="Apple Silicon">
-  <a href="https://buymeacoffee.com/jundot"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 <p align="center">
@@ -84,7 +87,7 @@ pip install -e ".[mcp]"   # 含 MCP（Model Context Protocol）支持
 
 ### macOS 应用
 
-从 Applications 文件夹启动 oMLX。欢迎界面会引导你完成三个步骤 — 模型目录设置、服务器启动、首个模型下载。就是这样。要连接 OpenClaw、OpenCode 或 Codex，请参阅[集成](#集成)。
+从 Applications 文件夹启动 oMLX。欢迎界面会引导你完成三个步骤 — 模型目录设置、服务器启动、首个模型下载。就是这样。要连接 OpenClaw、OpenCode、Codex、Hermes Agent 或 Copilot，请参阅[集成](#集成)。
 
 <p align="center">
   <img src="docs/images/Screenshot 2026-02-10 at 00.36.32.png" alt="oMLX 欢迎界面" width="360">
@@ -122,7 +125,7 @@ brew services info omlx     # 查看状态
 
 ### 管理后台
 
-在 `/admin` 提供实时监控、模型管理、聊天、基准测试和模型级设置的 Web UI。支持英语、韩语、日语和中文。所有 CDN 依赖已内置，完全支持离线运行。
+在 `/admin` 提供实时监控、模型管理、聊天、基准测试和模型级设置的 Web UI。支持英语、韩语、日语、中文和俄语。所有 CDN 依赖已内置，完全支持离线运行。
 
 <p align="center">
   <img src="docs/images/Screenshot 2026-02-10 at 00.45.34.png" alt="oMLX 管理后台" width="720">
@@ -191,7 +194,7 @@ brew services info omlx     # 查看状态
 
 ### 集成
 
-在管理后台中一键设置 OpenClaw、OpenCode 和 Codex。无需手动编辑配置文件。
+在管理后台中一键设置 OpenClaw、OpenCode、Codex、Hermes Agent、Copilot 和 Pi。无需手动编辑配置文件。
 
 <p align="center">
   <img src="docs/images/omlx_integrations.png" alt="oMLX 集成" width="720">
@@ -207,7 +210,7 @@ brew services info omlx     # 查看状态
 
 ### macOS 菜单栏应用
 
-原生 PyObjC 菜单栏应用（非 Electron）。无需打开终端即可启动、停止和监控服务器。包含持久化服务统计（重启后保留）、崩溃自动重启和应用内自动更新。
+原生 Swift / SwiftUI 菜单栏应用（非 Electron）。无需打开终端即可启动、停止和监控服务器。包含持久化服务统计（重启后保留）、崩溃自动重启和基于 Sparkle 的自动更新。
 
 <p align="center">
   <img src="docs/images/Screenshot 2026-02-10 at 00.51.54.png" alt="oMLX 菜单栏统计" width="400">
@@ -335,22 +338,20 @@ pytest -m "not slow"
 
 ### macOS 应用
 
-需要 Python 3.11+ 和 [venvstacks](https://venvstacks.lmstudio.ai)（`pip install venvstacks`）。
+原生 SwiftUI 应用位于 `apps/omlx-mac/`，需要 Xcode 26.5+ 和 Python 3.11+。venvstacks 已声明为 dev 依赖，因此 `pip install -e ".[dev]"`（或 `uv sync --dev`）会引入固定版本。若偏好主机全局工具运行器，也可使用 `uvx venvstacks` 或 `pipx run venvstacks`。
 
 ```bash
-cd packaging
+# 暂存可运行的 oMLX.app（xcodebuild + venvstacks Python 层 + ad-hoc 签名）
+apps/omlx-mac/Scripts/build.sh release
 
-# 完整构建（venvstacks + 应用包 + DMG）
-python build.py
+# 结果在 apps/omlx-mac/build/Stage/oMLX.app
+open apps/omlx-mac/build/Stage/oMLX.app
 
-# 跳过 venvstacks（仅代码更改）
-python build.py --skip-venv
-
-# 仅 DMG
-python build.py --dmg-only
+# 强制重建 venvstacks（默认按指纹缓存）
+apps/omlx-mac/Scripts/build.sh release --rebuild-donor
 ```
 
-应用包结构和层配置的详细说明请参阅 [packaging/README.md](packaging/README.md)。
+首次 cold 构建需要 10–20 分钟（venvstacks Python 层组装）。后续构建复用 `packaging/_export/` 缓存，约 4 分钟完成。层配置请参阅 [packaging/README.md](packaging/README.md)，Swift 源码请参阅 [apps/omlx-mac/](apps/omlx-mac/)。
 
 ## 贡献
 
@@ -371,3 +372,4 @@ python build.py --dmg-only
 - [vllm-mlx](https://github.com/waybarrios/vllm-mlx) - oMLX 从 vllm-mlx v0.1.0 起步，经过大幅演进，增加了多模型服务、分层 KV 缓存、完整分页缓存支持的 VLM、管理后台和 macOS 菜单栏应用
 - [venvstacks](https://venvstacks.lmstudio.ai) - macOS 应用包的便携 Python 环境分层
 - [mlx-embeddings](https://github.com/Blaizzy/mlx-embeddings) - Apple Silicon 嵌入模型支持
+- [dflash-mlx](https://github.com/bstnxbt/dflash-mlx) - Apple Silicon 上的块扩散推测解码 (Block diffusion speculative decoding)

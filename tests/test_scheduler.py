@@ -36,6 +36,7 @@ class TestSchedulerConfig:
         assert config.max_num_batched_tokens == 8192
         assert config.policy == SchedulingPolicy.FCFS
         assert config.completion_batch_size == 32
+        assert config.embedding_batch_size == 32
         assert config.prefill_step_size == 2048
         assert config.paged_cache_block_size == 256
         assert config.max_cache_blocks is None
@@ -53,6 +54,7 @@ class TestSchedulerConfig:
             max_num_batched_tokens=4096,
             policy=SchedulingPolicy.PRIORITY,
             completion_batch_size=16,
+            embedding_batch_size=12,
             prefill_step_size=1024,
             paged_cache_block_size=128,
             max_cache_blocks=500,
@@ -68,6 +70,7 @@ class TestSchedulerConfig:
         assert config.max_num_batched_tokens == 4096
         assert config.policy == SchedulingPolicy.PRIORITY
         assert config.completion_batch_size == 16
+        assert config.embedding_batch_size == 12
         assert config.prefill_step_size == 1024
         assert config.paged_cache_block_size == 128
         assert config.max_cache_blocks == 500
@@ -170,6 +173,34 @@ class TestSchedulerInitialization:
         assert scheduler.num_requests_processed == 0
         assert scheduler.total_prompt_tokens == 0
         assert scheduler.total_completion_tokens == 0
+
+    def test_snapshot_for_admin_is_isolated_from_live_state(
+        self, mock_model, mock_tokenizer
+    ):
+        """Published admin snapshot must not mutate when live state changes."""
+        scheduler = Scheduler(model=mock_model, tokenizer=mock_tokenizer)
+
+        request = Request(
+            request_id="req-snap",
+            prompt=[1, 2, 3],
+            sampling_params=SamplingParams(max_tokens=8),
+        )
+        request.prompt_token_ids = [1, 2, 3]
+        request.num_prompt_tokens = 3
+
+        scheduler.waiting.append(request)
+        scheduler.running["req-snap"] = request
+        scheduler._publish_admin_snapshot()
+
+        snap = scheduler.snapshot_for_admin()
+        assert snap["running_by_id"] == {"req-snap": request}
+        assert snap["waiting"] == [request]
+
+        scheduler.running.clear()
+        scheduler.waiting.clear()
+        # Snapshot reflects the published moment, not the live state.
+        assert snap["running_by_id"] == {"req-snap": request}
+        assert snap["waiting"] == [request]
 
 
 class TestSchedulerAddRequest:
@@ -692,6 +723,74 @@ class TestSchedulerReset:
         assert len(scheduler.requests) == 0
         assert scheduler.batch_generator is None
 
+    def test_reset_clears_async_store_cache_bookkeeping(
+        self, mock_model, mock_tokenizer
+    ):
+        """reset() must drop _pending_async_removes and _inflight_store_futures.
+
+        Regression for #1459: when a slow async store_cache worker finishes
+        between scheduler.shutdown()'s 30s wait timeout and the subsequent
+        executor.shutdown(wait=True), the deferred _drain_pending_async_removes
+        step that nulls req._extracted_cache never runs again. If reset()
+        leaves these two containers populated, the futures keep Request
+        references alive and the KV cache stays pinned for the rest of the
+        process lifetime. Clearing them in reset() is the second line of
+        defense after shutdown()'s final drain.
+        """
+        scheduler = Scheduler(model=mock_model, tokenizer=mock_tokenizer)
+
+        fake_future = MagicMock()
+        scheduler._pending_async_removes.append(
+            (999, "req-leaked", fake_future)
+        )
+        scheduler._inflight_store_futures["req-leaked"] = fake_future
+
+        scheduler.reset()
+
+        assert len(scheduler._pending_async_removes) == 0
+        assert len(scheduler._inflight_store_futures) == 0
+
+    def test_shutdown_drains_after_executor_join(self, mock_model, mock_tokenizer):
+        """shutdown() must drain pending removes again after executor join.
+
+        Regression for #1459. When the 30s `wait()` times out, the first
+        drain skips not-yet-done futures (deque break on `not future.done()`).
+        `executor.shutdown(wait=True)` then joins all workers — by the time
+        it returns, every future is done — but without a second drain those
+        skipped entries stay pinned, keeping the request's KV cache alive
+        for the rest of the process lifetime.
+
+        Asserts: drain runs both before and after executor.shutdown.
+        """
+        scheduler = Scheduler(model=mock_model, tokenizer=mock_tokenizer)
+
+        fake_executor = MagicMock()
+        scheduler._store_cache_executor = fake_executor
+        scheduler._store_cache_gate = MagicMock()
+
+        # Seed an inflight future so shutdown() enters the wait branch.
+        scheduler._inflight_store_futures["req-slow"] = MagicMock()
+
+        call_order = []
+        original_drain = scheduler._drain_pending_async_removes
+
+        def record_drain():
+            call_order.append("drain")
+            original_drain()
+
+        def record_executor_shutdown(wait=True):
+            call_order.append("executor_shutdown")
+
+        fake_executor.shutdown.side_effect = record_executor_shutdown
+        scheduler._drain_pending_async_removes = record_drain
+
+        with patch("concurrent.futures.wait"):
+            scheduler.shutdown()
+
+        assert call_order == ["drain", "executor_shutdown", "drain"], (
+            f"Expected drain to bracket executor.shutdown, got: {call_order}"
+        )
+
 
 class TestSchedulerStopTokens:
     """Tests for stop token handling."""
@@ -739,6 +838,129 @@ class TestSchedulerXtcSpecialTokens:
         tokens = scheduler._get_xtc_special_tokens()
 
         assert 2 in tokens
+
+
+class TestSyncAndClearCache:
+    """Tests for module-level _sync_and_clear_cache() helper (#300, #888)."""
+
+    def test_swallows_generation_stream_thread_error(self):
+        """generation_stream sync failing must not break cache clear.
+
+        Reproduces #888: on some MLX builds mx.synchronize(generation_stream)
+        raises 'There is no Stream(gpu, 0) in current thread' when called
+        from an executor thread that has not submitted work to that stream
+        (e.g. during _do_external_prefill). The helper must swallow that
+        RuntimeError and still drain the default stream + clear the cache.
+        """
+        from omlx import scheduler as sched_mod
+
+        calls = []
+
+        def fake_gen_sync(stream):
+            calls.append(("gen_sync", stream))
+            raise RuntimeError("There is no Stream(gpu, 0) in current thread.")
+
+        def fake_default_sync():
+            calls.append(("default_sync",))
+
+        def fake_clear_cache():
+            calls.append(("clear_cache",))
+
+        def dispatch(*args, **kwargs):
+            if args:
+                fake_gen_sync(args[0])
+            else:
+                fake_default_sync()
+
+        with patch.object(sched_mod.mx, "synchronize", side_effect=dispatch), \
+             patch.object(sched_mod.mx, "clear_cache", side_effect=fake_clear_cache):
+            sched_mod._sync_and_clear_cache()
+
+        assert calls[0][0] == "gen_sync"
+        assert ("default_sync",) in calls
+        assert ("clear_cache",) in calls
+
+    def test_propagates_default_stream_error(self):
+        """Errors on the default stream sync are not swallowed."""
+        from omlx import scheduler as sched_mod
+
+        def dispatch(*args, **kwargs):
+            if not args:
+                raise RuntimeError("default stream failure")
+
+        with patch.object(sched_mod.mx, "synchronize", side_effect=dispatch), \
+             patch.object(sched_mod.mx, "clear_cache") as clear_cache:
+            with pytest.raises(RuntimeError, match="default stream failure"):
+                sched_mod._sync_and_clear_cache()
+            clear_cache.assert_not_called()
+
+
+class TestStoreCacheWorkerSync:
+    """Tests for store-cache worker stream-scoped sync (#1437).
+
+    Worker must wait on generation_stream specifically, not on the
+    default stream. mx.synchronize() with no args only blocks on the
+    default stream (gpu:0) and leaves the gpu:2 dispatched work
+    unwaited, racing the buffer-protocol access in
+    _extract_tensor_bytes -> SIGABRT in get_command_encoder(gpu:2).
+    """
+
+    def test_safe_sync_passes_generation_stream(self):
+        """_safe_sync_stream() with no args must invoke mx.synchronize with
+        the module-level _default_generation_stream object, not call the
+        no-args variant.
+
+        Regression: PR #1146 wired the worker to bare mx.synchronize()
+        under the (incorrect) assumption that it was a global barrier
+        and that stream-scoped sync was unsafe cross-thread. Both
+        assumptions are wrong: synchronize() defaults to a single
+        stream, and Stream objects are not thread-local. The worker
+        path now routes through this helper so the regression has a
+        single chokepoint to assert against.
+        """
+        from omlx import scheduler as sched_mod
+
+        calls = []
+
+        def fake_sync(*args, **kwargs):
+            calls.append(args)
+
+        with patch.object(sched_mod.mx, "synchronize", side_effect=fake_sync):
+            sched_mod._safe_sync_stream()
+
+        assert len(calls) == 1
+        assert calls[0] and calls[0][0] is sched_mod._default_generation_stream, (
+            f"Worker sync must target _default_generation_stream, got: {calls}"
+        )
+
+    def test_safe_sync_swallows_no_stream_runtime_error(self):
+        """A 'no Stream' RuntimeError from cross-thread sync must be
+        swallowed so the worker can still proceed to extract bytes.
+
+        On some MLX builds mx.synchronize(stream) raises 'There is no
+        Stream(gpu, X) in current thread' from a thread that has not
+        submitted work to that stream. In the store-cache worker that
+        condition means there is no in-flight gpu:2 work to drain, so
+        it is safe to continue.
+        """
+        from omlx import scheduler as sched_mod
+
+        def fake_sync(*args, **kwargs):
+            raise RuntimeError("There is no Stream(gpu, 2) in current thread.")
+
+        with patch.object(sched_mod.mx, "synchronize", side_effect=fake_sync):
+            sched_mod._safe_sync_stream()
+
+    def test_safe_sync_propagates_other_runtime_errors(self):
+        """Real GPU errors must not be silently swallowed."""
+        from omlx import scheduler as sched_mod
+
+        def fake_sync(*args, **kwargs):
+            raise RuntimeError("Metal command buffer execution failed")
+
+        with patch.object(sched_mod.mx, "synchronize", side_effect=fake_sync):
+            with pytest.raises(RuntimeError, match="command buffer execution failed"):
+                sched_mod._safe_sync_stream()
 
 
 class TestSchedulerFormatBytes:
@@ -1012,7 +1234,14 @@ class TestSchedulerBoundarySnapshots:
     def test_prefill_boundary_snapshot_records_rotating_cache(
         self, mock_model, mock_tokenizer
     ):
-        """Prefill callback should store rotating boundary snapshots."""
+        """Prefill callback should store rotating boundary snapshots.
+
+        Regression: deliberately leave ``request_id_to_uid`` /
+        ``uid_to_request_id`` unset, matching what happens in production
+        during prefill (the request has not been inserted into
+        BatchGenerator yet). The earlier shape passed a uid that
+        resolved to None and silently dropped the snapshot.
+        """
         scheduler = Scheduler(
             model=mock_model,
             tokenizer=mock_tokenizer,
@@ -1025,16 +1254,15 @@ class TestSchedulerBoundarySnapshots:
             prompt="hello",
             sampling_params=SamplingParams(),
         )
-        uid = 77
         scheduler.requests[request.request_id] = request
         scheduler.running[request.request_id] = request
-        scheduler.request_id_to_uid[request.request_id] = uid
-        scheduler.uid_to_request_id[uid] = request.request_id
 
         RotatingStub = type("RotatingKVCache", (), {})
         snapshot_cache = [RotatingStub()]
 
-        scheduler._on_prefill_boundary_snapshot(uid, snapshot_cache, 4)
+        scheduler._on_prefill_boundary_snapshot(
+            request.request_id, snapshot_cache, 4
+        )
 
         assert 4 in scheduler._boundary_cache_snapshots[request.request_id]
         assert scheduler._boundary_cache_snapshots[request.request_id][4] == snapshot_cache
@@ -1056,16 +1284,56 @@ class TestSchedulerBoundarySnapshots:
             prompt="hello",
             sampling_params=SamplingParams(),
         )
-        uid = 78
         scheduler.requests[request.request_id] = request
         scheduler.running[request.request_id] = request
-        scheduler.request_id_to_uid[request.request_id] = uid
-        scheduler.uid_to_request_id[uid] = request.request_id
 
         RotatingStub = type("RotatingKVCache", (), {})
-        scheduler._on_prefill_boundary_snapshot(uid, [RotatingStub()], 3)
+        scheduler._on_prefill_boundary_snapshot(
+            request.request_id, [RotatingStub()], 3
+        )
 
         assert request.request_id not in scheduler._boundary_cache_snapshots
+
+    def test_emit_prefill_boundary_snapshot_persists_before_uid_assignment(
+        self, mock_model, mock_tokenizer
+    ):
+        """Snapshots emitted during prefill must persist even though the
+        request has not yet been inserted into BatchGenerator.
+
+        The regression this guards against: the wrapper used to route
+        through ``request_id_to_uid.get(rid, -1)`` →
+        ``uid_to_request_id.get(-1)`` → ``None`` → silent return, so
+        every block-boundary snapshot during prefill was dropped. For
+        hybrid (ArraysCache / GDN) models that meant every non-last
+        cached block stored a placeholder and identical-prefix re-
+        uploads re-prefilled from scratch.
+        """
+        scheduler = Scheduler(
+            model=mock_model,
+            tokenizer=mock_tokenizer,
+            config=SchedulerConfig(paged_cache_block_size=4),
+        )
+        scheduler.block_aware_cache = MagicMock()
+
+        request = Request(
+            request_id="req-prefill-pre-insert",
+            prompt="hello",
+            sampling_params=SamplingParams(),
+        )
+        scheduler.requests[request.request_id] = request
+        scheduler.running[request.request_id] = request
+        # Deliberately do NOT populate request_id_to_uid /
+        # uid_to_request_id — that mirrors production state at the
+        # time _emit_prefill_boundary_snapshot fires.
+        assert request.request_id not in scheduler.request_id_to_uid
+
+        RotatingStub = type("RotatingKVCache", (), {})
+        prompt_cache = [RotatingStub()]
+
+        scheduler._emit_prefill_boundary_snapshot(request, prompt_cache, 4)
+
+        assert request.request_id in scheduler._boundary_cache_snapshots
+        assert 4 in scheduler._boundary_cache_snapshots[request.request_id]
 
 
 class TestSchedulerRotatingBlockAlignment:
@@ -1275,6 +1543,67 @@ class TestSchedulerRotatingBlockAlignment:
         second_target = scheduler._step_counter + Scheduler._DEFERRED_CLEAR_DELAY
         assert scheduler._deferred_clear_at == second_target
         assert scheduler._deferred_clear_at > first_target
+
+
+class TestPeriodicClearGating:
+    """Tests for the conditional periodic clear (#978/#1040 mitigation)."""
+
+    def test_periodic_clear_skipped_when_cache_below_threshold(
+        self, mock_model, mock_tokenizer
+    ):
+        """Periodic clear should NOT fire when MLX buffer pool is small.
+
+        The pre-fix behavior fired every mlx_cache_cleanup_interval steps
+        unconditionally, producing IOGPUFamily refcount transitions even
+        when there was nothing meaningful to release. After the fix, the
+        clear only fires when accumulated cache memory exceeds the
+        threshold (memory_limit/3 or absolute 2 GiB floor).
+        """
+        from omlx import scheduler as sched_mod
+
+        scheduler = Scheduler(model=mock_model, tokenizer=mock_tokenizer)
+        scheduler._step_counter = scheduler.config.mlx_cache_cleanup_interval
+        scheduler._memory_limit_bytes = 0  # → use absolute 2 GiB threshold
+
+        # 1 GiB cached, well under the 2 GiB threshold
+        with patch.object(
+            sched_mod.mx, "get_cache_memory", return_value=1 * 1024**3
+        ):
+            assert scheduler._should_periodic_clear_cache() is False
+
+    def test_periodic_clear_fires_when_cache_above_threshold(
+        self, mock_model, mock_tokenizer
+    ):
+        """Periodic clear must fire when MLX buffer pool exceeds threshold."""
+        from omlx import scheduler as sched_mod
+
+        scheduler = Scheduler(model=mock_model, tokenizer=mock_tokenizer)
+        scheduler._step_counter = scheduler.config.mlx_cache_cleanup_interval
+        scheduler._memory_limit_bytes = 0  # → 2 GiB absolute floor
+
+        # 3 GiB cached, exceeds the 2 GiB threshold
+        with patch.object(
+            sched_mod.mx, "get_cache_memory", return_value=3 * 1024**3
+        ):
+            assert scheduler._should_periodic_clear_cache() is True
+
+    def test_periodic_clear_threshold_scales_with_memory_limit(
+        self, mock_model, mock_tokenizer
+    ):
+        """Threshold must be max(memory_limit/3, 2 GiB) when limit is set."""
+        scheduler = Scheduler(model=mock_model, tokenizer=mock_tokenizer)
+
+        # Limit 30 GiB → threshold 10 GiB (memory_limit / 3)
+        scheduler._memory_limit_bytes = 30 * 1024**3
+        assert scheduler._periodic_clear_threshold_bytes() == 10 * 1024**3
+
+        # Limit 3 GiB → threshold 2 GiB (floor wins)
+        scheduler._memory_limit_bytes = 3 * 1024**3
+        assert scheduler._periodic_clear_threshold_bytes() == 2 * 1024**3
+
+        # No limit → 2 GiB absolute floor
+        scheduler._memory_limit_bytes = 0
+        assert scheduler._periodic_clear_threshold_bytes() == 2 * 1024**3
 
 
 class TestExtractCacheStatesCacheList:
@@ -1524,6 +1853,87 @@ class TestCacheCorruptionRecovery:
         assert scheduler._current_sampler_params is None
         # Cache should NOT be cleared (not a corruption error)
         scheduler.block_aware_cache.clear.assert_not_called()
+
+    def test_fail_all_requests_includes_in_flight_orphans(
+        self, mock_model, mock_tokenizer
+    ):
+        """Catch requests popped from self.waiting but not yet in self.running.
+
+        Regression test for the hang triggered when ``_do_external_prefill``
+        raises inside ``_schedule_waiting``: the request has already been
+        popped from ``self.waiting`` and has not yet been inserted into
+        ``self.running``, so the three-queue sweep misses it. The orphan
+        still lives in ``self.requests`` and the HTTP collector for its id
+        keeps awaiting a result that never arrives.
+        """
+        scheduler = self._make_scheduler(mock_model, mock_tokenizer)
+        orphan = Request(
+            request_id="req-orphan",
+            prompt="orphan",
+            sampling_params=SamplingParams(),
+            prompt_token_ids=[6, 7],
+            num_prompt_tokens=2,
+        )
+        # Orphan only: present in self.requests, absent from all three queues.
+        scheduler.requests[orphan.request_id] = orphan
+        # _schedule_waiting assigns a temp_uid (id(request)) before prefill and
+        # only clears it on the success path, so an orphan leaves both uid maps
+        # populated.
+        temp_uid = id(orphan)
+        scheduler.request_id_to_uid[orphan.request_id] = temp_uid
+        scheduler.uid_to_request_id[temp_uid] = orphan.request_id
+        assert orphan.request_id not in scheduler.waiting
+        assert orphan.request_id not in scheduler.running
+        assert orphan.request_id not in scheduler.prefilling
+
+        failed_ids = scheduler.fail_all_requests()
+
+        assert "req-orphan" in failed_ids
+        assert "req-orphan" not in scheduler.requests
+        # Stale uid mappings for the orphan must be cleared too.
+        assert "req-orphan" not in scheduler.request_id_to_uid
+        assert temp_uid not in scheduler.uid_to_request_id
+
+    def test_fail_all_requests_excludes_async_cleanup_in_flight(
+        self, mock_model, mock_tokenizer
+    ):
+        """Finished requests awaiting async cache-store cleanup must not be failed.
+
+        ``_cleanup_finished`` keeps a finished request in ``self.requests``
+        and registers its store future in ``_inflight_store_futures`` until
+        ``_drain_pending_async_removes`` finalizes the cleanup. That request
+        has already emitted ``finished=True`` to its collector; if
+        ``fail_all_requests`` runs during this window, appending an error
+        output via the orphan sweep would override the success for
+        non-streaming ``generate()`` (engine_core returns the last queued
+        output). The sweep must skip ids present in
+        ``_inflight_store_futures`` and leave them for the async drain.
+        """
+        scheduler = self._make_scheduler(mock_model, mock_tokenizer)
+        finished_pending_cleanup = Request(
+            request_id="req-async-cleanup",
+            prompt="finished",
+            sampling_params=SamplingParams(),
+            prompt_token_ids=[8, 9],
+            num_prompt_tokens=2,
+        )
+        # Simulate _cleanup_finished's terminal state: request lives in
+        # self.requests + _inflight_store_futures, absent from all three queues.
+        scheduler.requests[finished_pending_cleanup.request_id] = finished_pending_cleanup
+        scheduler._inflight_store_futures[finished_pending_cleanup.request_id] = MagicMock()
+        # Its uid mapping is still live for _drain_pending_async_removes and
+        # must survive fail_all_requests untouched.
+        scheduler.request_id_to_uid[finished_pending_cleanup.request_id] = 999
+        scheduler.uid_to_request_id[999] = finished_pending_cleanup.request_id
+
+        failed_ids = scheduler.fail_all_requests()
+
+        assert "req-async-cleanup" not in failed_ids
+        assert "req-async-cleanup" in scheduler.requests
+        assert "req-async-cleanup" in scheduler._inflight_store_futures
+        # uid mapping preserved for the async drain.
+        assert scheduler.request_id_to_uid["req-async-cleanup"] == 999
+        assert scheduler.uid_to_request_id[999] == "req-async-cleanup"
 
 
 class TestDetectNeedsThinkPrefix:
@@ -1801,3 +2211,79 @@ class TestVLMPositionStateClearing:
         scheduler._schedule_waiting()
 
         model.clear_vlm_position_state.assert_called_once()
+
+
+class TestBuildStateMachineStopStrings:
+    """Tests for _build_state_machine stop-string tokenization.
+
+    The scheduler must convert SamplingParams.stop (a list of strings)
+    into token-sequence transitions on the per-request state machine,
+    so mlx-lm's BatchGenerator can halt on user-supplied stop sequences.
+    """
+
+    def _make_scheduler(self, mock_model, mock_tokenizer):
+        return Scheduler(model=mock_model, tokenizer=mock_tokenizer)
+
+    def _request_with_stop(self, stop):
+        return Request(
+            request_id="stop-001",
+            prompt="hello",
+            sampling_params=SamplingParams(max_tokens=10, stop=stop),
+        )
+
+    def test_no_stop_string_only_eos_transitions(
+        self, mock_model, mock_tokenizer
+    ):
+        scheduler = self._make_scheduler(mock_model, mock_tokenizer)
+        sm = scheduler._build_state_machine(self._request_with_stop([]))
+        # SequenceStateMachine has internal _states dict; non-empty implies
+        # at least the EOS transitions are present.
+        assert sm._states
+
+    def test_stop_string_added_as_token_sequence(
+        self, mock_model, mock_tokenizer
+    ):
+        scheduler = self._make_scheduler(mock_model, mock_tokenizer)
+        # MockTokenizer encodes "delta" to a single hash-derived token id.
+        expected_seq = mock_tokenizer.encode("delta", add_special_tokens=False)
+        assert expected_seq, "MockTokenizer must produce a token for 'delta'"
+
+        sm = scheduler._build_state_machine(self._request_with_stop(["delta"]))
+        # Walk the trie following expected_seq; the terminal node must
+        # have a __match__ entry, meaning the sequence is registered.
+        node = sm._states["normal"][0]
+        for tok in expected_seq:
+            assert tok in node, f"token {tok} missing from trie"
+            node = node[tok]
+        assert "__match__" in node, "stop sequence not terminated in trie"
+
+    def test_empty_or_non_string_entries_skipped(
+        self, mock_model, mock_tokenizer
+    ):
+        scheduler = self._make_scheduler(mock_model, mock_tokenizer)
+        # Mixed list with empty string and non-string entry; only "real"
+        # should be tokenized.
+        sm = scheduler._build_state_machine(
+            self._request_with_stop(["", "real", 123])
+        )
+        real_seq = mock_tokenizer.encode("real", add_special_tokens=False)
+        node = sm._states["normal"][0]
+        for tok in real_seq:
+            assert tok in node
+            node = node[tok]
+        assert "__match__" in node
+
+    def test_multiple_stop_strings_all_registered(
+        self, mock_model, mock_tokenizer
+    ):
+        scheduler = self._make_scheduler(mock_model, mock_tokenizer)
+        sm = scheduler._build_state_machine(
+            self._request_with_stop(["foo", "bar"])
+        )
+        for stop_str in ("foo", "bar"):
+            seq = mock_tokenizer.encode(stop_str, add_special_tokens=False)
+            node = sm._states["normal"][0]
+            for tok in seq:
+                assert tok in node
+                node = node[tok]
+            assert "__match__" in node

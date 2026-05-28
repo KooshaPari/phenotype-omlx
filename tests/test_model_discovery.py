@@ -130,6 +130,42 @@ class TestDetectModelType:
         (llm_dir / "config.json").write_text(json.dumps(config))
         assert detect_model_type(llm_dir) == "llm"
 
+    def test_detect_qwen3_vl_reranker(self, tmp_path):
+        """Qwen3VLForConditionalGeneration + 'reranker' in dir name → reranker."""
+        reranker_dir = tmp_path / "Qwen3-VL-Reranker-2B-4bit"
+        reranker_dir.mkdir()
+        config = {
+            "model_type": "qwen3_vl",
+            "architectures": ["Qwen3VLForConditionalGeneration"],
+            "vision_config": {"hidden_size": 1024},
+        }
+        (reranker_dir / "config.json").write_text(json.dumps(config))
+        assert detect_model_type(reranker_dir) == "reranker"
+
+    def test_detect_qwen3_vl_embedding(self, tmp_path):
+        """Qwen3VLForConditionalGeneration + 'embedding' in dir name → embedding."""
+        embed_dir = tmp_path / "Qwen3-VL-Embedding-2B"
+        embed_dir.mkdir()
+        config = {
+            "model_type": "qwen3_vl",
+            "architectures": ["Qwen3VLForConditionalGeneration"],
+            "vision_config": {"hidden_size": 1024},
+        }
+        (embed_dir / "config.json").write_text(json.dumps(config))
+        assert detect_model_type(embed_dir) == "embedding"
+
+    def test_detect_qwen3_vl_without_rerank_or_embed_name_is_vlm(self, tmp_path):
+        """Plain Qwen3-VL without rerank/embed hints still classifies as VLM."""
+        vlm_dir = tmp_path / "Qwen3-VL-2B-Instruct"
+        vlm_dir.mkdir()
+        config = {
+            "model_type": "qwen3_vl",
+            "architectures": ["Qwen3VLForConditionalGeneration"],
+            "vision_config": {"hidden_size": 1024},
+        }
+        (vlm_dir / "config.json").write_text(json.dumps(config))
+        assert detect_model_type(vlm_dir) == "vlm"
+
     def test_missing_config_defaults_to_llm(self, tmp_path):
         """Test that missing config.json defaults to LLM."""
         assert detect_model_type(tmp_path) == "llm"
@@ -328,6 +364,48 @@ class TestDetectModelType:
             "model_type": "gemma3",
             # No VLM architecture, no vision_config — text-only derivative
             "architectures": ["SomeTextOnlyArch"],
+        }
+        (tmp_path / "config.json").write_text(json.dumps(config))
+        assert detect_model_type(tmp_path) == "llm"
+
+    def test_detect_vlm_molmo2_via_vit_config(self, tmp_path):
+        """Molmo2 bf16 ships ``vit_config`` (not ``vision_config``) — must classify as VLM."""
+        config = {
+            "model_type": "molmo2",
+            "architectures": ["Molmo2ForConditionalGeneration"],
+            "vit_config": {"hidden_size": 1024, "num_layers": 24},
+        }
+        (tmp_path / "config.json").write_text(json.dumps(config))
+        assert detect_model_type(tmp_path) == "vlm"
+
+    def test_detect_vlm_fastvlm_via_mm_vision_tower(self, tmp_path):
+        """FastVLM bf16 ships ``mm_vision_tower`` (older LLaVA style) — must classify as VLM."""
+        config = {
+            "model_type": "llava_qwen2",
+            "architectures": ["LlavaQwen2ForCausalLM"],
+            "mm_vision_tower": "openai/clip-vit-large-patch14-336",
+        }
+        (tmp_path / "config.json").write_text(json.dumps(config))
+        assert detect_model_type(tmp_path) == "vlm"
+
+    def test_detect_text_only_quant_with_empty_mm_vision_tower_as_llm(self, tmp_path):
+        """``mm_vision_tower`` evidence check is non-empty-only — empty string falls back to LLM."""
+        config = {
+            "model_type": "llava_qwen2",
+            "architectures": ["LlavaQwen2ForCausalLM"],
+            "mm_vision_tower": "",
+        }
+        (tmp_path / "config.json").write_text(json.dumps(config))
+        assert detect_model_type(tmp_path) == "llm"
+
+    def test_detect_text_only_quant_no_vision_evidence_as_llm(self, tmp_path):
+        """A VLM_ARCHITECTURE match without any vision sub-config evidence is a text-only quant."""
+        config = {
+            # qwen3_5_moe is in VLM_MODEL_TYPES, and the unsloth Qwen3.5-122B
+            # text-only quant ships only the chat backbone arch.
+            "model_type": "qwen3_5_moe",
+            "architectures": ["Qwen3_5_MoEForCausalLM"],
+            # No vision_config / vit_config / mm_vision_tower.
         }
         (tmp_path / "config.json").write_text(json.dumps(config))
         assert detect_model_type(tmp_path) == "llm"

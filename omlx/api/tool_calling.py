@@ -30,6 +30,35 @@ from .openai_models import FunctionCall, ResponseFormat, ToolCall, ToolDefinitio
 logger = logging.getLogger(__name__)
 
 
+def _serialize_tool_call_arguments(arguments: Any) -> str:
+    """Serialize parser output to a JSON-object arguments string.
+
+    Chat templates for models with native tool calling (Qwen 3.5/3.6 XML,
+    GLM, MiniMax) iterate `arguments.items()` when the call is echoed back
+    in history. Anything that does not represent a JSON object must be
+    coerced to "{}" here so we never hand the client a non-JSON value that
+    the next turn's template would crash on.
+    """
+    if isinstance(arguments, dict):
+        return json.dumps(arguments, ensure_ascii=False)
+    # mlx-vlm / mlx-lm gemma4 parser returns a JSON-object string per the
+    # OpenAI spec. Accept it when it parses back to a dict.
+    if isinstance(arguments, str):
+        try:
+            parsed = json.loads(arguments)
+        except (json.JSONDecodeError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict):
+            return json.dumps(parsed, ensure_ascii=False)
+    logger.warning(
+        "Tool parser returned non-dict arguments (type=%s, repr=%.200r); "
+        "coercing to empty object to keep downstream template safe.",
+        type(arguments).__name__,
+        arguments,
+    )
+    return "{}"
+
+
 @dataclass(frozen=True)
 class ToolCallExtraction:
     """Parsed tool-call result plus sanitized reasoning text."""
@@ -69,9 +98,7 @@ def _parse_xml_tool_calls(text: str) -> Tuple[str, Optional[List[ToolCall]]]:
                     type="function",
                     function=FunctionCall(
                         name=name,
-                        arguments=json.dumps(arguments, ensure_ascii=False)
-                        if isinstance(arguments, dict)
-                        else str(arguments),
+                        arguments=_serialize_tool_call_arguments(arguments),
                     ),
                 )
             )
@@ -402,23 +429,33 @@ def parse_tool_calls(
             for match in matches:
                 try:
                     parsed = tool_parser(match.strip(), tools)
-                    name = parsed.get("name", "")
-                    arguments = parsed.get("arguments", {})
-                    tool_calls.append(
-                        ToolCall(
-                            id=f"call_{uuid.uuid4().hex[:8]}",
-                            type="function",
-                            function=FunctionCall(
-                                name=name,
-                                arguments=json.dumps(arguments, ensure_ascii=False)
-                                if isinstance(arguments, dict)
-                                else str(arguments),
-                            ),
+                    # MiniMax M2 parser returns a list when a single
+                    # <minimax:tool_call> block contains multiple <invoke>s.
+                    items = parsed if isinstance(parsed, list) else [parsed]
+                    for p in items:
+                        name = p.get("name", "")
+                        arguments = p.get("arguments", {})
+                        tool_calls.append(
+                            ToolCall(
+                                id=f"call_{uuid.uuid4().hex[:8]}",
+                                type="function",
+                                function=FunctionCall(
+                                    name=name,
+                                    arguments=_serialize_tool_call_arguments(arguments),
+                                ),
+                            )
                         )
-                    )
-                except (ValueError, json.JSONDecodeError, AttributeError, KeyError):
+                except (
+                    ValueError,
+                    json.JSONDecodeError,
+                    AttributeError,
+                    KeyError,
+                    SyntaxError,
+                    TypeError,
+                ) as primary_err:
                     # Gemma 4 only: try robust fallback that handles bare
                     # string values and colons in function names.
+                    gemma4_handled = False
                     if tool_call_start == "<|tool_call>":
                         try:
                             parsed = _parse_gemma4_tool_call_fallback(
@@ -436,20 +473,48 @@ def parse_tool_calls(
                                         type="function",
                                         function=FunctionCall(
                                             name=name,
-                                            arguments=json.dumps(
-                                                arguments, ensure_ascii=False
-                                            )
-                                            if isinstance(arguments, dict)
-                                            else str(arguments),
+                                            arguments=_serialize_tool_call_arguments(
+                                                arguments
+                                            ),
                                         ),
                                     )
                                 )
+                            gemma4_handled = True
                         except (
                             ValueError,
                             json.JSONDecodeError,
                             KeyError,
+                            SyntaxError,
+                            TypeError,
                         ):
                             pass
+
+                    if gemma4_handled:
+                        continue
+
+                    # Per-match XML fallback: regex-only, no ast.literal_eval,
+                    # recovers Qwen/GLM/Hermes-JSON formats. Prevents silent
+                    # drop when the native parser raises (e.g. ast.literal_eval
+                    # SyntaxError on non-Python-literal parameter values).
+                    fb_wrapped = f"<tool_call>{match}</tool_call>"
+                    _, fb_calls = _parse_xml_tool_calls(fb_wrapped)
+                    if fb_calls:
+                        tool_calls.extend(fb_calls)
+                        logger.warning(
+                            "Native tool parser failed (%s: %s), "
+                            "recovered via XML fallback. Match: %r",
+                            type(primary_err).__name__,
+                            primary_err,
+                            match[:200],
+                        )
+                    else:
+                        logger.warning(
+                            "Native tool parser failed (%s: %s) and XML "
+                            "fallback could not recover. Dropping match: %r",
+                            type(primary_err).__name__,
+                            primary_err,
+                            match[:200],
+                        )
                     continue
 
             if tool_calls:
@@ -547,7 +612,21 @@ def extract_tool_calls_with_thinking(
     tokenizer: Any,
     tools: Optional[List] = None,
 ) -> ToolCallExtraction:
-    """Extract tool calls while keeping a sanitized reasoning transcript."""
+    """Extract tool calls while keeping a sanitized reasoning transcript.
+
+    When tool calls are found in thinking content (not regular content),
+    the ``tools`` parameter controls validation:
+
+    * ``None`` (default) — no tools list was provided.  Thinking-embedded
+      calls are kept only when ``regular_content`` is empty (the model
+      produced no competing prose).  Otherwise they are dropped as
+      potential hallucinated reasoning.
+    * ``[]`` — "no tools allowed".  All thinking-embedded calls are
+      dropped regardless of ``regular_content``.
+    * Non-empty list — name matching is the sole discriminator.
+      Calls whose name matches a provided tool are promoted regardless
+      of whether regular text was also produced.
+    """
     cleaned_text, tool_calls = parse_tool_calls(regular_content, tokenizer, tools)
     cleaned_thinking = sanitize_tool_call_markup(thinking_content, tokenizer)
     tool_calls_from_thinking = False
@@ -556,19 +635,31 @@ def extract_tool_calls_with_thinking(
         _, tool_calls = parse_tool_calls(thinking_content, tokenizer, tools)
         tool_calls_from_thinking = bool(tool_calls)
 
-        # Guard 1: if model produced regular text, the tool call in thinking
-        # is just reasoning, not an actual invocation request.
-        if tool_calls and regular_content.strip():
-            tool_calls = None
-            tool_calls_from_thinking = False
-
-        # Guard 2: only keep tool calls whose name matches a provided tool.
-        if tool_calls and tools:
-            valid_names = _extract_tool_names(tools)
-            tool_calls = [tc for tc in tool_calls if tc.function.name in valid_names]
-            if not tool_calls:
-                tool_calls = None
-                tool_calls_from_thinking = False
+        # Guard: validate thinking-embedded tool calls.
+        #
+        # Three cases:
+        # 1. tools is None (not provided) AND regular text exists → drop.
+        #    The call is unvalidated and could be hallucinated reasoning.
+        # 2. tools is None AND no regular text → keep.  The model clearly
+        #    intended a tool invocation (no competing prose).
+        # 3. tools is a list (including empty) → name matching is the sole
+        #    discriminator.  An empty list means "no tools allowed" so all
+        #    calls are dropped.  A non-empty list filters by name, regardless
+        #    of whether regular text was also produced.  The previous "regular
+        #    text means just reasoning" heuristic was wrong for models
+        #    (Qwen3-Coder) that genuinely place tool calls in thinking.
+        # See https://github.com/jundot/omlx/issues/1392
+        if tool_calls:
+            if tools is None:
+                if regular_content.strip():
+                    tool_calls = None
+                    tool_calls_from_thinking = False
+            else:
+                valid_names = _extract_tool_names(tools)
+                tool_calls = [tc for tc in tool_calls if tc.function.name in valid_names]
+                if not tool_calls:
+                    tool_calls = None
+                    tool_calls_from_thinking = False
 
     return ToolCallExtraction(
         cleaned_text=cleaned_text,

@@ -15,8 +15,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from omlx.api.responses_utils import ResponseStore
+from omlx.engine.base import BaseEngine
 from omlx.engine.embedding import EmbeddingEngine
 from omlx.engine.reranker import RerankerEngine
+from omlx.mcp.types import MCPToolResult
 
 
 @dataclass
@@ -143,7 +145,7 @@ class MockTokenizer:
         return "\n".join(parts)
 
 
-class MockBaseEngine:
+class MockBaseEngine(BaseEngine):
     """Mock LLM engine for testing."""
 
     def __init__(self, model_name: str = "test-llm-model"):
@@ -163,7 +165,14 @@ class MockBaseEngine:
     def model_type(self) -> Optional[str]:
         return self._model_type
 
+    @property
+    def prefix_cache_enabled(self) -> bool:
+        return False
+
     async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
         pass
 
     async def generate(self, prompt: str, **kwargs) -> MockGenerationOutput:
@@ -182,7 +191,7 @@ class MockBaseEngine:
             finish_reason="stop",
         )
 
-    def count_chat_tokens(self, messages: List[Dict], tools=None, chat_template_kwargs=None) -> int:
+    def count_chat_tokens(self, messages: List[Dict], tools=None, chat_template_kwargs=None, **kwargs) -> int:
         prompt = self._tokenizer.apply_chat_template(messages, tokenize=False)
         return len(self._tokenizer.encode(prompt))
 
@@ -201,6 +210,12 @@ class MockBaseEngine:
             finished=True,
             finish_reason="stop",
         )
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {}
+
+    def get_cache_stats(self):
+        return None
 
 
 class RecordingResponsesEngine(MockBaseEngine):
@@ -358,7 +373,7 @@ class TestHealthEndpoint:
         pool_info = data["engine_pool"]
         assert "model_count" in pool_info
         assert "loaded_count" in pool_info
-        assert "max_model_memory" in pool_info
+        assert "final_ceiling" in pool_info
         assert "current_model_memory" in pool_info
 
 
@@ -608,6 +623,27 @@ class TestCompletionEndpoint:
         data = response.json()
         assert "choices" in data
 
+    def test_completion_includes_cached_tokens_on_cache_hit(self, client, mock_llm_engine):
+        """Non-streaming completion responses should expose cached token counts."""
+        mock_llm_engine.generate = AsyncMock(return_value=MockGenerationOutput(
+            text="Generated response.",
+            prompt_tokens=2215,
+            completion_tokens=5,
+            cached_tokens=2048,
+        ))
+
+        response = client.post(
+            "/v1/completions",
+            json={
+                "model": "test-model",
+                "prompt": "Cache hit prompt",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["usage"]["prompt_tokens_details"]["cached_tokens"] == 2048
+
 
 class TestChatCompletionEndpoint:
     """Tests for the /v1/chat/completions endpoint."""
@@ -662,6 +698,29 @@ class TestChatCompletionEndpoint:
         )
 
         assert response.status_code == 200
+
+    def test_chat_completion_includes_cached_tokens_on_cache_hit(self, client, mock_llm_engine):
+        """Non-streaming chat responses should expose cached token counts."""
+        mock_llm_engine.chat = AsyncMock(return_value=MockGenerationOutput(
+            text="Chat response.",
+            prompt_tokens=2215,
+            completion_tokens=5,
+            cached_tokens=2048,
+            finish_reason="stop",
+            finished=True,
+        ))
+
+        response = client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "test-model",
+                "messages": [{"role": "user", "content": "Cache hit prompt"}],
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["usage"]["prompt_tokens_details"]["cached_tokens"] == 2048
 
     def test_chat_completion_sanitizes_reasoning_tool_call_markup(self, client, mock_llm_engine):
         """Thinking-only tool calls should become structured tool_calls without leaked markup."""
@@ -1070,6 +1129,106 @@ class TestMCPEndpoints:
 
         # Should return 503 when MCP not configured
         assert response.status_code == 503
+
+    def test_mcp_execute_accepts_tool_alias(self, client):
+        """Test MCP execute accepts tool as an alias for tool_name."""
+        from omlx.server import _server_state
+
+        original_mcp_manager = _server_state.mcp_manager
+        manager = AsyncMock()
+        manager.execute_tool.return_value = MCPToolResult(
+            tool_name="test_tool",
+            content={"ok": True},
+        )
+
+        try:
+            _server_state.mcp_manager = manager
+
+            response = client.post(
+                "/v1/mcp/execute",
+                json={
+                    "tool": "test_tool",
+                    "arguments": {"query": "hello"},
+                },
+            )
+        finally:
+            _server_state.mcp_manager = original_mcp_manager
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "tool_name": "test_tool",
+            "content": {"ok": True},
+            "is_error": False,
+            "error_message": None,
+        }
+        manager.execute_tool.assert_awaited_once_with(
+            "test_tool",
+            {"query": "hello"},
+        )
+
+    def test_mcp_execute_tool_name_field(self, client):
+        """Test MCP execute happy path with tool_name field."""
+        from omlx.server import _server_state
+
+        original_mcp_manager = _server_state.mcp_manager
+        manager = AsyncMock()
+        manager.execute_tool.return_value = MCPToolResult(
+            tool_name="my_tool",
+            content="ok",
+        )
+
+        try:
+            _server_state.mcp_manager = manager
+
+            response = client.post(
+                "/v1/mcp/execute",
+                json={
+                    "tool_name": "my_tool",
+                    "arguments": {"q": "x"},
+                },
+            )
+        finally:
+            _server_state.mcp_manager = original_mcp_manager
+
+        assert response.status_code == 200
+        manager.execute_tool.assert_awaited_once_with("my_tool", {"q": "x"})
+
+    def test_mcp_execute_tool_name_wins_over_tool(self, client):
+        """Test tool_name takes precedence when both fields are present."""
+        from omlx.server import _server_state
+
+        original_mcp_manager = _server_state.mcp_manager
+        manager = AsyncMock()
+        manager.execute_tool.return_value = MCPToolResult(
+            tool_name="canonical",
+            content="ok",
+        )
+
+        try:
+            _server_state.mcp_manager = manager
+
+            response = client.post(
+                "/v1/mcp/execute",
+                json={
+                    "tool_name": "canonical",
+                    "tool": "alias_should_lose",
+                    "arguments": {},
+                },
+            )
+        finally:
+            _server_state.mcp_manager = original_mcp_manager
+
+        assert response.status_code == 200
+        manager.execute_tool.assert_awaited_once_with("canonical", {})
+
+    def test_mcp_execute_rejects_missing_tool(self, client):
+        """Test MCP execute returns 422 when neither tool nor tool_name is present."""
+        response = client.post(
+            "/v1/mcp/execute",
+            json={"arguments": {"q": "x"}},
+        )
+
+        assert response.status_code == 422
 
 
 class TestErrorHandling:

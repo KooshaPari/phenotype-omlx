@@ -58,7 +58,7 @@ class TestAccuracyBenchmarkRequest:
             model_id="test-model",
             benchmarks={b: 100 for b in VALID_BENCHMARKS},
         )
-        assert len(req.benchmarks) == 12
+        assert len(req.benchmarks) == len(VALID_BENCHMARKS)
 
     def test_enable_thinking_default_false(self):
         req = AccuracyBenchmarkRequest(
@@ -201,10 +201,8 @@ class TestRunAccuracyBenchmark:
         with patch.dict("omlx.eval.BENCHMARKS", {"mmlu": mock_bench_cls}, clear=True):
             await run_accuracy_benchmark(run, mock_pool)
 
-        # Collect all events
-        events = []
-        while not run.queue.empty():
-            events.append(await run.queue.get())
+        # Collect all events from the replay log.
+        events = list(run.events)
 
         event_types = [e["type"] for e in events]
         assert "done" in event_types
