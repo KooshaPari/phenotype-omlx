@@ -1,0 +1,402 @@
+<!--
+=======================================================================
+OMLX Research Panel — Admin Dashboard
+=======================================================================
+Dark-theme dashboard that bridges MLX framework + CLI + GUI + Web.
+Depends on:
+  - Static CSS:  /static/admin-extensions/css/research_panel.css
+  - JS Controller: /static/admin-extensions/js/research_controller.js
+
+The controller auto-initialises on DOMContentLoaded.
+=======================================================================
+-->
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OMLX Research Panel</title>
+  <link
+    rel="stylesheet"
+    href="/static/admin-extensions/css/research_panel.css"
+  />
+</head>
+<body>
+<div class="rp-container">
+
+  <!-- ==================================================================
+       Header
+       ================================================================== -->
+  <header style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+    <div>
+      <h1 class="rp-title">OMLX Research Panel</h1>
+      <p class="rp-subtitle">
+        MLX-native · multi-backend · multi-platform · concurrent agents
+      </p>
+    </div>
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span data-tq-status class="rp-badge rp-badge--offline">TurboQuant+: checking…</span>
+    </div>
+  </header>
+
+  <!-- ==================================================================
+       Backend Status Cards
+       ================================================================== -->
+  <section>
+    <h2 class="rp-section-heading">
+      <span class="rp-icon">⚙</span> Backend Engines
+    </h2>
+    <div class="rp-card-grid" id="backend-grid">
+
+      <!-- MLX -->
+      <div class="rp-card rp-fade-in" data-backend-id="mlx">
+        <div class="rp-card-indicator rp-card-indicator--offline"></div>
+        <div class="rp-card-header">
+          <span class="rp-card-name">MLX</span>
+          <span class="rp-badge rp-badge--offline">Offline</span>
+        </div>
+        <div class="rp-card-meta">
+          <span class="rp-tag rp-tag--metal">mlx</span>
+          <span class="rp-tag rp-tag--turboquant">TurboQuant+</span>
+        </div>
+        <div class="rp-card-detail">
+          Primary Apple Silicon backend &mdash; MLX framework.
+        </div>
+        <div class="rp-capability-list">
+          <span class="rp-cap" data-cap="supports_batching">batch</span>
+          <span class="rp-cap" data-cap="supports_streaming">stream</span>
+          <span class="rp-cap" data-cap="supports_turboquant">turboquant</span>
+          <span class="rp-cap" data-cap="supports_spec_decode">spec-dec</span>
+        </div>
+      </div>
+
+      <!-- Metal -->
+      <div class="rp-card rp-fade-in" data-backend-id="metal">
+        <div class="rp-card-indicator rp-card-indicator--offline"></div>
+        <div class="rp-card-header">
+          <span class="rp-card-name">Metal</span>
+          <span class="rp-badge rp-badge--offline">Offline</span>
+        </div>
+        <div class="rp-card-meta">
+          <span class="rp-tag rp-tag--metal">metal</span>
+          <span class="rp-tag rp-tag--turboquant">TurboQuant+ KV</span>
+        </div>
+        <div class="rp-card-detail">
+          Custom Metal kernel pipeline &mdash; TurboQuant+ KV cache hot path.
+        </div>
+        <div class="rp-capability-list">
+          <span class="rp-cap rp-cap--disabled" data-cap="supports_batching">batch</span>
+          <span class="rp-cap rp-cap--disabled" data-cap="supports_streaming">stream</span>
+          <span class="rp-cap" data-cap="supports_turboquant">turboquant</span>
+          <span class="rp-cap rp-cap--disabled" data-cap="supports_spec_decode">spec-dec</span>
+        </div>
+      </div>
+
+      <!-- vLLM -->
+      <div class="rp-card rp-fade-in" data-backend-id="vllm">
+        <div class="rp-card-indicator rp-card-indicator--offline"></div>
+        <div class="rp-card-header">
+          <span class="rp-card-name">vLLM</span>
+          <span class="rp-badge rp-badge--offline">Offline</span>
+        </div>
+        <div class="rp-card-meta">
+          <span class="rp-tag rp-tag--cuda">vllm</span>
+          <span class="rp-tag rp-tag--specdecode">spec-dec</span>
+        </div>
+        <div class="rp-card-detail">
+          NVIDIA GPU inference &mdash; PagedAttention, continuous batching.
+        </div>
+        <div class="rp-capability-list">
+          <span class="rp-cap" data-cap="supports_batching">batch</span>
+          <span class="rp-cap" data-cap="supports_streaming">stream</span>
+          <span class="rp-cap rp-cap--disabled" data-cap="supports_turboquant">turboquant</span>
+          <span class="rp-cap" data-cap="supports_spec_decode">spec-dec</span>
+        </div>
+      </div>
+
+      <!-- SGLang -->
+      <div class="rp-card rp-fade-in" data-backend-id="sglang">
+        <div class="rp-card-indicator rp-card-indicator--offline"></div>
+        <div class="rp-card-header">
+          <span class="rp-card-name">SGLang</span>
+          <span class="rp-badge rp-badge--offline">Offline</span>
+        </div>
+        <div class="rp-card-meta">
+          <span class="rp-tag rp-tag--cuda">sglang</span>
+          <span class="rp-tag rp-tag--turboquant">TurboQuant+</span>
+        </div>
+        <div class="rp-card-detail">
+          Structured generation language runtime &mdash; NVIDIA clusters.
+        </div>
+        <div class="rp-capability-list">
+          <span class="rp-cap" data-cap="supports_batching">batch</span>
+          <span class="rp-cap" data-cap="supports_streaming">stream</span>
+          <span class="rp-cap" data-cap="supports_turboquant">turboquant</span>
+          <span class="rp-cap" data-cap="supports_spec_decode">spec-dec</span>
+        </div>
+      </div>
+
+      <!-- TensorRT-LLM -->
+      <div class="rp-card rp-fade-in" data-backend-id="tensorrt">
+        <div class="rp-card-indicator rp-card-indicator--offline"></div>
+        <div class="rp-card-header">
+          <span class="rp-card-name">TensorRT-LLM</span>
+          <span class="rp-badge rp-badge--offline">Offline</span>
+        </div>
+        <div class="rp-card-meta">
+          <span class="rp-tag rp-tag--cuda">tensorrt</span>
+          <span class="rp-tag rp-tag--turboquant">TurboQuant+</span>
+        </div>
+        <div class="rp-card-detail">
+          NVIDIA TensorRT-LLM &mdash; high-throughput optimized inference.
+        </div>
+        <div class="rp-capability-list">
+          <span class="rp-cap" data-cap="supports_batching">batch</span>
+          <span class="rp-cap" data-cap="supports_streaming">stream</span>
+          <span class="rp-cap" data-cap="supports_turboquant">turboquant</span>
+          <span class="rp-cap" data-cap="supports_spec_decode">spec-dec</span>
+        </div>
+      </div>
+
+      <!-- llama.cpp -->
+      <div class="rp-card rp-fade-in" data-backend-id="llamacpp">
+        <div class="rp-card-indicator rp-card-indicator--offline"></div>
+        <div class="rp-card-header">
+          <span class="rp-card-name">llama.cpp</span>
+          <span class="rp-badge rp-badge--offline">Offline</span>
+        </div>
+        <div class="rp-card-meta">
+          <span class="rp-tag rp-tag--cuda">cuda</span>
+          <span class="rp-tag rp-tag--metal">metal</span>
+        </div>
+        <div class="rp-card-detail">
+          Cross-platform GGUF inference &mdash; macOS, Linux, Windows, mobile.
+        </div>
+        <div class="rp-capability-list">
+          <span class="rp-cap" data-cap="supports_batching">batch</span>
+          <span class="rp-cap" data-cap="supports_streaming">stream</span>
+          <span class="rp-cap rp-cap--disabled" data-cap="supports_turboquant">turboquant</span>
+          <span class="rp-cap rp-cap--disabled" data-cap="supports_spec_decode">spec-dec</span>
+        </div>
+      </div>
+
+    </div><!-- /.rp-card-grid -->
+  </section>
+
+  <!-- ==================================================================
+       Research Agents
+       ================================================================== -->
+  <section>
+    <h2 class="rp-section-heading">
+      <span class="rp-icon">🧠</span> Research Agents
+    </h2>
+    <div class="rp-card-grid" id="agent-grid">
+
+      <!-- LatentMAS -->
+      <div class="rp-agent-card rp-fade-in" data-agent-id="latentmas">
+        <div class="rp-card-header">
+          <span class="rp-card-name">LatentMAS</span>
+          <span class="rp-tag">fan-out</span>
+        </div>
+        <p class="rp-agent-description">
+          Concurrent multi-agent fan-out — proposer, verifier, refiner, critic.
+        </p>
+        <form class="rp-agent-form" data-agent-id="latentmas">
+          <textarea placeholder="Enter a research prompt for LatentMAS…" rows="2"></textarea>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="rp-btn rp-btn--primary">Run</button>
+            <button type="reset" class="rp-btn rp-btn--subtle rp-btn--small">Clear</button>
+          </div>
+        </form>
+        <div class="rp-output-area"></div>
+      </div>
+
+      <!-- TiDAR -->
+      <div class="rp-agent-card rp-fade-in" data-agent-id="tidar">
+        <div class="rp-card-header">
+          <span class="rp-card-name">TiDAR</span>
+          <span class="rp-tag">diffusion+AR</span>
+        </div>
+        <p class="rp-agent-description">
+          Think in Diffusion, Talk in AR — hybrid draft-verify loop.
+        </p>
+        <form class="rp-agent-form" data-agent-id="tidar">
+          <textarea placeholder="Enter a prompt for TiDAR…" rows="2"></textarea>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="rp-btn rp-btn--primary">Run</button>
+            <button type="reset" class="rp-btn rp-btn--subtle rp-btn--small">Clear</button>
+          </div>
+        </form>
+        <div class="rp-output-area"></div>
+      </div>
+
+      <!-- SSD -->
+      <div class="rp-agent-card rp-fade-in" data-agent-id="ssd">
+        <div class="rp-card-header">
+          <span class="rp-card-name">SSD</span>
+          <span class="rp-tag">spec-decode</span>
+        </div>
+        <p class="rp-agent-description">
+          Self-Speculative Decoding — n-gram prompt-lookup + same-model verify.
+        </p>
+        <form class="rp-agent-form" data-agent-id="ssd">
+          <textarea placeholder="Enter a prompt for SSD…" rows="2"></textarea>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="rp-btn rp-btn--primary">Run</button>
+            <button type="reset" class="rp-btn rp-btn--subtle rp-btn--small">Clear</button>
+          </div>
+        </form>
+        <div class="rp-output-area"></div>
+      </div>
+
+      <!-- JetSpec -->
+      <div class="rp-agent-card rp-fade-in" data-agent-id="jetspec">
+        <div class="rp-card-header">
+          <span class="rp-card-name">JetSpec</span>
+          <span class="rp-tag">tree-attn</span>
+        </div>
+        <p class="rp-agent-description">
+          Tree-attention speculative decoding — Medusa-style multi-head draft.
+        </p>
+        <form class="rp-agent-form" data-agent-id="jetspec">
+          <textarea placeholder="Enter a prompt for JetSpec…" rows="2"></textarea>
+          <div style="display:flex; gap:8px;">
+            <button type="submit" class="rp-btn rp-btn--primary">Run</button>
+            <button type="reset" class="rp-btn rp-btn--subtle rp-btn--small">Clear</button>
+          </div>
+        </form>
+        <div class="rp-output-area"></div>
+      </div>
+
+    </div><!-- /.rp-card-grid -->
+  </section>
+
+  <!-- ==================================================================
+       TurboQuant+ Configuration
+       ================================================================== -->
+  <section>
+    <h2 class="rp-section-heading">
+      <span class="rp-icon">⚡</span> TurboQuant+ Configuration
+    </h2>
+
+    <div class="rp-config-section">
+      <div class="rp-config-grid">
+
+        <!-- Enabled toggle -->
+        <div class="rp-config-item">
+          <label class="rp-config-label" for="tq-enabled">Enabled</label>
+          <label class="rp-toggle">
+            <input type="checkbox" id="tq-enabled" />
+            <span class="rp-toggle-slider"></span>
+            <span id="tq-enabled-label" style="font-size:0.8rem;color:var(--rp-text-secondary);">Off</span>
+          </label>
+        </div>
+
+        <!-- Rotation enabled -->
+        <div class="rp-config-item">
+          <label class="rp-config-label" for="tq-rotation">Rotation</label>
+          <label class="rp-toggle">
+            <input type="checkbox" id="tq-rotation" checked />
+            <span class="rp-toggle-slider"></span>
+            <span id="tq-rotation-label" style="font-size:0.8rem;color:var(--rp-text-secondary);">On</span>
+          </label>
+        </div>
+
+        <!-- KV Cache Bits -->
+        <div class="rp-config-item">
+          <label class="rp-config-label" for="tq-kv-cache-bits">
+            KV Cache Bits: <span data-display-for="tq-kv-cache-bits">4</span>
+          </label>
+          <input
+            type="range" id="tq-kv-cache-bits"
+            class="rp-slider"
+            min="2" max="8" step="1" value="4"
+            aria-describedby="tq-kv-cache-bits-val"
+          />
+          <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--rp-text-muted);">
+            <span>2</span><span>8</span>
+          </div>
+        </div>
+
+        <!-- Weight Bits -->
+        <div class="rp-config-item">
+          <label class="rp-config-label" for="tq-weight-bits">
+            Weight Bits: <span data-display-for="tq-weight-bits">4</span>
+          </label>
+          <input
+            type="range" id="tq-weight-bits"
+            class="rp-slider"
+            min="2" max="8" step="1" value="4"
+          />
+          <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--rp-text-muted);">
+            <span>2</span><span>8</span>
+          </div>
+        </div>
+
+        <!-- Block Size -->
+        <div class="rp-config-item">
+          <label class="rp-config-label" for="tq-block-size">
+            Block Size: <span data-display-for="tq-block-size">64</span>
+          </label>
+          <input
+            type="range" id="tq-block-size"
+            class="rp-slider"
+            min="16" max="256" step="16" value="64"
+          />
+          <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--rp-text-muted);">
+            <span>16</span><span>256</span>
+          </div>
+        </div>
+
+        <!-- Outlier Threshold -->
+        <div class="rp-config-item">
+          <label class="rp-config-label" for="tq-outlier-threshold">
+            Outlier Threshold: <span data-display-for="tq-outlier-threshold">2.0</span>
+          </label>
+          <input
+            type="range" id="tq-outlier-threshold"
+            class="rp-slider"
+            min="0.5" max="10" step="0.1" value="2.0"
+          />
+          <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--rp-text-muted);">
+            <span>0.5</span><span>10</span>
+          </div>
+        </div>
+
+        <!-- Codebook Size -->
+        <div class="rp-config-item">
+          <label class="rp-config-label" for="tq-codebook-size">
+            Codebook Size
+          </label>
+          <input
+            type="number" id="tq-codebook-size"
+            class="rp-number-input"
+            min="256" max="262144" step="256" value="65536"
+          />
+        </div>
+
+      </div><!-- /.rp-config-grid -->
+    </div><!-- /.rp-config-section -->
+  </section>
+
+  <!-- ==================================================================
+       Status Bar
+       ================================================================== -->
+  <div class="rp-status-bar">
+    <span>
+      Last updated: <strong data-last-update>—</strong>
+      &middot; Polling every <strong>5 s</strong>
+    </span>
+    <button type="button" class="rp-refresh-btn" title="Refresh now">
+      ⟳ Refresh
+    </button>
+  </div>
+
+</div><!-- /.rp-container -->
+
+<!-- ==================================================================
+     Scripts
+     ================================================================== -->
+<script src="/static/admin-extensions/js/research_controller.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Linux launcher — same surface as macOS `omlx-research` but talks to the
+# system Python / venv directly (no OMLX.app framework path).
+set -euo pipefail
+
+PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
+REPOS_ROOT="${REPOS_ROOT:-$(dirname "$PHENOTYPE_OMLX_HOME")}"
+
+# shellcheck disable=SC1091
+source "${PHENOTYPE_OMLX_HOME}/scripts/phenotype-omlx-env.sh"
+
+# Linux path: pick up MLX-Lite (PyTorch backend) instead of OMLX.framework.
+export PYTHONPATH="${PHENOTYPE_OMLX_HOME}/python:${PYTHONPATH:-}"
+
+# Drop the OMLX.app framework path on Linux (it doesn't exist here).
+unset OMLX_FRAMEWORK
+
+# On Linux, prefer venv if present, otherwise fall back to system python3.
+if [[ -f "${REPOS_ROOT}/turboquant_plus/.venv/bin/activate" ]]; then
+    # shellcheck disable=SC1091
+    source "${REPOS_ROOT}/turboquant_plus/.venv/bin/activate"
+fi
+
+cmd="${1:-repl}"
+shift 2>/dev/null || true
+case "$cmd" in
+    web)    port="${1:-8080}"; shift 2>/dev/null || true; exec python3 -m omlx_research.web --port "$port" "$@" ;;
+    doctor) exec python3 -m omlx_research.cli doctor ;;
+    status) exec python3 -m omlx_research.cli status ;;
+    gui)
+        # Tauri GUI (when built)
+        cargo tauri dev --config "${PHENOTYPE_OMLX_HOME}/gui/desktop/linux/tauri.conf.json" "$@"
+        ;;
+    -c)     exec python3 -c "$@" ;;
+    *)      exec python3 -m omlx_research.cli "$cmd" "$@" ;;
+esac

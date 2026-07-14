@@ -1,0 +1,9 @@
+[plugin]
+name        = "llamacpp"
+kind        = "backend"
+module      = "omlx_research.backends.llamacpp_backend"
+entrypoint  = "LlamaCppBackend"
+platforms   = ["darwin", "linux", "win32"]
+gpus        = ["metal", "cuda", "rocm", "cpu"]
+priority    = 50
+requires    = []

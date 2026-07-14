@@ -1,0 +1,9 @@
+[plugin]
+name        = "vllm"
+kind        = "backend"
+module      = "omlx_research.backends.vllm_backend"
+entrypoint  = "VllmBackend"
+platforms   = ["linux", "darwin"]
+gpus        = ["cuda", "rocm", "cpu"]
+priority    = 80
+requires    = ["vllm"]

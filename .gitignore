@@ -1,0 +1,31 @@
+# Rust build output
+/perf-core/target/
+/python/ffi/target/
+
+# Python environments and caches
+.venv/
+venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Python/Rust extension build artifacts
+build/
+dist/
+*.whl
+*.so
+*.dylib
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+
+# Local model and checkpoint artifacts
+*.gguf
+*.safetensors
+
+# Local worktrees
+/.worktrees/

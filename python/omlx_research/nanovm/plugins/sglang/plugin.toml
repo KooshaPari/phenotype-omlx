@@ -1,0 +1,9 @@
+[plugin]
+name        = "sglang"
+kind        = "backend"
+module      = "omlx_research.backends.sglang_backend"
+entrypoint  = "SglangBackend"
+platforms   = ["linux"]
+gpus        = ["cuda", "rocm"]
+priority    = 90
+requires    = ["sglang"]

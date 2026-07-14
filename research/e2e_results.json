@@ -1,0 +1,61 @@
+{
+  "model": "a5339a4131f135d0fdc6a5c8b5bbed2753bbe0f3",
+  "model_path": "/Users/kooshapari/.cache/huggingface/models--mlx-community--Qwen2.5-0.5B-Instruct-4bit/snapshots/a5339a4131f135d0fdc6a5c8b5bbed2753bbe0f3",
+  "arch": "Model",
+  "prompt": "def fibonacci(n):\n    ",
+  "max_tokens": 64,
+  "num_layers": 24,
+  "modes": {
+    "Mode 1: Baseline FP16 KVCache": {
+      "text": "if n == 0 or n == 1:\n         return 1\n     else:\n         return fibonacci(n-1) + fibonacci(n-2)\nn = int(input())\nprint(fibonacci(n))<|endoftext|># 1 1 2 3 5 8 13 21",
+      "elapsed_s": 4.785758972167969,
+      "tok_per_s": 13.373009458311214,
+      "rss_delta_mb": 13.4375,
+      "peak_rss_mb": 432.734375,
+      "kv_fp16_bytes": 61440,
+      "kv_saved_mb": 0,
+      "kv_saved_pct": 0
+    },
+    "Mode 2: MLX native kv_bits=4": {
+      "text": "= 0, 1, 1, 2, 3, 5, 7, 9, 11, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1",
+      "elapsed_s": 9.886162042617798,
+      "tok_per_s": 6.473695224102676,
+      "rss_delta_mb": -293.609375,
+      "peak_rss_mb": 432.734375,
+      "kv_turbo_bytes": 0,
+      "kv_saved_mb": 0,
+      "kv_saved_pct": 0,
+      "config": "kv_bits=4"
+    },
+    "Mode 3: TurboQuant+ asym K=FP16 V=4b": {
+      "text": "if n == 0 or n == 1:\n         return 1\n     else:\n         return fibonacci(n-1) + fibonacci(n-2)\nn = int(input())\nprint(fibonacci(n))<|endoftext|># 1 1 2 3 5 8 13 21",
+      "elapsed_s": 13.737147092819214,
+      "tok_per_s": 4.658900393769137,
+      "rss_delta_mb": -151.515625,
+      "peak_rss_mb": 432.734375,
+      "kv_fp16_bytes": 61440,
+      "kv_turbo_bytes": 61440,
+      "kv_saved_bytes": 0,
+      "kv_saved_mb": 0.0,
+      "kv_saved_pct": 0.0,
+      "compact_layers": 0,
+      "num_layers": 24,
+      "config": "bits=4, key_bits=None"
+    },
+    "Mode 4: TurboQuant+ sym  K=4b  V=4b": {
+      "text": "if n == 0 or n == 1:\n         return 1\n     else:\n         return fibonacci(n-1) + fibonacci(n-2)\nn = int(input())\nprint(fibonacci(n))<|endoftext|># 1 1 2 3 5 8 13 21",
+      "elapsed_s": 9.238896131515503,
+      "tok_per_s": 6.927234497385973,
+      "rss_delta_mb": 37.546875,
+      "peak_rss_mb": 432.734375,
+      "kv_fp16_bytes": 61440,
+      "kv_turbo_bytes": 61440,
+      "kv_saved_bytes": 0,
+      "kv_saved_mb": 0.0,
+      "kv_saved_pct": 0.0,
+      "compact_layers": 0,
+      "num_layers": 24,
+      "config": "bits=4, key_bits=4"
+    }
+  }
+}

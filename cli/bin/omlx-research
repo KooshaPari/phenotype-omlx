@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# omlx-research: unified launcher for the phenotype-omlx research stack.
+#
+# Bridges the THREE touch-points the upstream OMLX does not provide:
+#   1) MLX framework     — TurboQuant+ / perf-core injected into the bundled
+#                          Python at /Applications/oMLX.app/.../framework-mlx-base
+#   2) omlx CLI          — `omlx-cli` proxy that pre-pends perf-core to PYTHONPATH
+#                          so the CLI sees the same modules as the framework
+#   3) oMLX GUI / web    — launch the desktop app (or local web admin) with the
+#                          admin-extensions loaded (`omlx-research web|gui`)
+#
+# Subcommands:
+#   omlx-research                   — interactive Python REPL with the stack loaded
+#   omlx-research cli <args...>     — proxy into /Applications/oMLX.app/.../omlx-cli
+#   omlx-research gui               — launch oMLX.app with admin-extensions
+#   omlx-research web [port]        — start the local web admin (default 8080)
+#   omlx-research python <args...>  — run `python3` with the perf-core env
+#   omlx-research pip <args...>     — run `pip` in the venv
+#   omlx-research doctor            — diagnose the stack
+#   omlx-research status            — backend availability
+#   omlx-research <omlx-research-cmd>  — any subcommand the Python CLI understands
+#
+# Usage examples:
+#   omlx-research
+#   omlx-research -c "from turbo_mlx.ssd import MLXSpeculativeDecoder"
+#   omlx-research cli --help
+#   omlx-research gui &
+#   omlx-research web 8081
+#   omlx-research status
+#   omlx-research doctor
+#   omlx-research inference --prompt "Hello"
+
+set -euo pipefail
+
+PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx}"
+OMLX_APP="${OMLX_APP:-/Applications/oMLX.app}"
+OMLX_FRAMEWORK="${OMLX_APP}/Contents/Resources/Python/framework-mlx-base/lib/python3.11/site-packages"
+OMLX_FRAMEWORK_PY="${OMLX_APP}/Contents/Resources/Python/cpython-3.11/bin/python3"
+OMLX_CLI_BIN="${OMLX_APP}/Contents/MacOS/omlx-cli"
+GUI_ADMIN_EXT="${PHENOTYPE_OMLX_HOME}/gui/admin-extensions"
+REPOS_ROOT="${REPOS_ROOT:-/Users/kooshapari/CodeProjects/Phenotype/repos}"
+
+# 1) Source the env so TurboQuant+, perf-core, research repos, and the venv
+#    are activated. This sets PYTHONPATH, PATH, and the alias helpers.
+# shellcheck disable=SC1091
+source "${PHENOTYPE_OMLX_HOME}/scripts/phenotype-omlx-env.sh"
+
+# 2) The env script now handles Python-version-specific framework injection
+#    automatically (3.11 → OMLX framework, 3.12+ → persistent TurboQuant+
+#    wrapper). Do not force-inject the 3.11 framework here — doing so would
+#    shadow the 3.12 venv's numpy/mlx and break PyTorch imports.
+
+# 3) Forward the admin-extensions to the OMLX admin package.
+export OMLX_ADMIN_EXTRA="${GUI_ADMIN_EXT}"
+
+cmd="${1:-repl}"
+
+case "$cmd" in
+    cli)
+        shift
+        if [[ -x "$OMLX_CLI_BIN" ]]; then
+            exec "$OMLX_CLI_BIN" "$@"
+        else
+            echo "omlx-research cli: cannot find $OMLX_CLI_BIN" >&2
+            exit 1
+        fi
+        ;;
+    gui)
+        # Launch the .app (it auto-discovers admin-extensions via OMLX_ADMIN_EXTRA).
+        open -a "$OMLX_APP" --args --admin-ext "$GUI_ADMIN_EXT"
+        echo "Launched ${OMLX_APP} with admin-extensions=${GUI_ADMIN_EXT}"
+        ;;
+    web)
+        port="${1:-8080}"
+        shift 2>/dev/null || true
+        echo "Starting omlx-research web admin on :${port}"
+        exec python3 -m omlx_research.web --port "$port" "$@"
+        ;;
+    python|py)
+        shift
+        exec python3 "$@"
+        ;;
+    pip)
+        shift
+        exec python3 -m pip "$@"
+        ;;
+    doctor)
+        exec python3 -m omlx_research.cli doctor
+        ;;
+    ready)
+        # Delegate to the full-stack readiness check (compiles Rust if needed,
+        # verifies every research repo + every omlx_research submodule).
+        exec "${PHENOTYPE_OMLX_HOME}/scripts/phenotype-omlx-ready"
+        ;;
+    status)
+        exec python3 -m omlx_research.cli status
+        ;;
+    repl)
+        exec python3 -i
+        ;;
+    -c)
+        # `omlx-research -c "..."` — pass through to python3.
+        shift
+        exec python3 -c "$@"
+        ;;
+    *)
+        # Pass through to the Python `omlx_research` subcommand CLI.
+        exec python3 -m omlx_research.cli "$@"
+        ;;
+esac

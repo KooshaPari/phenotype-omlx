@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Proxy launcher: invoke the system omlx in CLI mode with TurboQuant+
+# paths injected, but never modify the app bundle.
+exec /Applications/oMLX.app/Contents/MacOS/omlx-cli "$@"

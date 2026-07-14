@@ -1,0 +1,9 @@
+[plugin]
+name        = "latentmas"
+kind        = "agent"
+module      = "omlx_research.agents.latentmas_runner"
+entrypoint  = "LatentMasRunner"
+platforms   = ["darwin", "linux", "win32"]
+gpus        = ["metal", "cuda", "cpu"]
+priority    = 70
+requires    = []

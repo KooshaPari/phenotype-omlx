@@ -1,0 +1,25 @@
+[package]
+name = "omlx-research-perf"
+version = "0.1.0"
+edition = "2021"
+description = "phenotype-omlx Rust perf-core → Python pyo3 FFI bridge"
+
+[lib]
+name = "_perf"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module", "abi3-py311"] }
+async-trait = "0.1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
+spec-decode = { path = "../../perf-core/spec-decode" }
+turbo-quant = { path = "../../perf-core/turbo-quant" }
+concurrent-exec = { path = "../../perf-core/concurrent-exec" }
+tree-attention = { path = "../../perf-core/tree-attention" }
+fleet-proto = { path = "../../perf-core/fleet-proto" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

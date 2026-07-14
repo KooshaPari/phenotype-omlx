@@ -1,0 +1,9 @@
+[plugin]
+name        = "jetspec"
+kind        = "agent"
+module      = "omlx_research.agents.jetspec_runner"
+entrypoint  = "JetSpecRunner"
+platforms   = ["darwin", "linux"]
+gpus        = ["metal", "cuda", "cpu"]
+priority    = 65
+requires    = []

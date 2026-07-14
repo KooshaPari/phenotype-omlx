@@ -1,0 +1,10 @@
+# NanoVM plugin manifest — bundled default
+[plugin]
+name        = "mlx-metal"
+kind        = "backend"
+module      = "omlx_research.backends.mlx_backend"
+entrypoint  = "MlxBackend"
+platforms   = ["darwin"]
+gpus        = ["metal", "cpu"]
+priority    = 100
+requires    = []

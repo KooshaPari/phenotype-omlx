@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omlx-research"
+version = "0.1.0"
+description = "phenotype-omlx research stack: MLX, TurboQuant+, SSD, JetSpec, LatentMAS, TiDAR"
+requires-python = ">=3.11"
+dependencies = [
+    "mlx>=0.31",
+    "mlx-lm>=0.30",
+    "transformers>=4.40",
+    "numpy",
+    "scipy",
+]
+
+[project.optional-dependencies]
+metal = []
+mps = ["torch>=2.2"]
+cuda = ["torch>=2.2", "vllm", "sglang", "tensorrt-llm"]
+dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+
+[project.scripts]
+omlx-research = "omlx_research.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["omlx_research*"]

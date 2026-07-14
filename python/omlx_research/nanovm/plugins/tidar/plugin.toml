@@ -1,0 +1,9 @@
+[plugin]
+name        = "tidar"
+kind        = "agent"
+module      = "omlx_research.agents.tidar_runner"
+entrypoint  = "TidarRunner"
+platforms   = ["darwin", "linux"]
+gpus        = ["metal", "cuda", "cpu"]
+priority    = 70
+requires    = []

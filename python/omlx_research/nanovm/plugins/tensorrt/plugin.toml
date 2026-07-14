@@ -1,0 +1,9 @@
+[plugin]
+name        = "tensorrt-llm"
+kind        = "backend"
+module      = "omlx_research.backends.tensorrt_backend"
+entrypoint  = "TensorrtBackend"
+platforms   = ["linux"]
+gpus        = ["cuda"]
+priority    = 85
+requires    = ["tensorrt-llm"]

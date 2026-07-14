@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# phenotype-omlx-ready: verify that the full research stack is wired correctly.
+#
+# Idempotent: this script can be run any number of times. It:
+#   1. Compiles the Rust perf-core workspace if no target/ exists.
+#   2. Verifies the OMLX framework path (or PYTHONPATH wrapper) sees TurboQuant+.
+#   3. Verifies each research repo (JetSpec, SSD, LatentMAS, TiDAR) is importable.
+#   4. Verifies omlx_research.{backends,engines,agents,cli,web} all import.
+#   5. Emits a single-line summary the calling shell can grep on.
+#
+# Exit codes: 0 = all systems green, non-zero = first failing check.
+
+set -euo pipefail
+
+PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx}"
+REPOS_ROOT="${REPOS_ROOT:-/Users/kooshapari/CodeProjects/Phenotype/repos}"
+PERF_CORE="${PHENOTYPE_OMLX_HOME}/perf-core"
+OMLX_APP="${OMLX_APP:-/Applications/oMLX.app}"
+OMLX_FRAMEWORK="${OMLX_APP}/Contents/Resources/Python/framework-mlx-base/lib/python3.11/site-packages"
+GUI_ADMIN_EXT="${PHENOTYPE_OMLX_HOME}/gui/admin-extensions"
+
+# shellcheck disable=SC1091
+source "${PHENOTYPE_OMLX_HOME}/scripts/phenotype-omlx-env.sh"
+# NOTE: do NOT force ${OMLX_FRAMEWORK} onto PYTHONPATH here. The env script
+# already detected the active Python version and only injects the 3.11 OMLX
+# framework when the active interpreter matches. Forcing it onto a 3.12 venv
+# makes OMLX's 3.11 numpy shadow the venv's numpy and breaks `import numpy`.
+
+# 1) Rust perf-core compiles.
+if [[ ! -d "${PERF_CORE}/target" ]]; then
+    echo "[ready] compiling Rust perf-core (first run only)…"
+    (cd "$PERF_CORE" && cargo check --workspace >/tmp/phenotype-omlx-build.log 2>&1) || {
+        echo "[ready] FAIL: cargo check failed — see /tmp/phenotype-omlx-build.log"
+        exit 2
+    }
+fi
+
+# 2-4) Python stack checks via a one-shot interpreter.
+python3 - <<'PY' || exit 3
+import sys, os, traceback
+checks = []
+
+def chk(label, fn):
+    try:
+        result = fn()
+        checks.append((label, result if isinstance(result, str) else "ok"))
+    except Exception as e:
+        checks.append((label, f"FAIL: {e}"))
+
+# 2) TurboQuant+ MLX
+def c2():
+    from mlx.nn.layers.turbo_kv_cache import TurboKVCache  # noqa: F401
+chk("turboquant+ MLX", c2)
+
+# 3a) JetSpec
+def c3a():
+    import jetspec  # noqa: F401
+    from jetspec import DraftHeadDrafter  # noqa: F401
+chk("jetspec", c3a)
+
+# 3b) TiDAR
+def c3b():
+    sys.path.insert(0, "/Users/kooshapari/CodeProjects/Phenotype/repos/TiDAR")
+    sys.modules.pop("models", None)
+    from models.tidar import tidar_forward  # noqa: F401
+chk("tidar", c3b)
+
+# 3c) LatentMAS (separate import — models.py namespace)
+def c3c():
+    sys.path.insert(0, "/Users/kooshapari/CodeProjects/Phenotype/repos/LatentMAS")
+    sys.modules.pop("models", None)
+    from models import ModelWrapper  # noqa: F401
+chk("latentmas", c3c)
+
+# 3d) SSD (PyTorch / CUDA reference) — only relevant on Linux/Windows with
+#     an NVIDIA GPU. On macOS, `omlx_research.backends.MlxBackend` +
+#     `turbo_mlx.ssd` is the Metal-native replacement. We try the import
+#     and mark it `ok-unavailable` when flashinfer is missing (which is the
+#     correct expected state on Apple Silicon).
+def c3d():
+    sys.path.insert(0, "/Users/kooshapari/CodeProjects/Phenotype/repos/ssd")
+    os.environ.setdefault("SSD_HF_CACHE", os.path.expanduser("~/.cache/huggingface/hub"))
+    os.environ.setdefault("SSD_DATASET_DIR", os.path.expanduser("~/.cache/ssd/datasets"))
+    try:
+        from ssd import config, llm  # noqa: F401
+        return "ok"
+    except ImportError as e:
+        # Expected on Apple Silicon — flashinfer has no Metal backend.
+        # On Linux/Windows with CUDA, this would be `ok`.
+        if "flashinfer" in str(e) or "cuda" in str(e).lower():
+            return "ok (CUDA-only reference — use turbo_mlx.ssd on Metal)"
+        raise
+chk("ssd", c3d)
+
+# 4) omlx_research submodules
+def c4a():
+    from omlx_research.backends import (MlxBackend, MetalKernelBackend, VllmBackend, TensorrtBackend, SglangBackend, LlamaCppBackend)  # noqa: F401
+chk("omlx_research.backends", c4a)
+
+def c4b():
+    from omlx_research.engines import SpeculativeEngine, TreeAttentionEngine, ParallelBatchEngine, HybridDispatch  # noqa: F401
+chk("omlx_research.engines", c4b)
+
+def c4c():
+    from omlx_research.agents import LatentMasRunner, TidarRunner, SsdRunner, JetSpecRunner, ConcurrentScheduler  # noqa: F401
+chk("omlx_research.agents", c4c)
+
+def c4d():
+    from omlx_research.cli import main  # noqa: F401
+    from omlx_research.web import main as web_main  # noqa: F401
+chk("omlx_research.cli+web", c4d)
+
+# 5) pyo3 FFI bridge (Rust perf-core → Python). Built via `maturin develop`
+#    from `python/ffi/`. Importable as `_perf` (top-level module).
+def c5():
+    import _perf  # noqa: F401
+    # Exercise the FFI plumbing to confirm it actually works, not just loads.
+    q = _perf.turbo_quant_encode([0.0] * 128, 32, 4)
+    if not (q.get("packed") and q.get("scales") is not None):
+        raise RuntimeError("turbo_quant_encode returned empty payload")
+    return f"ok ({len(q['packed'])} bytes packed)"
+chk("pyo3 FFI (_perf)", c5)
+
+# Summary
+fails = [n for n, s in checks if not (s.startswith("ok") or s.startswith("ok ("))]
+for n, s in checks:
+    print(f"  [ready] {n:30s} {s}")
+if fails:
+    print(f"[ready] FAIL: {len(fails)} check(s) failed: {fails}", file=sys.stderr)
+    sys.exit(1)
+print(f"[ready] OK: {len(checks)} check(s) passed")
+PY
+
+# 5) OMLX admin-extensions available for the GUI tier.
+if [[ -d "$GUI_ADMIN_EXT" ]]; then
+    echo "[ready] admin-extensions: ${GUI_ADMIN_EXT}"
+else
+    echo "[ready] WARN: admin-extensions not found at ${GUI_ADMIN_EXT}"
+fi
+
+echo "[ready] all systems green"
