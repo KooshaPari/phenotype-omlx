@@ -1,9 +1,20 @@
 [plugin]
 name        = "tidar"
-kind        = "agent"
+kind        = "strategy"
 module      = "omlx_research.agents.tidar_runner"
-entrypoint  = "TidarRunner"
-platforms   = ["darwin", "linux"]
-gpus        = ["metal", "cuda", "cpu"]
-priority    = 70
-requires    = []
+description = "TiDAR — Think in Diffusion, Talk in AR. Draft in diffusion, verify in AR. Cross-backend pipeline: any diffusion-capable backend for draft + any AR backend for verify."
+version     = "0.4"
+runtime     = "pytorch"
+priority    = 100
+requires    = ["torch"]
+
+# STRATEGY (not backend) — flippable option, dual-phase pipeline.
+# Use this when: you want draft tokens from a diffusion model, verified by a separate
+# AR model. Each phase can hit a different backend (e.g. SD draft → MLX AR verify).
+phases = ["diffusion_draft", "ar_verify"]
+compatible_backends = ["mlx_metal", "sglang", "vllm", "tensorrt", "llamacpp"]
+default_pool        = ["sglang", "mlx_metal"]  # sglang=SD draft, mlx=AR verify
+parallel            = true                       # draft and verify can overlap
+diff_steps          = 8                          # diffusion steps
+draft_len           = 4                          # tokens drafted per step
+mode                = "hybrid"

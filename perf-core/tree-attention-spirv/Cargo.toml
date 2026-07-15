@@ -1,0 +1,20 @@
+[package]
+name = "tree-attention-spirv"
+version = "0.1.0"
+edition = "2021"
+description = "phenotype-omlx tree-attention kernel — Swift/Metal/SPIR-V backend"
+
+[dependencies]
+tree-attention = { path = "../tree-attention" }
+
+[lib]
+name = "tree_attention_spirv"
+crate-type = ["rlib"]
+
+[features]
+default = []
+# Opt-in: enable the Metal/SPIR-V kernel (macOS + Xcode toolchain).
+# Without this feature, the crate compiles to a no-op stub.
+spirv = []
+
+[build-dependencies]

@@ -2,8 +2,17 @@
 name        = "sglang"
 kind        = "backend"
 module      = "omlx_research.backends.sglang_backend"
-entrypoint  = "SglangBackend"
-platforms   = ["linux"]
-gpus        = ["cuda", "rocm"]
-priority    = 90
-requires    = ["sglang"]
+description = "SGLang — RadixAttention + structured generation.  Primary backend for multi-user serving on Linux."
+version     = "0.4"
+runtime     = "sglang"
+priority    = 10
+requires    = ["sglang>=0.4", "torch>=2"]
+
+# Backend (not strategy) — leaf plugin that serves models.
+# Use this for: high-throughput multi-user serving, structured JSON,
+# RadixAttention prefix sharing, production deployments.
+accelerator = "cuda,rocm,metal"
+precision   = "fp16,bf16,4bit,8bit"
+kv_cache    = "fp16,q4,q8"
+memory_efficient = true
+best_for    = ["production", "high_throughput", "multi_user", "structured_output", "prefix_sharing"]

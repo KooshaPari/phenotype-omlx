@@ -1,0 +1,18 @@
+[package]
+name = "fleet-proto-zeromq"
+version = "0.1.0"
+edition = "2021"
+description = "Fleet dispatch protocol — C++ ZeroMQ transport (libzmq via pkg-config)"
+
+[dependencies]
+fleet-proto = { path = "../fleet-proto" }
+
+# libzmq is the official Rust binding. Use a tiny shim so the workspace
+# compiles without libzmq installed (link happens at runtime via pkg-config).
+[lib]
+name = "fleet_proto_zeromq"
+crate-type = ["rlib"]
+
+[features]
+default = []
+zeromq-system = []

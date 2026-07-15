@@ -1,11 +1,16 @@
 [workspace]
 resolver = "2"
 members = [
+    "tree-attention-spirv",
+    "tree-attention",
     "spec-decode",
     "concurrent-exec",
+    "concurrent-exec-cuda",
     "turbo-quant",
-    "tree-attention",
+    "turbo-quant-mojo",
+    "turbo-quant-zig",
     "fleet-proto",
+    "fleet-proto-zeromq",
 ]
 
 [workspace.package]

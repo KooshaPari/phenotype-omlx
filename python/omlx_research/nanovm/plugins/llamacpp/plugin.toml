@@ -2,8 +2,17 @@
 name        = "llamacpp"
 kind        = "backend"
 module      = "omlx_research.backends.llamacpp_backend"
-entrypoint  = "LlamaCppBackend"
-platforms   = ["darwin", "linux", "win32"]
-gpus        = ["metal", "cuda", "rocm", "cpu"]
-priority    = 50
-requires    = []
+description = "llama.cpp — universal CPU/Metal/CUDA inference (last-resort, always works)."
+version     = "0.3"
+runtime     = "llamacpp"
+priority    = 1
+requires    = ["llama-cpp-python"]
+
+# Backend (not strategy) — leaf plugin that serves models.
+# Use this for: warmup fallback (works everywhere), Apple Silicon CPU path,
+# machines with no GPU and no SGLang, edge inference.
+accelerator = "cpu,metal,cuda,rocm"
+precision   = "fp16,q4_k,q5_k,q8_0,q2_k"
+kv_cache    = "fp16,q8,q4"
+inplace     = false
+best_for    = ["universal_fallback", "cpu_inference", "edge", "warmup"]

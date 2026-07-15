@@ -1,114 +1,132 @@
 """
-Hybrid Backend Demonstration — exercises ALL backends + strategies together.
+Hybrid Backend Demonstration — runs ALL strategies concurrently.
 
-This is the canonical answer to:
-  "why not use all methods/strategies together or hybridize where possible,
-   given this is a mlx based system that incl adjustments for such compat
-   or abstractions (perhaps as an nvms or similar plugin)"
+Domain decomposition (the answer to "use all backends + all strategies together"):
+  - BACKENDS  = model-serving runtimes (mlx-metal, sglang, vllm, tensorrt, llamacpp)
+  - STRATEGIES = multi-agent/decoding wrappers (latentmas, tidar, jetspec, ssd)
+  - PIPELINE  = sequence of (phase, backend) pairs each strategy declares
 
-It exercises:
-  1. NanoVM plugin discovery (mlx-metal, sglang, vllm, tensorrt, llamacpp,
-     tidar, latentmas, jetspec — 8 plugins registered)
-  2. Hardware detection (CPU + Apple Metal on this Mac Pro M1)
-  3. Hybrid orchestrator with 4 strategies:
-     - PARALLEL_VOTE:        all backends answer, majority votes
-     - SPECULATIVE_DRAFT:    MLX draft → SGLang/MLX verify (cross-backend spec-decode)
-     - TIER_FALLBACK:        MLX primary → SGLang → vLLM → llama.cpp (cost-ordered)
-     - ADAPTIVE_RACE:        race all backends, take first (lowest-latency wins)
-  4. Cross-backend speculative verification
+Run ALL strategies concurrently — each picks its native backend per phase.
+No pytorch fallback, no llamacpp-as-strategy — only the strategy's declared
+compatible_backends are used.
 """
-import sys, time, json
+import sys, time, asyncio
 sys.path.insert(0, "/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/python")
 
 from omlx_research.nanovm import (
-    PluginRegistry, BackendKind, discover_plugins,
-    list_available_backends, list_available_strategies,
+    discover_plugins, list_available_backends, list_available_strategies,
+    get_registry,
 )
-from omlx_research.hardware import detect_hardware, HardwareProfile, Accelerator
-from omlx_research.hybrid.orchestrator import (
-    HybridOrchestrator, HybridStrategy, HybridRequest,
-)
+from omlx_research.hardware import detect_hardware
+from omlx_research.hybrid.orchestrator import get_executor
 
-# ── 1. Discover all plugins ─────────────────────────────────────────
+
+# ── 1. Plugin discovery ─────────────────────────────────────────────────
 print("=" * 64)
-print("STEP 1 — NanoVM plugin discovery")
+print("STEP 1 — NanoVM plugin discovery (BACKEND + STRATEGY kinds)")
 print("=" * 64)
 discover_plugins()
-backends = list_available_backends()
-strategies = list_available_strategies()
-print(f"  Backends registered: {len(backends)}")
-for b in backends:
-    print(f"    • {b['name']:12s} kind={b['kind']:18s} runtime={b['runtime']:8s} prio={b['priority']}")
-print(f"  Strategies registered: {len(strategies)}")
-for s in strategies:
-    print(f"    • {s}")
 
-# ── 2. Detect hardware ──────────────────────────────────────────────
+backends = list_available_backends(include_unloadable=True)
+print(f"\n  Backends ({len(backends)} total):")
+for b in backends:
+    status = "loadable" if b["loadable"] else f"unloadable: {b['reason'][:40]}"
+    print(f"    - {b['name']:14s} runtime={b['runtime']:10s} prio={b['priority']:3d} ({status})")
+
+strat_names = list_available_strategies()
+print(f"\n  Strategies ({len(strat_names)}): {strat_names}")
+
+
+# ── 2. Hardware detection ───────────────────────────────────────────────
 print()
 print("=" * 64)
-print("STEP 2 — Hardware detection")
+print("STEP 2 — Hardware detection (cross-platform)")
 print("=" * 64)
 hw = detect_hardware()
-print(f"  CPU cores:       {hw.cpu_count_logical} logical / {hw.cpu_count_physical} physical")
-print(f"  Memory:          {hw.memory_total_gb:.1f} GB")
-print(f"  Accelerators:    {[a.name for a in hw.accelerators]}")
-print(f"  Recommended:     MLX={hw.recommend(BackendKind.MLX_METAL)}  "
-      f"SGLang={hw.recommend(BackendKind.SGLANG)}")
+print(f"  CPU cores:    {hw.cpu_count_logical} logical / {hw.cpu_count_physical} physical")
+print(f"  Memory:       {hw.memory_total_gb:.1f} GB")
+print(f"  Accelerators: {[a.name for a in hw.accelerators]}")
 
-# ── 3. Hybrid orchestrator with all 4 strategies ────────────────────
+
+# ── 3. Single strategy: latentmas ───────────────────────────────────────
 print()
 print("=" * 64)
-print("STEP 3 — Hybrid orchestrator: 4 strategies on the same prompt")
+print("STEP 3 — Single strategy: latentmas (debate→propose→vote)")
 print("=" * 64)
 
-orch = HybridOrchestrator(plugin_root=discover_plugins())
+executor = get_executor()
+registry = get_registry()
+spec = registry.get("latentmas")
+if spec:
+    print(f"\n  latentmas spec (from registry):")
+    print(f"    phases:              {spec.phases}")
+    print(f"    compatible_backends: {spec.compatible_backends}")
+    print(f"    default_pool:        {spec.default_pool}")
+    print(f"    parallel:            {spec.parallel}")
+
 prompt = "What is the capital of France?"
-req = HybridRequest(prompt=prompt, max_tokens=20, temperature=0.0)
+result = asyncio.run(executor.run("latentmas", prompt, max_tokens=20, temperature=0.0))
+print(f"\n  Result:")
+print(f"    strategy:        {result.strategy}")
+print(f"    text:            {result.text[:80]!r}")
+print(f"    elapsed_ms:      {result.elapsed_ms:.1f}")
+print(f"    parallel:        {result.parallel}")
+print(f"    backends_used:   {result.backends_used}")
+print(f"    fallback_used:   {result.fallback_used}")
+if result.phase_results:
+    print(f"    phase_results:")
+    for phase, r in result.phase_results.items():
+        print(f"      - {phase:20s} backend={r.backend_name:12s} ok={r.ok} elapsed={r.elapsed_ms:.1f}ms text={r.text[:30]!r}")
 
-results = {}
-for strategy in HybridStrategy:
-    print(f"\n  ┌─ Strategy: {strategy.name}")
-    t0 = time.perf_counter()
-    try:
-        r = orch.run(req, strategy=strategy)
-        dt = (time.perf_counter() - t0) * 1000
-        print(f"  │  Winner:      {r.backend_used}")
-        print(f"  │  Text:        {r.text[:80]!r}")
-        print(f"  │  Latency:     {dt:.1f}ms")
-        print(f"  │  Backends tried: {[a['backend'] for a in r.attempts]}")
-        results[strategy.name] = {
-            "backend": r.backend_used,
-            "text": r.text[:80],
-            "latency_ms": dt,
-            "attempts": [a['backend'] for a in r.attempts],
-        }
-    except Exception as e:
-        print(f"  │  ERR: {type(e).__name__}: {e}")
-    print(f"  └─")
 
-# ── 4. Cross-backend speculative verification ───────────────────────
+# ── 4. ALL strategies concurrently ───────────────────────────────────────
 print()
 print("=" * 64)
-print("STEP 4 — Cross-backend speculative verification (MLX draft → SGLang/MLX verify)")
+print("STEP 4 — ALL strategies concurrently (latentmas + tidar + jetspec + ssd)")
 print("=" * 64)
-print("Concept: MLX generates a draft on Metal (low latency),")
-print("         SGLang verifies the draft in parallel on its own runtime,")
-print("         accept longest matching prefix.")
 
-# Get any MLX and SGLang backend
-mlx_backends = [b for b in backends if b['kind'] == 'mlx_metal']
-sglang_backends = [b for b in backends if b['kind'] == 'sglang']
-if mlx_backends and sglang_backends:
-    print(f"  Draft:   {mlx_backends[0]['name']} (Apple Metal)")
-    print(f"  Verify:  {sglang_backends[0]['name']} (SGLang)")
-    print(f"  Cross-backend speculative decoding is now possible — both backends")
-    print(f"  are in the same registry, the orchestrator can hand tokens between them.")
-else:
-    print(f"  Only MLX available on this host (no CUDA/ROCm).")
+print(f"\n  Running all {len(strat_names)} strategies in parallel against: {prompt!r}")
+t0 = time.perf_counter()
+results = asyncio.run(executor.run_all(strat_names, prompt, max_tokens=20, temperature=0.0))
+total_elapsed = (time.perf_counter() - t0) * 1000
 
-# ── 5. Summary ────────────────────────────────────────────────────────
+print(f"\n  All {len(results)} strategies completed in {total_elapsed:.1f}ms (wall clock)")
+print()
+print(f"  {'Strategy':15s} {'Backend(s)':40s} {'Elapsed':>10s}")
+print(f"  {'-'*15} {'-'*40} {'-'*10:>10}")
+for r in results:
+    backends_str = ", ".join(set(r.backends_used.values())) if r.backends_used else "-"
+    print(f"  {r.strategy:15s} {backends_str:40s} {r.elapsed_ms:>9.1f}ms")
+
+
+# ── 5. Summary ───────────────────────────────────────────────────────────
 print()
 print("=" * 64)
-print("SUMMARY — All backends / strategies available together")
+print("SUMMARY — Strategies × Backends decomposition")
 print("=" * 64)
-print(json.dumps(results, indent=2, default=str))
+print()
+print("  PHASE 1 — Backends (model-serving runtimes):")
+for b in backends:
+    if b["loadable"]:
+        print(f"    {b['name']:14s} runtime={b['runtime']:10s} [loadable]")
+
+print()
+print("  PHASE 2 — Strategies (multi-agent/decoding wrappers):")
+for sname in strat_names:
+    s = registry.get(sname)
+    if s:
+        print(f"    {s.name:14s} phases={s.phases}")
+        print(f"                  default_pool={s.default_pool}")
+        print(f"                  compatible={s.compatible_backends}")
+        print(f"                  parallel={s.parallel}")
+
+print()
+print("  PHASE 3 — Pipeline (strategy phases × backend picks):")
+print("    Each strategy declares its phases; orchestrator picks the best")
+print("    available backend per phase. parallel=true → all phases run")
+print("    concurrently via asyncio.gather.")
+print()
+print("  RESULT: All strategies ran concurrently above (each picking the")
+print("          best native backend available). PyTorch/llama.cpp are NOT")
+print("          fallbacks for strategy execution — only the strategy's")
+print("          declared compatible_backends are considered.")

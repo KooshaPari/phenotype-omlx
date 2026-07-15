@@ -1,0 +1,21 @@
+[package]
+name = "turbo-quant-zig"
+version = "0.1.0"
+edition = "2021"
+description = "phenotype-omlx turbo-quant in Zig (cross-language FFI polyglot crate)"
+
+[lib]
+name = "turbo_quant_zig"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+libc = "0.2"
+
+[features]
+default = []
+# Opt-in: compile + link the Zig kernel. Requires `zig` in PATH.
+# Without this feature the crate compiles cleanly; the wrapper just
+# returns an inert no-op via cfg gates in src/lib.rs.
+zig = []
+
+[build-dependencies]
