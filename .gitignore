@@ -29,3 +29,4 @@ dist/
 
 # Local worktrees
 /.worktrees/
+.archive/
