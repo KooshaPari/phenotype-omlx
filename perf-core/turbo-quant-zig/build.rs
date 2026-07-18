@@ -10,7 +10,7 @@ use std::process::Command;
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zig_src = manifest_dir.join("zig-src");
-    let zig_file = zig_src.join("turbo_quant.zig");
+    let zig_file = zig_src.join("root.zig");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let lib_path = out_dir.join("libturbo_quant_zig.a");
 
@@ -38,8 +38,9 @@ fn main() {
         .arg("build-lib")
         .arg("-O")
         .arg("ReleaseFast")
-        .arg(format!("--name turbo_quant_zig"))
-        .arg(format!("--out-dir {}", out_dir.display()))
+        .arg(format!("--name"))
+        .arg("turbo_quant_zig")
+        .arg(format!("-femit-bin={}", lib_path.display()))
         .arg(&zig_file)
         .status();
 

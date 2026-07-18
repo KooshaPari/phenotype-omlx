@@ -126,7 +126,7 @@ fn unpack_bits(src: []u8, bit_pos: usize, bits: u8) u16 {
 
 // ── C ABI exports (consumed by Rust `extern "C"` wrapper) ──────────────
 
-export fn tq_zig_encode(
+pub fn tq_zig_encode(
     data_ptr: [*]const f32,
     n: usize,
     bits: u8,
@@ -155,7 +155,7 @@ export fn tq_zig_encode(
     return true;
 }
 
-export fn tq_zig_decode(
+pub fn tq_zig_decode(
     packed_ptr: [*]const u8,
     packed_len: usize,
     scales_ptr: [*]const f32,
@@ -178,8 +178,16 @@ export fn tq_zig_decode(
     decode_uniform(q, out, group_size, bits);
 }
 
-// Entry point for `zig build run`
-pub fn main() !void {
+pub fn tq_zig_free(ptr: ?*anyopaque, size: usize) void {
+    if (ptr) |p| {
+        const allocator = std.heap.page_allocator;
+        const slice = @as([*]u8, @ptrCast(p))[0..size];
+        allocator.free(slice);
+    }
+}
+
+// Optional entry point for standalone testing
+pub fn tq_main() !void {
     const data = [_]f32{ 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, -0.8 };
     const arena = std.heap.page_allocator;
     const q = try encode_uniform(arena, &data, 4, 0);

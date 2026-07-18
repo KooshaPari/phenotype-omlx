@@ -11,6 +11,9 @@
 // Without `--features zig`, the crate compiles to a no-op stub (so the
 // workspace always builds, even when `zig` is not installed).
 
+#[cfg(feature = "zig")]
+use native::{zig_encode, zig_decode};
+
 #[derive(Debug, Clone)]
 pub struct ZigQuantizedTensor {
     pub shape: Vec<usize>,
@@ -82,7 +85,7 @@ mod native {
             out_ptr: *mut f32,
         );
 
-        fn free(ptr: *mut c_void);
+        fn tq_zig_free(ptr: *mut c_void, size: usize);
     }
 
     pub(super) fn zig_encode(
@@ -123,10 +126,10 @@ mod native {
         let zeros  = unsafe { std::slice::from_raw_parts(zeros_ptr,  zeros_len)  }.to_vec();
 
         unsafe {
-            free(shape_ptr  as *mut c_void);
-            free(packed_ptr as *mut c_void);
-            free(scales_ptr as *mut c_void);
-            free(zeros_ptr  as *mut c_void);
+            tq_zig_free(shape_ptr  as *mut c_void, shape_len * std::mem::size_of::<usize>());
+            tq_zig_free(packed_ptr as *mut c_void, packed_len * std::mem::size_of::<u8>());
+            tq_zig_free(scales_ptr as *mut c_void, scales_len * std::mem::size_of::<f32>());
+            tq_zig_free(zeros_ptr  as *mut c_void, zeros_len * std::mem::size_of::<f32>());
         }
 
         Ok(ZigQuantizedTensor { shape, packed, scales, zeros })
@@ -137,12 +140,18 @@ mod native {
         n: usize, group_size: usize, bits: u8,
     ) -> Vec<f32> {
         let mut out = vec![0.0f32; n];
+        if n == 0 {
+            return out;
+        }
+        let packed_ptr = if packed.is_empty() { std::ptr::null() } else { packed.as_ptr() };
+        let scales_ptr = if scales.is_empty() { std::ptr::null() } else { scales.as_ptr() };
+        let zeros_ptr = if zeros.is_empty() { std::ptr::null() } else { zeros.as_ptr() };
         unsafe {
             tq_zig_decode(
-                packed.as_ptr(),
+                packed_ptr,
                 packed.len(),
-                scales.as_ptr(),
-                zeros.as_ptr(),
+                scales_ptr,
+                zeros_ptr,
                 n,
                 group_size,
                 bits,
@@ -166,7 +175,14 @@ mod tests {
         let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
         let r = ZigQuantizedTensor::encode(&data, 4, 32);
         #[cfg(feature = "zig")]
-        assert!(r.is_ok(), "encode failed: {:?}", r.err());
+        {
+            assert!(r.is_ok(), "encode failed: {:?}", r.err());
+            let q = r.unwrap();
+            let decoded = q.decode(data.len(), 32, 4);
+            for (a, b) in data.iter().zip(decoded.iter()) {
+                assert!((a - b).abs() < 0.15, "{} vs {}", a, b);
+            }
+        }
         #[cfg(not(feature = "zig"))]
         assert!(r.is_err(), "encode should fail without --features zig");
     }
@@ -176,7 +192,7 @@ mod tests {
         let q = ZigQuantizedTensor { shape: vec![8], packed: vec![], scales: vec![], zeros: vec![] };
         let r = q.decode(8, 8, 4);
         #[cfg(feature = "zig")]
-        assert!(r.iter().all(|&x| x.is_finite()));
+        assert!(r.iter().all(|&x| x == 0.0)); // since packed/scales/zeros are empty
         #[cfg(not(feature = "zig"))]
         assert!(r.iter().all(|&x| x == 0.0));
     }
