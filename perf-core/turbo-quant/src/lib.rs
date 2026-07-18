@@ -6,9 +6,8 @@
 //! in `shaders/turbo_quant.metallib` and consumed by `perf-core/spec-decode`'s
 //! optional `metal` feature.
 
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurboMode {
     /// Asymmetric: K kept at FP16, V at 4-bit.
     Asymmetric4,
@@ -40,7 +39,7 @@ impl TurboMode {
 }
 
 /// Quantization parameters applied to the entire model.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct QuantConfig {
     pub mode: TurboMode,
     pub skip_last_n: usize,
@@ -78,16 +77,13 @@ impl QuantizedTensor {
 
         let mut bit_cursor = 0usize;
         for chunk in data.chunks(group_size) {
-            // Auto-vectorizable fallback min/max
-            let (min, max) = {
-                let mut min = f32::INFINITY;
-                let mut max = f32::NEG_INFINITY;
-                for &v in chunk {
-                    if v < min { min = v; }
-                    if v > max { max = v; }
-                }
-                (min, max)
-            };
+            // Scalar min/max — auto-vectorizes via LLVM on NEON/SSE4.2 at -O2+
+            let mut min = f32::INFINITY;
+            let mut max = f32::NEG_INFINITY;
+            for &v in chunk {
+                if v < min { min = v; }
+                if v > max { max = v; }
+            }
             let scale = (max - min) / qmax;
             let zero = min;
             scales.push(scale.max(1e-12));

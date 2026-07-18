@@ -141,8 +141,8 @@ pub fn tq_zig_encode(
     out_zeros_len: *usize,
 ) bool {
     const data = data_ptr[0..n];
-    const arena = std.heap.page_allocator;
-    const q = encode_uniform(arena, data, bits, group_size) catch return false;
+    const allocator = std.heap.c_allocator;
+    const q = encode_uniform(allocator, data, bits, group_size) catch return false;
 
     out_shape[0] = @ptrCast(q.shape.ptr);
     out_shape_len.* = q.shape.len;
@@ -165,9 +165,13 @@ pub fn tq_zig_decode(
     bits: u8,
     out_ptr: [*]f32,
 ) void {
-    const packed_data = packed_ptr[0..packed_len];
-    const scales = scales_ptr[0..((n + group_size - 1) / group_size)];
-    const zeros = zeros_ptr[0..scales.len];
+    if (n == 0) return;
+    const gs = if (group_size == 0) 64 else group_size;
+    const num_groups = (n + gs - 1) / gs;
+
+    const packed_data = if (packed_len == 0) &[_]u8{} else packed_ptr[0..packed_len];
+    const scales = if (num_groups == 0) &[_]f32{} else scales_ptr[0..num_groups];
+    const zeros = if (num_groups == 0) &[_]f32{} else zeros_ptr[0..num_groups];
     const out = out_ptr[0..n];
     const q = QuantizedTensor{
         .shape = @constCast(&[_]usize{n})[0..],
@@ -180,7 +184,9 @@ pub fn tq_zig_decode(
 
 pub fn tq_zig_free(ptr: ?*anyopaque, size: usize) void {
     if (ptr) |p| {
-        const allocator = std.heap.page_allocator;
+        // Use std.heap.c_allocator so std.os.raw/C-ABI compatible free can be safely done if needed, 
+        // or let's free via c_allocator.
+        const allocator = std.heap.c_allocator;
         const slice = @as([*]u8, @ptrCast(p))[0..size];
         allocator.free(slice);
     }
