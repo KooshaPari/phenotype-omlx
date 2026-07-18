@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
 members = [
+    "turbo-quant-c",
+    "turbo-quant-go",
+    "turbo-quant-nim",
+    "eval-harness",
     "tree-attention-spirv",
     "tree-attention",
     "spec-decode",

@@ -10,7 +10,7 @@ const std = @import("std");
 /// QuantizedTensor — the same shape as turbo_quant::QuantizedTensor in Rust.
 pub const QuantizedTensor = struct {
     shape: []usize,
-    packed: []u8,
+    packed_data: []u8,
     scales: []f32,
     zeros: []f32,
 };
@@ -19,7 +19,7 @@ pub const QuantizedTensor = struct {
 /// group-scaled. Group size defaults to 64; pass `group_size=0` to use the
 /// default. Returns a freshly-allocated QuantizedTensor in `arena`.
 ///
-/// Caller frees `result.packed`, `result.scales`, `result.zeros` with `arena.free`.
+/// Caller frees `result.packed_data`, `result.scales`, `result.zeros` with `arena.free`.
 pub fn encode_uniform(
     arena: std.mem.Allocator,
     data: []const f32,
@@ -34,10 +34,10 @@ pub fn encode_uniform(
 
     const shape = try arena.alloc(usize, 1);
     shape[0] = n;
-    const packed = try arena.alloc(u8, n_groups * per_group_packed_bytes);
+    const packed_data = try arena.alloc(u8, n_groups * per_group_packed_bytes);
     const scales = try arena.alloc(f32, n_groups);
     const zeros = try arena.alloc(f32, n_groups);
-    @memset(packed, 0);
+    @memset(packed_data, 0);
     @memset(scales, 0);
     @memset(zeros, 0);
 
@@ -67,18 +67,18 @@ pub fn encode_uniform(
             const normalized = (data[i] - zero) / scale;
             const clamped = @max(0.0, @min(@as(f32, @floatFromInt(levels)), @round(normalized)));
             const q: u16 = @intFromFloat(clamped);
-            pack_bits(packed[g * per_group_packed_bytes ..][0..per_group_packed_bytes], bit_pos, bits, q);
+            pack_bits(packed_data[g * per_group_packed_bytes ..][0..per_group_packed_bytes], bit_pos, bits, q);
             bit_pos += bits;
         }
     }
 
-    return QuantizedTensor{ .shape = shape, .packed = packed, .scales = scales, .zeros = zeros };
+    return QuantizedTensor{ .shape = shape, .packed_data = packed_data, .scales = scales, .zeros = zeros };
 }
 
 /// Inverse of `encode_uniform` — writes the reconstructed f32 values into `out`.
 pub fn decode_uniform(q: QuantizedTensor, out: []f32, group_size: usize, bits: u8) void {
     const gs: usize = if (group_size == 0) 64 else group_size;
-    const levels: f32 = @floatFromInt((@as(u16, 1) << @intCast(bits)) - 1);
+    // const levels: f32 = @floatFromInt((@as(u16, 1) << @intCast(bits)) - 1);
     const per_group_packed_bytes = (gs * bits + 7) / 8;
 
     var g: usize = 0;
@@ -90,7 +90,7 @@ pub fn decode_uniform(q: QuantizedTensor, out: []f32, group_size: usize, bits: u
         var bit_pos: usize = 0;
         var i: usize = start;
         while (i < end) : (i += 1) {
-            const qv = unpack_bits(q.packed[g * per_group_packed_bytes ..][0..per_group_packed_bytes], bit_pos, bits);
+            const qv = unpack_bits(q.packed_data[g * per_group_packed_bytes ..][0..per_group_packed_bytes], bit_pos, bits);
             out[i] = zero + @as(f32, @floatFromInt(qv)) * scale;
             bit_pos += bits;
         }
@@ -98,7 +98,7 @@ pub fn decode_uniform(q: QuantizedTensor, out: []f32, group_size: usize, bits: u
 }
 
 fn pack_bits(dst: []u8, bit_pos: usize, bits: u8, value: u16) void {
-    var v = value;
+    const v = value;
     var bp = bit_pos;
     var b: u8 = 0;
     while (b < bits) : (b += 1) {
@@ -141,16 +141,16 @@ export fn tq_zig_encode(
     out_zeros_len: *usize,
 ) bool {
     const data = data_ptr[0..n];
-    var arena = std.heap.page_allocator;
+    const arena = std.heap.page_allocator;
     const q = encode_uniform(arena, data, bits, group_size) catch return false;
 
-    out_shape.* = q.shape.ptr;
+    out_shape[0] = @ptrCast(q.shape.ptr);
     out_shape_len.* = q.shape.len;
-    out_packed.* = q.packed.ptr;
-    out_packed_len.* = q.packed.len;
-    out_scales.* = q.scales.ptr;
+    out_packed[0] = @as(*u8, @ptrCast(q.packed_data.ptr));
+    out_packed_len.* = q.packed_data.len;
+    out_scales[0] = @as(*f32, @ptrCast(q.scales.ptr));
     out_scales_len.* = q.scales.len;
-    out_zeros.* = q.zeros.ptr;
+    out_zeros[0] = @as(*f32, @ptrCast(q.zeros.ptr));
     out_zeros_len.* = q.zeros.len;
     return true;
 }
@@ -165,13 +165,13 @@ export fn tq_zig_decode(
     bits: u8,
     out_ptr: [*]f32,
 ) void {
-    const packed = packed_ptr[0..packed_len];
+    const packed_data = packed_ptr[0..packed_len];
     const scales = scales_ptr[0..((n + group_size - 1) / group_size)];
     const zeros = zeros_ptr[0..scales.len];
     const out = out_ptr[0..n];
     const q = QuantizedTensor{
-        .shape = &[_]usize{n},
-        .packed = @constCast(packed),
+        .shape = @constCast(&[_]usize{n})[0..],
+        .packed_data = @constCast(packed_data),
         .scales = @constCast(scales),
         .zeros = @constCast(zeros),
     };
@@ -181,9 +181,9 @@ export fn tq_zig_decode(
 // Entry point for `zig build run`
 pub fn main() !void {
     const data = [_]f32{ 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, -0.8 };
-    var arena = std.heap.page_allocator;
+    const arena = std.heap.page_allocator;
     const q = try encode_uniform(arena, &data, 4, 0);
-    std.debug.print("encoded: packed={d} bytes, scales={d}\n", .{ q.packed.len, q.scales.len });
+    std.debug.print("encoded: packed_data={d} bytes, scales={d}\n", .{ q.packed_data.len, q.scales.len });
 
     var out: [data.len]f32 = undefined;
     decode_uniform(q, &out, 0, 4);
