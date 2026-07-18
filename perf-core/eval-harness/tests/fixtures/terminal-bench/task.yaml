@@ -1,0 +1,9 @@
+id: shell-find-fixme
+prompt: Find all files containing FIXME.
+criteria:
+  expected_commands:
+    - "grep -r 'FIXME' ."
+  required_output:
+    - "src/main.rs:FIXME"
+  forbidden_output:
+    - "permission denied"

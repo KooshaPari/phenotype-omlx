@@ -48,3 +48,48 @@ mod turbo_quant_c_build {
         out
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{decode, encode};
+
+    #[test]
+    fn rejects_invalid_encode_arguments() {
+        assert!(encode(&[], 2, 4).is_none());
+        assert!(encode(&[1.0], 1, 4).is_none());
+        assert!(encode(&[1.0], 5, 4).is_none());
+        assert!(encode(&[1.0], 2, 0).is_none());
+    }
+
+    #[test]
+    fn round_trips_all_supported_bit_widths() {
+        let input = [-3.0, -1.0, 0.5, 2.0, 7.0, 9.0, 12.0];
+
+        for bits in [2, 3, 4] {
+            let tensor = encode(&input, bits, 3).expect("supported encoding");
+            assert_eq!(tensor.shape, vec![input.len()]);
+            assert_eq!(tensor.scales.len(), 3);
+            assert_eq!(tensor.zeros.len(), 3);
+
+            let output = decode(&tensor, input.len(), 3, bits);
+            for (actual, expected) in output.iter().zip(input) {
+                let tolerance = tensor.scales.iter().copied().fold(0.0_f32, f32::max);
+                assert!((actual - expected).abs() <= tolerance + 1e-5);
+            }
+        }
+    }
+
+    #[test]
+    fn decode_ignores_invalid_bounds_without_writing_output() {
+        let tensor = encode(&[0.0, 1.0, 2.0, 3.0], 3, 4).expect("supported encoding");
+        let sentinel = vec![91.0; 4];
+
+        assert_eq!(decode(&tensor, 4, 0, 3), sentinel);
+        assert_eq!(decode(&tensor, 4, 4, 1), sentinel);
+        assert_eq!(decode(&tensor, 4, 4, 3), sentinel);
+
+        let mut truncated = tensor;
+        truncated.packed.pop();
+        assert_eq!(decode(&truncated, 4, 4, 3), sentinel);
+    }
+}
