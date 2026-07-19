@@ -38,6 +38,7 @@ const SOTA_OPERATORS_SOURCES: &[(&str, &str)] = &[
     ("diffusion.rs", include_str!("diffusion.rs")),
     ("discrete_diffusion_sampler.rs", include_str!("discrete_diffusion_sampler.rs")),
     ("discrete_diffusion_schedule.rs", include_str!("discrete_diffusion_schedule.rs")),
+    ("grouped_gemm_moe.rs", include_str!("grouped_gemm_moe.rs")),
     ("lfm_routing.rs", include_str!("lfm_routing.rs")),
     ("mod_routing/mod.rs", include_str!("mod_routing/mod.rs")),
     ("mod_routing/policy.rs", include_str!("mod_routing/policy.rs")),

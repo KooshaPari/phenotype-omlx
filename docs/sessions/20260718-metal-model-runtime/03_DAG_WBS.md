@@ -47,7 +47,7 @@ workspace tests, benchmark comparison, and Airlock snapshot before the next depe
 ## Forward Kernel DAG (2026-07-19)
 
     MoE top-k router [complete]
-      -> grouped expert GEMM
+      -> grouped expert GEMM [complete — model-kernels::moe::gemm_tiled, scalar-tile path, oracle parity pinned, kernel-registry candidate wired with tuning + coverage]
       -> weighted expert reduction
       -> Step / Kimi K2 / GLM / OLMoE / MiniMax conformance
 
@@ -67,5 +67,10 @@ workspace tests, benchmark comparison, and Airlock snapshot before the next depe
       -> remasking scheduler
       -> Seed Diffusion / Mercury coding acceptance
 
-Current critical path: grouped expert GEMM -> weighted reduction -> end-to-end Qwen/OLMoE model
-run -> latency, memory, energy, and quality regression baselines.
+Current critical path: weighted reduction -> end-to-end Qwen/OLMoE model run ->
+latency, memory, energy, and quality regression baselines. The previous critical-path item
+(grouped expert GEMM) was completed at turn-12 with `model-kernels::moe::gemm_tiled`,
+oracle parity pinned against the scalar reference, a `grouped_gemm_moe` kernel-registry
+candidate (scalar + tiled) wired into `coverage_matrix.rs` and the SOTA operator suite,
+and a deterministic bench envelope emitted to
+`research/baselines/moe_grouped_gemm_20260719.json`.

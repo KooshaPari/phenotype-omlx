@@ -14,12 +14,14 @@
 
 pub mod dispatch;
 pub mod gemm;
+pub mod gemm_tiled;
 pub mod reduce;
 pub mod router;
 pub mod shared;
 
 pub use dispatch::{moe_dispatch, DispatchPlan};
 pub use gemm::grouped_gemm;
+pub use gemm_tiled::grouped_gemm_tiled;
 pub use reduce::weighted_reduce;
 pub use router::router_topk;
 pub use shared::shared_expert;
