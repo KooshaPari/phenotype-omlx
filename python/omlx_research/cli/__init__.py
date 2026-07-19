@@ -7,6 +7,7 @@ Subcommands:
   latentmas               — multi-agent concurrent fan-out
   tidar                   — hybrid AR+diffusion generation
   bench                   — quick benchmark (tokens/sec, acceptance rate)
+  eval                    — run an eval-harness suite (mmlu/gpqa/terminal-bench/perplexity)
   doctor [--json]         — diagnose environment (Python, MLX, kernels, ABI, tests)
   fleet                   — show / manage cluster peers
   inspect <plan.json>     — load + validate a model plan; print summary
@@ -23,6 +24,7 @@ Subcommands:
 from __future__ import annotations
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Optional
@@ -143,6 +145,153 @@ def cmd_bench(args: argparse.Namespace) -> int:
     return 0
 
 
+# --- eval-harness subcommand -----------------------------------------------
+#
+# The canonical scoring surface lives in the Rust crate
+# ``perf-core/eval-harness/`` (consumed via the kernel-registry). This
+# Python wrapper is the CLI entry point that loads a dataset off disk and
+# emits a JSON report — the actual scoring is delegated to the Rust
+# scorer through the kernel-registry in production. The wrapper is
+# deliberately a stub for now: it loads the dataset via Python's csv /
+# json modules, counts "passes" against a deterministic heuristic, and
+# prints the JSON report. When the kernel-registry binding for the
+# eval-harness lands, this is the seam where the Rust scorer slots in.
+#
+# The suite identifiers mirror ``eval_harness::Suite`` (which uses
+# ``#[serde(rename_all = "lowercase")]``) so the on-disk dataset
+# identifiers stay byte-compatible with the Rust enum. The list is
+# exposed publicly as :data:`EVAL_VALID_SUITES` so tests can pin the
+# contract without re-deriving it from argparse's choices.
+
+EVAL_VALID_SUITES: tuple[str, ...] = (
+    "mmlu",
+    "gpqa",
+    "terminal-bench",
+    "perplexity",
+)
+
+
+def _eval_load_dataset(suite: str, dataset_path: str) -> list[dict]:
+    """Load an eval-harness dataset off disk in the documented shape.
+
+    The Rust loaders (``perf-core/eval-harness/src/{dataset,mmlu,gpqa}.rs``)
+    accept CSV for the multiple-choice suites (mmlu, gpqa) and JSONL for
+    the open-ended ones (terminal-bench, perplexity). We mirror that
+    split here so the wrapper's contract matches what the Rust crate
+    expects on disk.
+
+    Returns a list of raw row dicts; the wrapper is a stub so we do not
+    validate per-suite schemas — the row count drives the report, and
+    the schema check lives in the Rust loader.
+    """
+    if not os.path.isfile(dataset_path):
+        raise FileNotFoundError(
+            f"dataset not found: {dataset_path} (suite={suite})"
+        )
+
+    if suite in ("terminal-bench", "perplexity"):
+        # JSONL: one JSON object per line.
+        rows: list[dict] = []
+        with open(dataset_path, "r", encoding="utf-8") as fh:
+            for lineno, raw in enumerate(fh, start=1):
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    rows.append(json.loads(raw))
+                except json.JSONDecodeError as e:
+                    raise ValueError(
+                        f"dataset {dataset_path} line {lineno}: "
+                        f"invalid JSON: {e}"
+                    ) from e
+        return rows
+
+    # CSV: dict-reader on the header row.
+    import csv as _csv  # local import — keeps startup lean
+    with open(dataset_path, "r", encoding="utf-8", newline="") as fh:
+        reader = _csv.DictReader(fh)
+        return [dict(row) for row in reader]
+
+
+def _eval_stub_score(rows: list[dict], suite: str) -> int:
+    """Deterministic stub: count rows with a non-empty answer field.
+
+    The real scorer lives in Rust; this stub exists so the wrapper has
+    an honest end-to-end contract for tests and CI smoke runs. It
+    counts the same rows the Rust ``EvalHarness::run`` would mark as
+    "answer present" for the multiple-choice suites.
+
+    The ``answer`` field is canonical for the multiple-choice suites
+    (mmlu/gpqa); the open-ended suites (terminal-bench/perplexity)
+    store the expected completion under ``expected``. The stub
+    accepts either so the wrapper's JSON-report contract is uniform
+    across all four suites.
+    """
+    del suite  # unused in the stub; reserved for suite-specific heuristics
+    score = 0
+    for r in rows:
+        answer = str(r.get("answer", "")).strip()
+        if not answer:
+            answer = str(r.get("expected", "")).strip()
+        if answer:
+            score += 1
+    return score
+
+
+def cmd_eval(args: argparse.Namespace) -> int:
+    """Run an eval-harness suite against a local dataset file.
+
+    Loads the dataset (CSV for multiple-choice, JSONL for open-ended),
+    asks the kernel-registry's eval-harness binding to score it (stub
+    today: count rows with a non-empty answer), and prints a JSON
+    report on stdout. ``--report PATH`` also persists the report to
+    disk so it can be archived alongside the run.
+    """
+    suite: str = args.suite
+    dataset_path: str = args.dataset
+    backend: str = args.backend
+    report_path: Optional[str] = args.report
+
+    try:
+        rows = _eval_load_dataset(suite, dataset_path)
+    except FileNotFoundError as e:
+        # Surface a structured argparse-style error and exit 2 — the
+        # standard exit code for CLI usage errors so scripts wrapping
+        # the CLI can distinguish "bad input" from "internal failure".
+        print(f"omlx-research eval: error: {e}", file=sys.stderr)
+        return 2
+    except ValueError as e:
+        print(f"omlx-research eval: error: {e}", file=sys.stderr)
+        return 2
+
+    tasks = len(rows)
+    passed = _eval_stub_score(rows, suite)
+    score = (passed / tasks) if tasks else 0.0
+
+    report = {
+        "suite": suite,
+        "tasks": tasks,
+        "passed": passed,
+        "score": round(score, 6),
+        "backend": backend,
+        "harness": "eval-harness (Rust crate via kernel-registry; stub scorer in Python wrapper)",
+        "dataset": dataset_path,
+        "report_path": report_path,
+        "timestamp": time.time(),
+    }
+    payload = json.dumps(report)
+    print(payload)
+
+    if report_path is not None:
+        out_dir = os.path.dirname(os.path.abspath(report_path))
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+        with open(report_path, "w", encoding="utf-8") as fh:
+            fh.write(payload + "\n")
+
+    return 0
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     # Imported lazily so the heavy doctor check imports (subprocess, mlx,
     # platform) don't pay off when users invoke other subcommands.
@@ -188,6 +337,35 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     p = sub.add_parser("bench")
     p.set_defaults(fn=cmd_bench)
+
+    # --------------------------------------------------------------- eval
+    p = sub.add_parser(
+        "eval",
+        help=(
+            "run an eval-harness suite (mmlu, gpqa, terminal-bench, "
+            "perplexity) against a local dataset file"
+        ),
+    )
+    p.add_argument(
+        "--suite", required=True, choices=list(EVAL_VALID_SUITES),
+        help=(
+            "suite identifier; matches eval_harness::Suite "
+            "(mmlu, gpqa, terminal-bench, perplexity)"
+        ),
+    )
+    p.add_argument(
+        "--dataset", required=True,
+        help="path to a dataset file (CSV for mmlu/gpqa, JSONL for terminal-bench/perplexity)",
+    )
+    p.add_argument(
+        "--backend", default="metal",
+        help="backend identifier reported in the JSON envelope (default: metal)",
+    )
+    p.add_argument(
+        "--report", default=None,
+        help="optional path; when set, the JSON report is also written to disk",
+    )
+    p.set_defaults(fn=cmd_eval)
 
     p = sub.add_parser(
         "doctor",
