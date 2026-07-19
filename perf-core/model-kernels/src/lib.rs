@@ -40,6 +40,7 @@ pub mod attention;
 pub mod common;
 pub mod diffusion;
 pub mod error;
+pub mod mod_routing;
 pub mod moe;
 pub mod quantized;
 pub mod recurrent;
@@ -106,6 +107,8 @@ pub enum KernelOp {
     SubBytePack,
     /// Multi-token-prediction proposal (DeepSeek-V3 / EAGLE-style).
     SpeculativeMtp,
+    /// Mixture-of-Depths sparse token routing (Raposo et al., 2024).
+    ModRouting,
 }
 
 impl KernelOp {
@@ -133,6 +136,7 @@ impl KernelOp {
             KernelOp::TernaryPack => "ternary_pack",
             KernelOp::SubBytePack => "subbyte_pack",
             KernelOp::SpeculativeMtp => "speculative_mtp",
+            KernelOp::ModRouting => "mod_routing",
         }
     }
 }
