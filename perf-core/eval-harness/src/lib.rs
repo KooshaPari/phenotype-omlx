@@ -2,6 +2,7 @@ pub mod mmlu;
 pub mod gpqa;
 pub mod terminal_bench;
 pub mod perplexity;
+pub mod fixture_backend;
 
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +17,12 @@ pub struct TaskSpec {
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq)]
 #[serde(rename_all = "lowercase")]
-pub enum Suite { MMLU, GPQA, TerminalBench, Perplexity }
+pub enum Suite {
+    MMLU,
+    GPQA,
+    TerminalBench,
+    Perplexity,
+}
 
 #[derive(Debug, Serialize, Clone)]
 pub struct TaskResult {
@@ -34,14 +40,27 @@ pub trait Backend {
 }
 
 pub fn run_suite<B: Backend>(suite: Suite, backend: &B, tasks: &[TaskSpec]) -> Vec<TaskResult> {
-    tasks.iter().filter(|t| t.suite == suite).map(|t| {
-        let prompt_tokens = t.prompt.split_whitespace().count();
-        let (completion, latency_ms) = backend.complete(&t.prompt, 128);
-        let correct = t.expected.as_ref().map(|exp| completion.trim().contains(exp.trim()));
-        TaskResult {
-            task_id: t.id.clone(), suite, prompt_tokens,
-            completion_tokens: completion.split_whitespace().count(),
-            completion, correct, latency_ms,
-        }
-    }).collect()
+    tasks
+        .iter()
+        .filter(|t| t.suite == suite)
+        .map(|t| {
+            let prompt_tokens = t.prompt.split_whitespace().count();
+            let (completion, latency_ms) = backend.complete(&t.prompt, 128);
+            let correct = t
+                .expected
+                .as_ref()
+                .map(|exp| completion.trim().contains(exp.trim()));
+            TaskResult {
+                task_id: t.id.clone(),
+                suite,
+                prompt_tokens,
+                completion_tokens: completion.split_whitespace().count(),
+                completion,
+                correct,
+                latency_ms,
+            }
+        })
+        .collect()
 }
+
+pub use fixture_backend::OracleBackend;
