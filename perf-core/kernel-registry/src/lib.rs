@@ -34,6 +34,7 @@
 
 #![deny(unsafe_code)]
 
+pub mod builders;
 pub mod candidate;
 pub mod compat;
 pub mod error;
@@ -45,6 +46,7 @@ pub mod selector;
 pub mod trace;
 pub mod tuner;
 
+pub use builders::{deltanet_batched_key, deltanet_key, sliding_window_key};
 pub use candidate::{BackendKind, Candidate, CandidateId, Capability};
 pub use compat::{AttentionKind, DType, OperatorKind, QuantizationPolicy};
 pub use error::{Error, Result};

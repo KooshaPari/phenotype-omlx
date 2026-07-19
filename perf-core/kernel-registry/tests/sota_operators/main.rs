@@ -203,6 +203,7 @@ fn selector_rejects_when_no_candidate_supports_ternary_dtype() {
 mod attention;
 mod attention_sliding_window;
 mod bonsai_qwen;
+mod builders_integration;
 mod diffusion;
 mod mod_routing;
 mod recurrent;
