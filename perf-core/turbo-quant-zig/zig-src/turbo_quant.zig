@@ -155,6 +155,13 @@ export fn tq_zig_encode(
     return true;
 }
 
+export fn tq_zig_free(ptr: ?*anyopaque, byte_len: usize) void {
+    if (ptr) |p| {
+        const bytes = @as([*]u8, @ptrCast(p))[0..byte_len];
+        std.heap.page_allocator.free(bytes);
+    }
+}
+
 export fn tq_zig_decode(
     packed_ptr: [*]const u8,
     packed_len: usize,
@@ -176,21 +183,4 @@ export fn tq_zig_decode(
         .zeros = @constCast(zeros),
     };
     decode_uniform(q, out, group_size, bits);
-}
-
-// Entry point for `zig build run`
-pub fn main() !void {
-    const data = [_]f32{ 0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, -0.8 };
-    const arena = std.heap.page_allocator;
-    const q = try encode_uniform(arena, &data, 4, 0);
-    std.debug.print("encoded: packed_data={d} bytes, scales={d}\n", .{ q.packed_data.len, q.scales.len });
-
-    var out: [data.len]f32 = undefined;
-    decode_uniform(q, &out, 0, 4);
-    var max_err: f32 = 0;
-    for (data, out) |a, b| {
-        const err = @abs(a - b);
-        if (err > max_err) max_err = err;
-    }
-    std.debug.print("decoded: max_err={d}\n", .{max_err});
 }

@@ -1,7 +1,6 @@
-// build.rs — compile Mojo shared library when `--features mojo` is enabled.
+// build.rs — always compile and link the Mojo shared library.
 //
-// Without the feature the crate is a Rust-only stub. With the feature, a missing
-// Mojo SDK or failed `mojo build` is a hard error (fail loudly).
+// Missing Mojo SDK or a failed `mojo build` is a hard error (fail loudly).
 
 use std::env;
 use std::path::PathBuf;
@@ -14,12 +13,6 @@ fn main() {
     println!("cargo:rerun-if-changed={}", mojo_src.display());
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=MOJO_PATH");
-
-    let feature_mojo = env::var("CARGO_FEATURE_MOJO").is_ok();
-    if !feature_mojo {
-        println!("cargo:warning=turbo-quant-mojo built without `mojo` feature — stub only");
-        return;
-    }
 
     let lib_name = if cfg!(target_os = "macos") {
         "libturbo_quant_mojo.dylib"
@@ -36,7 +29,7 @@ fn main() {
         .or_else(|| which("mojo"))
         .unwrap_or_else(|| {
             panic!(
-                "turbo-quant-mojo: `--features mojo` requires the Mojo SDK in PATH \
+                "turbo-quant-mojo: Mojo SDK required in PATH \
                  (install: modular install mojo; or set MOJO_PATH)"
             );
         });
@@ -56,7 +49,7 @@ fn main() {
     if !status.success() || !lib_path.exists() {
         panic!(
             "turbo-quant-mojo: `mojo build --emit shared-lib` failed — \
-             cannot link native kernel with --features mojo"
+             cannot link native kernel (install: modular install mojo)"
         );
     }
 

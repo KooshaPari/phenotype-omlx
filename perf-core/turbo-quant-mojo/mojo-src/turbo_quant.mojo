@@ -1,10 +1,8 @@
 # turbo-quant-mojo — Mojo implementation of TurboQuant.
 #
-# Build:
-#   mojo build mojo-src/turbo_quant.mojo -o libturbo_quant_mojo.a
-#
-# Without Mojo installed, this crate compiles as a no-op stub
-# (matching the "no language forbidden" policy).
+# Build (required — build.rs invokes this automatically):
+#   modular install mojo
+#   mojo build mojo-src/turbo_quant.mojo -o libturbo_quant_mojo.dylib --emit shared-lib
 
 from std.memory import alloc, UnsafePointer
 
@@ -154,32 +152,27 @@ def decode_uniform[
 # `UnsafePointer[Int, ...]` so the caller can read pointer addresses
 # back as Int values without per-element type confusion.
 #
-# Note: Mojo 1.0.0b3's @export emits an "abi() effect required" warning
-# but still produces an `internal_linkage` symbol. The Rust wrapper
-# gracefully falls back to its pure-Rust implementation when the
-# symbols are not externally visible, so the crate is usable either way.
+# Note: Mojo 1.0.0b3's @export emits an "abi() effect required" warning.
+# Exported symbols must be visible to the Rust dylib linker — build fails
+# loudly if encode returns null output pointers (see Rust roundtrip tests).
 
 
 @export("tq_mojo_encode")
-def tq_mojo_encode[
-    d_origin: MutOrigin,
-    s0: MutOrigin, s1: MutOrigin, s2: MutOrigin, s3: MutOrigin,
-    s4: MutOrigin, s5: MutOrigin, s6: MutOrigin, s7: MutOrigin,
-](
+def tq_mojo_encode(
     data_addr: Int,
     n: Int,
     bits: UInt8,
     group_size: Int,
-    shape_ptr_out: UnsafePointer[Int, s0],
-    out_shape_len: UnsafePointer[Int, s1],
-    packed_ptr_out: UnsafePointer[Int, s2],
-    out_packed_len: UnsafePointer[Int, s3],
-    scales_ptr_out: UnsafePointer[Int, s4],
-    out_scales_len: UnsafePointer[Int, s5],
-    zeros_ptr_out: UnsafePointer[Int, s6],
-    out_zeros_len: UnsafePointer[Int, s7],
+    shape_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_shape_len: UnsafePointer[Int, MutUntrackedOrigin],
+    packed_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_packed_len: UnsafePointer[Int, MutUntrackedOrigin],
+    scales_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_scales_len: UnsafePointer[Int, MutUntrackedOrigin],
+    zeros_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_zeros_len: UnsafePointer[Int, MutUntrackedOrigin],
 ) -> Bool:
-    var data_ptr = UnsafePointer[Float32, d_origin](unsafe_from_address=data_addr)
+    var data_ptr = UnsafePointer[Float32, MutUntrackedOrigin](unsafe_from_address=data_addr)
 
     var gs: Int = 64 if group_size == 0 else group_size
     var bits_i: Int = Int(bits)

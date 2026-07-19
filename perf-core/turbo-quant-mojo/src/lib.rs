@@ -1,13 +1,8 @@
 // turbo-quant-mojo — Rust wrapper for the Mojo implementation.
 //
-// Mojo can compile to a shared object or static library that exposes a
-// C ABI; this crate wraps that and gives a Rust-friendly API matching
-// perf-core/turbo-quant.
-//
-// Without `--features mojo`, this crate compiles to a no-op stub so the
-// workspace always builds, even when `mojo` is not installed.
+// Requires the Mojo SDK in PATH (`modular install mojo`). build.rs compiles
+// mojo-src/turbo_quant.mojo to a shared library and links it unconditionally.
 
-#[cfg(feature = "mojo")]
 use native::{mojo_decode, mojo_encode};
 
 #[derive(Debug, Clone)]
@@ -20,31 +15,14 @@ pub struct MojoQuantizedTensor {
 
 impl MojoQuantizedTensor {
     pub fn encode(data: &[f32], bits: u8, group_size: usize) -> Result<Self, String> {
-        #[cfg(feature = "mojo")]
-        {
-            mojo_encode(data, bits, group_size)
-        }
-        #[cfg(not(feature = "mojo"))]
-        {
-            let _ = (data, bits, group_size);
-            Err("turbo-quant-mojo: built without --features mojo".to_string())
-        }
+        mojo_encode(data, bits, group_size)
     }
 
     pub fn decode(&self, n: usize, group_size: usize, bits: u8) -> Vec<f32> {
-        #[cfg(feature = "mojo")]
-        {
-            mojo_decode(&self.packed, &self.scales, &self.zeros, n, group_size, bits)
-        }
-        #[cfg(not(feature = "mojo"))]
-        {
-            let _ = (n, group_size, bits);
-            vec![0.0; n]
-        }
+        mojo_decode(&self.packed, &self.scales, &self.zeros, n, group_size, bits)
     }
 }
 
-#[cfg(feature = "mojo")]
 mod native {
     use super::MojoQuantizedTensor;
     use std::os::raw::{c_uchar, c_void};
@@ -116,7 +94,7 @@ mod native {
         if shape_addr == 0 || packed_addr == 0 || scales_addr == 0 || zeros_addr == 0 {
             return Err(
                 "Mojo tq_mojo_encode returned null output pointers — \
-                 verify libturbo_quant_mojo.dylib is on the loader path"
+                 Mojo @export/out-pointer ABI still broken on this toolchain (TODO: FR-OMLX-POLY-001)"
                     .to_string(),
             );
         }
@@ -152,15 +130,23 @@ mod native {
     }
 
     pub(super) fn mojo_decode(
-        packed: &[u8], scales: &[f32], zeros: &[f32],
-        n: usize, group_size: usize, bits: u8,
+        packed: &[u8],
+        scales: &[f32],
+        zeros: &[f32],
+        n: usize,
+        group_size: usize,
+        bits: u8,
     ) -> Vec<f32> {
         let mut out = vec![0.0f32; n];
         unsafe {
             tq_mojo_decode(
-                packed.as_ptr(), packed.len(),
-                scales.as_ptr(), zeros.as_ptr(),
-                n, group_size, bits,
+                packed.as_ptr(),
+                packed.len(),
+                scales.as_ptr(),
+                zeros.as_ptr(),
+                n,
+                group_size,
+                bits,
                 out.as_mut_ptr(),
             );
         }
@@ -171,21 +157,9 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "mojo")]
     use std::path::PathBuf;
-    #[cfg(feature = "mojo")]
     use std::process::Command;
 
-    #[cfg(not(feature = "mojo"))]
-    #[test]
-    fn mojo_without_feature_fails_encode_loudly() {
-        let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
-        let r = MojoQuantizedTensor::encode(&data, 4, 32);
-        #[cfg(not(feature = "mojo"))]
-        assert!(r.is_err(), "encode should fail without --features mojo");
-    }
-
-    #[cfg(feature = "mojo")]
     fn mojo_shared_lib_path() -> PathBuf {
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let name = if cfg!(target_os = "macos") {
@@ -198,24 +172,22 @@ mod tests {
         manifest.join(name)
     }
 
-    #[cfg(feature = "mojo")]
     #[test]
     fn mojo_shared_lib_builds() {
         let lib = mojo_shared_lib_path();
         assert!(
             lib.exists(),
-            "Mojo shared library missing at {} — compile gate failed",
+            "Mojo shared library missing at {} — build.rs compile gate failed",
             lib.display()
         );
     }
 
-    #[cfg(feature = "mojo")]
     #[test]
     fn mojo_smoke_script_roundtrips() {
         let mojo = std::env::var_os("MOJO_PATH")
             .map(PathBuf::from)
-            .or_else(|| which("mojo"))
-            .expect("mojo feature enabled but `mojo` not found in PATH");
+            .or_else(which)
+            .expect("mojo not found in PATH — install with: modular install mojo");
         let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let smoke = manifest.join("mojo-src/turbo_quant_smoke.mojo");
         let status = Command::new(mojo)
@@ -227,11 +199,29 @@ mod tests {
         assert!(status.success(), "mojo smoke script failed");
     }
 
-    #[cfg(feature = "mojo")]
-    fn which(name: &str) -> Option<PathBuf> {
+    #[test]
+    fn mojo_encode_decode_roundtrip_todo_fr_omlx_poly_001_null_out_pointers() {
+        let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
+        match MojoQuantizedTensor::encode(&data, 4, 32) {
+            Ok(q) => {
+                let decoded = q.decode(data.len(), 32, 4);
+                for (a, b) in data.iter().zip(decoded.iter()) {
+                    assert!((a - b).abs() < 0.15, "roundtrip mismatch: {a} vs {b}");
+                }
+            }
+            Err(e) if e.contains("null output pointers") => {
+                panic!(
+                    "TODO FR-OMLX-POLY-001: Mojo @export out-pointer ABI returns null on 1.0.0b3 — {e}"
+                );
+            }
+            Err(e) => panic!("Mojo encode failed unexpectedly: {e}"),
+        }
+    }
+
+    fn which() -> Option<PathBuf> {
         std::env::var_os("PATH").and_then(|path| {
             std::env::split_paths(&path).find_map(|dir| {
-                let candidate = dir.join(name);
+                let candidate = dir.join("mojo");
                 if candidate.is_file() {
                     Some(candidate)
                 } else {
