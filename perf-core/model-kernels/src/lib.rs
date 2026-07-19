@@ -86,6 +86,9 @@ pub enum KernelOp {
     MoeShared,
     /// DeltaNet chunked linear-recurrent update.
     DeltaNet,
+    /// Batched DeltaNet chunked linear-recurrent update (multiple
+    /// `(batch, head)` chunks in parallel; Qwen3-Coder-Next hybrid).
+    DeltaNetBatched,
     /// LFM2-style gated short convolution.
     ShortConv,
     /// Selective state-space scan (Mamba).
@@ -126,6 +129,7 @@ impl KernelOp {
             KernelOp::MoeReduce => "moe_reduce",
             KernelOp::MoeShared => "moe_shared",
             KernelOp::DeltaNet => "deltanet",
+            KernelOp::DeltaNetBatched => "deltanet_batched",
             KernelOp::ShortConv => "short_conv",
             KernelOp::MambaScan => "mamba_scan",
             KernelOp::MambaSelectiveScan => "mamba_selective_scan",

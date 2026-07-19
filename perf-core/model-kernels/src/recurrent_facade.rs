@@ -18,6 +18,7 @@
 
 pub use crate::recurrent::conv::{gated_short_conv1d_step, short_conv1d_step};
 pub use crate::recurrent::deltanet::{deltanet_chunk, deltanet_step};
+pub use crate::recurrent::deltanet_batched::deltanet_batched_chunk;
 pub use crate::recurrent::mamba::mamba_scan;
 pub use crate::recurrent::mamba_selective::{
     mamba_selective_scan, mamba_selective_scan_chunk, MambaSelectiveParams,
