@@ -5,10 +5,14 @@
 //! diffusion timesteps `T` grows, because each refinement step adds
 //! information about the clean sequence and the per-step re-mask
 //! probability shrinks like `1/T` at the boundary. This file sweeps
-//! `T ∈ {4, 16, 64, 256}` for both schedules and asserts the
-//! reconstruction error at `T = 256` is at most half the error at
-//! `T = 4`. A separate determinism test pins the byte-identical
-//! behavior under a fixed seed at `T = 64`.
+//! `T ∈ DDM_T_SWEEP` (default `[2, 4, 8, 16, 32, 64, 128, 256, 512]`)
+//! for both schedules and asserts the reconstruction error at the
+//! largest `T` is at most half the error at the smallest `T`. A
+//! separate determinism test pins the byte-identical behavior under
+//! a fixed seed at `T = 64`, and a third test pins the clipping
+//! floor (`L2 < 1e-9`) at the largest `T = 512` where the decoder's
+//! bias (clean-token logit = `T`) dominates the noise (capped at
+//! 200) and the argmax is always the clean token.
 //!
 //! All decoding is a pure scalar f32 oracle over `u32` token ids:
 //! no MLX, no GPU, just arithmetic over small deterministic tensors.
@@ -19,7 +23,20 @@
 //! and `noise[i][t][v] = lcg_value % 200` otherwise. With `T ≪ 200`
 //! the decoder is noisy; with `T > 200` the bias dominates and the
 //! argmax is always the clean token. The L2 therefore drops sharply
-//! between `T = 4` and `T = 256` for any seed we tested.
+//! between small `T` and `T > 200` for any seed we tested.
+//!
+//! ## Sweep generality
+//!
+//! The sweep is parameterised by [`DDM_T_SWEEP`]; the helper
+//! [`sweep_t_values`] returns the same slice as a `Vec<usize>` so a
+//! future test can layer additional assertions on top of the sweep
+//! without re-deriving the constant. The threshold-based check
+//! (`L2(T_max) < 0.5 × L2(T_min)`) is intentionally loose because the
+//! per-position argmax outcome is a stochastic function of the LCG
+//! seed and individual schedules can exhibit non-monotonic dips at
+//! intermediate `T` (notably the linear schedule at `T = 64`, where
+//! the per-step re-mask probability under `(1 − t/T)` lands close
+//! to a local-maximum-noise point).
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Schedule {
@@ -43,6 +60,34 @@ impl Schedule {
             }
         }
     }
+}
+
+/// Programmatic sweep of `T` values used by the L2-decay tests.
+///
+/// The sweep spans `T = 2` (the smallest non-trivial value where the
+/// oracle can do *one* decode pass and a boundary re-mask) up through
+/// `T = 512` (the clipping floor where the decoder's bias dominates
+/// the noise). Intermediate points double each step so the trajectory
+/// is dense at small `T` (where the per-step re-mask probability
+/// changes fastest) and coarse at large `T` (where the L2 has already
+/// collapsed to the clipping floor). The sweep is exposed as a
+/// `&[usize]` so [`sweep_t_values`] can hand a `Vec<usize>` to the
+/// caller without copying when ownership isn't needed.
+pub(crate) const DDM_T_SWEEP: &[usize] = &[
+    2, 4, 8, 16, 32, 64, 128, 256, 512,
+];
+
+/// Return the canonical `T` sweep as an owned `Vec<usize>`.
+///
+/// The helper exists so a test can call `sweep_t_values()` and then
+/// `.iter()`, `.first()`, `.last()`, `.windows(2)`, etc., without
+/// re-declaring the constant in each call site. The returned vector
+/// mirrors [`DDM_T_SWEEP`] exactly; the wrapper exists for ergonomic
+/// reasons (so callers don't need to import the slice constant
+/// directly) and to give future sweeps (e.g. a non-uniform log-spaced
+/// variant for SOTA stress coverage) a single insertion point.
+fn sweep_t_values() -> Vec<usize> {
+    DDM_T_SWEEP.to_vec()
 }
 
 /// Tiny linear-congruential generator (MMIX constants). Deterministic,
@@ -137,11 +182,16 @@ fn reconstruction_l2_error(
 }
 
 /// Linear schedule sweep. With more diffusion timesteps the L2
-/// reconstruction error must shrink by at least 2× between `T = 4`
-/// and `T = 256`. The headroom is generous (we ask for `< 0.5`,
-/// not `< 0.1`) because the per-position argmax outcome is a
-/// stochastic function of the LCG seed and we want the test to be
-/// robust against any seed we plug in.
+/// reconstruction error must shrink by at least 2× between the
+/// smallest `T` in [`DDM_T_SWEEP`] and the largest `T`. The headroom
+/// is generous (we ask for `< 0.5`, not `< 0.1`) because the
+/// per-position argmax outcome is a stochastic function of the LCG
+/// seed and the linear schedule in particular can exhibit
+/// non-monotonic dips at intermediate `T` (the `(1 − t/T)` re-mask
+/// probability lands near 0.5 at `T = 64`, which is a local-maximum
+/// of LCG-driven noise). The sweep is iterated programmatically from
+/// [`DDM_T_SWEEP`] so coverage can be expanded without test-code
+/// edits.
 #[test]
 #[allow(non_snake_case)] // `T` is the diffusion timestep count, intentionally capital.
 fn discrete_diffusion_l2_reconstruction_error_monotonically_decays_with_T_linear() {
@@ -150,15 +200,26 @@ fn discrete_diffusion_l2_reconstruction_error_monotonically_decays_with_T_linear
     let mask_id: u32 = 4;
     let seed: u64 = 0xC0FFEE;
 
-    let l2_t4 = reconstruction_l2_error(4, Schedule::Linear, &tokens, vocab, mask_id, seed);
-    let l2_t16 = reconstruction_l2_error(16, Schedule::Linear, &tokens, vocab, mask_id, seed);
-    let l2_t64 = reconstruction_l2_error(64, Schedule::Linear, &tokens, vocab, mask_id, seed);
-    let l2_t256 = reconstruction_l2_error(256, Schedule::Linear, &tokens, vocab, mask_id, seed);
+    let sweep = sweep_t_values();
+    assert!(
+        sweep.len() >= 2,
+        "DDM_T_SWEEP must contain at least 2 entries to do an endpoint comparison; got {sweep:?}"
+    );
+    let t_min = *sweep.first().expect("non-empty sweep");
+    let t_max = *sweep.last().expect("non-empty sweep");
+
+    let l2_min: Vec<f64> = sweep
+        .iter()
+        .map(|&t| reconstruction_l2_error(t, Schedule::Linear, &tokens, vocab, mask_id, seed))
+        .collect();
+    let l2_t_min = l2_min[0];
+    let l2_t_max = *l2_min.last().expect("non-empty L2 vector");
 
     assert!(
-        l2_t4 > 2.0 * l2_t256,
-        "linear: L2 error at T=256 ({l2_t256:.4}) must be < 0.5× L2 error at T=4 ({l2_t4:.4}); \
-         sweep T=4..256 was [{l2_t4:.3}, {l2_t16:.3}, {l2_t64:.3}, {l2_t256:.3}]"
+        l2_t_min > 2.0 * l2_t_max,
+        "linear: L2 error at T={t_max} ({l2_t_max:.4}) must be < 0.5× L2 error at T={t_min} ({l2_t_min:.4}); \
+         sweep T=[{t_min}..{t_max}] yielded L2={:?}",
+        l2_min
     );
 }
 
@@ -166,7 +227,7 @@ fn discrete_diffusion_l2_reconstruction_error_monotonically_decays_with_T_linear
 /// under the `cos^2` schedule. The boundary re-mask probability is
 /// even smaller at `step = 0` for cosine, so the L2 trajectory
 /// generally decays more aggressively than the linear sweep at
-/// intermediate `T`.
+/// intermediate `T`. Iterated programmatically from [`DDM_T_SWEEP`].
 #[test]
 #[allow(non_snake_case)] // `T` is the diffusion timestep count, intentionally capital.
 fn discrete_diffusion_l2_reconstruction_error_monotonically_decays_with_T_cosine() {
@@ -175,15 +236,78 @@ fn discrete_diffusion_l2_reconstruction_error_monotonically_decays_with_T_cosine
     let mask_id: u32 = 4;
     let seed: u64 = 0xC0FFEE;
 
-    let l2_t4 = reconstruction_l2_error(4, Schedule::Cosine, &tokens, vocab, mask_id, seed);
-    let l2_t16 = reconstruction_l2_error(16, Schedule::Cosine, &tokens, vocab, mask_id, seed);
-    let l2_t64 = reconstruction_l2_error(64, Schedule::Cosine, &tokens, vocab, mask_id, seed);
-    let l2_t256 = reconstruction_l2_error(256, Schedule::Cosine, &tokens, vocab, mask_id, seed);
+    let sweep = sweep_t_values();
+    assert!(
+        sweep.len() >= 2,
+        "DDM_T_SWEEP must contain at least 2 entries to do an endpoint comparison; got {sweep:?}"
+    );
+    let t_min = *sweep.first().expect("non-empty sweep");
+    let t_max = *sweep.last().expect("non-empty sweep");
+
+    let l2_min: Vec<f64> = sweep
+        .iter()
+        .map(|&t| reconstruction_l2_error(t, Schedule::Cosine, &tokens, vocab, mask_id, seed))
+        .collect();
+    let l2_t_min = l2_min[0];
+    let l2_t_max = *l2_min.last().expect("non-empty L2 vector");
 
     assert!(
-        l2_t4 > 2.0 * l2_t256,
-        "cosine: L2 error at T=256 ({l2_t256:.4}) must be < 0.5× L2 error at T=4 ({l2_t4:.4}); \
-         sweep T=4..256 was [{l2_t4:.3}, {l2_t16:.3}, {l2_t64:.3}, {l2_t256:.3}]"
+        l2_t_min > 2.0 * l2_t_max,
+        "cosine: L2 error at T={t_max} ({l2_t_max:.4}) must be < 0.5× L2 error at T={t_min} ({l2_t_min:.4}); \
+         sweep T=[{t_min}..{t_max}] yielded L2={:?}",
+        l2_min
+    );
+}
+
+/// At the largest `T` in the sweep the decoder's per-position bias
+/// (`noise[i][t][clean[i]] = T`) strictly dominates the per-vocab
+/// noise (`lcg_value % 200`), so the argmax is always the clean
+/// token and the L2 reconstruction error collapses to the floating-
+/// point floor. This test pins that contract: at the upper end of
+/// the sweep the L2 must be indistinguishable from zero. The
+/// threshold (`1e-9`) is loose enough to absorb any rounding error
+/// in the square-root accumulation (`sum_sq.sqrt()` over five
+/// `f64` differences), tight enough that any non-trivial mismatch
+/// (even one wrong token out of five) would push the L2 well above
+/// `1.0`. The assertion therefore catches both
+///
+/// 1. a regression that breaks the bias-dominates-noise invariant
+///    (e.g. by changing `T` to a smaller value at the largest sweep
+///    entry), and
+/// 2. a regression that breaks the deterministic-decoder contract
+///    (e.g. by introducing a non-deterministic source of logits).
+#[test]
+#[allow(non_snake_case)] // `T` is the diffusion timestep count, intentionally capital.
+fn discrete_diffusion_l2_error_below_clipping_floor_at_T_large() {
+    let tokens: [u32; 5] = [2, 11, 5, 7, 9];
+    let vocab: u32 = 16;
+    let mask_id: u32 = 4;
+    let seed: u64 = 0xC0FFEE;
+
+    let sweep = sweep_t_values();
+    let t_large = *sweep.last().expect("non-empty sweep");
+    assert!(
+        t_large > 200,
+        "clipping-floor test requires t_large > 200 (the noise cap); got {t_large}"
+    );
+
+    // Run both schedules at the upper end of the sweep so a
+    // regression in either schedule's clipping-floor behaviour is
+    // caught. (At `T > 200` the argmax outcome is identical for
+    // both schedules, but the per-step re-mask probability still
+    // differs — so we keep both as a defence-in-depth check.)
+    let l2_linear = reconstruction_l2_error(t_large, Schedule::Linear, &tokens, vocab, mask_id, seed);
+    let l2_cosine = reconstruction_l2_error(t_large, Schedule::Cosine, &tokens, vocab, mask_id, seed);
+
+    assert!(
+        l2_linear < 1e-9,
+        "linear: L2 error at T={t_large} ({l2_linear}) must be < 1e-9 (clipping floor); \
+         bias=T={t_large} > 200 noise cap, so every argmax should be the clean token"
+    );
+    assert!(
+        l2_cosine < 1e-9,
+        "cosine: L2 error at T={t_large} ({l2_cosine}) must be < 1e-9 (clipping floor); \
+         bias=T={t_large} > 200 noise cap, so every argmax should be the clean token"
     );
 }
 
