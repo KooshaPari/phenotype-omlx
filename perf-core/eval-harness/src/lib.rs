@@ -18,7 +18,7 @@
 //! ```no_run
 //! use eval_harness::mmlu;
 //! let dataset = mmlu::load_csv_with_provenance("path/to/mmlu.csv", "v1.0", "test").unwrap();
-//! assert_eq!(dataset.suite(), eval_harness::Suite::MMLU);
+//! assert_eq!(dataset.suite(), eval_harness::Suite::Mmlu);
 //! assert_eq!(dataset.provenance().task_count, dataset.len());
 //! ```
 
@@ -42,8 +42,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[serde(rename_all = "lowercase")]
 pub enum Suite {
-    MMLU,
-    GPQA,
+    Mmlu,
+    Gpqa,
     TerminalBench,
     Perplexity,
 }
@@ -53,8 +53,8 @@ impl Suite {
     /// reports and dataset records.
     pub fn as_str(&self) -> &'static str {
         match self {
-            Suite::MMLU => "mmlu",
-            Suite::GPQA => "gpqa",
+            Suite::Mmlu => "mmlu",
+            Suite::Gpqa => "gpqa",
             Suite::TerminalBench => "terminal-bench",
             Suite::Perplexity => "perplexity",
         }

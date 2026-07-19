@@ -94,9 +94,9 @@ mod tests {
     #[test]
     fn deref_allows_iteration_and_indexing() {
         let dataset = Dataset::new(
-            Suite::MMLU,
+            Suite::Mmlu,
             sample_provenance(2),
-            vec![sample_task("b", Suite::MMLU), sample_task("a", Suite::MMLU)],
+            vec![sample_task("b", Suite::Mmlu), sample_task("a", Suite::Mmlu)],
         );
         // Iteration through Deref.
         let ids: Vec<&str> = dataset.iter().map(|t| t.id.as_str()).collect();
@@ -110,9 +110,9 @@ mod tests {
         // Caller passes a stale task_count; Dataset::new corrects it so the
         // recorded provenance matches the actual task list.
         let dataset = Dataset::new(
-            Suite::MMLU,
+            Suite::Mmlu,
             sample_provenance(99),
-            vec![sample_task("a", Suite::MMLU)],
+            vec![sample_task("a", Suite::Mmlu)],
         );
         assert_eq!(dataset.provenance.task_count, 1);
     }
@@ -120,9 +120,9 @@ mod tests {
     #[test]
     fn serde_round_trips() {
         let dataset = Dataset::new(
-            Suite::GPQA,
+            Suite::Gpqa,
             sample_provenance(1),
-            vec![sample_task("gpqa_a", Suite::GPQA)],
+            vec![sample_task("gpqa_a", Suite::Gpqa)],
         );
         let encoded = serde_json::to_string(&dataset).unwrap();
         let decoded: Dataset = serde_json::from_str(&encoded).unwrap();
@@ -132,9 +132,9 @@ mod tests {
     #[test]
     fn into_tasks_drops_provenance() {
         let dataset = Dataset::new(
-            Suite::MMLU,
+            Suite::Mmlu,
             sample_provenance(1),
-            vec![sample_task("a", Suite::MMLU)],
+            vec![sample_task("a", Suite::Mmlu)],
         );
         let tasks = dataset.into_tasks();
         assert_eq!(tasks.len(), 1);

@@ -69,7 +69,7 @@ pub fn load_jsonl_bytes(
         .map_err(|e| EvalError::malformed(source.clone(), 0, format!("non-utf8 bytes: {e}")))?;
     let tasks = parse_jsonl(content, &source)?;
     let provenance = DatasetProvenance::new(source, source_revision, split, bytes, tasks.len());
-    Ok(Dataset::new(Suite::GPQA, provenance, tasks))
+    Ok(Dataset::new(Suite::Gpqa, provenance, tasks))
 }
 
 fn parse_jsonl(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
@@ -92,7 +92,7 @@ fn parse_jsonl(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
         let prompt = format!("{}\n{}\nAnswer:", row.question, labeled.join("\n"));
         tasks.push(TaskSpec {
             id: format!("gpqa_{}", row.id),
-            suite: Suite::GPQA,
+            suite: Suite::Gpqa,
             prompt,
             expected: Some(row.answer),
             choices: row.choices,
@@ -128,7 +128,7 @@ fn validate_row(row: &GpqaRow, path: &str, line_no: usize) -> Result<()> {
         .next()
         .map(|c| c.to_ascii_uppercase())
         .unwrap_or('?');
-    if letter < 'A' || letter > 'Z' {
+    if !letter.is_ascii_uppercase() {
         return Err(EvalError::malformed(
             path,
             line_no,
@@ -162,7 +162,7 @@ mod tests {
     fn parses_minimal_jsonl_with_provenance() {
         let dataset =
             load_jsonl_bytes(MINIMAL_JSONL.as_bytes(), "test.jsonl", "v1", "diamond").unwrap();
-        assert_eq!(dataset.suite(), Suite::GPQA);
+        assert_eq!(dataset.suite(), Suite::Gpqa);
         assert_eq!(dataset.len(), 2);
         // Sorted by task id; biology sorts before chemistry.
         assert_eq!(dataset[0].id, "gpqa_biology-1");

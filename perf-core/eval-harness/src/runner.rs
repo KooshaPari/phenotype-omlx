@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn completion_runner_propagates_backend_errors() {
-        let task = TaskSpec::multiple_choice("q", Suite::MMLU, "Question", ["one"], "A");
-        assert!(matches!(run_suite(Suite::MMLU, &FailingBackend, &[task]), Err(EvalError::Backend { .. })));
+        let task = TaskSpec::multiple_choice("q", Suite::Mmlu, "Question", ["one"], "A");
+        assert!(matches!(run_suite(Suite::Mmlu, &FailingBackend, &[task]), Err(EvalError::Backend { .. })));
     }
 }

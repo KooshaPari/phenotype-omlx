@@ -20,7 +20,7 @@
 
 use crate::dataset::Dataset;
 use crate::provenance::DatasetProvenance;
-use crate::{EvalError, Result, Suite, TaskSpec};
+use crate::{EvalError, Result, Suite};
 use std::path::Path;
 
 /// Load MMLU tasks from a CSV file on disk, returning a [`Dataset`].
@@ -64,7 +64,7 @@ pub fn load_csv_bytes(
         .map_err(|e| EvalError::malformed(source.clone(), 0, format!("non-utf8 bytes: {e}")))?;
     let tasks = parser::parse_csv(content, &source)?;
     let provenance = DatasetProvenance::new(source, source_revision, split, bytes, tasks.len());
-    Ok(Dataset::new(Suite::MMLU, provenance, tasks))
+    Ok(Dataset::new(Suite::Mmlu, provenance, tasks))
 }
 
 mod parser;
@@ -79,7 +79,7 @@ anatomy,The heart is located in which cavity?,Cranial,Thoracic,Abdominal,Pelvic,
     #[test]
     fn parses_minimal_csv_with_provenance() {
         let dataset = load_csv_bytes(MINIMAL_CSV.as_bytes(), "test.csv", "v1", "test").unwrap();
-        assert_eq!(dataset.suite(), Suite::MMLU);
+        assert_eq!(dataset.suite(), Suite::Mmlu);
         assert_eq!(dataset.len(), 1);
         assert_eq!(dataset[0].id, "mmlu_anatomy_1");
         assert_eq!(

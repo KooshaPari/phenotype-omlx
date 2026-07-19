@@ -114,7 +114,7 @@ pub(crate) fn parse_csv(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
             .next()
             .map(|c| c.to_ascii_uppercase())
             .unwrap_or('?');
-        if answer_letter < 'A' || answer_letter > 'Z' {
+        if !answer_letter.is_ascii_uppercase() {
             return Err(EvalError::malformed(
                 path,
                 line_no,
@@ -149,7 +149,7 @@ pub(crate) fn parse_csv(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
 
         tasks.push(TaskSpec {
             id: format!("mmlu_{}_{}", subject, line_no - 1),
-            suite: Suite::MMLU,
+            suite: Suite::Mmlu,
             prompt: full_prompt,
             expected: Some(answer),
             choices,
@@ -181,7 +181,7 @@ anatomy,The heart is located in which cavity?,Cranial,Thoracic,Abdominal,Pelvic,
         let tasks = parse_csv(MINIMAL_CSV, "test.csv").unwrap();
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].id, "mmlu_anatomy_1");
-        assert_eq!(tasks[0].suite, Suite::MMLU);
+        assert_eq!(tasks[0].suite, Suite::Mmlu);
         assert_eq!(
             tasks[0].choices,
             vec!["Cranial", "Thoracic", "Abdominal", "Pelvic"]

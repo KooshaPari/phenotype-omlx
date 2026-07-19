@@ -142,8 +142,8 @@ mod tests {
         // MMLU: 1/1 correct (1.0); GPQA: 0/1 correct (0.0). Overall must be
         // 0.5 (1 of 2), not the 0.5 mean of per-suite accuracies.
         let multi = MultiSuiteReport::from_reports(vec![
-            entry(Suite::MMLU, 1, 1),
-            entry(Suite::GPQA, 0, 1),
+            entry(Suite::Mmlu, 1, 1),
+            entry(Suite::Gpqa, 0, 1),
         ]);
         assert_eq!(multi.task_count, 2);
         assert_eq!(multi.correct_count, 1);
@@ -151,16 +151,16 @@ mod tests {
         assert_eq!(multi.mean_suite_accuracy, 0.5);
         assert_eq!(multi.mean_suite_score, 0.5);
         // Entries sorted by Suite's declaration-order Ord (MMLU < GPQA).
-        assert_eq!(multi.entries[0].suite, Suite::MMLU);
-        assert_eq!(multi.entries[1].suite, Suite::GPQA);
+        assert_eq!(multi.entries[0].suite, Suite::Mmlu);
+        assert_eq!(multi.entries[1].suite, Suite::Gpqa);
     }
 
     #[test]
     fn aggregate_uneven_suites_uses_task_weighted_accuracy() {
         // MMLU: 9/10 correct; GPQA: 0/10 correct. Overall must be 0.45.
         let multi = MultiSuiteReport::from_reports(vec![
-            entry(Suite::MMLU, 9, 10),
-            entry(Suite::GPQA, 0, 10),
+            entry(Suite::Mmlu, 9, 10),
+            entry(Suite::Gpqa, 0, 10),
         ]);
         assert_eq!(multi.overall_accuracy, 0.45);
         assert_eq!(multi.mean_suite_accuracy, 0.45);
@@ -180,8 +180,8 @@ mod tests {
     #[test]
     fn aggregate_is_serde_stable() {
         let multi = MultiSuiteReport::from_reports(vec![
-            entry(Suite::MMLU, 1, 2),
-            entry(Suite::GPQA, 0, 1),
+            entry(Suite::Mmlu, 1, 2),
+            entry(Suite::Gpqa, 0, 1),
         ]);
         let encoded = serde_json::to_string(&multi).unwrap();
         let decoded: MultiSuiteReport = serde_json::from_str(&encoded).unwrap();
@@ -192,7 +192,7 @@ mod tests {
     fn entry_new_aligns_provenance_task_count_with_report() {
         let mut p = prov("mmlu", 99);
         p.task_count = 0;
-        let r = report(Suite::MMLU, 2, 3);
+        let r = report(Suite::Mmlu, 2, 3);
         let e = SuiteReportEntry::new(p, r);
         assert_eq!(e.task_count(), 3);
         assert_eq!(e.correct_count(), 2);
@@ -201,8 +201,8 @@ mod tests {
 
     #[test]
     fn determinism_independent_of_input_order() {
-        let r1 = entry(Suite::MMLU, 1, 2);
-        let r2 = entry(Suite::GPQA, 2, 3);
+        let r1 = entry(Suite::Mmlu, 1, 2);
+        let r2 = entry(Suite::Gpqa, 2, 3);
         let multi_a = MultiSuiteReport::from_reports(vec![r1.clone(), r2.clone()]);
         let multi_b = MultiSuiteReport::from_reports(vec![r2, r1]);
         // Both aggregated reports must be byte-equal because entries are
@@ -212,7 +212,7 @@ mod tests {
 
     #[test]
     fn aggregate_preserves_provenance() {
-        let multi = MultiSuiteReport::from_reports(vec![entry(Suite::MMLU, 1, 1)]);
+        let multi = MultiSuiteReport::from_reports(vec![entry(Suite::Mmlu, 1, 1)]);
         assert_eq!(multi.entries[0].provenance.source, "mmlu");
         assert_eq!(multi.entries[0].provenance.split, "test");
         assert_eq!(multi.entries[0].provenance.source_revision, "v1");
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn mean_suite_score_uses_report_mean_scores() {
-        let mut r = report(Suite::MMLU, 1, 2);
+        let mut r = report(Suite::Mmlu, 1, 2);
         // Set non-binary scores to test mean_suite_score.
         r.results[0].score = 0.7;
         r.results[1].score = 0.3;

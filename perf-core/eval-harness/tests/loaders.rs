@@ -198,7 +198,7 @@ fn dataset_deref_allows_indexing_and_iteration() {
 #[test]
 fn cross_suite_aggregate_sorts_by_suite_declaration_order() {
     // The aggregate must sort entries by the suite's declaration order
-    // (Suite::MMLU < Suite::GPQA < Suite::TerminalBench < Suite::Perplexity),
+    // (Suite::Mmlu < Suite::Gpqa < Suite::TerminalBench < Suite::Perplexity),
     // matching the derived Ord. Inserting entries in a scrambled order must
     // still produce the declaration-order sequence in the aggregate.
     use eval_harness::provenance::DatasetProvenance;
@@ -227,16 +227,16 @@ fn cross_suite_aggregate_sorts_by_suite_declaration_order() {
 
     // Scrambled input order: GPQA, Perplexity, TerminalBench, MMLU.
     let multi = MultiSuiteReport::from_reports(vec![
-        make_entry(Suite::GPQA, 1),
+        make_entry(Suite::Gpqa, 1),
         make_entry(Suite::Perplexity, 1),
         make_entry(Suite::TerminalBench, 1),
-        make_entry(Suite::MMLU, 1),
+        make_entry(Suite::Mmlu, 1),
     ]);
     assert_eq!(
         multi.entries.iter().map(|e| e.suite).collect::<Vec<_>>(),
         vec![
-            Suite::MMLU,
-            Suite::GPQA,
+            Suite::Mmlu,
+            Suite::Gpqa,
             Suite::TerminalBench,
             Suite::Perplexity,
         ]
@@ -269,8 +269,8 @@ fn cross_suite_aggregate_is_task_weighted_and_deterministic() {
         SuiteReportEntry::new(provenance, report)
     }
 
-    let mmlu = make_entry(Suite::MMLU, 9, 10);
-    let gpqa = make_entry(Suite::GPQA, 0, 10);
+    let mmlu = make_entry(Suite::Mmlu, 9, 10);
+    let gpqa = make_entry(Suite::Gpqa, 0, 10);
 
     // Independent of input order.
     let a = MultiSuiteReport::from_reports(vec![mmlu.clone(), gpqa.clone()]);
@@ -286,8 +286,8 @@ fn cross_suite_aggregate_is_task_weighted_and_deterministic() {
     // task-weighted from per-suite averaging.
     assert!((a.mean_suite_accuracy - 0.45).abs() < 1e-9);
     // Entries sorted by Suite's declaration-order Ord (MMLU < GPQA).
-    assert_eq!(a.entries[0].suite, Suite::MMLU);
-    assert_eq!(a.entries[1].suite, Suite::GPQA);
+    assert_eq!(a.entries[0].suite, Suite::Mmlu);
+    assert_eq!(a.entries[1].suite, Suite::Gpqa);
     // Provenance survives aggregation.
     assert_eq!(a.entries[0].provenance.source, "mmlu");
     assert_eq!(a.entries[1].provenance.source, "gpqa");

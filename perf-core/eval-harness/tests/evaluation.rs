@@ -15,7 +15,7 @@ fn mmlu_csv_loader_builds_stable_multiple_choice_tasks() {
         "mmlu_anatomy_1",
         "mmlu_physics_2",
     ]);
-    assert_eq!(tasks[0].suite, Suite::MMLU);
+    assert_eq!(tasks[0].suite, Suite::Mmlu);
     assert_eq!(tasks[0].choices, vec!["Cranial", "Thoracic", "Abdominal", "Pelvic"]);
     assert_eq!(tasks[0].expected.as_deref(), Some("B"));
 }
@@ -28,7 +28,7 @@ fn gpqa_jsonl_loader_is_sorted_and_preserves_choices() {
         "gpqa_chemistry-1",
     ]);
     assert_eq!(tasks[1].choices[0], "Fluorine");
-    assert_eq!(tasks[1].suite, Suite::GPQA);
+    assert_eq!(tasks[1].suite, Suite::Gpqa);
 }
 
 #[test]
@@ -54,12 +54,12 @@ fn normalization_and_scoring_are_exact_and_choice_aware() {
 
 #[test]
 fn report_is_deterministic_and_serde_round_trips() {
-    let tasks = vec![
-        TaskSpec::multiple_choice("b", Suite::MMLU, "Q2", vec!["x"], "A"),
-        TaskSpec::multiple_choice("a", Suite::MMLU, "Q1", vec!["x"], "A"),
+    let tasks = [
+        TaskSpec::multiple_choice("b", Suite::Mmlu, "Q2", vec!["x"], "A"),
+        TaskSpec::multiple_choice("a", Suite::Mmlu, "Q1", vec!["x"], "A"),
     ];
     let results = tasks.iter().map(|task| evaluate(task, "A").unwrap()).collect::<Vec<_>>();
-    let report = EvaluationReport::from_results(Suite::MMLU, results);
+    let report = EvaluationReport::from_results(Suite::Mmlu, results);
     assert_eq!(report.results.iter().map(|r| r.task_id.as_str()).collect::<Vec<_>>(), ["a", "b"]);
     assert_eq!(report.accuracy, 1.0);
 
@@ -72,7 +72,7 @@ fn report_is_deterministic_and_serde_round_trips() {
 fn task_result_serializes_all_evaluation_fields() {
     let result = TaskResult {
         task_id: "task".into(),
-        suite: Suite::GPQA,
+        suite: Suite::Gpqa,
         prompt_tokens: 2,
         completion_tokens: 1,
         completion: "B".into(),

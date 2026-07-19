@@ -201,14 +201,14 @@ impl Sha256Core {
         let mut g = self.state[6];
         let mut h = self.state[7];
 
-        for i in 0..64 {
+        for (i, &w_i) in w.iter().enumerate() {
             let s1 = e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25);
             let ch = (e & f) ^ (!e & g);
             let t1 = h
                 .wrapping_add(s1)
                 .wrapping_add(ch)
                 .wrapping_add(Self::K[i])
-                .wrapping_add(w[i]);
+                .wrapping_add(w_i);
             let s0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
             let mj = (a & b) ^ (a & c) ^ (b & c);
             let t2 = s0.wrapping_add(mj);

@@ -40,7 +40,7 @@ fn mmlu_csv_loader_builds_stable_multiple_choice_tasks() {
             .collect::<Vec<_>>(),
         ["mmlu_anatomy_1", "mmlu_physics_2"]
     );
-    assert_eq!(dataset[0].suite, Suite::MMLU);
+    assert_eq!(dataset[0].suite, Suite::Mmlu);
     assert_eq!(
         dataset[0].choices,
         vec!["Cranial", "Thoracic", "Abdominal", "Pelvic"]
@@ -73,7 +73,7 @@ fn gpqa_jsonl_loader_is_sorted_and_preserves_choices() {
         ["gpqa_biology-1", "gpqa_chemistry-1"]
     );
     assert_eq!(dataset[1].choices[0], "Fluorine");
-    assert_eq!(dataset[1].suite, Suite::GPQA);
+    assert_eq!(dataset[1].suite, Suite::Gpqa);
     assert!(dataset[1].criteria.is_none());
     assert_eq!(dataset.provenance().split, FIXTURE_SPLIT);
 }
@@ -166,15 +166,15 @@ fn choice_score_rejects_non_letter_expected() {
 
 #[test]
 fn report_is_deterministic_and_serde_round_trips() {
-    let tasks = vec![
-        TaskSpec::multiple_choice("b", Suite::MMLU, "Q2", vec!["x"], "A"),
-        TaskSpec::multiple_choice("a", Suite::MMLU, "Q1", vec!["x"], "A"),
+    let tasks = [
+        TaskSpec::multiple_choice("b", Suite::Mmlu, "Q2", vec!["x"], "A"),
+        TaskSpec::multiple_choice("a", Suite::Mmlu, "Q1", vec!["x"], "A"),
     ];
     let results: Vec<TaskResult> = tasks
         .iter()
         .map(|task| evaluate(task, "A").unwrap())
         .collect();
-    let report = EvaluationReport::from_results(Suite::MMLU, results);
+    let report = EvaluationReport::from_results(Suite::Mmlu, results);
     assert_eq!(
         report
             .results
@@ -195,7 +195,7 @@ fn report_is_deterministic_and_serde_round_trips() {
 
 #[test]
 fn report_handles_empty_input() {
-    let report = EvaluationReport::from_results(Suite::GPQA, vec![]);
+    let report = EvaluationReport::from_results(Suite::Gpqa, vec![]);
     assert_eq!(report.task_count, 0);
     assert_eq!(report.correct_count, 0);
     assert_eq!(report.accuracy, 0.0);
@@ -209,18 +209,18 @@ fn report_handles_empty_input() {
 #[test]
 fn report_handles_partial_correctness() {
     let mut r1 = evaluate(
-        &TaskSpec::multiple_choice("a", Suite::MMLU, "Q", vec!["x"], "A"),
+        &TaskSpec::multiple_choice("a", Suite::Mmlu, "Q", vec!["x"], "A"),
         "A",
     )
     .unwrap();
     r1.score = 1.0;
     let mut r2 = evaluate(
-        &TaskSpec::multiple_choice("b", Suite::MMLU, "Q", vec!["x"], "B"),
+        &TaskSpec::multiple_choice("b", Suite::Mmlu, "Q", vec!["x"], "B"),
         "A",
     )
     .unwrap();
     r2.score = 0.5;
-    let report = EvaluationReport::from_results(Suite::MMLU, vec![r1, r2]);
+    let report = EvaluationReport::from_results(Suite::Mmlu, vec![r1, r2]);
     assert_eq!(report.task_count, 2);
     assert_eq!(report.correct_count, 1);
     assert_eq!(report.accuracy, 0.5);
@@ -231,7 +231,7 @@ fn report_handles_partial_correctness() {
 fn task_result_serializes_all_evaluation_fields() {
     let result = TaskResult {
         task_id: "task".into(),
-        suite: Suite::GPQA,
+        suite: Suite::Gpqa,
         prompt_tokens: 2,
         completion_tokens: 1,
         completion: "B".into(),
@@ -273,7 +273,7 @@ fn evaluate_exact_does_not_use_choice_letter_rules() {
     // scoring compares the normalized completion string, not choice markers.
     let task = TaskSpec {
         id: "t".into(),
-        suite: Suite::GPQA,
+        suite: Suite::Gpqa,
         prompt: "p".into(),
         expected: Some("B".into()),
         choices: vec![],
