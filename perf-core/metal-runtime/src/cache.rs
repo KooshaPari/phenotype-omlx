@@ -225,15 +225,14 @@ impl PipelineCache {
         let access = inner.next_access;
 
         // Replace existing entry in-place — no eviction, no size change.
-        if inner.entries.contains_key(&key) {
-            inner.entries.insert(
-                key,
-                Entry {
-                    value,
-                    last_access: access,
-                    inserted_at: access,
-                },
-            );
+        if let std::collections::hash_map::Entry::Occupied(mut occupied) =
+            inner.entries.entry(key)
+        {
+            occupied.insert(Entry {
+                value,
+                last_access: access,
+                inserted_at: access,
+            });
             return;
         }
 

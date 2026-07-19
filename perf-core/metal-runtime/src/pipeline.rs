@@ -208,6 +208,16 @@ fn map_interpreter_error(e: model_plan::InterpreterError) -> PipelineError {
     }
 }
 
+// Compile-time assertion: the cache + pipeline can be shared across threads.
+#[allow(dead_code)]
+const _: () = {
+    fn assert_send_sync<T: Send + Sync>() {}
+    fn _f() {
+        assert_send_sync::<Pipeline>();
+        assert_send_sync::<PipelineCache>();
+    }
+};
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -263,13 +273,3 @@ mod tests {
         assert_eq!(out.execution_order, vec![OperatorId(1)]);
     }
 }
-
-// Compile-time assertion: the cache + pipeline can be shared across threads.
-#[allow(dead_code)]
-const _: () = {
-    fn assert_send_sync<T: Send + Sync>() {}
-    fn _f() {
-        assert_send_sync::<Pipeline>();
-        assert_send_sync::<PipelineCache>();
-    }
-};

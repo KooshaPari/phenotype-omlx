@@ -193,11 +193,7 @@ mod macos {
         let total_memory_bytes = sysctl_u64("hw.memsize").unwrap_or(0);
 
         // SIMD width: NEON on aarch64 = 128 bits, SSE2 baseline on x86 = 128.
-        let simd_bit_width: u32 = if is_arm || brand.contains("Apple") {
-            128
-        } else {
-            128
-        };
+        let simd_bit_width: u32 = 128;
 
         let gpu_family = classify_gpu(&arch, &brand);
         let device_name = if model.is_empty() {
