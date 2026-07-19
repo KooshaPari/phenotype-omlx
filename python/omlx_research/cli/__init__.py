@@ -7,7 +7,7 @@ Subcommands:
   latentmas               — multi-agent concurrent fan-out
   tidar                   — hybrid AR+diffusion generation
   bench                   — quick benchmark (tokens/sec, acceptance rate)
-  doctor                  — diagnose environment
+  doctor [--json]         — diagnose environment (Python, MLX, kernels, ABI, tests)
   fleet                   — show / manage cluster peers
   inspect <plan.json>     — load + validate a model plan; print summary
   explain <op-kind>       — print canonical op contract + kernel candidates
@@ -133,34 +133,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_doctor(_: argparse.Namespace) -> int:
-    print("== Environment diagnostics ==")
-    try:
-        import mlx.core as mx
-        print(f"MLX {mx.__version__} | Metal {mx.metal.is_available()}")
-    except ImportError:
-        print("MLX: not installed")
-    try:
-        import torch
-        print(f"PyTorch {torch.__version__} | CUDA {torch.cuda.is_available()} | MPS {torch.backends.mps.is_available()}")
-    except ImportError:
-        print("PyTorch: not installed")
-    try:
-        import turboquant_plus  # noqa
-        print("TurboQuant+ ref: installed")
-    except ImportError:
-        try:
-            import sys as _s
-            _s.path.insert(0, "/Users/kooshapari/CodeProjects/Phenotype/repos/turboquant_plus")
-            print("TurboQuant+ ref: present but not activated")
-        except Exception:
-            print("TurboQuant+ ref: missing")
-    try:
-        from mlx.nn.layers.turbo_kv_cache import TurboKVCache  # noqa
-        print("TurboKVCache (MLX fork): available")
-    except ImportError:
-        print("TurboKVCache (MLX fork): not in framework path")
-    return 0
+def cmd_doctor(args: argparse.Namespace) -> int:
+    # Imported lazily so the heavy doctor check imports (subprocess, mlx,
+    # platform) don't pay off when users invoke other subcommands.
+    from .doctor import cmd_doctor as _doctor_cmd
+    return _doctor_cmd(args)
 
 
 def cmd_fleet(args: argparse.Namespace) -> int:
@@ -199,9 +176,22 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("--steps", type=int, default=8)
     p.set_defaults(fn=cmd_tidar)
 
-    sub.add_parser("bench").set_defaults(fn=cmd_bench)
-    sub.add_parser("doctor").set_defaults(fn=cmd_doctor)
-    sub.add_parser("fleet").set_defaults(fn=cmd_fleet)
+    p = sub.add_parser("bench")
+    p.set_defaults(fn=cmd_bench)
+
+    p = sub.add_parser(
+        "doctor",
+        help="diagnose the runtime environment (Python, MLX, kernels, ABI, tests)",
+    )
+    p.add_argument(
+        "--json",
+        action="store_true",
+        help="emit a JSON envelope to stdout instead of the human summary",
+    )
+    p.set_defaults(fn=cmd_doctor)
+
+    p = sub.add_parser("fleet")
+    p.set_defaults(fn=cmd_fleet)
 
     # ------------------------------------------------------------------ inspect
     from .commands import (
