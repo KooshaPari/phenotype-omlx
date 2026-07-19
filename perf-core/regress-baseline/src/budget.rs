@@ -79,13 +79,15 @@ struct Bucket {
     energy_per_op_ceiling_j: f64,
 }
 
-/// Eight canonical buckets, ordered by `output_cells` ascending:
+/// Ten canonical buckets, ordered by `output_cells` ascending:
 ///
 /// | Bucket                              |  dispatches | energy_per_op_j |
 /// |-------------------------------------|------------:|----------------:|
 /// | longctx_64x32_c2048                 |         154 |        2.00e-7  |
+/// | qwen3_64x96_c12288                  |      943719 |        2.00e-7  |
 /// | tiny_decode_512x2048x2048           |         308 |        1.75e-7  |
 /// | small_prompt_1024x4096x4096         |        1229 |        1.70e-7  |
+/// | deepseek_v3_4x7168                  |    17616077 |        2.00e-7  |
 /// | medium_prompt_2048x8192x8192        |        4916 |        1.80e-7  |
 /// | square_4k_4096x4096x4096            |        4916 |        1.80e-7  |
 /// | bigmoe_expert_2x14336               |        8602 |        2.00e-7  |
@@ -98,14 +100,33 @@ struct Bucket {
 /// skinny decode path has its own ceiling rather than collapsing to the
 /// 512×2048 prompt-decode bucket.
 ///
+/// `qwen3_64x96_c12288` is the Qwen3-Next MLP gate+up fusion projection:
+/// `(M=64, N=12288, K=12288)`. With Qwen3-Next using a 12288 hidden
+/// dim, the gate+up fused projection is N=12288 in a single-projection
+/// test bucket (the real fused op is `N=2*12288`, but per-projection
+/// size is what the regression envelope tracks). Output cells ≈ 786 k;
+/// dispatch ceiling is `M*N * 1.2 ≈ 943 719`.
+///
 /// `bigmoe_expert_2x14336` is the heavy Mixtral-class MoE expert FFN
 /// forward: `(M=2048, N=14336, K=14336)`. It slots between `square_4k`
 /// and `square_8k` (output cells ≈ 29 M) and pins the ceiling for the
 /// routed-expert GEMM that dominates MoE inference cost.
+///
+/// `deepseek_v3_4x7168` is the DeepSeek-V3 routed-expert FFN at a
+/// post-routing MoE batch: `(M=2048, N=7168, K=7168)`. Output cells ≈
+/// 14.7 M, slotted between the small-prompt bucket and the
+/// medium-prompt / square-4k ceiling so a DeepSeek-class expert
+/// forward has its own envelope rather than collapsing onto a generic
+/// prompt bucket. Dispatch ceiling is `M*N * 1.2 ≈ 17 616 077`.
 const BUCKETS: &[Bucket] = &[
     Bucket {
         shape: ShapeKey::new(64, 8192, 2048),
         dispatch_ceiling: 154,
+        energy_per_op_ceiling_j: 2.00e-7,
+    },
+    Bucket {
+        shape: ShapeKey::new(64, 12288, 12288),
+        dispatch_ceiling: 943719,
         energy_per_op_ceiling_j: 2.00e-7,
     },
     Bucket {
@@ -117,6 +138,11 @@ const BUCKETS: &[Bucket] = &[
         shape: ShapeKey::new(1024, 4096, 4096),
         dispatch_ceiling: 1229,
         energy_per_op_ceiling_j: 1.70e-7,
+    },
+    Bucket {
+        shape: ShapeKey::new(2048, 7168, 7168),
+        dispatch_ceiling: 17616077,
+        energy_per_op_ceiling_j: 2.00e-7,
     },
     Bucket {
         shape: ShapeKey::new(2048, 8192, 8192),
