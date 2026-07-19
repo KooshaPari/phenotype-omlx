@@ -1,0 +1,22 @@
+{
+  "id": 0,
+  "feature_id": 1,
+  "version": 1,
+  "rules": [
+    {
+      "transition": "WP01: Doing -> Review",
+      "required_evidence": [
+        "FR-CI:ci_output"
+      ],
+      "policy_refs": []
+    },
+    {
+      "transition": "WP01: Review -> Done",
+      "required_evidence": [
+        "FR-REVIEW:review_approval"
+      ],
+      "policy_refs": []
+    }
+  ],
+  "bound_at": "2026-07-19T06:50:21.404202Z"
+}
