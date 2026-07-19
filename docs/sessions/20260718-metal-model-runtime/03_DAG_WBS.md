@@ -43,3 +43,29 @@
 
 Each implementation package receives specification review, code-quality review, targeted tests,
 workspace tests, benchmark comparison, and Airlock snapshot before the next dependent package.
+
+## Forward Kernel DAG (2026-07-19)
+
+    MoE top-k router [complete]
+      -> grouped expert GEMM
+      -> weighted expert reduction
+      -> Step / Kimi K2 / GLM / OLMoE / MiniMax conformance
+
+    KDA chunk scan
+      -> recurrent-state ABI
+      -> Falcon-H1 / Nemotron / Kimi Linear hybrid scheduling
+
+    packed ternary GEMM
+      -> BitNet b1.58 conformance
+      -> Bonsai shared low-bit dispatch evidence
+
+    MTP proposal tree
+      -> batched verification
+      -> Step / Nemotron / GLM agentic decode acceptance
+
+    active-position compaction
+      -> remasking scheduler
+      -> Seed Diffusion / Mercury coding acceptance
+
+Current critical path: grouped expert GEMM -> weighted reduction -> end-to-end Qwen/OLMoE model
+run -> latency, memory, energy, and quality regression baselines.

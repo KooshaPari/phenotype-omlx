@@ -50,3 +50,20 @@ must be bounded and cached; production execution cannot silently compile arbitra
 - Compare MLA and CCA cache layouts against Apple GPU cache-line behavior.
 - Evaluate recent block-diffusion, recurrent-hybrid, and sub-byte quantization papers as they land.
 - Verify model configuration contracts from released checkpoints before adding a family preset.
+
+## 2026-07-19 Frontier Expansion
+
+Primary-source review added twelve high-leverage families to the forward kernel map: Kimi Linear
+(KDA), BitNet b1.58, Step-3.5-Flash, Seed Diffusion, Falcon-H1, Nemotron 3 Hybrid, Kimi K2/K2.5,
+MiniMax-M1, xLSTM, GLM-4.5/4.7, OLMoE, and Mercury Coder. The resulting implementation order is:
+
+1. KDA chunk scan and recurrent-state ABI.
+2. Native packed ternary GEMM for BitNet.
+3. Grouped expert GEMM and weighted reduction after the completed top-k router.
+4. MTP proposal and batched verification.
+5. Active-position compaction and remasking for diffusion decoders.
+
+The first real Metal kernel is now the MoE top-k router. It uses stable score-descending and
+expert-id-ascending ties, selected softmax, a scalar model-kernels oracle, and an artifact-only
+production path. `MetallibArtifact` is an unforgeable capability outside the crate: only the
+allowlist/hash-verifying loader can construct one.
