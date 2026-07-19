@@ -126,7 +126,7 @@ if [ "${DRY_RUN:-0}" = "1" ]; then
 fi
 
 log "all gates green — invoking airlock-v2 snapshot"
-airlock-v2 snapshot "${REPO_ROOT}" -m "turn-9 green: 806 rust + 216 py + 21 doctor (19 pass / 2 warn / 0 fail)"
+airlock-v2 snapshot "${REPO_ROOT}" -m "turn-10 green: 819 rust + 234 py + 23 doctor (21 pass / 2 warn / 0 fail)"
 
 # After `airlock-v2 snapshot`, HEAD is detached on the new wip/<date>-<uuid>.
 log "[snapshot] wip branch: $(git branch --show-current)"
