@@ -22,6 +22,7 @@ pub mod gqa;
 pub mod mla;
 pub mod mla_cache;
 pub mod paged;
+pub mod sliding_window;
 pub mod tree;
 
 pub use cca::cca_attention;
@@ -34,4 +35,5 @@ pub use mla_cache::{
     MLA_CACHE_MAX_ENTRIES,
 };
 pub use paged::paged_attention;
+pub use sliding_window::sliding_window_attention;
 pub use tree::tree_attention_step;

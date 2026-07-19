@@ -27,4 +27,5 @@ pub use crate::attention::dense::dense_attention;
 pub use crate::attention::gqa::gqa_attention;
 pub use crate::attention::mla::mla_attention;
 pub use crate::attention::paged::paged_attention;
+pub use crate::attention::sliding_window::sliding_window_attention;
 pub use crate::attention::tree::tree_attention_step;

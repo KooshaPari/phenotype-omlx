@@ -27,7 +27,9 @@ FAIL: str = "fail"
 MIN_PYTHON: tuple[int, int] = (3, 14)
 
 #: Documented SOTA coverage count for model-kernels KernelOp tags.
-EXPECTED_KERNEL_OP_COUNT: int = 22
+#: Bumped from 22 -> 24 when SlidingWindowAttention + sliding_window_attention
+#: tag landed (Qwen3-Next long-context support).
+EXPECTED_KERNEL_OP_COUNT: int = 24
 
 
 # ---------------------------------------------------------------------------

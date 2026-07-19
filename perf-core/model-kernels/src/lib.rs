@@ -76,6 +76,8 @@ pub enum KernelOp {
     PagedAttention,
     /// Tree-shaped causal attention.
     TreeAttention,
+    /// Sliding-window causal GQA attention (Qwen3-Next, Mistral).
+    SlidingWindowAttention,
     /// Mixture-of-experts router.
     MoeRouter,
     /// Mixture-of-experts dispatch + grouped GEMM.
@@ -124,6 +126,7 @@ impl KernelOp {
             KernelOp::CcaAttention => "cca_attention",
             KernelOp::PagedAttention => "paged_attention",
             KernelOp::TreeAttention => "tree_attention",
+            KernelOp::SlidingWindowAttention => "sliding_window_attention",
             KernelOp::MoeRouter => "moe_router",
             KernelOp::MoeDispatch => "moe_dispatch",
             KernelOp::MoeReduce => "moe_reduce",
