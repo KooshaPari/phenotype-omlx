@@ -12,6 +12,11 @@
 //! ```
 //! Choice columns may be named `A`/`B`/`C`/`D`, `choice1`/`choice2`, or any
 //! other header order. The loader preserves header order for choices.
+//!
+//! Implementation is split across two files:
+//! - [`super`] — the public [`load_csv`] / [`load_csv_with_provenance`] /
+//!   [`load_csv_bytes`] wrappers.
+//! - [`super::parser`] — the [`parse_csv`] row parser and its unit tests.
 
 use crate::dataset::Dataset;
 use crate::provenance::DatasetProvenance;
@@ -57,168 +62,12 @@ pub fn load_csv_bytes(
     let source = source.into();
     let content = std::str::from_utf8(bytes)
         .map_err(|e| EvalError::malformed(source.clone(), 0, format!("non-utf8 bytes: {e}")))?;
-    let tasks = parse_csv(content, &source)?;
+    let tasks = parser::parse_csv(content, &source)?;
     let provenance = DatasetProvenance::new(source, source_revision, split, bytes, tasks.len());
     Ok(Dataset::new(Suite::MMLU, provenance, tasks))
 }
 
-/// Parse a CSV string into MMLU tasks. Exposed for callers that already hold
-/// the bytes; the path is only used in error messages.
-///
-/// Uses the `csv` crate so quoted fields containing commas, escaped quotes
-/// (`""`), and CRLF line endings are handled per RFC 4180. Row numbers in
-/// errors are 1-based and refer to the data row position in the source file
-/// (the header is line 1).
-fn parse_csv(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
-    let mut reader = csv::ReaderBuilder::new()
-        .has_headers(true)
-        .flexible(true)
-        .from_reader(content.as_bytes());
-
-    let header = reader
-        .headers()
-        .map_err(|e| EvalError::csv(path, 1, format!("failed to read header: {e}")))?;
-    let header_cols: Vec<String> = header.iter().map(|c| c.trim().to_string()).collect();
-
-    if header_cols.is_empty() {
-        return Err(EvalError::csv(path, 1, "file is empty (missing header)"));
-    }
-    let mut unique_headers = std::collections::HashSet::with_capacity(header_cols.len());
-    if let Some(duplicate) = header_cols
-        .iter()
-        .find(|column| !unique_headers.insert(column.as_str()))
-    {
-        return Err(EvalError::csv(
-            path,
-            1,
-            format!("duplicate column '{duplicate}'"),
-        ));
-    }
-
-    let subject_idx = header_cols
-        .iter()
-        .position(|c| c == "subject")
-        .ok_or_else(|| EvalError::missing_field(path, "subject"))?;
-    let question_idx = header_cols
-        .iter()
-        .position(|c| c == "question")
-        .ok_or_else(|| EvalError::missing_field(path, "question"))?;
-    let answer_idx = header_cols
-        .iter()
-        .position(|c| c == "answer")
-        .ok_or_else(|| EvalError::missing_field(path, "answer"))?;
-
-    if subject_idx == question_idx || subject_idx == answer_idx || question_idx == answer_idx {
-        return Err(EvalError::csv(
-            path,
-            1,
-            "subject, question, and answer must refer to distinct columns",
-        ));
-    }
-
-    // Choice columns are everything between subject/question and answer, in
-    // header order. This is robust to choice columns being named A/B/C/D,
-    // choice1/2/3/4, or any other single-letter / column-name scheme.
-    let mut choice_indices: Vec<usize> = (0..header_cols.len())
-        .filter(|i| *i != subject_idx && *i != question_idx && *i != answer_idx)
-        .collect();
-    choice_indices.sort();
-    if choice_indices.is_empty() {
-        return Err(EvalError::csv(path, 1, "no choice columns found"));
-    }
-
-    let max_idx = [subject_idx, question_idx, answer_idx]
-        .iter()
-        .chain(choice_indices.iter())
-        .copied()
-        .max()
-        .unwrap_or(0);
-
-    let mut tasks = Vec::new();
-    // Data rows start at line 2 (header is line 1). The csv crate reports
-    // its own record positions which we map back to 1-based file line numbers.
-    for (record_idx, record) in reader.records().enumerate() {
-        let line_no = record_idx + 2;
-        let record = record.map_err(|e| {
-            EvalError::csv(path, line_no, format!("malformed CSV row: {e}"))
-        })?;
-        // Skip rows that are entirely empty (every field empty/whitespace).
-        if record.iter().all(|f| f.trim().is_empty()) {
-            continue;
-        }
-        if record.len() <= max_idx {
-            return Err(EvalError::csv(
-                path,
-                line_no,
-                format!(
-                    "row has {} fields, expected at least {}",
-                    record.len(),
-                    max_idx + 1
-                ),
-            ));
-        }
-        let subject = record.get(subject_idx).unwrap_or("").trim();
-        let prompt = record.get(question_idx).unwrap_or("").trim().to_string();
-        let answer = record.get(answer_idx).unwrap_or("").trim().to_string();
-        if answer.is_empty() {
-            return Err(EvalError::malformed(path, line_no, "answer field is empty"));
-        }
-        let answer_letter = answer
-            .chars()
-            .next()
-            .map(|c| c.to_ascii_uppercase())
-            .unwrap_or('?');
-        if answer_letter < 'A' || answer_letter > 'Z' {
-            return Err(EvalError::malformed(
-                path,
-                line_no,
-                format!("answer '{answer}' is not a letter"),
-            ));
-        }
-        let expected_idx = (answer_letter as u8 - b'A') as usize;
-        if expected_idx >= choice_indices.len() {
-            return Err(EvalError::malformed(
-                path,
-                line_no,
-                format!(
-                    "answer '{answer}' is out of range for {} choices",
-                    choice_indices.len()
-                ),
-            ));
-        }
-        let choices: Vec<String> = choice_indices
-            .iter()
-            .map(|i| record.get(*i).unwrap_or("").trim().to_string())
-            .collect();
-
-        let letter_labels: Vec<String> = (0..choices.len())
-            .map(|i| char::from(b'A' + i as u8).to_string())
-            .collect();
-        let labeled: Vec<String> = letter_labels
-            .iter()
-            .zip(choices.iter())
-            .map(|(label, value)| format!("{}) {}", label, value))
-            .collect();
-        let full_prompt = format!("{}\n{}\nAnswer:", prompt, labeled.join("\n"));
-
-        tasks.push(TaskSpec {
-            id: format!("mmlu_{}_{}", subject, line_no - 1),
-            suite: Suite::MMLU,
-            prompt: full_prompt,
-            expected: Some(answer),
-            choices,
-            // MMLU is multiple-choice, so criteria-based scoring is disabled.
-            criteria: None,
-        });
-    }
-
-    if tasks.is_empty() {
-        return Err(EvalError::malformed(path, 1, "no data rows found"));
-    }
-
-    tasks.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(tasks)
-}
+mod parser;
 
 #[cfg(test)]
 mod tests {
