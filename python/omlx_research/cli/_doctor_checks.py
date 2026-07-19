@@ -95,6 +95,57 @@ def mlx_lm() -> Check:
     )
 
 
+# Subcommands whose production path strictly requires `mlx_lm`. When
+# the user invokes one of these commands in an environment without
+# `mlx_lm`, the doctor should escalate the warning to a hard fail so
+# they don't ship a build that can only run the doctor. (See
+# `cli/__init__.py::cmd_inference` for the matching require_mlx_lm gate.)
+_MLX_LM_REQUIRED_COMMANDS: frozenset[str] = frozenset({"inference"})
+
+
+def mlx_lm_required_by_command(cmd: str) -> Check:
+    """Cross-reference the active command against the mlx_lm requirement.
+
+    The static ``mlx_lm`` check above returns ``WARN`` regardless of
+    the active command. This companion check is only meaningful in
+    the doctor context where the user names the command they intend
+    to run (e.g. ``omlx-research doctor --command inference``); when
+    that command is in :data:`_MLX_LM_REQUIRED_COMMANDS` and mlx_lm
+    is missing, escalate to ``FAIL`` so the report reflects that
+    the active command path is broken.
+    """
+    desc = f"mlx_lm importable for active command `{cmd}`"
+    try:
+        import mlx_lm  # type: ignore  # noqa: F401
+    except Exception as e:
+        if cmd in _MLX_LM_REQUIRED_COMMANDS:
+            return Check(
+                id="mlx_lm_required_by_command",
+                description=desc,
+                status=FAIL,
+                details=(
+                    f"`{cmd}` requires mlx_lm in production but it is "
+                    f"not importable ({type(e).__name__}: {e}). Install "
+                    f"with `pip install mlx-lm` (and `pip install mlx-core` "
+                    f"on Apple Silicon)."
+                ),
+            )
+        return Check(
+            id="mlx_lm_required_by_command",
+            description=desc,
+            status=PASS,
+            details=(
+                f"command `{cmd}` does not require mlx_lm; nothing to fail."
+            ),
+        )
+    return Check(
+        id="mlx_lm_required_by_command",
+        description=desc,
+        status=PASS,
+        details=f"mlx_lm {getattr(mlx_lm, '__version__', 'unknown')} available for `{cmd}`",
+    )
+
+
 def turboquant_rust_extension() -> Check:
     try:
         import _perf  # type: ignore  # noqa: F401

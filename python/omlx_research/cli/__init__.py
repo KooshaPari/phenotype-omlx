@@ -49,6 +49,11 @@ def cmd_inference(args: argparse.Namespace) -> int:
     req = GenerateRequest(prompt=args.prompt, max_tokens=args.max_tokens, temperature=args.temperature)
     pol = DispatchPolicy(args.policy) if args.policy else DispatchPolicy.AUTO
     if pol == DispatchPolicy.MLX:
+        # Fail loudly with a structured install hint instead of a bare
+        # ImportError when mlx_lm is missing — this is the production
+        # decode path on Apple Silicon and the most common DX paper cut.
+        from ._missing_dep import require_mlx_lm
+        require_mlx_lm("omlx-research inference --policy mlx")
         b = MlxBackend(model_path=args.model)
         out = b.generate(req)
         print(out.text)
@@ -57,6 +62,11 @@ def cmd_inference(args: argparse.Namespace) -> int:
         out = b.generate(req)
         print(out.text)
     else:
+        # AUTO / hybrid: mlx_lm may be required by whichever branch the
+        # hybrid dispatcher picks; require it up front so the user sees
+        # the structured install message before any partial work runs.
+        from ._missing_dep import require_mlx_lm
+        require_mlx_lm("omlx-research inference")
         d = HybridDispatch()
         outs = d.generate(req, policy=pol)
         for r in outs:

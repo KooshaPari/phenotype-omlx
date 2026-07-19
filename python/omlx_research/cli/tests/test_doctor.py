@@ -337,3 +337,54 @@ def test_cmd_doctor_exit_code_one_when_any_check_fails(monkeypatch):
     with _IO():
         rc = cmd_doctor(_ns(json=False))
     assert rc == 1
+
+
+# --- mlx_lm_required_by_command (per-command gating) -----------------------
+
+
+def test_mlx_lm_required_by_command_fails_for_inference_when_missing(monkeypatch):
+    """The active-command check must FAIL for `inference` when mlx_lm is missing.
+
+    This is the DX bridge: the static ``mlx_lm`` check stays at WARN,
+    but when the user names `inference` (or any production-path
+    subcommand) the cross-reference escalates to FAIL so the doctor
+    report reflects that the active command path is broken.
+    """
+    monkeypatch.delitem(sys.modules, "mlx_lm", raising=False)
+    monkeypatch.setitem(sys.modules, "mlx_lm", None)
+    c = checks_mod.mlx_lm_required_by_command("inference")
+    assert c.status == FAIL
+    assert c.id == "mlx_lm_required_by_command"
+    assert "inference" in c.description
+    assert "pip install mlx-lm" in c.details
+
+
+def test_mlx_lm_required_by_command_passes_for_unrelated_command_when_missing(monkeypatch):
+    """Non-production commands must NOT escalate to FAIL when mlx_lm is missing.
+
+    Commands outside the production-path set (e.g. ``doctor`` itself,
+    or plan-inspection commands) shouldn't be marked broken just
+    because mlx_lm is unavailable — they're either meta-commands or
+    work entirely on plan files / traces.
+    """
+    monkeypatch.delitem(sys.modules, "mlx_lm", raising=False)
+    monkeypatch.setitem(sys.modules, "mlx_lm", None)
+    c = checks_mod.mlx_lm_required_by_command("doctor")
+    assert c.status == PASS
+    assert "does not require mlx_lm" in c.details
+
+
+def test_mlx_lm_required_by_command_passes_when_mlx_lm_importable(monkeypatch):
+    """When mlx_lm is available, the check must PASS for any command."""
+    # mlx_lm may or may not be installed in this environment — accept
+    # either branch but require the check to PASS in both.
+    try:
+        import mlx_lm  # noqa: F401
+        c = checks_mod.mlx_lm_required_by_command("inference")
+        assert c.status == PASS
+        assert "available" in c.details
+    except ImportError:
+        # Even if the env doesn't have it, the active-command check
+        # for a non-required command must pass cleanly.
+        c = checks_mod.mlx_lm_required_by_command("doctor")
+        assert c.status == PASS
