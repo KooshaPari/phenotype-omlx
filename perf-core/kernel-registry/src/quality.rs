@@ -332,7 +332,7 @@ impl PromotionRecord {
     /// edits to a promotion record.
     pub fn content_hash(&self) -> String {
         let mut h = Sha256::new();
-        h.update(&self.canonical_bytes());
+        h.update(self.canonical_bytes());
         hex_lower(&h.finalize())
     }
 
@@ -376,24 +376,25 @@ impl PromotionRecord {
         // Build each field as a deterministic JSON string then concatenate
         // the fields in a fixed lexicographic order. This avoids relying on
         // serde_json::Map's internal ordering across crate versions.
-        let mut pairs: Vec<(&'static str, String)> = Vec::with_capacity(8);
-        pairs.push((
-            "candidate_id",
-            serde_json::to_string(&self.candidate_id.0).unwrap_or_else(|_| "0".to_string()),
-        ));
-        pairs.push(("source_revision", serde_json::to_string(&self.source_revision).unwrap_or_default()));
-        pairs.push((
-            "approved_at_unix_ms",
-            serde_json::to_string(&self.approved_at_unix_ms).unwrap_or_else(|_| "0".to_string()),
-        ));
-        pairs.push(("approver", serde_json::to_string(&self.approver).unwrap_or_default()));
-        pairs.push(("evidence", evidence_json));
-        pairs.push(("gates", gates_json));
-        pairs.push(("justification", serde_json::to_string(&self.justification).unwrap_or_default()));
-        pairs.push((
-            "tuning_record_id",
-            serde_json::to_string(&self.tuning_record_id).unwrap_or_else(|_| "null".to_string()),
-        ));
+        let mut pairs: Vec<(&'static str, String)> = vec![
+            (
+                "candidate_id",
+                serde_json::to_string(&self.candidate_id.0).unwrap_or_else(|_| "0".to_string()),
+            ),
+            ("source_revision", serde_json::to_string(&self.source_revision).unwrap_or_default()),
+            (
+                "approved_at_unix_ms",
+                serde_json::to_string(&self.approved_at_unix_ms).unwrap_or_else(|_| "0".to_string()),
+            ),
+            ("approver", serde_json::to_string(&self.approver).unwrap_or_default()),
+            ("evidence", evidence_json),
+            ("gates", gates_json),
+            ("justification", serde_json::to_string(&self.justification).unwrap_or_default()),
+            (
+                "tuning_record_id",
+                serde_json::to_string(&self.tuning_record_id).unwrap_or_else(|_| "null".to_string()),
+            ),
+        ];
         pairs.sort_by(|a, b| a.0.cmp(b.0));
         let mut out = String::with_capacity(256);
         out.push('{');

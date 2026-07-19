@@ -273,7 +273,7 @@ impl KernelRegistry {
                 let chosen = pick_winner(&survived, metric);
                 return SelectionDecision::Chosen {
                     candidate: chosen.0,
-                    tuning: chosen.1,
+                    tuning: Box::new(chosen.1),
                 };
             }
             // Quality-gate enforcement filtered out every tuned candidate.
@@ -294,7 +294,7 @@ impl KernelRegistry {
                     );
                     return SelectionDecision::Chosen {
                         candidate: refc,
-                        tuning: placeholder,
+                        tuning: Box::new(placeholder),
                     };
                 }
                 return SelectionDecision::Rejected { rejections, considered };
@@ -318,7 +318,7 @@ impl KernelRegistry {
             );
             return SelectionDecision::Chosen {
                 candidate: refc,
-                tuning: placeholder,
+                tuning: Box::new(placeholder),
             };
         }
 

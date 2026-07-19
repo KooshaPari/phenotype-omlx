@@ -203,7 +203,7 @@ impl RejectionRecord {
 pub enum SelectionDecision {
     Chosen {
         candidate: Candidate,
-        tuning: TuningRecord,
+        tuning: Box<TuningRecord>,
     },
     Rejected {
         rejections: Vec<RejectionRecord>,

@@ -106,6 +106,7 @@ impl TuningRecord {
     /// `ceil(0.99*N)` indices into the sorted sample array. `median_energy_j`
     /// and `median_dispatches` are derived from the post-warmup samples
     /// and are `None` when no sample reported that metric.
+    #[allow(clippy::too_many_arguments)]
     pub fn from_samples(
         candidate_id: CandidateId,
         key: KernelKey,

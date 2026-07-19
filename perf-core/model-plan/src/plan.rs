@@ -243,33 +243,31 @@ impl ModelPlan {
     /// must have the same dtype (no implicit promotion in this plan).
     fn check_operator_dtype(op: &OperatorPlan) -> PlanResult<()> {
         match op.kind {
-            OperatorKind::Add | OperatorKind::Mul => {
-                if op.inputs.len() == 2 {
-                    let a = &op.inputs[0];
-                    let b = &op.inputs[1];
-                    if a.dtype != b.dtype {
-                        return Err(PlanError::DtypeMismatch {
-                            operator: op.id,
-                            reason: format!(
-                                "{:?} inputs must share dtype, got {:?} and {:?}",
-                                op.kind, a.dtype, b.dtype
-                            ),
-                        });
-                    }
-                }
-            }
-            OperatorKind::DenseMatmul | OperatorKind::GroupedMatmul { .. } => {
-                if op.inputs.len() >= 2 && op.inputs[0].dtype != op.inputs[1].dtype {
+            OperatorKind::Add | OperatorKind::Mul if op.inputs.len() == 2 => {
+                let a = &op.inputs[0];
+                let b = &op.inputs[1];
+                if a.dtype != b.dtype {
                     return Err(PlanError::DtypeMismatch {
                         operator: op.id,
                         reason: format!(
-                            "{:?} input dtypes must match, got {:?} and {:?}",
-                            op.kind,
-                            op.inputs[0].dtype,
-                            op.inputs[1].dtype
+                            "{:?} inputs must share dtype, got {:?} and {:?}",
+                            op.kind, a.dtype, b.dtype
                         ),
                     });
                 }
+            }
+            OperatorKind::DenseMatmul | OperatorKind::GroupedMatmul { .. }
+                if op.inputs.len() >= 2 && op.inputs[0].dtype != op.inputs[1].dtype =>
+            {
+                return Err(PlanError::DtypeMismatch {
+                    operator: op.id,
+                    reason: format!(
+                        "{:?} input dtypes must match, got {:?} and {:?}",
+                        op.kind,
+                        op.inputs[0].dtype,
+                        op.inputs[1].dtype
+                    ),
+                });
             }
             _ => {}
         }
