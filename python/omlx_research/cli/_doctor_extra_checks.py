@@ -1,7 +1,7 @@
-"""Doctor checks added 2026-07-19.
+"""Doctor checks added 2026-07-19 (turn-4 batch).
 
 This module is the sibling of :mod:`omlx_research.cli._doctor_checks`.
-It holds the four newest doctor checks (omlx_research version, NIAH
+It holds the four turn-4 doctor checks (omlx_research version, NIAH
 benchmark presence, eval-harness subcommand, regress-baseline dispatch
 envelope) so :mod:`_doctor_checks` stays under the 500L hard cap. Each
 check returns a :class:`omlx_research.cli.doctor.Check`; the
@@ -14,6 +14,10 @@ The four public check callables are re-exported by
 :mod:`omlx_research.cli._doctor_checks` so the existing
 ``checks.<name>`` access pattern keeps working — callers should not
 import this module directly.
+
+Turn-5 additions (NIAH regression baseline + dispatch script probes)
+live in :mod:`omlx_research.cli._doctor_turn5_checks.py`; this module
+is intentionally left untouched at turn-5 to keep its diff clean.
 """
 
 from __future__ import annotations
@@ -405,3 +409,9 @@ def regress_baseline_dispatch_envelope() -> Check:
         status=PASS,
         details=f"dispatch_budget((m=64, n=64, k=64)) = {budget_value}",
     )
+
+
+# Note: Turn-5 additions (NIAH baseline + 3 dispatch scripts) live in
+# ``_doctor_turn5_checks.py`` to keep this module under the 500L hard
+# cap. They are re-exported at the top of this file so the existing
+# ``checks.<name>`` access pattern still works.
