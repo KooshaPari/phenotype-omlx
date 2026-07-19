@@ -263,6 +263,7 @@ mod deepseek_mla_mtp;
 mod diffusion;
 mod dense_envelope;
 mod discrete_diffusion_l2;
+mod discrete_diffusion_oracle;
 mod discrete_diffusion_sampler;
 mod discrete_diffusion_schedule;
 mod lfm_routing;
