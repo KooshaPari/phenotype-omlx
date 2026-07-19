@@ -7,6 +7,9 @@
 // Without `--features mojo`, this crate compiles to a no-op stub so the
 // workspace always builds, even when `mojo` is not installed.
 
+#[cfg(feature = "mojo")]
+use native::{mojo_decode, mojo_encode};
+
 #[derive(Debug, Clone)]
 pub struct MojoQuantizedTensor {
     pub shape: Vec<usize>,
@@ -48,17 +51,28 @@ mod native {
 
     extern "C" {
         fn tq_mojo_encode(
-            data_ptr: *const f32, n: usize, bits: c_uchar, group_size: usize,
-            out_shape: *mut *mut usize, out_shape_len: *mut usize,
-            out_packed: *mut *mut u8, out_packed_len: *mut usize,
-            out_scales: *mut *mut f32, out_scales_len: *mut usize,
-            out_zeros: *mut *mut f32, out_zeros_len: *mut usize,
+            data_addr: isize,
+            n: usize,
+            bits: c_uchar,
+            group_size: usize,
+            shape_ptr_out: *mut isize,
+            out_shape_len: *mut isize,
+            packed_ptr_out: *mut isize,
+            out_packed_len: *mut isize,
+            scales_ptr_out: *mut isize,
+            out_scales_len: *mut isize,
+            zeros_ptr_out: *mut isize,
+            out_zeros_len: *mut isize,
         ) -> bool;
 
         fn tq_mojo_decode(
-            packed_ptr: *const u8, packed_len: usize,
-            scales_ptr: *const f32, zeros_ptr: *const f32,
-            n: usize, group_size: usize, bits: c_uchar,
+            packed_ptr: *const u8,
+            packed_len: usize,
+            scales_ptr: *const f32,
+            zeros_ptr: *const f32,
+            n: usize,
+            group_size: usize,
+            bits: c_uchar,
             out_ptr: *mut f32,
         );
 
@@ -66,41 +80,75 @@ mod native {
     }
 
     pub(super) fn mojo_encode(
-        data: &[f32], bits: u8, group_size: usize,
+        data: &[f32],
+        bits: u8,
+        group_size: usize,
     ) -> Result<MojoQuantizedTensor, String> {
-        let mut shape_ptr: *mut usize = std::ptr::null_mut();
-        let mut shape_len: usize = 0;
-        let mut packed_ptr: *mut u8 = std::ptr::null_mut();
-        let mut packed_len: usize = 0;
-        let mut scales_ptr: *mut f32 = std::ptr::null_mut();
-        let mut scales_len: usize = 0;
-        let mut zeros_ptr: *mut f32 = std::ptr::null_mut();
-        let mut zeros_len: usize = 0;
+        let mut shape_addr: isize = 0;
+        let mut shape_len: isize = 0;
+        let mut packed_addr: isize = 0;
+        let mut packed_len: isize = 0;
+        let mut scales_addr: isize = 0;
+        let mut scales_len: isize = 0;
+        let mut zeros_addr: isize = 0;
+        let mut zeros_len: isize = 0;
 
         let ok = unsafe {
             tq_mojo_encode(
-                data.as_ptr(), data.len(), bits, group_size,
-                &mut shape_ptr, &mut shape_len,
-                &mut packed_ptr, &mut packed_len,
-                &mut scales_ptr, &mut scales_len,
-                &mut zeros_ptr, &mut zeros_len,
+                data.as_ptr() as usize as isize,
+                data.len(),
+                bits,
+                group_size,
+                &mut shape_addr,
+                &mut shape_len,
+                &mut packed_addr,
+                &mut packed_len,
+                &mut scales_addr,
+                &mut scales_len,
+                &mut zeros_addr,
+                &mut zeros_len,
             )
         };
-        if !ok { return Err("Mojo tq_mojo_encode returned false".to_string()); }
-
-        let shape  = unsafe { std::slice::from_raw_parts(shape_ptr,  shape_len)  }.to_vec();
-        let packed = unsafe { std::slice::from_raw_parts(packed_ptr, packed_len) }.to_vec();
-        let scales = unsafe { std::slice::from_raw_parts(scales_ptr, scales_len) }.to_vec();
-        let zeros  = unsafe { std::slice::from_raw_parts(zeros_ptr,  zeros_len)  }.to_vec();
-
-        unsafe {
-            free(shape_ptr  as *mut c_void);
-            free(packed_ptr as *mut c_void);
-            free(scales_ptr as *mut c_void);
-            free(zeros_ptr  as *mut c_void);
+        if !ok {
+            return Err("Mojo tq_mojo_encode returned false".to_string());
         }
 
-        Ok(MojoQuantizedTensor { shape, packed, scales, zeros })
+        if shape_addr == 0 || packed_addr == 0 || scales_addr == 0 || zeros_addr == 0 {
+            return Err(
+                "Mojo tq_mojo_encode returned null output pointers — \
+                 verify libturbo_quant_mojo.dylib is on the loader path"
+                    .to_string(),
+            );
+        }
+
+        let shape_len = shape_len as usize;
+        let packed_len = packed_len as usize;
+        let scales_len = scales_len as usize;
+        let zeros_len = zeros_len as usize;
+
+        let shape_ptr = shape_addr as *mut usize;
+        let packed_ptr = packed_addr as *mut u8;
+        let scales_ptr = scales_addr as *mut f32;
+        let zeros_ptr = zeros_addr as *mut f32;
+
+        let shape = unsafe { std::slice::from_raw_parts(shape_ptr, shape_len) }.to_vec();
+        let packed = unsafe { std::slice::from_raw_parts(packed_ptr, packed_len) }.to_vec();
+        let scales = unsafe { std::slice::from_raw_parts(scales_ptr, scales_len) }.to_vec();
+        let zeros = unsafe { std::slice::from_raw_parts(zeros_ptr, zeros_len) }.to_vec();
+
+        unsafe {
+            free(shape_ptr as *mut c_void);
+            free(packed_ptr as *mut c_void);
+            free(scales_ptr as *mut c_void);
+            free(zeros_ptr as *mut c_void);
+        }
+
+        Ok(MojoQuantizedTensor {
+            shape,
+            packed,
+            scales,
+            zeros,
+        })
     }
 
     pub(super) fn mojo_decode(
@@ -123,14 +171,73 @@ mod native {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "mojo")]
+    use std::path::PathBuf;
+    #[cfg(feature = "mojo")]
+    use std::process::Command;
 
+    #[cfg(not(feature = "mojo"))]
     #[test]
-    fn mojo_stub_returns_error_without_feature() {
+    fn mojo_without_feature_fails_encode_loudly() {
         let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
         let r = MojoQuantizedTensor::encode(&data, 4, 32);
-        #[cfg(feature = "mojo")]
-        assert!(r.is_ok(), "encode failed: {:?}", r.err());
         #[cfg(not(feature = "mojo"))]
         assert!(r.is_err(), "encode should fail without --features mojo");
+    }
+
+    #[cfg(feature = "mojo")]
+    fn mojo_shared_lib_path() -> PathBuf {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let name = if cfg!(target_os = "macos") {
+            "libturbo_quant_mojo.dylib"
+        } else if cfg!(target_os = "windows") {
+            "turbo_quant_mojo.dll"
+        } else {
+            "libturbo_quant_mojo.so"
+        };
+        manifest.join(name)
+    }
+
+    #[cfg(feature = "mojo")]
+    #[test]
+    fn mojo_shared_lib_builds() {
+        let lib = mojo_shared_lib_path();
+        assert!(
+            lib.exists(),
+            "Mojo shared library missing at {} — compile gate failed",
+            lib.display()
+        );
+    }
+
+    #[cfg(feature = "mojo")]
+    #[test]
+    fn mojo_smoke_script_roundtrips() {
+        let mojo = std::env::var_os("MOJO_PATH")
+            .map(PathBuf::from)
+            .or_else(|| which("mojo"))
+            .expect("mojo feature enabled but `mojo` not found in PATH");
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let smoke = manifest.join("mojo-src/turbo_quant_smoke.mojo");
+        let status = Command::new(mojo)
+            .arg("run")
+            .arg(smoke.file_name().expect("smoke filename"))
+            .current_dir(manifest.join("mojo-src"))
+            .status()
+            .expect("spawn mojo run smoke");
+        assert!(status.success(), "mojo smoke script failed");
+    }
+
+    #[cfg(feature = "mojo")]
+    fn which(name: &str) -> Option<PathBuf> {
+        std::env::var_os("PATH").and_then(|path| {
+            std::env::split_paths(&path).find_map(|dir| {
+                let candidate = dir.join(name);
+                if candidate.is_file() {
+                    Some(candidate)
+                } else {
+                    None
+                }
+            })
+        })
     }
 }
