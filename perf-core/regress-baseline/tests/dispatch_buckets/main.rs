@@ -92,11 +92,16 @@ struct Bucket {
     shape: ShapeKey,
 }
 
-/// Six buckets the spec calls out: tiny decode, two medium prompts, a
-/// square 4k, a square 8k, and a long-context 16k decode path. Ordered
-/// from smallest to largest output cell count so the printout reads as
-/// a perf scaling ladder.
+/// Eight buckets the spec calls out: a long-context decode, a tiny
+/// decode, two medium prompts, a square 4k, a Mixtral-class MoE expert
+/// FFN, a square 8k, and a long-context 16k decode path. Ordered from
+/// smallest to largest output cell count so the printout reads as a perf
+/// scaling ladder.
 const BUCKETS: &[Bucket] = &[
+    Bucket {
+        name: "longctx_64x32_c2048",
+        shape: ShapeKey::new(64, 8192, 2048),
+    },
     Bucket {
         name: "tiny_decode_512x2048x2048",
         shape: ShapeKey::new(512, 2048, 2048),
@@ -112,6 +117,10 @@ const BUCKETS: &[Bucket] = &[
     Bucket {
         name: "square_4k_4096x4096x4096",
         shape: ShapeKey::new(4096, 4096, 4096),
+    },
+    Bucket {
+        name: "bigmoe_expert_2x14336",
+        shape: ShapeKey::new(2048, 14336, 14336),
     },
     Bucket {
         name: "square_8k_8192x8192x8192",

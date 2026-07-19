@@ -25,7 +25,7 @@
 //!
 //! A request whose shape is *smaller* than the smallest bucket is clamped
 //! to that smallest bucket's ceiling rather than returning `0`, so a
-//! regression test that uses a smaller bucket than the canonical six
+//! regression test that uses a smaller bucket than the canonical eight
 //! still has a useful ceiling.
 
 use serde::{Deserialize, Serialize};
@@ -79,17 +79,35 @@ struct Bucket {
     energy_per_op_ceiling_j: f64,
 }
 
-/// Six canonical buckets, ordered by `output_cells` ascending:
+/// Eight canonical buckets, ordered by `output_cells` ascending:
 ///
 /// | Bucket                              |  dispatches | energy_per_op_j |
 /// |-------------------------------------|------------:|----------------:|
+/// | longctx_64x32_c2048                 |         154 |        2.00e-7  |
 /// | tiny_decode_512x2048x2048           |         308 |        1.75e-7  |
 /// | small_prompt_1024x4096x4096         |        1229 |        1.70e-7  |
 /// | medium_prompt_2048x8192x8192        |        4916 |        1.80e-7  |
 /// | square_4k_4096x4096x4096            |        4916 |        1.80e-7  |
+/// | bigmoe_expert_2x14336               |        8602 |        2.00e-7  |
 /// | square_8k_8192x8192x8192            |       19661 |        1.90e-7  |
 /// | long_decode_16384x4096x4096         |       19661 |        1.95e-7  |
+///
+/// `longctx_64x32_c2048` is a long-context single-token decode on a
+/// Qwen-class 7B at 32 k context: `(M=64, N=8192, K=2048)`. It anchors
+/// the very-small `M` end of the envelope (output cells ≈ 524 k) so a
+/// skinny decode path has its own ceiling rather than collapsing to the
+/// 512×2048 prompt-decode bucket.
+///
+/// `bigmoe_expert_2x14336` is the heavy Mixtral-class MoE expert FFN
+/// forward: `(M=2048, N=14336, K=14336)`. It slots between `square_4k`
+/// and `square_8k` (output cells ≈ 29 M) and pins the ceiling for the
+/// routed-expert GEMM that dominates MoE inference cost.
 const BUCKETS: &[Bucket] = &[
+    Bucket {
+        shape: ShapeKey::new(64, 8192, 2048),
+        dispatch_ceiling: 154,
+        energy_per_op_ceiling_j: 2.00e-7,
+    },
     Bucket {
         shape: ShapeKey::new(512, 2048, 2048),
         dispatch_ceiling: 308,
@@ -109,6 +127,11 @@ const BUCKETS: &[Bucket] = &[
         shape: ShapeKey::new(4096, 4096, 4096),
         dispatch_ceiling: 4916,
         energy_per_op_ceiling_j: 1.80e-7,
+    },
+    Bucket {
+        shape: ShapeKey::new(2048, 14336, 14336),
+        dispatch_ceiling: 8602,
+        energy_per_op_ceiling_j: 2.00e-7,
     },
     Bucket {
         shape: ShapeKey::new(8192, 8192, 8192),
@@ -173,11 +196,11 @@ mod bucket_tests {
 
     #[test]
     fn smaller_request_clamps_to_smallest_bucket() {
-        // Smaller than the smallest bucket (512x2048x2048): clamps to it
-        // rather than 0 so a sub-bucket regression test still has a
+        // Smaller than the smallest bucket (longctx_64x32_c2048): clamps
+        // to it rather than 0 so a sub-bucket regression test still has a
         // useful ceiling.
         let k = ShapeKey::new(1, 1, 1);
-        assert_eq!(dispatch_budget(&k), 308);
+        assert_eq!(dispatch_budget(&k), 154);
     }
 
     #[test]
