@@ -258,5 +258,6 @@ mod attention_sliding_window;
 mod bonsai_qwen;
 mod builders_integration;
 mod diffusion;
+mod dense_envelope;
 mod mod_routing;
 mod recurrent;
