@@ -37,22 +37,12 @@ const V1: AbiVersion = AbiVersion { major: 1, minor: 0 };
 // doc-comment pins this range; the fuzz test guards against drift.
 const VALID_BITS: &[u8] = &[2u8, 3, 4];
 
-/// Strategy producing a valid `(group_size, n)` pair so `n % group_size
-/// == 0` (the ABI requires aligned groups; misaligned tails are rejected
-/// with `ErrInvalidBits`).
-fn aligned_group_n(max: usize) -> BoxedStrategy<(usize, usize)> {
-    (1usize..max)
-        .prop_flat_map(move |group_size| {
-            let n_groups = 1usize..max;
-            n_groups
-                .prop_map(move |g| (group_size, g.div_ceil(group_size) * group_size))
-        })
-        .boxed()
-}
-
 /// Strategy producing a valid `(bits, group_size, n)` triple for which
 /// `encode_v1` is expected to succeed, plus a vector of `n` finite
-/// `f32` values.
+/// `f32` values. `well_formed_request` is the canonical builder here;
+/// it shares the same aligned-group semantics as the standalone
+/// `aligned_group_n` helper would but is inlined so we avoid one
+/// `BoxedStrategy` allocation per call.
 fn well_formed_request() -> BoxedStrategy<(u8, usize, usize, Vec<f32>)> {
     (
         proptest::sample::select(VALID_BITS.to_vec()),
@@ -246,13 +236,11 @@ proptest! {
         // is degenerate (zero or non-finite) — the affine-quantization
         // contract deliberately returns 0 for an all-equal group, so
         // the round-trip is exact for that case.
-        for g in 0..n_groups {
-            let scale = scales_storage[g];
+        for (g, &scale) in scales_storage.iter().enumerate().take(n_groups) {
             if !scale.is_finite() || scale == 0.0 {
                 // All-equal group: the encoder writes zero scale and
                 // the decoder produces zero for every element. Verify
                 // that and continue.
-                let zero: f32 = 0.0;
                 for i in 0..group_size {
                     let idx = g * group_size + i;
                     if data[idx] != 0.0 {

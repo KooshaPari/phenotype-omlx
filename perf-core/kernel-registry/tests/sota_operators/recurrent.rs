@@ -435,14 +435,17 @@ fn deltanet_batched_considered_list_contains_tagged_candidate() {
 /// `ceil_div` is local to this test file — it's not in the library
 /// because the test is the one place the dispatch budget is enforced.
 fn ceil_div(a: usize, b: usize) -> u32 {
-    ((a + b - 1) / b) as u32
+    a.div_ceil(b) as u32
 }
+
+/// Per-bucket shape spec for `dispatch_buckets_recurrent_picks_delta_net_batched_within_budget`.
+type Bucket = (&'static str, (usize, usize, usize, usize));
 
 #[test]
 fn dispatch_buckets_recurrent_picks_delta_net_batched_within_budget() {
     // Five shape buckets spanning decode, prompt, and long-context
     // recurrence. (batch=B, state_channels=C, head_dim=D, chunk=16.)
-    let buckets: &[(/* tag */ &str, /* (B, H, C, D) */ (usize, usize, usize, usize))] = &[
+    let buckets: &[Bucket] = &[
         ("decode_1x1", (1, 1, 1, 64)),
         ("decode_4x4", (4, 4, 4, 128)),
         ("prompt_2x2_c16", (2, 2, 16, 64)),
