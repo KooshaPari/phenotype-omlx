@@ -28,13 +28,22 @@ from ._doctor_shared import (
 
 
 # Re-export the four newest checks so the existing `checks.<name>`
-# access pattern keeps working. The implementations live in
-# `_doctor_extra_checks.py` to keep this module under the 500L hard
-# cap (added 2026-07-19 — version, NIAH, eval-harness, regress-baseline
-# dispatch envelope).
-from ._doctor_extra_checks import (  # noqa: E402,F401  (re-export)
-    eval_harness_subcommand_runnable,
+# access pattern keeps working. The implementations were originally
+# collected in `_doctor_extra_checks.py` (turn-4 batch), but that
+# module grew to 530L and was split per-topic in turn-9 into three
+# siblings — see the module-size-sweep pattern documented in
+# turn-8 resume notes §6.1.
+#   * `_doctor_extra_niah.py`   — NIAH benchmark check
+#   * `_doctor_extra_eval.py`   — eval-harness subcommand check
+#   * `_doctor_extra_kernel.py` — package version +
+#                                 regress-baseline dispatch envelope
+from ._doctor_extra_niah import (  # noqa: E402,F401  (re-export)
     niah_benchmark_present,
+)
+from ._doctor_extra_eval import (  # noqa: E402,F401  (re-export)
+    eval_harness_subcommand_runnable,
+)
+from ._doctor_extra_kernel import (  # noqa: E402,F401  (re-export)
     omlx_research_version,
     regress_baseline_dispatch_envelope,
 )
@@ -313,10 +322,11 @@ def airlock_v2() -> Check:
 
 
 # NOTE: New checks added 2026-07-19 (version, NIAH, eval-harness,
-# regress-baseline dispatch envelope) live in ``_doctor_extra_checks.py``
-# to keep this module under the 500L hard cap. They are re-exported
-# at the top of this file so the existing ``checks.<name>`` access
-# pattern still works.
+# regress-baseline dispatch envelope) were split into three per-topic
+# modules in turn-9 to keep each file under the 350L target:
+# `_doctor_extra_niah.py`, `_doctor_extra_eval.py`, and
+# `_doctor_extra_kernel.py`. They are re-exported at the top of this
+# file so the existing `checks.<name>` access pattern keeps working.
 
 
 def tests_runnable() -> Check:

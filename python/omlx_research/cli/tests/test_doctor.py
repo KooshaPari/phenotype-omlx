@@ -176,7 +176,9 @@ def test_run_doctor_returns_at_least_one_check_for_each_id():
         "native_abi_v1",
         "airlock_v2_installed",
         "tests_runnable",
-        # Added 2026-07-19 — see _doctor_extra_checks.py.
+        # Added 2026-07-19 — see _doctor_extra_niah.py / _doctor_extra_eval.py
+        # / _doctor_extra_kernel.py (split from the original
+        # _doctor_extra_checks.py module).
         "omlx_research_version",
         "niah_benchmark_present",
         "eval_harness_subcommand_runnable",
@@ -298,7 +300,9 @@ def test_checks_list_includes_expected_ids():
         "native_abi_v1",
         "airlock_v2",
         "tests_runnable",
-        # Added 2026-07-19 — see _doctor_extra_checks.py.
+        # Added 2026-07-19 — see _doctor_extra_niah.py / _doctor_extra_eval.py
+        # / _doctor_extra_kernel.py (split from the original
+        # _doctor_extra_checks.py module).
         "omlx_research_version",
         "niah_benchmark_present",
         "eval_harness_subcommand_runnable",

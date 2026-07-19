@@ -19,7 +19,9 @@ Layout:
     doctor.py                 — public API + orchestration + rendering (this file)
     _doctor_shared.py         — pure parsing helpers (Cargo.toml, version.rs, lib.rs)
     _doctor_checks.py         — individual check functions
-    _doctor_extra_checks.py   — turn-4 checks (version, NIAH, eval, dispatch envelope)
+    _doctor_extra_niah.py     — turn-4 NIAH benchmark check + niah_results.json helpers
+    _doctor_extra_eval.py     — turn-4 eval-harness subcommand check
+    _doctor_extra_kernel.py   — turn-4 package version + regress-baseline dispatch envelope
     _doctor_turn5_checks.py   — turn-5 checks (NIAH baseline, dispatch scripts)
     _doctor_meta_checks.py    — turn-7 meta-check (drift detector for the CHECKS list)
 """
@@ -100,7 +102,8 @@ CHECKS: list[Callable[[], Check]] = [
     checks.native_abi_v1,
     checks.airlock_v2,
     checks.tests_runnable,
-    # Added 2026-07-19 — see _doctor_extra_checks.py for the implementations.
+    # Added 2026-07-19 — split per-topic in turn-9 into three sibling
+    # modules (see _doctor_extra_{niah,eval,kernel}.py).
     checks.omlx_research_version,
     checks.niah_benchmark_present,
     checks.eval_harness_subcommand_runnable,

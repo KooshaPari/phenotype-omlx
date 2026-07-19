@@ -1,7 +1,10 @@
 """Doctor checks added 2026-07-19 — turn 5 batch.
 
 This module is the second sibling of :mod:`omlx_research.cli._doctor_checks`
-and :mod:`omlx_research.cli._doctor_extra_checks`. It holds the four
+and the turn-4 extra-checks split (now
+:mod:`omlx_research.cli._doctor_extra_niah`,
+:mod:`omlx_research.cli._doctor_extra_eval`,
+:mod:`omlx_research.cli._doctor_extra_kernel`). It holds the four
 turn-5 doctor checks (one NIAH baseline probe + three dispatch-script
 probes) so the parent modules stay under the 500L hard cap.
 
