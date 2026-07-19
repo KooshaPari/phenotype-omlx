@@ -114,12 +114,15 @@ CHECKS: list[Callable[[], Check]] = [
     checks.dispatch_script_sglang_exists,
     checks.dispatch_script_vllm_exists,
     # Added 2026-07-19 (turn-10) — internal structural invariants
-    # (coverage tag count, eval-suite variant count). See
-    # _doctor_internal_checks.py. Both are entirely INTERNAL
+    # (coverage tag count, eval-suite variant count, metal-runtime lib
+    # test count, CLI subcommand count). See
+    # _doctor_internal_checks.py. All four are entirely INTERNAL
     # (no external dependencies) and degrade to WARN — never
     # FAIL — when their target file is missing.
     checks.coverage_tag_count_at_least_25,
     checks.eval_harness_suite_count_at_least_4,
+    checks.metal_runtime_lib_test_count_at_least_25,
+    checks.python_cli_subcommand_count_at_least_6,
     # Meta-check (drift detector) — MUST be last so the count it
     # observes reflects the complete registry. See
     # _doctor_meta_checks.py for the recursion guard that prevents

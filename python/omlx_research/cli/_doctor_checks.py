@@ -56,6 +56,8 @@ from ._doctor_turn5_checks import (  # noqa: E402,F401  (re-export)
 from ._doctor_internal_checks import (  # noqa: E402,F401  (re-export)
     coverage_tag_count_at_least_25,
     eval_harness_suite_count_at_least_4,
+    metal_runtime_lib_test_count_at_least_25,
+    python_cli_subcommand_count_at_least_6,
 )
 
 

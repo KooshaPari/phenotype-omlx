@@ -4,4 +4,4 @@
 # Bump this when adding new mandatory checks.
 
 [meta]
-min_check_count = 21
+min_check_count = 23
