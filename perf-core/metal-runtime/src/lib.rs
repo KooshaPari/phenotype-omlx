@@ -37,6 +37,7 @@
 
 pub mod cache;
 pub mod compile;
+pub mod dispatch;
 pub mod error;
 pub mod fingerprint;
 pub mod pipeline;

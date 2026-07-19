@@ -133,8 +133,15 @@ impl BoundedCompiler {
 /// informational — it includes the plan id, family, and a one-line kernel
 /// per operator. A future task will replace this with real codegen driven
 /// by the operator kinds.
+///
+/// Each per-op line is emitted through [`crate::dispatch::emit_per_op_stub`]
+/// so the kernel-registry dispatch tag (or `no-kernel-tag`) travels with
+/// the operator into the shader template. Selector audits can then
+/// grep the shader source to confirm the bridge produced the expected
+/// routing for every operator.
 fn emit_msl_stub(plan: &ModelPlan, fp: &DeviceFingerprint) -> String {
-    let mut out = String::with_capacity(256 + plan.operators.len() * 80);
+    use crate::dispatch::emit_per_op_stub;
+    let mut out = String::with_capacity(256 + plan.operators.len() * 120);
     out.push_str("// metal-runtime MSL stub (real codegen in a future task)\n");
     out.push_str(&format!("// plan_id      = {}\n", plan.id.0));
     out.push_str(&format!("// family       = {}\n", plan.model_family));
@@ -144,13 +151,7 @@ fn emit_msl_stub(plan: &ModelPlan, fp: &DeviceFingerprint) -> String {
     out.push_str("#include <metal_stdlib>\n");
     out.push_str("using namespace metal;\n\n");
     for op in &plan.operators {
-        out.push_str(&format!(
-            "// op#{} {} : {} input(s), {} output(s)\n",
-            op.id.0,
-            op.kind.tag(),
-            op.inputs.len(),
-            op.outputs.len(),
-        ));
+        out.push_str(&emit_per_op_stub(op));
     }
     out
 }
@@ -219,12 +220,12 @@ pub(crate) fn plan_revision(plan: &ModelPlan) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use model_plan::{
+        DType, ModelId, OperatorId, OperatorKind, OperatorPlan, Precision,
+        QuantizationPolicy, SchedulerPolicy, TensorRef,
+    };
 
     fn small_plan() -> ModelPlan {
-        use model_plan::{
-            DType, ModelId, OperatorId, OperatorKind, OperatorPlan, Precision,
-            QuantizationPolicy, SchedulerPolicy, TensorRef,
-        };
         let op = |id: u64, kind: OperatorKind, ins: usize, outs: usize| OperatorPlan {
             id: OperatorId(id),
             kind,
@@ -331,5 +332,147 @@ mod tests {
         );
         let r1 = plan_revision(&bigger);
         assert_ne!(r0, r1);
+    }
+
+    /// Regression test for the metal-runtime <-> kernel-registry
+    /// dispatch bridge: a plan carrying a sliding-window attention
+    /// operator must produce an MSL stub line tagged
+    /// `sliding_window_attention` (the kernel-registry dispatch tag)
+    /// so trace audits can correlate the plan-side and kernel-side
+    /// namespaces.
+    #[test]
+    fn emit_msl_stub_includes_kernel_tag_for_sliding_window() {
+        use model_plan::attention::AttentionKind;
+        let op_sw = OperatorPlan {
+            id: OperatorId(1),
+            kind: OperatorKind::Rope,
+            attention: Some(AttentionKind::SlidingWindow { window_size: 256 }),
+            inputs: vec![TensorRef {
+                name: "q".into(),
+                shape: vec![1],
+                dtype: DType::F32,
+                state_id: None,
+            }],
+            outputs: vec![TensorRef {
+                name: "o".into(),
+                shape: vec![1],
+                dtype: DType::F32,
+                state_id: None,
+            }],
+            precision: Precision::Fp32,
+            quant: QuantizationPolicy::Dense,
+            deps: vec![],
+        };
+        let plan = ModelPlan::new_unchecked(
+            ModelId(1),
+            "qwen3-next",
+            "qwen",
+            vec![op_sw],
+            vec![],
+            SchedulerPolicy::Eager,
+            4,
+            8,
+        );
+        plan.validate().expect("sw plan must validate");
+        let fp = DeviceFingerprint::compute_software();
+        let stub = emit_msl_stub(&plan, &fp);
+        assert!(
+            stub.contains("[kernel=sliding_window_attention"),
+            "shader stub must carry sliding_window_attention tag; got:\n{stub}"
+        );
+        assert!(
+            stub.contains("from-plan=rope"),
+            "shader stub must carry the plan-side from-plan tag; got:\n{stub}"
+        );
+    }
+
+    /// Sibling test for [`emit_msl_stub_includes_kernel_tag_for_sliding_window`]
+    /// covering GQA: confirms the bridge produces a per-op kernel-tag
+    /// line for the Qwen3-Coder-Next GQA layers that run alongside
+    /// the sliding-window ones.
+    #[test]
+    fn emit_msl_stub_includes_kernel_tag_for_gqa() {
+        use model_plan::attention::AttentionKind;
+        let op_gqa = OperatorPlan {
+            id: OperatorId(7),
+            kind: OperatorKind::Rope,
+            attention: Some(AttentionKind::Gqa { kv_heads: 2 }),
+            inputs: vec![TensorRef {
+                name: "q".into(),
+                shape: vec![1],
+                dtype: DType::F32,
+                state_id: None,
+            }],
+            outputs: vec![TensorRef {
+                name: "o".into(),
+                shape: vec![1],
+                dtype: DType::F32,
+                state_id: None,
+            }],
+            precision: Precision::Fp32,
+            quant: QuantizationPolicy::Dense,
+            deps: vec![],
+        };
+        let plan = ModelPlan::new_unchecked(
+            ModelId(1),
+            "qwen3-next",
+            "qwen",
+            vec![op_gqa],
+            vec![],
+            SchedulerPolicy::Eager,
+            4,
+            8,
+        );
+        plan.validate().expect("gqa plan must validate");
+        let fp = DeviceFingerprint::compute_software();
+        let stub = emit_msl_stub(&plan, &fp);
+        assert!(
+            stub.contains("[kernel=gqa_attention"),
+            "shader stub must carry gqa_attention tag; got:\n{stub}"
+        );
+    }
+
+    /// Confirms the stub marks operators without a kernel-registry
+    /// mapping with the literal `no-kernel-tag` token so audits can
+    /// distinguish deliberate absence from a missing case.
+    #[test]
+    fn emit_msl_stub_marks_unmapped_operators_as_no_kernel_tag() {
+        let op_softmax = OperatorPlan {
+            id: OperatorId(1),
+            kind: OperatorKind::Softmax,
+            attention: None,
+            inputs: vec![TensorRef {
+                name: "x".into(),
+                shape: vec![1],
+                dtype: DType::F32,
+                state_id: None,
+            }],
+            outputs: vec![TensorRef {
+                name: "y".into(),
+                shape: vec![1],
+                dtype: DType::F32,
+                state_id: None,
+            }],
+            precision: Precision::Fp32,
+            quant: QuantizationPolicy::Dense,
+            deps: vec![],
+        };
+        let plan = ModelPlan::new_unchecked(
+            ModelId(1),
+            "smoke",
+            "test",
+            vec![op_softmax],
+            vec![],
+            SchedulerPolicy::Eager,
+            4,
+            8,
+        );
+        plan.validate().expect("smoke plan must validate");
+        let fp = DeviceFingerprint::compute_software();
+        let stub = emit_msl_stub(&plan, &fp);
+        assert!(
+            stub.contains("[kernel=no-kernel-tag"),
+            "unmapped operator must be marked no-kernel-tag; got:\n{stub}"
+        );
     }
 }
