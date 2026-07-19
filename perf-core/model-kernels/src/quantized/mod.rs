@@ -10,6 +10,10 @@
 //! All functions are pure: no allocation outside the returned buffers,
 //! no global state, deterministic.
 
+pub mod ternary_matmul;
+
+pub use ternary_matmul::ternary_matmul;
+
 use crate::error::{KernelError, Result};
 
 /// Sign-magnitude ternary code. Three values per symbol.
