@@ -6,6 +6,9 @@
 //! in `shaders/turbo_quant.metallib` and consumed by `perf-core/spec-decode`'s
 //! optional `metal` feature.
 
+mod minmax;
+
+use minmax::min_max;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurboMode {
@@ -82,14 +85,22 @@ impl QuantizedTensor {
     ///
     /// Panics on violation rather than silently corrupting the output.
     pub fn encode_uniform(data: &[f32], bits: u8, group_size: usize) -> Self {
-        assert!((2..=4).contains(&bits),
-                "turbo-quant: bits must be in 2..=4, got {bits}");
-        assert!(group_size > 0,
-                "turbo-quant: group_size must be greater than zero");
-        assert!(!data.is_empty(),
-                "turbo-quant: encode_uniform requires non-empty input");
-        assert!(data.iter().all(|v| v.is_finite()),
-                "turbo-quant: encode_uniform requires finite input data");
+        assert!(
+            (2..=4).contains(&bits),
+            "turbo-quant: bits must be in 2..=4, got {bits}"
+        );
+        assert!(
+            group_size > 0,
+            "turbo-quant: group_size must be greater than zero"
+        );
+        assert!(
+            !data.is_empty(),
+            "turbo-quant: encode_uniform requires non-empty input"
+        );
+        assert!(
+            data.iter().all(|v| v.is_finite()),
+            "turbo-quant: encode_uniform requires finite input data"
+        );
 
         let qmax = ((1u32 << bits) - 1) as f32;
         let n_packed = (data.len() * bits as usize + 7) / 8;
@@ -143,15 +154,23 @@ impl QuantizedTensor {
     /// metadata or mismatched output length panics with a descriptive
     /// message instead of silently producing wrong numbers.
     pub fn decode_uniform(&self, out: &mut [f32]) {
-        assert!((2..=4).contains(&self.bits),
-                "turbo-quant: stored bits must be in 2..=4, got {}", self.bits);
-        assert!(self.group_size > 0,
-                "turbo-quant: stored group_size must be > 0, got {}",
-                self.group_size);
+        assert!(
+            (2..=4).contains(&self.bits),
+            "turbo-quant: stored bits must be in 2..=4, got {}",
+            self.bits
+        );
+        assert!(
+            self.group_size > 0,
+            "turbo-quant: stored group_size must be > 0, got {}",
+            self.group_size
+        );
         let expected = self.shape.iter().product::<usize>();
-        assert!(out.len() == expected,
-                "turbo-quant: decode_uniform output length mismatch — expected \
-                 {expected}, got {}", out.len());
+        assert!(
+            out.len() == expected,
+            "turbo-quant: decode_uniform output length mismatch — expected \
+                 {expected}, got {}",
+            out.len()
+        );
 
         let bits = self.bits;
         let qmax = ((1u32 << bits) - 1) as f32;
@@ -191,86 +210,6 @@ pub fn quantize_tensor(data: &[f32], cfg: &QuantConfig) -> QuantizedTensor {
     QuantizedTensor::encode_uniform(data, cfg.mode.bits(), cfg.group_size)
 }
 
-// ── Min/max helpers ───────────────────────────────────────────────────────
-//
-// Public for benchmarking and tests. The scalar implementation is the
-// portable, always-correct reference; on `aarch64` we also expose a NEON
-// fast path that operates on 4-wide f32 vectors with a scalar tail. The
-// NEON path preserves the exact same finite-input semantics as the scalar
-// path — any input containing `NaN` will propagate `NaN` because the
-// initial seed values come from the first lane, matching IEEE-754 rules.
-
-/// Scalar min/max — portable reference, always correct.
-pub fn scalar_min_max(data: &[f32]) -> (f32, f32) {
-    let mut mn = f32::INFINITY;
-    let mut mx = f32::NEG_INFINITY;
-    for &v in data {
-        if v < mn { mn = v; }
-        if v > mx { mx = v; }
-    }
-    (mn, mx)
-}
-
-/// Min/max with SIMD dispatch: NEON on aarch64, scalar fallback elsewhere.
-#[cfg(target_arch = "aarch64")]
-pub fn min_max(data: &[f32]) -> (f32, f32) {
-    use core::arch::aarch64::{vld1q_f32, vminq_f32, vmaxq_f32};
-    // SAFETY: vld1q_f32 reads 4 aligned lanes; we always load from the
-    // start of a 4-element window inside `data`. Pointer arithmetic stays
-    // within `data` because we compare `chunk.len()` before dereferencing.
-    unsafe {
-        let n = data.len();
-        let mut mn = f32::INFINITY;
-        let mut mx = f32::NEG_INFINITY;
-        let mut i = 0usize;
-        let chunks = n / 4;
-        let mut vmn = vld1q_f32([mn; 4].as_ptr());
-        let mut vmx = vld1q_f32([mx; 4].as_ptr());
-        for _ in 0..chunks {
-            let v = vld1q_f32(data.as_ptr().add(i));
-            vmn = vminq_f32(vmn, v);
-            vmx = vmaxq_f32(vmx, v);
-            i += 4;
-        }
-        // Horizontal reduction — 4 lanes each.
-        let mut a = [0f32; 4];
-        vst1q_f32_to_array(vmn, &mut a);
-        mn = a[0].min(a[1]).min(a[2]).min(a[3]);
-        let mut b = [0f32; 4];
-        vst1q_f32_to_array(vmx, &mut b);
-        mx = b[0].max(b[1]).max(b[2]).max(b[3]);
-        // Scalar tail.
-        while i < n {
-            let v = *data.get_unchecked(i);
-            if v < mn { mn = v; }
-            if v > mx { mx = v; }
-            i += 1;
-        }
-        (mn, mx)
-    }
-}
-
-#[cfg(not(target_arch = "aarch64"))]
-pub fn min_max(data: &[f32]) -> (f32, f32) {
-    scalar_min_max(data)
-}
-
-// Tiny helper: store an f32x4 into a [f32; 4] without bringing in the full
-// NEON vst1q import path on stable. We avoid `core::arch::aarch64::vst1q_f32`
-// because it has historically had signature drift between stable/nightly;
-// using a transmute-via-bytes route is portable.
-#[cfg(target_arch = "aarch64")]
-#[inline]
-fn vst1q_f32_to_array(v: core::arch::aarch64::float32x4_t, dst: &mut [f32; 4]) {
-    // SAFETY: float32x4_t is #[repr(C)] and 16 bytes wide; transmuting to
-    // the matching byte array and reinterpreting as f32 is sound.
-    unsafe {
-        let raw: [u8; 16] = core::mem::transmute(v);
-        let tmp: [f32; 4] = core::mem::transmute(raw);
-        *dst = tmp;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,7 +227,13 @@ mod tests {
         let mut out = vec![0f32; data.len()];
         q.decode_uniform(&mut out);
         for (a, b) in data.iter().zip(out.iter()) {
-            assert!((a - b).abs() < 0.1, "{} vs {} (delta={})", a, b, (a - b).abs());
+            assert!(
+                (a - b).abs() < 0.1,
+                "{} vs {} (delta={})",
+                a,
+                b,
+                (a - b).abs()
+            );
         }
     }
 
@@ -298,8 +243,6 @@ mod tests {
         assert_eq!(TurboMode::Symmetric3.bits(), 3);
         assert_eq!(TurboMode::Symmetric2.bits(), 2);
     }
-
-    // ── New TDD cases (RED): metadata-aware round-trip ─────────────────────
 
     fn linspace(n: usize, lo: f32, hi: f32) -> Vec<f32> {
         if n == 0 {
@@ -324,8 +267,13 @@ mod tests {
             - data.iter().cloned().fold(f32::INFINITY, f32::min);
         let tol = tolerance_for(2, range).max(1e-5);
         for (a, b) in data.iter().zip(out.iter()) {
-            assert!((a - b).abs() <= tol + 1e-6,
-                    "{} vs {} (delta={})", a, b, (a - b).abs());
+            assert!(
+                (a - b).abs() <= tol + 1e-6,
+                "{} vs {} (delta={})",
+                a,
+                b,
+                (a - b).abs()
+            );
         }
     }
 
@@ -341,8 +289,13 @@ mod tests {
             - data.iter().cloned().fold(f32::INFINITY, f32::min);
         let tol = tolerance_for(3, range).max(1e-5);
         for (a, b) in data.iter().zip(out.iter()) {
-            assert!((a - b).abs() <= tol + 1e-6,
-                    "{} vs {} (delta={})", a, b, (a - b).abs());
+            assert!(
+                (a - b).abs() <= tol + 1e-6,
+                "{} vs {} (delta={})",
+                a,
+                b,
+                (a - b).abs()
+            );
         }
     }
 
@@ -358,8 +311,13 @@ mod tests {
             - data.iter().cloned().fold(f32::INFINITY, f32::min);
         let tol = tolerance_for(4, range).max(1e-5);
         for (a, b) in data.iter().zip(out.iter()) {
-            assert!((a - b).abs() <= tol + 1e-6,
-                    "{} vs {} (delta={})", a, b, (a - b).abs());
+            assert!(
+                (a - b).abs() <= tol + 1e-6,
+                "{} vs {} (delta={})",
+                a,
+                b,
+                (a - b).abs()
+            );
         }
     }
 
@@ -369,8 +327,11 @@ mod tests {
             let data = linspace(13, -1.0, 1.0);
             let q = QuantizedTensor::encode_uniform(&data, bits, group_size);
             assert_eq!(q.bits, bits, "bits mismatch for ({}, {})", bits, group_size);
-            assert_eq!(q.group_size, group_size,
-                       "group_size mismatch for ({}, {})", bits, group_size);
+            assert_eq!(
+                q.group_size, group_size,
+                "group_size mismatch for ({}, {})",
+                bits, group_size
+            );
             // scale/zero length must equal ceil(n / group_size)
             let expected_groups = (data.len() + group_size - 1) / group_size;
             assert_eq!(q.scales.len(), expected_groups);
@@ -387,8 +348,13 @@ mod tests {
         let mut out = vec![0f32; data.len()];
         q.decode_uniform(&mut out);
         for (a, b) in data.iter().zip(out.iter()) {
-            assert!((a - b).abs() < 0.1,
-                    "{} vs {} (delta={})", a, b, (a - b).abs());
+            assert!(
+                (a - b).abs() < 0.1,
+                "{} vs {} (delta={})",
+                a,
+                b,
+                (a - b).abs()
+            );
         }
     }
 
@@ -411,124 +377,5 @@ mod tests {
             QuantizedTensor::encode_uniform(&bad, 4, 2);
         });
         assert!(result.is_err(), "NaN input should panic");
-    }
-
-    #[test]
-    fn min_max_scalar_neon_equivalence() {
-        // Deterministic, finite, mixed-sign pattern.
-        let mut data: Vec<f32> = Vec::with_capacity(1024);
-        for i in 0..1024 {
-            let v = ((i as f32) * 0.013).sin() + ((i as f32) * 0.007).cos();
-            data.push(v);
-        }
-        let (smn, smx) = scalar_min_max(&data);
-        let (nmn, nmx) = min_max(&data);
-        assert_eq!(smn.to_bits(), nmn.to_bits(),
-                   "min mismatch scalar={} neon={}", smn, nmn);
-        assert_eq!(smx.to_bits(), nmx.to_bits(),
-                   "max mismatch scalar={} neon={}", smx, nmx);
-    }
-
-    #[test]
-    #[cfg(target_arch = "aarch64")]
-    fn min_max_neon_smoke_unaligned() {
-        // Unaligned slices + non-multiple-of-4 lengths — exercise the
-        // vector load + scalar tail path.
-        for &len in &[1usize, 3, 5, 7, 9, 17, 33, 65, 129] {
-            let mut data = Vec::with_capacity(len);
-            for i in 0..len {
-                data.push((i as f32).sin() * 7.0 - (i as f32 * 0.1).cos());
-            }
-            let (smn, smx) = scalar_min_max(&data);
-            let (nmn, nmx) = min_max(&data);
-            assert!(nmn.is_finite() && nmx.is_finite(),
-                    "non-finite neon result for len={}", len);
-            assert!(nmn <= smn + 1e-6 && nmx + 1e-6 >= smx,
-                    "neon bounds loose: scalar=[{}, {}] neon=[{}, {}]",
-                    smn, smx, nmn, nmx);
-        }
-    }
-
-    // ── Microbenchmark (release-only, ignored in debug to keep tests fast) ─
-
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::hint::black_box;
-
-    // Global sink to prevent the optimiser from eliminating the call.
-    static SINK_A: AtomicU64 = AtomicU64::new(0);
-    static SINK_B: AtomicU64 = AtomicU64::new(0);
-    static SINK_C: AtomicU64 = AtomicU64::new(0);
-    static SINK_D: AtomicU64 = AtomicU64::new(0);
-
-    fn consume((a, b): (f32, f32)) {
-        SINK_A.fetch_add(a.to_bits() as u64, Ordering::Relaxed);
-        SINK_B.fetch_add(b.to_bits() as u64, Ordering::Relaxed);
-    }
-
-    #[test]
-    #[ignore]
-    fn microbench_scalar_vs_neon_min_max() {
-        // >= 1 Mi floats (4 Mi = 16 MiB), repeated K times per measurement
-        // so each sample is on the order of tens of milliseconds — below
-        // that, Instant precision dominates.
-        let n: usize = 1 << 22; // 4 Mi floats
-        let inner_repeats: usize = 32;
-        let mut data = Vec::with_capacity(n);
-        for i in 0..n {
-            data.push(((i as f32) * 0.0001).sin() * 100.0);
-        }
-        let data = black_box(data);
-
-        // Warmup
-        for _ in 0..16 {
-            consume(scalar_min_max(&data));
-            consume(min_max(&data));
-        }
-
-        const ITERS: usize = 96;
-
-        // Scalar
-        let mut scalar_best = f64::INFINITY;
-        let mut scalar_samples: Vec<f64> = Vec::with_capacity(ITERS);
-        for _ in 0..ITERS {
-            let t0 = std::time::Instant::now();
-            for _ in 0..inner_repeats {
-                consume(scalar_min_max(&data));
-            }
-            let dt = t0.elapsed().as_secs_f64() / inner_repeats as f64;
-            scalar_best = scalar_best.min(dt);
-            scalar_samples.push(dt);
-        }
-        scalar_samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let scalar_median = scalar_samples[ITERS / 2];
-
-        // NEON / dispatched
-        let mut neon_best = f64::INFINITY;
-        let mut neon_samples: Vec<f64> = Vec::with_capacity(ITERS);
-        for _ in 0..ITERS {
-            let t0 = std::time::Instant::now();
-            for _ in 0..inner_repeats {
-                consume(min_max(&data));
-            }
-            let dt = t0.elapsed().as_secs_f64() / inner_repeats as f64;
-            neon_best = neon_best.min(dt);
-            neon_samples.push(dt);
-        }
-        neon_samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let neon_median = neon_samples[ITERS / 2];
-
-        let ratio = scalar_median / neon_median;
-        // Touch the sinks so they are not eliminated.
-        SINK_C.store(SINK_A.load(Ordering::Relaxed), Ordering::Relaxed);
-        SINK_D.store(SINK_B.load(Ordering::Relaxed), Ordering::Relaxed);
-        eprintln!(
-            "min_max microbench n={} reps={} iters={}: scalar median={:.3}ms best={:.3}ms | neon median={:.3}ms best={:.3}ms | scalar/neon={:.2}x (bandwidth: scalar={:.2} GB/s, neon={:.2} GB/s)",
-            n, inner_repeats, ITERS,
-            scalar_median * 1e3, scalar_best * 1e3,
-            neon_median * 1e3, neon_best * 1e3,
-            ratio,
-            (n as f64 * 4.0) / scalar_median / 1e9,
-            (n as f64 * 4.0) / neon_median / 1e9,
-        );
     }
 }
