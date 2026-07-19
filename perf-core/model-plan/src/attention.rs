@@ -46,6 +46,15 @@ pub enum AttentionKind {
         depth: usize,
     },
 
+    /// Sliding-window causal attention (Qwen3-Next, Mistral).
+    /// Each query attends to at most `window_size` preceding key/value
+    /// positions; long-context is then handled by sparse global
+    /// attention at selected layers.
+    SlidingWindow {
+        /// Maximum number of K positions a single Q can attend to.
+        window_size: usize,
+    },
+
     /// Vanilla dense attention. All heads share KV.
     Dense,
 }
@@ -59,6 +68,7 @@ impl AttentionKind {
             AttentionKind::Cca { .. } => "cca",
             AttentionKind::Paged { .. } => "paged",
             AttentionKind::Tree { .. } => "tree",
+            AttentionKind::SlidingWindow { .. } => "sliding_window",
             AttentionKind::Dense => "dense",
         }
     }
@@ -102,6 +112,10 @@ mod tests {
             .tag(),
             "tree"
         );
+        assert_eq!(
+            AttentionKind::SlidingWindow { window_size: 256 }.tag(),
+            "sliding_window"
+        );
     }
 
     #[test]
@@ -120,6 +134,7 @@ mod tests {
                 width: 4,
                 depth: 3,
             },
+            AttentionKind::SlidingWindow { window_size: 256 },
             AttentionKind::Dense,
         ];
         for v in variants {
