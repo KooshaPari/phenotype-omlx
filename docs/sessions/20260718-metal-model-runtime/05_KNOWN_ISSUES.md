@@ -14,5 +14,6 @@
 | P2 | Zig integration | Zig is excluded or version-sensitive and must pass workspace feature tests |
 | P2 | observability | Kernel choice, tuning provenance, and rejection reasons are not exposed end to end |
 | P2 | AX and DX | No unified plan-inspect, tune, replay, compare, and evidence-export CLI |
+| P2 | Airlock | Contract path repos/.airlock/bin/airlock-v2.py is absent; snapshots cannot run until tooling is restored |
 
 Issues are removed only after a reproducing test, forward fix, validation evidence, and review.
