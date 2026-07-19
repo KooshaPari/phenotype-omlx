@@ -16,9 +16,12 @@ project's own files, so the doctor can run before optional dependencies
 failing import is reported as ``warn`` — never raised.
 
 Layout:
-    doctor.py             — public API + orchestration + rendering (this file)
-    _doctor_shared.py     — pure parsing helpers (Cargo.toml, version.rs, lib.rs)
-    _doctor_checks.py     — individual check functions
+    doctor.py                 — public API + orchestration + rendering (this file)
+    _doctor_shared.py         — pure parsing helpers (Cargo.toml, version.rs, lib.rs)
+    _doctor_checks.py         — individual check functions
+    _doctor_extra_checks.py   — turn-4 checks (version, NIAH, eval, dispatch envelope)
+    _doctor_turn5_checks.py   — turn-5 checks (NIAH baseline, dispatch scripts)
+    _doctor_meta_checks.py    — turn-7 meta-check (drift detector for the CHECKS list)
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Callable, Optional
 
 from . import _doctor_checks as checks
+from . import _doctor_meta_checks as meta_checks  # drift detector (turn-7)
 from ._doctor_shared import (
     EXPECTED_KERNEL_OP_COUNT,
     FAIL,
@@ -106,6 +110,11 @@ CHECKS: list[Callable[[], Check]] = [
     checks.dispatch_script_metal_exists,
     checks.dispatch_script_sglang_exists,
     checks.dispatch_script_vllm_exists,
+    # Meta-check (drift detector) — MUST be last so the count it
+    # observes reflects the complete registry. See
+    # _doctor_meta_checks.py for the recursion guard that prevents
+    # the spawned `doctor --json` subprocess from spawning another.
+    meta_checks.doctor_check_count_at_least_18,
 ]
 
 
