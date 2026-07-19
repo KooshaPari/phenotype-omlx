@@ -48,6 +48,7 @@ const SOTA_OPERATORS_SOURCES: &[(&str, &str)] = &[
     ("recurrent/rwkv7.rs", include_str!("recurrent/rwkv7.rs")),
     ("spec_decode_proposal_state.rs", include_str!("spec_decode_proposal_state.rs")),
     ("zaya_activations.rs", include_str!("zaya_activations.rs")),
+    ("zaya_lfm_interaction.rs", include_str!("zaya_lfm_interaction.rs")),
 ];
 
 /// Spec-mandated families from
@@ -74,6 +75,7 @@ const MATRIX_FAMILIES: &[(&str, &[&str])] = &[
     ("DeltaNetBatched", &["deltanet_batched", "deltanet"]),
     ("ZayaActivation", &["zaya_binary_act"]),
     ("SpecDecodeProposal", &["proposal_state"]),
+    ("ZayaLfmInteraction", &["zaya", "lfm", "interaction"]),
 ];
 
 /// Dispatch-envelope families that must each have at least one

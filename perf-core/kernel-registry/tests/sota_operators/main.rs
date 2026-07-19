@@ -273,3 +273,4 @@ mod qwen_agentic;
 mod recurrent;
 mod spec_decode_proposal_state;
 mod zaya_activations;
+mod zaya_lfm_interaction;
