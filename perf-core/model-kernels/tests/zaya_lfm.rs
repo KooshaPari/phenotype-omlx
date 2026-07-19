@@ -54,8 +54,8 @@ fn zaya_reference(q: &[f32], blocks: &[CcaBlock], head_dim: usize) -> Vec<f32> {
     let mut max = f32::NEG_INFINITY;
     for block in blocks {
         let mut dot = 0.0f32;
-        for d in 0..head_dim {
-            dot += q[d] * block.block_summary[d];
+        for (d, &q_d) in q.iter().enumerate().take(head_dim) {
+            dot += q_d * block.block_summary[d];
         }
         let s = dot * block.block_summary_scale;
         scores.push(s);
@@ -80,8 +80,8 @@ fn zaya_reference(q: &[f32], blocks: &[CcaBlock], head_dim: usize) -> Vec<f32> {
     // Accumulate block_size-weighted summaries.
     for (block, &w) in blocks.iter().zip(weights.iter()) {
         let scale = w * (block.block_indices.len() as f32);
-        for d in 0..head_dim {
-            out[d] += scale * block.block_summary[d];
+        for (d, out_d) in out.iter_mut().enumerate().take(head_dim) {
+            *out_d += scale * block.block_summary[d];
         }
     }
     out

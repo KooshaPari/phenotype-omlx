@@ -263,9 +263,8 @@ fn llada_remask_count_per_position_bounded_by_total_steps_minus_one() {
     }
     for (i, &c) in per_position_remasks.iter().enumerate() {
         assert!(
-            c <= total_steps - 1,
-            "position {i} remasked {c} times, exceeds total_steps - 1 = {}",
-            total_steps - 1
+            c < total_steps,
+            "position {i} remasked {c} times, exceeds total_steps = {total_steps}"
         );
     }
 }
@@ -431,9 +430,8 @@ fn dream_remask_count_per_position_bounded_by_total_steps_minus_one() {
     }
     for (i, &c) in per_position_remasks.iter().enumerate() {
         assert!(
-            c <= total_steps - 1,
-            "position {i} remasked {c} times, exceeds total_steps - 1 = {}",
-            total_steps - 1
+            c < total_steps,
+            "position {i} remasked {c} times, exceeds total_steps = {total_steps}"
         );
     }
 }

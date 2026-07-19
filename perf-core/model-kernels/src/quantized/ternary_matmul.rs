@@ -268,11 +268,11 @@ mod tests {
     fn rejects_n_not_aligned_to_four() {
         // n=3 is not a multiple of 4 -> the packed layout cannot
         // index into a byte in a row-aligned way.
-        let a = vec![0.0f32; 1 * 4];
+        let a = vec![0.0f32; 4];
         let b_packed = vec![0u8; 3]; // 3 ternary symbols -> ceil(3/4) = 1 byte
         let scales = [1.0f32];
         let zeros = [0.0f32];
-        let mut out = vec![0.0f32; 1 * 3];
+        let mut out = vec![0.0f32; 3];
         let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 4, 1, 4, 3, &mut out)
             .unwrap_err();
         assert!(matches!(err, KernelError::DimMismatch { .. }));

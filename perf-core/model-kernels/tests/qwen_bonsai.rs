@@ -211,8 +211,11 @@ fn qwen_deltanet_chunk_matches_repeated_step_4_heads() {
 
     // And all entries must be finite.
     assert!(chunk_outs.iter().all(|v| v.is_finite()), "non-finite chunk output");
-    for h in 0..num_heads {
-        assert!(chunk_states[h].iter().all(|v| v.is_finite()), "non-finite head {h} state");
+    for (h, state) in chunk_states.iter().enumerate().take(num_heads) {
+        assert!(
+            state.iter().all(|v| v.is_finite()),
+            "non-finite head {h} state"
+        );
     }
 }
 
@@ -378,8 +381,11 @@ fn qwen_agentic_mini_trace_runs_and_is_finite() {
         head_dim,
     );
     assert!(deltanet_outs.iter().all(|v| v.is_finite()));
-    for h in 0..num_heads {
-        assert!(deltanet_states[h].iter().all(|v| v.is_finite()), "head {h} state not finite");
+    for (h, state) in deltanet_states.iter().enumerate().take(num_heads) {
+        assert!(
+            state.iter().all(|v| v.is_finite()),
+            "head {h} state not finite"
+        );
     }
 
     // Reduce the per-head, per-step outputs into per-token
