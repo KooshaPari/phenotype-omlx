@@ -83,12 +83,10 @@ impl TreePlan {
     /// responsible for converting from absolute sequence positions using the
     /// tree's `offset`.
     pub fn parent(i: usize, width: usize) -> Option<usize> {
-        if i == 0 {
-            None
-        } else if width == 0 {
+        if i == 0 || width == 0 {
             None
         } else {
-            Some((i - 1) / width)
+            (i - 1).checked_div(width)
         }
     }
 }
@@ -155,10 +153,10 @@ pub fn tree_causal_mask(
     let plan = TreePlan::new(tree_width, tree_depth);
     let total_tree_nodes = plan.total_nodes();
 
-    for r in 0..seq_len {
+    for (r, row) in mask.iter_mut().enumerate() {
         let r_in_tree = in_tree_index(r, offset, total_tree_nodes);
-        for c in 0..seq_len {
-            mask[r][c] = match (r_in_tree, in_tree_index(c, offset, total_tree_nodes)) {
+        for (c, cell) in row.iter_mut().enumerate() {
+            *cell = match (r_in_tree, in_tree_index(c, offset, total_tree_nodes)) {
                 // Both query and key are in the tree. The query can attend
                 // to the key iff the key is an ancestor-or-self of the query
                 // in the explicit tree.
