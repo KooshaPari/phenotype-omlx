@@ -12,9 +12,10 @@
 //! continue to satisfy the parent module's `use` sites unchanged.
 
 mod dispatch_envelope;
+mod mamba_extended;
 mod mamba_scan;
-mod recurrent_extended;
 mod rwkv7;
+mod rwkv_extended;
 
 // Re-export the parent module's shared builder helpers (`build_record`,
 // `fresh_capabilities`, `make_candidate`, `samples_with_p95`, `shape`,
