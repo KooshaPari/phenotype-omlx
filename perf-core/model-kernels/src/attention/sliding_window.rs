@@ -351,4 +351,79 @@ mod tests {
                 "decode out[{d}]={got} not in convex range [{min_w}, {max_w}]");
         }
     }
+
+    /// (10) Mistral-style half-open window=1 oracle: with causal
+    /// masking and `window_size=1`, each Q row `s_q` attends to exactly
+    /// one K row: the latest causal one. Concretely with
+    /// `seq_k - seq_q + s_q - 1 + 1 = seq_k - seq_q + s_q` as the
+    /// half-open hi edge, the single index attended to is
+    /// `seq_k - seq_q + s_q` (since hi is exclusive, the highest
+    /// in-window index is hi-1 = seq_k - seq_q + s_q). After softmax
+    /// over a single score returns 1.0, output must equal V[s] at
+    /// that index byte-for-byte.
+    ///
+    /// Sweep covers prefill (`seq_q == seq_k`), decode (`seq_q == 1`),
+    /// and asymmetric prefill (`seq_q < seq_k`).
+    #[test]
+    fn mistral_window_one_is_half_open_byte_identical() {
+        for &(seq_k, seq_q, qh_, kvh, hd) in &[
+            // window=1 prefill shapes
+            (1usize, 1usize, 1usize, 1usize, 1usize),
+            (4, 4, 4, 2, 8),
+            (8, 8, 4, 1, 16),
+            // window=1 decode (seq_q = 1)
+            (8, 1, 4, 2, 8),
+            (16, 1, 8, 4, 16),
+            // window=1 decode with seq_k >> window (clamps leading edge)
+            (32, 1, 4, 2, 16),
+            // mixed-shape prefill with seq_q != seq_k
+            (16, 8, 4, 2, 8),
+        ] {
+            let q = tensor(seq_q, qh_, hd);
+            let k = tensor(seq_k, kvh, hd);
+            // V is row-distinct: V[s, *, *] = 1000 + s; since softmax of
+            // a single score returns 1.0, out must equal V at the
+            // single attended index byte-for-byte.
+            let mut v_unique = vec![0.0f32; seq_k * kvh * hd];
+            for s in 0..seq_k { for h in 0..kvh { for d in 0..hd {
+                v_unique[s * kvh * hd + h * hd + d] = 1000.0 + s as f32;
+            }}}
+            let got = run_sw(&q, &k, &v_unique, qh_, kvh, hd, seq_q, seq_k, 1);
+            for sq in 0..seq_q {
+                // Half-open window `[sq, sq+1)` with seq_q < seq_k
+                // collapses to the single causal-most-recent index
+                // for Q row `sq`: `seq_k - seq_q + sq`. With
+                // seq_q == seq_k this reduces to `sq` (causal prefill).
+                let s_attended = seq_k - seq_q + sq;
+                let expected_v_value = 1000.0 + s_attended as f32;
+                for qh in 0..qh_ {
+                    for d in 0..hd {
+                        let v_idx = sq * qh_ * hd + qh * hd + d;
+                        assert!(
+                            (got[v_idx] - expected_v_value).abs() < 1e-4,
+                            "window=1 (seq_q={seq_q}, seq_k={seq_k}, qh={qh}, d={d}): \
+                             Q[{sq}] must attend only to K[{s_attended}], so out[{sq},{qh},{d}] \
+                             must equal V[{s_attended}]={expected_v_value}, got {}",
+                            got[v_idx]
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// (11) Mistral-style `seq_k=1` boundary: a single K position must
+    /// be attended to by the single Q row (causal window of size 1 still
+    /// admits K[s=0]).
+    #[test]
+    fn mistral_window_one_seq_k_one_is_identity() {
+        let q = vec![7.0f32];
+        let k = vec![3.0f32];
+        let v = vec![42.0f32];
+        let got = run_sw(&q, &k, &v, 1, 1, 1, 1, 1, 1);
+        assert_eq!(got.len(), 1);
+        // Single score = q*k = 21.0, softmax = 1.0, out = V[0] = 42.
+        assert!((got[0] - 42.0).abs() < 1e-4,
+            "single-element window=1 must be byte-identical to V[0]: got {}", got[0]);
+    }
 }

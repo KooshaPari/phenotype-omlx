@@ -143,6 +143,59 @@ pub(crate) fn samples_with_p95(p95: u64) -> Vec<u64> {
     v
 }
 
+/// Variant of [`build_record`] that attaches a non-zero
+/// `median_dispatches` and the per-sample `dispatches` field. Used by
+/// dispatch-bucket regression tests (`dispatch_buckets_recurrent`,
+/// `dispatch_buckets_dense`) which need the registry's selector to surface
+/// a `median_dispatches` for the chosen candidate so the test can pin it
+/// against the per-shape budget.
+pub(crate) fn build_record_with_dispatches(
+    candidate_id: CandidateId,
+    key: KernelKey,
+    samples: &[u64],
+    expires_at_unix_ms: Option<u64>,
+    dispatches: u32,
+) -> TuningRecord {
+    let mut sorted = samples.to_vec();
+    sorted.sort_unstable();
+    let n = sorted.len();
+    let median = sorted[n / 2];
+    let p95_idx = ((n as f64 * 0.95).ceil() as usize).saturating_sub(1).min(n - 1);
+    let p99_idx = ((n as f64 * 0.99).ceil() as usize).saturating_sub(1).min(n - 1);
+    let mean = sorted.iter().sum::<u64>() as f64 / n as f64;
+    let variance = sorted
+        .iter()
+        .map(|&x| (x as f64 - mean).powi(2))
+        .sum::<f64>()
+        / n as f64;
+    let measurements: Vec<Measurement> = samples
+        .iter()
+        .enumerate()
+        .map(|(i, &latency_ns)| {
+            Measurement::with_metadata(i as u32, latency_ns, None, Some(dispatches), 0)
+        })
+        .collect();
+    TuningRecord {
+        candidate_id,
+        key,
+        measurements,
+        median_ns: median,
+        p95_ns: sorted[p95_idx],
+        p99_ns: sorted[p99_idx],
+        variance_ns2: variance as u64,
+        median_energy_j: None,
+        median_dispatches: Some(dispatches),
+        samples: n,
+        warmup_discarded: 3,
+        compiler: "metal-msl".to_string(),
+        compiler_version: "3.2".to_string(),
+        captured_at_unix_ms: NOW_UNIX_MS,
+        source_revision: "rev-sota".to_string(),
+        expires_at_unix_ms,
+        quality: None,
+    }
+}
+
 #[test]
 fn selector_runs_are_deterministic_across_sota_operator_families() {
     // Run the deterministic policy twice against the Mamba registry and

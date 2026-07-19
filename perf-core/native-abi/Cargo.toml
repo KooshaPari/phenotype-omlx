@@ -15,6 +15,9 @@ thiserror = "1"
 [build-dependencies]
 # The build script does not link anything; it just writes include/abi_v1.h.
 
+[dev-dependencies]
+proptest = "1.4"
+
 [features]
 default = []
 
