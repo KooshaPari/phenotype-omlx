@@ -1,0 +1,27 @@
+[package]
+name = "native-abi"
+version = "0.1.0"
+edition = "2021"
+description = "Versioned Native ABI v1 contract — shared between C, Zig, Rust, Mojo, Nim, Go backends"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "native_abi"
+crate-type = ["rlib"]
+
+[dependencies]
+thiserror = "1"
+
+[build-dependencies]
+# The build script does not link anything; it just writes include/abi_v1.h.
+
+[features]
+default = []
+
+[package.metadata.docs.rs]
+# Generated header is shipped via `include/` — no extra config needed.
+
+# Ship the generated ABI header alongside the crate so polyglot consumers
+# (C, Zig, Mojo, Nim, Go) can `#include` it directly without depending on
+# `build.rs` running.
+include = ["include/abi_v1.h"]

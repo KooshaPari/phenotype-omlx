@@ -1,6 +1,14 @@
 pub use turbo_quant_c_build::*;
 
 mod turbo_quant_c_build {
+    use std::os::raw::c_void;
+
+    use native_abi::{
+        AbiVersion, DecodeRequest as RustDecodeRequest, EncodeRequest as RustEncodeRequest,
+        EncodeResult as RustEncodeResult, Status as RustStatus, ABI_VERSION_CURRENT,
+    };
+
+    // ── Pre-v1 backwards-compatibility surface ──────────────────────────────
     extern "C" {
         fn tq_c_encode(
             data: *const f32,
@@ -26,7 +34,13 @@ mod turbo_quant_c_build {
             bits: u8,
             out: *mut f32,
         );
-        fn tq_c_free(ptr: *mut std::ffi::c_void);
+        fn tq_c_free(ptr: *mut c_void);
+    }
+
+    // ── Native ABI v1 surface ──────────────────────────────────────────────
+    extern "C" {
+        fn tq_abi_encode(req: *const RustEncodeRequest) -> RustEncodeResult;
+        fn tq_abi_decode(req: *const RustDecodeRequest) -> i32;
     }
 
     pub struct CTensor {
@@ -34,6 +48,17 @@ mod turbo_quant_c_build {
         pub packed: Vec<u8>,
         pub scales: Vec<f32>,
         pub zeros: Vec<f32>,
+    }
+
+    impl std::fmt::Debug for CTensor {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("CTensor")
+                .field("shape", &self.shape)
+                .field("packed_len", &self.packed.len())
+                .field("scales", &self.scales)
+                .field("zeros", &self.zeros)
+                .finish()
+        }
     }
 
     impl Clone for CTensor {
@@ -136,11 +161,123 @@ mod turbo_quant_c_build {
         decode_into(t, n, group_size, bits, &mut out);
         out
     }
+
+    // ── Native ABI v1 wrappers ──────────────────────────────────────────────
+    //
+    // These provide a typed Rust surface over the C ABI v1 entry points. They
+    // exist alongside the legacy `encode`/`decode` functions above so the
+    // pre-v1 API is preserved unchanged. The descriptors used here mirror
+    // `native_abi::*` exactly; the C side declares the same layout in
+    // `abi_v1.h`.
+
+    /// Result of an ABI v1 encode call.
+    pub type AbiEncodeResult = RustEncodeResult;
+
+    /// Versioned encode entry. Returns `Ok(CTensor)` on success; on failure
+    /// returns the matching [`RustStatus`] and zeroes every output slot.
+    pub fn encode_v1(
+        data: &[f32],
+        bits: u8,
+        group_size: usize,
+    ) -> Result<CTensor, RustStatus> {
+        let n_groups = native_abi::group_count(data.len(), group_size);
+        let packed_len = native_abi::expected_packed_len(data.len(), bits);
+
+        // Pre-allocate caller-owned output buffers. The C ABI writes into
+        // these directly and never allocates; the matching release call is
+        // therefore not required for this implementation.
+        let mut shape_storage: Vec<usize> = vec![0; 1];
+        let mut packed_storage: Vec<u8> = vec![0; packed_len];
+        let mut scales_storage: Vec<f32> = vec![0.0; n_groups];
+        let mut zeros_storage: Vec<f32> = vec![0.0; n_groups];
+
+        let mut shape_ptr = shape_storage.as_mut_ptr();
+        let mut packed_ptr = packed_storage.as_mut_ptr();
+        let mut scales_ptr = scales_storage.as_mut_ptr();
+        let mut zeros_ptr = zeros_storage.as_mut_ptr();
+
+        let mut req = RustEncodeRequest::zeroed();
+        req.abi = ABI_VERSION_CURRENT;
+        req.data_ptr = data.as_ptr();
+        req.n = data.len();
+        req.bits = bits;
+        req.group_size = group_size;
+        req.out_shape = &mut shape_ptr;
+        req.out_shape_capacity = shape_storage.len();
+        req.out_packed = &mut packed_ptr;
+        req.out_packed_capacity = packed_storage.len();
+        req.out_scales = &mut scales_ptr;
+        req.out_scales_capacity = scales_storage.len();
+        req.out_zeros = &mut zeros_ptr;
+        req.out_zeros_capacity = zeros_storage.len();
+
+        let result = unsafe { tq_abi_encode(&req) };
+        let RustEncodeResult { status, .. } = result;
+        if status != RustStatus::Ok {
+            // The C ABI resets every output slot to NULL on failure; we
+            // simply discard the local Vecs whose contents may be in any
+            // partial state.
+            return Err(status);
+        }
+
+        // Take ownership of the buffers: drain them into a fresh CTensor so
+        // the returned value owns its memory via the standard Rust allocator.
+        let shape = std::mem::take(&mut shape_storage);
+        let packed = std::mem::take(&mut packed_storage);
+        let scales = std::mem::take(&mut scales_storage);
+        let zeros = std::mem::take(&mut zeros_storage);
+
+        Ok(CTensor { shape, packed, scales, zeros })
+    }
+
+    /// Decode via the versioned ABI into a caller-owned buffer. Returns the
+    /// status reported by the C side; on success the buffer is overwritten
+    /// with the reconstructed f32 values, on failure it is left untouched.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `out.len() < n` — same reasoning as `decode_into`.
+    pub fn decode_v1(
+        packed: &[u8],
+        scales: &[f32],
+        zeros: &[f32],
+        n: usize,
+        group_size: usize,
+        bits: u8,
+        out: &mut [f32],
+    ) -> RustStatus {
+        assert!(
+            out.len() >= n,
+            "decode_v1: output buffer length ({}) must be >= n ({})",
+            out.len(),
+            n
+        );
+
+        let mut req = RustDecodeRequest::zeroed();
+        req.abi = ABI_VERSION_CURRENT;
+        req.packed_ptr = packed.as_ptr();
+        req.packed_len = packed.len();
+        req.scales_ptr = scales.as_ptr();
+        req.zeros_ptr = zeros.as_ptr();
+        req.n = n;
+        req.group_size = group_size;
+        req.bits = bits;
+        req.out_ptr = out.as_mut_ptr();
+
+        let code = unsafe { tq_abi_decode(&req) };
+        RustStatus::try_from(code).unwrap_or(RustStatus::ErrBackend)
+    }
+
+    /// Try to construct an `AbiVersion` from raw parts. Convenience for tests
+    /// that want to forge mismatched versions.
+    pub fn abi_version(major: u16, minor: u16) -> AbiVersion {
+        AbiVersion { major, minor }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{decode, decode_into, encode};
+    use super::{decode, decode_into, encode, turbo_quant_c_build::abi_version};
 
     #[test]
     fn rejects_invalid_encode_arguments() {
@@ -228,5 +365,13 @@ mod tests {
         let mut buf = vec![sentinel_value; 4];
         decode_into(&truncated, 4, 4, 3, &mut buf);
         assert_eq!(buf, vec![sentinel_value; 4]);
+    }
+
+    #[test]
+    fn abi_v1_version_helper_smoke() {
+        // Tiny smoke test that the version helper is wired up. Not load-bearing.
+        let v = abi_version(1, 0);
+        assert_eq!(v.major, 1);
+        assert_eq!(v.minor, 0);
     }
 }

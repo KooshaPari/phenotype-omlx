@@ -404,11 +404,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "model-kernels"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "tree-attention",
+]
+
+[[package]]
 name = "model-plan"
 version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "native-abi"
+version = "0.1.0"
+dependencies = [
  "thiserror",
 ]
 
@@ -752,6 +767,7 @@ name = "turbo-quant-c"
 version = "0.1.0"
 dependencies = [
  "cc",
+ "native-abi",
 ]
 
 [[package]]

@@ -14,9 +14,11 @@ members = [
     "turbo-quant-mojo",
     "eval-harness",
     "kernel-registry",
+    "native-abi",
     "fleet-proto",
     "fleet-proto-zeromq",
     "model-plan",
+    "model-kernels",
 ]
 
 [workspace.package]

@@ -228,3 +228,215 @@ void tq_c_decode(const uint8_t* packed, size_t packed_len,
 }
 
 void tq_c_free(void* ptr) { free(ptr); }
+
+/* ----- Native ABI v1 ----------------------------------------------------- *
+ *
+ * The versioned ABI defined by perf-core/native-abi. New consumers should
+ * call `tq_abi_encode` and `tq_abi_decode` directly; the `tq_c_*` aliases
+ * above remain for backwards compatibility and route through these entry
+ * points. */
+
+/* Compute the number of groups implied by `n` and `group_size`. Returns 0
+ * when either argument is invalid. */
+static size_t tq_abi_group_count(size_t n, size_t group_size) {
+    if (n == 0 || group_size == 0) return 0;
+    return (n + group_size - 1u) / group_size;
+}
+
+/* Expected packed buffer length for `n` elements at `bits` per element. */
+static size_t tq_abi_expected_packed_len(size_t n, uint8_t bits) {
+    if (n == 0 || bits == 0) return 0;
+    return (n * (size_t)bits + 7u) / 8u;
+}
+
+/* Validate an encode request; returns the matching status. On validation
+ * failure every output slot is reset to NULL. */
+static tq_abi_status tq_abi_validate_encode(
+    const tq_abi_encode_request* req, size_t* out_packed_len,
+    size_t* out_n_groups) {
+    if (req == NULL) return TQ_ABI_ERR_NULL_ARG;
+    if (req->abi.major != TQ_ABI_VERSION_MAJOR) {
+        return TQ_ABI_ERR_VERSION_MISMATCH;
+    }
+    if (req->data_ptr == NULL || req->n == 0) return TQ_ABI_ERR_NULL_ARG;
+    if (!tq_bits_valid(req->bits)) return TQ_ABI_ERR_INVALID_BITS;
+    if (req->group_size == 0) return TQ_ABI_ERR_INVALID_GROUPSZ;
+    if (req->out_shape == NULL || req->out_shape_capacity == 0 ||
+        req->out_packed == NULL || req->out_packed_capacity == 0 ||
+        req->out_scales == NULL || req->out_scales_capacity == 0 ||
+        req->out_zeros == NULL || req->out_zeros_capacity == 0) {
+        return TQ_ABI_ERR_NULL_ARG;
+    }
+
+    /* Overflow checks. */
+    if (req->n > SIZE_MAX - req->group_size) return TQ_ABI_ERR_OVERFLOW;
+    if ((size_t)req->bits > 0 && req->n > SIZE_MAX / (size_t)req->bits) {
+        return TQ_ABI_ERR_OVERFLOW;
+    }
+
+    size_t packed_len = tq_abi_expected_packed_len(req->n, req->bits);
+    size_t n_groups = tq_abi_group_count(req->n, req->group_size);
+
+    if (req->out_packed_capacity < packed_len ||
+        req->out_shape_capacity < 1 ||
+        req->out_scales_capacity < n_groups ||
+        req->out_zeros_capacity < n_groups) {
+        return TQ_ABI_ERR_OVERFLOW;
+    }
+
+    /* NaN / Inf rejection. */
+    for (size_t i = 0; i < req->n; i++) {
+        if (!isfinite(req->data_ptr[i])) return TQ_ABI_ERR_NONFINITE_INPUT;
+    }
+
+    *out_packed_len = packed_len;
+    *out_n_groups = n_groups;
+    return TQ_ABI_OK;
+}
+
+/* v1 contract: output buffers are caller-owned. The dispatcher must not
+ * free them or invalidate the caller's pointers. We only NULL out the
+ * descriptor slots themselves (req->out_shape etc.) — the caller's storage
+ * backing those slots is untouched. */
+static void tq_abi_reset_output_slots(tq_abi_encode_request* req) {
+    if (req->out_shape)  req->out_shape  = NULL;
+    if (req->out_packed) req->out_packed = NULL;
+    if (req->out_scales) req->out_scales = NULL;
+    if (req->out_zeros)  req->out_zeros  = NULL;
+}
+
+tq_abi_encode_result tq_abi_encode(const tq_abi_encode_request* req) {
+    tq_abi_encode_result res;
+    res.status = TQ_ABI_ERR_NULL_ARG;
+    res.written_packed_len = 0;
+    res.written_shape_len = 0;
+    res.written_scales_len = 0;
+    res.written_zeros_len = 0;
+
+    if (req == NULL) return res;
+
+    /* The public signature takes a const pointer (immutable request), but the
+     * failure path is required by the ABI contract to NULL every output
+     * slot, and the success path writes into the caller's buffers via those
+     * slots. The slot pointers are mutable by contract (the caller hands
+     * them in to be filled or cleared), so we cast away const here. */
+    tq_abi_encode_request* mreq = (tq_abi_encode_request*)req;
+
+    size_t packed_len = 0;
+    size_t n_groups = 0;
+    tq_abi_status vstatus = tq_abi_validate_encode(req, &packed_len, &n_groups);
+    if (vstatus != TQ_ABI_OK) {
+        tq_abi_reset_output_slots(mreq);
+        res.status = vstatus;
+        return res;
+    }
+
+    /* v1 is caller-owned buffers: the dispatcher writes into the caller's
+     * storage and reports populated lengths via the result. Partial
+     * allocation is therefore a caller-side concern, not ours. */
+    uint32_t levels = (uint32_t)((1u << req->bits) - 1u);
+
+    (*mreq->out_shape)[0] = req->n;
+
+    for (size_t g = 0; g < n_groups; g++) {
+        size_t start = g * req->group_size;
+        size_t end = start + req->group_size;
+        if (end > req->n) end = req->n;
+
+        float gmin = req->data_ptr[start];
+        float gmax = req->data_ptr[start];
+        for (size_t i = start + 1; i < end; i++) {
+            if (req->data_ptr[i] < gmin) gmin = req->data_ptr[i];
+            if (req->data_ptr[i] > gmax) gmax = req->data_ptr[i];
+        }
+
+        float span = gmax - gmin;
+        float scale = span / (float)levels;
+        if (!(scale > 0.0f)) scale = 1e-30f;
+
+        (*mreq->out_scales)[g] = scale;
+        (*mreq->out_zeros)[g] = gmin;
+
+        for (size_t i = start; i < end; i++) {
+            float qf = (req->data_ptr[i] - gmin) / scale;
+            if (!(qf >= 0.0f)) qf = 0.0f;
+            uint32_t q = (uint32_t)(qf + 0.5f);
+            if (q > levels) q = levels;
+            size_t bit_off = (g * req->group_size + (i - start)) * (size_t)req->bits;
+            tq_write_bits(*mreq->out_packed, bit_off, (uint8_t)q, req->bits);
+        }
+    }
+
+    res.status = TQ_ABI_OK;
+    res.written_packed_len = packed_len;
+    res.written_shape_len = 1;
+    res.written_scales_len = n_groups;
+    res.written_zeros_len = n_groups;
+    return res;
+}
+
+tq_abi_status tq_abi_decode(const tq_abi_decode_request* req) {
+    if (req == NULL) return TQ_ABI_ERR_NULL_ARG;
+    if (req->abi.major != TQ_ABI_VERSION_MAJOR) return TQ_ABI_ERR_VERSION_MISMATCH;
+    if (req->out_ptr == NULL || req->n == 0) return TQ_ABI_ERR_NULL_ARG;
+    if (!tq_bits_valid(req->bits)) return TQ_ABI_ERR_INVALID_BITS;
+    if (req->group_size == 0) return TQ_ABI_ERR_INVALID_GROUPSZ;
+    if (req->packed_ptr == NULL || req->scales_ptr == NULL || req->zeros_ptr == NULL) {
+        return TQ_ABI_ERR_NULL_ARG;
+    }
+
+    /* Overflow guards mirroring encode. */
+    if (req->n > SIZE_MAX - req->group_size) return TQ_ABI_ERR_OVERFLOW;
+    if ((size_t)req->bits > 0 && req->n > SIZE_MAX / (size_t)req->bits) {
+        return TQ_ABI_ERR_OVERFLOW;
+    }
+
+    size_t expected = tq_abi_expected_packed_len(req->n, req->bits);
+    if (req->packed_len != expected) return TQ_ABI_ERR_INVALID_BITS;
+
+    size_t n_groups = tq_abi_group_count(req->n, req->group_size);
+
+    /* The public signature is `const`, but `out_ptr` is the caller's
+     * writable buffer that the contract commits to fill on success. Cast
+     * away const here, immediately after validation, so the success path
+     * can write into it. */
+    float* out = (float*)req->out_ptr;
+
+    for (size_t g = 0; g < n_groups; g++) {
+        float scale = req->scales_ptr[g];
+        float zero  = req->zeros_ptr[g];
+
+        size_t start = g * req->group_size;
+        size_t end = start + req->group_size;
+        if (end > req->n) end = req->n;
+
+        for (size_t i = start; i < end; i++) {
+            size_t bit_off = (g * req->group_size + (i - start)) * (size_t)req->bits;
+            uint8_t q = tq_read_bits(req->packed_ptr, bit_off, req->bits);
+            out[i] = zero + (float)q * scale;
+        }
+    }
+    return TQ_ABI_OK;
+}
+
+void tq_abi_release(tq_abi_release_kind kind, void* ptr, size_t count) {
+    if (ptr == NULL || count == 0) return;
+    switch (kind) {
+        case TQ_ABI_RELEASE_SHAPE:
+            free(ptr);
+            break;
+        case TQ_ABI_RELEASE_PACKED:
+            free(ptr);
+            break;
+        case TQ_ABI_RELEASE_SCALES:
+            free(ptr);
+            break;
+        case TQ_ABI_RELEASE_ZEROS:
+            free(ptr);
+            break;
+        default:
+            /* Unknown kind — silently ignore so a forward-compatible caller
+             * doesn't crash when given a future kind value. */
+            break;
+    }
+}
