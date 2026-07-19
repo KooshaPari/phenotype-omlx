@@ -6,9 +6,11 @@
 //! strategy uses a deterministic LCG so tests are reproducible.
 
 pub mod confidence;
+pub mod decoder;
 pub mod denoise;
 pub mod remask;
 
 pub use confidence::confidence_scores;
+pub use decoder::{DiffusionDecoder, DiffusionStepReport};
 pub use denoise::{denoise_step, denoise_step_sequential, DenoiseUpdate, RemaskStrategy};
 pub use remask::remask;
