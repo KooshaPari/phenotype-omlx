@@ -96,6 +96,11 @@ CHECKS: list[Callable[[], Check]] = [
     checks.native_abi_v1,
     checks.airlock_v2,
     checks.tests_runnable,
+    # Added 2026-07-19 — see _doctor_extra_checks.py for the implementations.
+    checks.omlx_research_version,
+    checks.niah_benchmark_present,
+    checks.eval_harness_subcommand_runnable,
+    checks.regress_baseline_dispatch_envelope,
 ]
 
 

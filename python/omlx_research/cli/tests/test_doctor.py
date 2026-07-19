@@ -176,6 +176,11 @@ def test_run_doctor_returns_at_least_one_check_for_each_id():
         "native_abi_v1",
         "airlock_v2_installed",
         "tests_runnable",
+        # Added 2026-07-19 — see _doctor_extra_checks.py.
+        "omlx_research_version",
+        "niah_benchmark_present",
+        "eval_harness_subcommand_runnable",
+        "regress_baseline_dispatch_envelope",
     }
     assert expected.issubset(ids)
 
@@ -293,6 +298,11 @@ def test_checks_list_includes_expected_ids():
         "native_abi_v1",
         "airlock_v2",
         "tests_runnable",
+        # Added 2026-07-19 — see _doctor_extra_checks.py.
+        "omlx_research_version",
+        "niah_benchmark_present",
+        "eval_harness_subcommand_runnable",
+        "regress_baseline_dispatch_envelope",
     }
     assert expected.issubset(set(ids))
 
@@ -388,3 +398,9 @@ def test_mlx_lm_required_by_command_passes_when_mlx_lm_importable(monkeypatch):
         # for a non-required command must pass cleanly.
         c = checks_mod.mlx_lm_required_by_command("doctor")
         assert c.status == PASS
+
+
+# Tests for the four checks added 2026-07-19 (omlx_research_version,
+# niah_benchmark_present, eval_harness_subcommand_runnable,
+# regress_baseline_dispatch_envelope) live in ``test_doctor_extra.py``
+# to keep this module under the 500L hard cap.

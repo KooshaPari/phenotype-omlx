@@ -27,6 +27,19 @@ from ._doctor_shared import (
 )
 
 
+# Re-export the four newest checks so the existing `checks.<name>`
+# access pattern keeps working. The implementations live in
+# `_doctor_extra_checks.py` to keep this module under the 500L hard
+# cap (added 2026-07-19 — version, NIAH, eval-harness, regress-baseline
+# dispatch envelope).
+from ._doctor_extra_checks import (  # noqa: E402,F401  (re-export)
+    eval_harness_subcommand_runnable,
+    niah_benchmark_present,
+    omlx_research_version,
+    regress_baseline_dispatch_envelope,
+)
+
+
 def python_version() -> Check:
     current = (sys.version_info.major, sys.version_info.minor)
     expected = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}+"
@@ -291,6 +304,13 @@ def airlock_v2() -> Check:
             "see the gap. Install once the upstream crate ships."
         ),
     )
+
+
+# NOTE: New checks added 2026-07-19 (version, NIAH, eval-harness,
+# regress-baseline dispatch envelope) live in ``_doctor_extra_checks.py``
+# to keep this module under the 500L hard cap. They are re-exported
+# at the top of this file so the existing ``checks.<name>`` access
+# pattern still works.
 
 
 def tests_runnable() -> Check:
