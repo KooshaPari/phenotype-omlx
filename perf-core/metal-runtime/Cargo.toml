@@ -27,3 +27,6 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 parking_lot = { workspace = true }
 sha2 = "0.10"
+
+[dev-dependencies]
+proptest = "1.4"
