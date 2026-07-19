@@ -1,4 +1,5 @@
 //! (l) Discrete (masked) diffusion language model — MDLM / D3PM / SEDD
+//! — *sampler* coverage.
 //!
 //! NOTE: `kernel-registry` does not yet have a first-class
 //! `DiscreteDiffusion` selector. This file therefore defines a
@@ -6,6 +7,16 @@
 //! `mode = Decode`, `policy = Deterministic`, `kind = MaskedDiffusionStep`)
 //! that drives the existing `KernelRegistry` selector via the
 //! `OperatorKind::DiscreteDiffusion` variant added to `kernel_registry::compat`.
+//!
+//! This file is the **sampler** half of the discrete-diffusion test
+//! family, split from the prior `discrete_diffusion.rs` (468L) in
+//! turn-9's module-size sweep. The schedule half
+//! (`discrete_diffusion_schedule.rs`) owns the schedule-only tests
+//! (`ddm_step_respects_schedule`,
+//! `ddm_cosine_vs_linear_schedule_differs`) and imports the
+//! `Schedule` enum + `DiscreteDiffusionOracle` it needs from this
+//! module. Every shared type lives here because the sampler is the
+//! consumer — the schedule file is a thin client.
 //!
 //! The stub is sufficient to verify the byte-identical oracle
 //! contract for the discrete diffusion family:
@@ -17,9 +28,6 @@
 //! 3. The masked-token tensor's invariant — only positions that were
 //!    masked get re-masked under the schedule — holds for the linear
 //!    and cosine schedules.
-//! 4. Linear and cosine schedules produce *different* mask counts
-//!    for the same step, confirming the schedule parameter is wired
-//!    into the oracle rather than no-op.
 //!
 //! When the kernel-registry gains a real `DiscreteDiffusion` selector,
 //! this file should be extended to register its backend candidates and
@@ -44,14 +52,14 @@ use super::{
 /// runtime; `Decode` means "one masked position per call, decode
 /// greedily, advance the schedule".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SelectorMode {
+pub(crate) enum SelectorMode {
     Prefill,
     Decode,
 }
 
 /// Kind of discrete-diffusion step the selector is asked to dispatch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum StepKind {
+pub(crate) enum StepKind {
     /// Decode one masked position per call under the noise schedule.
     MaskedDiffusionStep,
     /// Sample an entirely noised sequence from the prior (used at
@@ -63,19 +71,19 @@ enum StepKind {
 /// the kernel-registry proper; defined here so the discrete-diffusion
 /// oracle test does not need to wait on that refactor.
 #[derive(Debug, Clone)]
-struct SelectorMetadata {
+pub(crate) struct SelectorMetadata {
     /// Family discriminator on the `KernelKey`.
-    family: OperatorKind,
+    pub(crate) family: OperatorKind,
     /// Decode vs prefill — controls the oracle's update pattern.
-    mode: SelectorMode,
+    pub(crate) mode: SelectorMode,
     /// Selection policy for the registry call.
-    policy: SelectionPolicy,
+    pub(crate) policy: SelectionPolicy,
     /// Which step kind the dispatch represents.
-    kind: StepKind,
+    pub(crate) kind: StepKind,
 }
 
 impl SelectorMetadata {
-    fn decode_deterministic() -> Self {
+    pub(crate) fn decode_deterministic() -> Self {
         Self {
             family: OperatorKind::DiscreteDiffusion,
             mode: SelectorMode::Decode,
@@ -92,7 +100,7 @@ impl SelectorMetadata {
 /// Noise schedule used by the discrete diffusion model. The schedule
 /// controls how many positions stay masked at step `t` of `num_steps`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Schedule {
+pub(crate) enum Schedule {
     /// Linear mask-fraction `alpha(t) = 1 - t / num_steps`.
     Linear,
     /// Cosine mask-fraction `alpha(t) = cos^2(t * pi / (2 * num_steps))`.
@@ -105,7 +113,7 @@ impl Schedule {
     /// Mask fraction at step `t` in `0..=num_steps`. Returns a value
     /// in `[0.0, 1.0]`; the oracle uses it as a probability threshold
     /// for re-masking newly-unmasked tokens.
-    fn alpha_at(self, t: usize, num_steps: usize) -> f64 {
+    pub(crate) fn alpha_at(self, t: usize, num_steps: usize) -> f64 {
         debug_assert!(t <= num_steps);
         let tn = t as f64 / num_steps as f64;
         match self {
@@ -132,15 +140,15 @@ impl Schedule {
 /// runtime will eventually hand to a real MDLM-style model:
 /// `vocab_size`, `mask_token_id`, `num_steps`, and `schedule`.
 #[derive(Debug, Clone, Copy)]
-struct DiscreteDiffusionOracle {
-    vocab_size: u32,
-    mask_token_id: u32,
-    num_steps: usize,
-    schedule: Schedule,
+pub(crate) struct DiscreteDiffusionOracle {
+    pub(crate) vocab_size: u32,
+    pub(crate) mask_token_id: u32,
+    pub(crate) num_steps: usize,
+    pub(crate) schedule: Schedule,
 }
 
 impl DiscreteDiffusionOracle {
-    fn new(vocab_size: u32, mask_token_id: u32, num_steps: usize, schedule: Schedule) -> Self {
+    pub(crate) fn new(vocab_size: u32, mask_token_id: u32, num_steps: usize, schedule: Schedule) -> Self {
         // The mask token must be a valid vocab id so it round-trips
         // through the buffer byte representation.
         assert!(
@@ -167,7 +175,7 @@ impl DiscreteDiffusionOracle {
     /// schedule reaches `alpha(num_steps) = 0`, which means
     /// every newly-decoded position is re-masked — the fully-noised
     /// prior is restored at the boundary.
-    fn step(&self, x_t: &[u32], mask: &[bool], clean: &[u32], step: usize, seed: u64) -> Vec<u32> {
+    pub(crate) fn step(&self, x_t: &[u32], mask: &[bool], clean: &[u32], step: usize, seed: u64) -> Vec<u32> {
         debug_assert_eq!(x_t.len(), clean.len());
         debug_assert_eq!(mask.len(), clean.len());
         debug_assert!(step < self.num_steps);
@@ -219,14 +227,14 @@ impl DiscreteDiffusionOracle {
     /// Build the next-step mask tensor: true where the position is
     /// masked (either newly re-masked or still masked from a prior
     /// step), false where decoded.
-    fn next_mask(&self, x_next: &[u32]) -> Vec<bool> {
+    pub(crate) fn next_mask(&self, x_next: &[u32]) -> Vec<bool> {
         x_next.iter().map(|&t| t == self.mask_token_id).collect()
     }
 }
 
 /// Tiny linear-congruential generator (MMIX constants). Deterministic,
 /// seed-stable, and avoids pulling in `rand`.
-fn lcg_next(state: u64) -> u64 {
+pub(crate) fn lcg_next(state: u64) -> u64 {
     state
         .wrapping_mul(6_364_136_223_846_793_005)
         .wrapping_add(1_442_695_040_888_963_407)
@@ -236,7 +244,7 @@ fn lcg_next(state: u64) -> u64 {
 // Registry wiring.
 // ---------------------------------------------------------------------------
 
-fn ddm_key(vocab_size: usize, num_steps: usize) -> KernelKey {
+pub(crate) fn ddm_key(vocab_size: usize, num_steps: usize) -> KernelKey {
     // vocab = m=vocab_size, total_steps = n=num_steps.
     KernelKey {
         operator_kind: OperatorKind::DiscreteDiffusion,
@@ -250,7 +258,7 @@ fn ddm_key(vocab_size: usize, num_steps: usize) -> KernelKey {
     }
 }
 
-fn ddm_registry() -> (KernelRegistry, kernel_registry::CandidateId, kernel_registry::CandidateId) {
+pub(crate) fn ddm_registry() -> (KernelRegistry, kernel_registry::CandidateId, kernel_registry::CandidateId) {
     let min = shape(1, 1, 1, 1, 1, 1);
     let max = shape(128, 64, 128, 4, 1, 1);
     let scalar = make_candidate(
@@ -289,7 +297,7 @@ fn ddm_registry() -> (KernelRegistry, kernel_registry::CandidateId, kernel_regis
 }
 
 // ---------------------------------------------------------------------------
-// Tests.
+// Tests (sampler surface — pre-split tests 1, 2, 3).
 // ---------------------------------------------------------------------------
 
 /// The Deterministic policy under the discrete-diffusion metadata
@@ -396,74 +404,4 @@ fn ddm_masked_tokens_only_in_noised_positions() {
             );
         }
     }
-}
-
-/// Schedule boundary invariant: at step 0 every position is masked
-/// (alpha(0) = 1, the noised prior); at step `num_steps` no position
-/// is masked (alpha(N) = 0, the clean data distribution). The oracle's
-/// re-mask probability derived from the schedule must respect these
-/// boundaries — the test pins both linear and cosine.
-#[test]
-fn ddm_step_respects_schedule() {
-    let num_steps: usize = 8;
-    for schedule in [Schedule::Linear, Schedule::Cosine] {
-        // Boundary check 1: alpha(0) == 1.
-        let alpha_start = schedule.alpha_at(0, num_steps);
-        assert!(
-            (alpha_start - 1.0).abs() < 1e-9,
-            "{schedule:?} alpha(0) must be 1.0 (fully-masked prior); got {alpha_start}"
-        );
-
-        // Boundary check 2: alpha(N) == 0.
-        let alpha_end = schedule.alpha_at(num_steps, num_steps);
-        assert!(
-            alpha_end.abs() < 1e-9,
-            "{schedule:?} alpha(num_steps) must be 0.0 (clean data); got {alpha_end}"
-        );
-
-        // Behavior check: feeding a fully-masked input at the last
-        // step (`step = N - 1`) must yield a fully-masked output,
-        // because the boundary re-mask probability is 1.
-        let oracle = DiscreteDiffusionOracle::new(16, 4, num_steps, schedule);
-        let n: usize = 32;
-        let x_t: Vec<u32> = vec![oracle.mask_token_id; n];
-        let mask: Vec<bool> = vec![true; n];
-        let clean: Vec<u32> = (0..n).map(|i| ((i + 1) % (oracle.vocab_size as usize - 1)) as u32).collect();
-
-        let out = oracle.step(&x_t, &mask, &clean, num_steps - 1, 1);
-        assert_eq!(
-            out,
-            vec![oracle.mask_token_id; n],
-            "{schedule:?} at the last step every position must be re-masked"
-        );
-    }
-}
-
-/// Linear and cosine schedules must produce *different* mask counts
-/// for the same input, confirming the schedule parameter is wired
-/// through the oracle rather than ignored.
-#[test]
-fn ddm_cosine_vs_linear_schedule_differs() {
-    let num_steps: usize = 16;
-    let linear = DiscreteDiffusionOracle::new(32, 0, num_steps, Schedule::Linear);
-    let cosine = DiscreteDiffusionOracle::new(32, 0, num_steps, Schedule::Cosine);
-    let n: usize = 64;
-    let x_t: Vec<u32> = vec![0; n]; // mask token id == 0
-    let mask: Vec<bool> = vec![true; n];
-    // Clean tokens live in 1..=31 to never collide with mask_token_id.
-    let clean: Vec<u32> = (0..n).map(|i| ((i % 31) + 1) as u32).collect();
-
-    // Pick a mid-range step where the two schedules diverge most.
-    let step: usize = num_steps / 2;
-
-    let linear_out = linear.step(&x_t, &mask, &clean, step, 99);
-    let cosine_out = cosine.step(&x_t, &mask, &clean, step, 99);
-    let linear_masked = linear.next_mask(&linear_out).iter().filter(|m| **m).count();
-    let cosine_masked = cosine.next_mask(&cosine_out).iter().filter(|m| **m).count();
-
-    assert_ne!(
-        linear_masked, cosine_masked,
-        "linear ({linear_masked}) and cosine ({cosine_masked}) schedules must produce different mask counts at step {step}/{num_steps}; \
-         if they agree, the schedule parameter is being ignored"
-    );
 }
