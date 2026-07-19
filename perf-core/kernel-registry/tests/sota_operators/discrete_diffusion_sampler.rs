@@ -36,7 +36,7 @@ use super::{
 // (`discrete_diffusion_schedule.rs`, the per-tag coverage matrix) do
 // not need to import from two files.
 pub(crate) use super::discrete_diffusion_oracle::{
-    DiscreteDiffusionOracle, Schedule,
+    ContinuousSchedule, ContinuousScheduleKind, DiscreteDiffusionOracle, Schedule,
 };
 
 // ---------------------------------------------------------------------------

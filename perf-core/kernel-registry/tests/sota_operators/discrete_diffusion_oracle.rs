@@ -72,6 +72,85 @@ impl Schedule {
 }
 
 // ---------------------------------------------------------------------------
+// Continuous schedules (turn-11).
+//
+// Generalizes the legacy `Schedule` enum to support arbitrary continuous
+// noise schedules used by recent SEDD / MDLM papers (`Sqrt`,
+// `Sigmoid { k }`). The boundary invariant is identical:
+// `alpha(0, N) == 1.0` and `alpha(N, N) == 0.0`. The legacy
+// `Schedule` enum is kept untouched so any byte-identical determinism
+// pinned against it remains stable.
+// ---------------------------------------------------------------------------
+
+/// Family discriminator for [`ContinuousSchedule`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ContinuousScheduleKind {
+    /// Linear mask-fraction `alpha(t) = 1 - t / num_steps`. Matches
+    /// the legacy [`Schedule::Linear`] byte-for-byte.
+    Linear,
+    /// Cosine mask-fraction `alpha(t) = cos^2(t * pi / (2 * num_steps))`.
+    /// Matches the legacy [`Schedule::Cosine`] byte-for-byte.
+    Cosine,
+    /// Sqrt mask-fraction `alpha(t) = sqrt(1 - t / num_steps)`.
+    /// Slower-than-linear decay: at the mid-step alpha is
+    /// `sqrt(1/2) ~= 0.707`, not `0.5`. Used by SEDD-style absorption
+    /// schedules.
+    Sqrt,
+    /// Sigmoid mask-fraction `alpha(t) = 1 / (1 + exp(k * (2*t/N - 1)))`,
+    /// centred at `t = N/2` with steepness `k`. Larger `k` yields a
+    /// sharper transition through the middle and gentler tails
+    /// near the boundaries. Used by MDLM-style reparameterised
+    /// schedules.
+    Sigmoid { k: i32 },
+}
+
+/// Wrapper struct so callers can pass a `ContinuousSchedule { kind, ... }`
+/// to the oracle without reaching into the kind enum directly. Keeping
+/// the wrapper distinct from the legacy [`Schedule`] enum preserves
+/// the byte-identical determinism of the original test surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ContinuousSchedule {
+    pub(crate) kind: ContinuousScheduleKind,
+}
+
+impl ContinuousSchedule {
+    /// Mask fraction at step `t` in `0..=num_steps`. Returns a value
+    /// in `[0.0, 1.0]`; the oracle uses it as a probability threshold
+    /// for re-masking newly-unmasked tokens. The boundary invariant
+    /// is identical to [`Schedule::alpha_at`]: `alpha(0) = 1.0` and
+    /// `alpha(num_steps) = 0.0` for every variant.
+    pub(crate) fn alpha_at(self, t: usize, num_steps: usize) -> f64 {
+        debug_assert!(t <= num_steps);
+        let tn = t as f64 / num_steps as f64;
+        match self.kind {
+            ContinuousScheduleKind::Linear => (1.0 - tn).clamp(0.0, 1.0),
+            ContinuousScheduleKind::Cosine => {
+                let c = (t as f64 * std::f64::consts::PI / (2.0 * num_steps as f64)).cos();
+                (c * c).clamp(0.0, 1.0)
+            }
+            ContinuousScheduleKind::Sqrt => (1.0 - tn).max(0.0).sqrt(),
+            ContinuousScheduleKind::Sigmoid { k } => {
+                // The boundary values must be exactly 1.0 / 0.0 to
+                // match the shared boundary invariant; clamp the
+                // endpoints before evaluating the sigmoid.
+                if t == 0 {
+                    return 1.0;
+                }
+                if t == num_steps {
+                    return 0.0;
+                }
+                // 1 / (1 + exp(k * (2*t/N - 1))). At t = 0 the
+                // exponent is -k → alpha ~= 1.0 for large k; at t = N
+                // the exponent is +k → alpha ~= 0.0 for large k.
+                let kf = k as f64;
+                let z = kf * (2.0 * tn - 1.0);
+                1.0 / (1.0 + z.exp())
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Reference oracle.
 //
 // The oracle is the test's source of truth: given a *noised* token
@@ -84,18 +163,52 @@ impl Schedule {
 /// Discrete-diffusion reference oracle. Mirrors the parameters the
 /// runtime will eventually hand to a real MDLM-style model:
 /// `vocab_size`, `mask_token_id`, `num_steps`, and `schedule`.
+///
+/// Internally the schedule is stored as a [`ContinuousSchedule`] so a
+/// single `step` path covers both the legacy [`Schedule`] enum and
+/// the newer `Sqrt`/`Sigmoid` variants. The legacy `new(...)`
+/// constructor bridges the legacy enum into the continuous form,
+/// preserving the byte-identical determinism of every pre-turn-11
+/// test.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct DiscreteDiffusionOracle {
     pub(crate) vocab_size: u32,
     pub(crate) mask_token_id: u32,
     pub(crate) num_steps: usize,
-    pub(crate) schedule: Schedule,
+    pub(crate) schedule: ContinuousSchedule,
 }
 
 impl DiscreteDiffusionOracle {
     pub(crate) fn new(vocab_size: u32, mask_token_id: u32, num_steps: usize, schedule: Schedule) -> Self {
         // The mask token must be a valid vocab id so it round-trips
         // through the buffer byte representation.
+        assert!(
+            mask_token_id < vocab_size,
+            "mask_token_id ({mask_token_id}) must be < vocab_size ({vocab_size})"
+        );
+        let continuous_kind = match schedule {
+            Schedule::Linear => ContinuousScheduleKind::Linear,
+            Schedule::Cosine => ContinuousScheduleKind::Cosine,
+        };
+        Self {
+            vocab_size,
+            mask_token_id,
+            num_steps,
+            schedule: ContinuousSchedule { kind: continuous_kind },
+        }
+    }
+
+    /// Construct an oracle around an arbitrary
+    /// [`ContinuousSchedule`]. Used by the newer `Sqrt`/`Sigmoid`
+    /// schedule tests; the legacy `Linear`/`Cosine` schedules can also
+    /// be passed via [`ContinuousScheduleKind::Linear`] / [`Cosine`]
+    /// and produce the same step outputs as `new(...)`.
+    pub(crate) fn with_continuous(
+        vocab_size: u32,
+        mask_token_id: u32,
+        num_steps: usize,
+        schedule: ContinuousSchedule,
+    ) -> Self {
         assert!(
             mask_token_id < vocab_size,
             "mask_token_id ({mask_token_id}) must be < vocab_size ({vocab_size})"
