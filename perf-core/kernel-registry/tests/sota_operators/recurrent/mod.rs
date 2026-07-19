@@ -13,6 +13,7 @@
 
 mod dispatch_envelope;
 mod mamba_scan;
+mod recurrent_extended;
 mod rwkv7;
 
 // Re-export the parent module's shared builder helpers (`build_record`,
