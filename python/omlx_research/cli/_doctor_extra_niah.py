@@ -52,6 +52,12 @@ __all__ = [
 
 _NIAH_RESULTS_REL_PATH = "niah_results.json"
 _NIAH_TARGET_ROW_FLOOR = 25  # 5 context lengths × 5 seeds
+# Informational ceiling for the full envelope: 10 ctx × 5 seeds × 5 kernels.
+# Not a PASS threshold — the WARN->PASS gate stays at the 25-row floor so
+# the turn-9 regression contract does not regress silently. The ceiling is
+# surfaced only in the PASS details string so the doctor report indicates
+# when the envelope is fully expanded.
+_NIAH_ENVELOPE_TARGET = 250  # 10 context lengths × 5 seeds × 5 kernels
 
 
 def _load_niah_results() -> tuple[bool, str, int]:
@@ -172,6 +178,11 @@ def niah_benchmark_present() -> Check:
     results_ok = results_loaded and target_count >= _NIAH_TARGET_ROW_FLOOR
 
     if help_ok and results_ok:
+        envelope_note = (
+            f"; envelope complete ({target_count}/{_NIAH_ENVELOPE_TARGET})"
+            if target_count >= _NIAH_ENVELOPE_TARGET
+            else f"; envelope partial ({target_count}/{_NIAH_ENVELOPE_TARGET} target)"
+        )
         return Check(
             id="niah_benchmark_present",
             description=desc,
@@ -179,6 +190,7 @@ def niah_benchmark_present() -> Check:
             details=(
                 f"{rel} — NIAH benchmark executable, --help exits 0; "
                 f"{results_label} (≥ {_NIAH_TARGET_ROW_FLOOR} floor)"
+                + envelope_note
             ),
         )
 
