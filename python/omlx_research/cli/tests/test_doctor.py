@@ -183,6 +183,9 @@ def test_run_doctor_returns_at_least_one_check_for_each_id():
         "niah_benchmark_present",
         "eval_harness_subcommand_runnable",
         "regress_baseline_dispatch_envelope",
+        # Added 2026-07-19 (turn-10) — see _doctor_internal_checks.py.
+        "coverage_tag_count_at_least_25",
+        "eval_harness_suite_count_at_least_4",
     }
     assert expected.issubset(ids)
 
@@ -307,6 +310,9 @@ def test_checks_list_includes_expected_ids():
         "niah_benchmark_present",
         "eval_harness_subcommand_runnable",
         "regress_baseline_dispatch_envelope",
+        # Added 2026-07-19 (turn-10) — see _doctor_internal_checks.py.
+        "coverage_tag_count_at_least_25",
+        "eval_harness_suite_count_at_least_4",
     }
     assert expected.issubset(set(ids))
 

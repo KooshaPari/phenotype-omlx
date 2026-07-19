@@ -53,6 +53,10 @@ from ._doctor_turn5_checks import (  # noqa: E402,F401  (re-export)
     dispatch_script_vllm_exists,
     niah_regression_baseline_exists,
 )
+from ._doctor_internal_checks import (  # noqa: E402,F401  (re-export)
+    coverage_tag_count_at_least_25,
+    eval_harness_suite_count_at_least_4,
+)
 
 
 def python_version() -> Check:
