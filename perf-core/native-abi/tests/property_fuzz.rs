@@ -26,6 +26,7 @@
 
 use native_abi::{
     encode_v1, AbiVersion, DecodeRequest, EncodeRequest, EncodeResult, Status, ABI_VERSION_CURRENT,
+    expected_packed_len,
 };
 use proptest::prelude::*;
 
@@ -299,5 +300,195 @@ proptest! {
     fn current_abi_version_is_pinned_to_v1(_unused in Just(())) {
         prop_assert_eq!(ABI_VERSION_CURRENT.major, 1);
         prop_assert_eq!(ABI_VERSION_CURRENT.minor, 0);
+    }
+}
+
+// --- Fencepost fuzzers: explicit bits={2,3,4} boundaries ---
+//
+// The properties above drive `(bits, group_size, n)` from proptest's
+// shrinking space, so the boundary values (bits ∈ {2, 3, 4}) are
+// exercised but never guaranteed. The fencepost tests below pin the
+// behaviour at each of the three valid widths: `*_min_encode_decodes`
+// (group_size=1, harshest per-element scale test), `*_max_group_size`
+// (group_size=256, surfaces capacity / buffer mis-counts), and
+// `*_packed_len_matches_expected` (pins the `(n*bits).div_ceil(8)`
+// contract).
+
+/// Round-trip check for the `*_min_encode_decodes` and
+/// `*_max_group_size` fencepost tests. Encodes `data` at
+/// `(group_size, bits)`, decodes back, asserts every element is within
+/// `scale/2` of its input (or exact for the degenerate-scale case).
+fn assert_fencepost_round_trip(data: &[f32], n_groups: usize, group_size: usize, bits: u8) {
+    let n = n_groups * group_size;
+    let mut shape = vec![0usize; 1];
+    let mut packed = vec![0u8; expected_packed_len(n, bits)];
+    let mut scales = vec![0.0f32; n_groups];
+    let mut zeros = vec![0.0f32; n_groups];
+    let mut sp = shape.as_mut_ptr();
+    let mut pp = packed.as_mut_ptr();
+    let mut scp = scales.as_mut_ptr();
+    let mut zp = zeros.as_mut_ptr();
+    let mut req = EncodeRequest::zeroed();
+    req.abi = V1;
+    req.data_ptr = data.as_ptr();
+    req.n = n;
+    req.bits = bits;
+    req.group_size = group_size;
+    req.out_shape = &mut sp;
+    req.out_shape_capacity = shape.len();
+    req.out_packed = &mut pp;
+    req.out_packed_capacity = packed.len();
+    req.out_scales = &mut scp;
+    req.out_scales_capacity = scales.len();
+    req.out_zeros = &mut zp;
+    req.out_zeros_capacity = zeros.len();
+    let result: EncodeResult = unsafe { encode_v1(&req) };
+    assert_eq!(result.status, Status::Ok, "encode failed bits={bits} gs={group_size}");
+    let mut decoded = vec![0.0f32; n];
+    let mut dreq = DecodeRequest::zeroed();
+    dreq.abi = V1;
+    dreq.packed_ptr = packed.as_ptr();
+    dreq.packed_len = packed.len();
+    dreq.scales_ptr = scales.as_ptr();
+    dreq.zeros_ptr = zeros.as_ptr();
+    dreq.n = n;
+    dreq.group_size = group_size;
+    dreq.bits = bits;
+    dreq.out_ptr = decoded.as_mut_ptr();
+    let status = unsafe { native_abi::decode_v1(&dreq) };
+    assert_eq!(status, Status::Ok, "decode failed bits={bits} gs={group_size}");
+    for (g, &scale) in scales.iter().enumerate() {
+        let tol = if scale.is_finite() && scale != 0.0 { scale.abs() / 2.0 + 1e-5 } else { 1e-5 };
+        for i in 0..group_size {
+            let idx = g * group_size + i;
+            let delta = (decoded[idx] - data[idx]).abs();
+            assert!(delta.is_finite() && delta <= tol,
+                "bits={bits} gs={group_size} g={g} i={i} delta={delta} > tol={tol}");
+        }
+    }
+}
+
+/// Packed-length invariant: `expected_packed_len(n, bits)` must equal
+/// the encoder's `written_packed_len` and the formula
+/// `(n*bits).div_ceil(8)`. `data` must have `>= n` entries.
+fn assert_fencepost_packed_len(data: &[f32], n: usize, bits: u8) {
+    assert!(data.len() >= n);
+    let expected = expected_packed_len(n, bits);
+    assert_eq!(expected, (n * bits as usize).div_ceil(8), "formula drift");
+    let mut shape = vec![0usize; 1];
+    let mut packed = vec![0u8; expected.max(1)];
+    let mut scales = vec![0.0f32; n];
+    let mut zeros = vec![0.0f32; n];
+    let mut sp = shape.as_mut_ptr();
+    let mut pp = packed.as_mut_ptr();
+    let mut scp = scales.as_mut_ptr();
+    let mut zp = zeros.as_mut_ptr();
+    let mut req = EncodeRequest::zeroed();
+    req.abi = V1;
+    req.data_ptr = data.as_ptr();
+    req.n = n;
+    req.bits = bits;
+    req.group_size = 1;
+    req.out_shape = &mut sp;
+    req.out_shape_capacity = shape.len();
+    req.out_packed = &mut pp;
+    req.out_packed_capacity = packed.len();
+    req.out_scales = &mut scp;
+    req.out_scales_capacity = scales.len();
+    req.out_zeros = &mut zp;
+    req.out_zeros_capacity = zeros.len();
+    let result: EncodeResult = unsafe { encode_v1(&req) };
+    assert_eq!(result.status, Status::Ok, "encode failed bits={bits} n={n}");
+    assert_eq!(result.written_packed_len, expected, "written_packed_len drift");
+}
+
+proptest! {
+    #[test]
+    fn fencepost_2bit_min_encode_decodes(
+        data in proptest::collection::vec(
+            (-1.0e3f32..1.0e3f32).prop_filter("finite", |v| v.is_finite()),
+            8,
+        ),
+    ) {
+        // bits=2 (3 levels), group_size=1 — minimum legal group.
+        assert_fencepost_round_trip(&data, 8, 1, 2);
+    }
+    #[test]
+    fn fencepost_2bit_max_group_size(
+        data in proptest::collection::vec(
+            (-1.0e3f32..1.0e3f32).prop_filter("finite", |v| v.is_finite()),
+            256,
+        ),
+    ) {
+        // bits=2, group_size=256 → 1 group; catches capacity miscounts.
+        assert_fencepost_round_trip(&data, 1, 256, 2);
+    }
+    #[test]
+    fn fencepost_2bit_packed_len_matches_expected(
+        n in 1usize..128,
+        data in proptest::collection::vec(
+            (-1.0f32..1.0f32).prop_filter("finite", |v| v.is_finite()),
+            128,
+        ),
+    ) {
+        assert_fencepost_packed_len(&data, n, 2);
+    }
+    #[test]
+    fn fencepost_3bit_min_encode_decodes(
+        data in proptest::collection::vec(
+            (-1.0e3f32..1.0e3f32).prop_filter("finite", |v| v.is_finite()),
+            8,
+        ),
+    ) {
+        // bits=3 (7 levels, odd width), group_size=1.
+        assert_fencepost_round_trip(&data, 8, 1, 3);
+    }
+    #[test]
+    fn fencepost_3bit_max_group_size(
+        data in proptest::collection::vec(
+            (-1.0e3f32..1.0e3f32).prop_filter("finite", |v| v.is_finite()),
+            256,
+        ),
+    ) {
+        assert_fencepost_round_trip(&data, 1, 256, 3);
+    }
+    #[test]
+    fn fencepost_3bit_packed_len_matches_expected(
+        n in 1usize..128,
+        data in proptest::collection::vec(
+            (-1.0f32..1.0f32).prop_filter("finite", |v| v.is_finite()),
+            128,
+        ),
+    ) {
+        assert_fencepost_packed_len(&data, n, 3);
+    }
+    #[test]
+    fn fencepost_4bit_min_encode_decodes(
+        data in proptest::collection::vec(
+            (-1.0e3f32..1.0e3f32).prop_filter("finite", |v| v.is_finite()),
+            8,
+        ),
+    ) {
+        // bits=4 (15 levels, max width), group_size=1.
+        assert_fencepost_round_trip(&data, 8, 1, 4);
+    }
+    #[test]
+    fn fencepost_4bit_max_group_size(
+        data in proptest::collection::vec(
+            (-1.0e3f32..1.0e3f32).prop_filter("finite", |v| v.is_finite()),
+            256,
+        ),
+    ) {
+        assert_fencepost_round_trip(&data, 1, 256, 4);
+    }
+    #[test]
+    fn fencepost_4bit_packed_len_matches_expected(
+        n in 1usize..128,
+        data in proptest::collection::vec(
+            (-1.0f32..1.0f32).prop_filter("finite", |v| v.is_finite()),
+            128,
+        ),
+    ) {
+        assert_fencepost_packed_len(&data, n, 4);
     }
 }
