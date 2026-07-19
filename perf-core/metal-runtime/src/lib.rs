@@ -33,7 +33,7 @@
 //! - [`pipeline`]: [`Pipeline`] and [`StepOutput`].
 //! - [`error`]: [`CompileError`] and [`PipelineError`].
 
-#![deny(unsafe_code)]
+#![cfg_attr(not(all(feature = "metal", target_os = "macos")), deny(unsafe_code))]
 
 pub mod artifact;
 pub mod cache;
@@ -41,6 +41,7 @@ pub mod compile;
 pub mod dispatch;
 pub mod error;
 pub mod fingerprint;
+pub mod moe;
 pub mod pipeline;
 
 pub use artifact::{
@@ -50,6 +51,7 @@ pub use cache::{CacheKey, CacheStats, CompiledPipeline, EvictionPolicy, Pipeline
 pub use compile::{BoundedCompiler, CompileBudget};
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};
+pub use moe::{MoeRouter, MoeRouterError, MoeRouterOutput, MoeShape};
 pub use pipeline::{Pipeline, StepOutput};
 
 // ---------------------------------------------------------------------------

@@ -507,6 +507,7 @@ name = "metal-runtime"
 version = "0.1.0"
 dependencies = [
  "kernel-registry",
+ "metal",
  "model-kernels",
  "model-plan",
  "native-abi",

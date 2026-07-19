@@ -30,9 +30,23 @@ impl ArtifactAllowlist {
 /// A verified precompiled Metal library.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetallibArtifact {
-    pub name: String,
-    pub sha256: [u8; 32],
-    pub bytes: Vec<u8>,
+    name: String,
+    sha256: [u8; 32],
+    bytes: Vec<u8>,
+}
+
+impl MetallibArtifact {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn sha256(&self) -> &[u8; 32] {
+        &self.sha256
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
 }
 
 #[derive(Debug, Error)]
@@ -129,7 +143,7 @@ mod tests {
         let artifact = MetallibLoader::new(&root, allowlist)
             .load("model.metallib")
             .unwrap();
-        assert_eq!(artifact.bytes, b"precompiled-metal-library");
+        assert_eq!(artifact.bytes(), b"precompiled-metal-library");
         std::fs::remove_dir_all(root).unwrap();
     }
 

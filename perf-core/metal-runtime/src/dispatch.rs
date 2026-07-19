@@ -84,6 +84,7 @@ pub fn plan_kernel_tag(op: &OperatorPlan) -> Option<&'static str> {
         return Some(attention_kernel_tag(attn));
     }
     match op.kind {
+        OperatorKind::MoeRouter { .. } => Some(KernelOp::MoeRouter.tag()),
         // Recurrent / linear-recurrent family — no attention slot.
         // The Qwen3-Coder-Next hybrid uses these in alternation with
         // attention layers, so the plan carries a plain kind here.
@@ -249,6 +250,18 @@ mod tests {
     fn plain_sampling_has_no_kernel_mapping() {
         let op = op_plain(1, OperatorKind::Sampling);
         assert_eq!(plan_kernel_tag(&op), None);
+    }
+
+    #[test]
+    fn moe_router_maps_to_existing_kernel_registry_tag() {
+        let op = op_plain(
+            1,
+            OperatorKind::MoeRouter {
+                num_experts: 64,
+                top_k: 8,
+            },
+        );
+        assert_eq!(plan_kernel_tag(&op), Some(KernelOp::MoeRouter.tag()));
     }
 
     // -- emit_per_op_stub: format invariants ---------------------------

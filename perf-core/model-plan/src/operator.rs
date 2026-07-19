@@ -62,6 +62,13 @@ pub enum OperatorKind {
     Embedding,
     /// Token sampling (argmax, top-k, top-p, etc.).
     Sampling,
+    /// Fused mixture-of-experts top-k routing with selected softmax.
+    MoeRouter {
+        /// Number of router-logit columns (experts).
+        num_experts: usize,
+        /// Number of selected experts per token.
+        top_k: usize,
+    },
     /// Range construction (e.g. position ids).
     Arange,
     /// Elementwise / structural copy.
@@ -91,6 +98,7 @@ impl OperatorKind {
             OperatorKind::SilU => "silu",
             OperatorKind::Embedding => "embedding",
             OperatorKind::Sampling => "sampling",
+            OperatorKind::MoeRouter { .. } => "moe_router",
             OperatorKind::Arange => "arange",
             OperatorKind::Copy => "copy",
             OperatorKind::Add => "add",
@@ -150,6 +158,14 @@ mod tests {
         assert_eq!(OperatorKind::Copy.tag(), "copy");
         assert_eq!(OperatorKind::Add.tag(), "add");
         assert_eq!(OperatorKind::Mul.tag(), "mul");
+        assert_eq!(
+            OperatorKind::MoeRouter {
+                num_experts: 64,
+                top_k: 8,
+            }
+            .tag(),
+            "moe_router"
+        );
     }
 
     #[test]
@@ -166,6 +182,10 @@ mod tests {
             OperatorKind::SilU,
             OperatorKind::Embedding,
             OperatorKind::Sampling,
+            OperatorKind::MoeRouter {
+                num_experts: 64,
+                top_k: 8,
+            },
             OperatorKind::Arange,
             OperatorKind::Copy,
             OperatorKind::Add,
