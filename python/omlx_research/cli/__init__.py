@@ -9,6 +9,12 @@ Subcommands:
   bench                   — quick benchmark (tokens/sec, acceptance rate)
   doctor                  — diagnose environment
   fleet                   — show / manage cluster peers
+  inspect <plan.json>     — load + validate a model plan; print summary
+  explain <op-kind>       — print canonical op contract + kernel candidates
+  tune <op-kind>          — produce a synthetic TuningRecord and cache it
+  replay <trace-file>     — replay an execution trace in human-readable form
+  compare <trace-a> <trace-b> — side-by-side trace comparison (JSON)
+  evidence <plan-file>    — generate an evidence bundle (stdout + .json)
 """
 
 from __future__ import annotations
@@ -194,7 +200,87 @@ def main(argv: Optional[list[str]] = None) -> int:
     sub.add_parser("doctor").set_defaults(fn=cmd_doctor)
     sub.add_parser("fleet").set_defaults(fn=cmd_fleet)
 
+    # ------------------------------------------------------------------ inspect
+    from .commands import (
+        cmd_inspect, cmd_explain, cmd_tune,
+        cmd_replay, cmd_compare, cmd_evidence,
+    )
+
+    p = sub.add_parser(
+        "inspect",
+        help="load + validate a model plan JSON file and print a summary",
+    )
+    p.add_argument("plan", nargs="?", default=None,
+                   help="path to a model-plan JSON file (omit when using --empty)")
+    p.add_argument("--empty", action="store_true",
+                   help="use a built-in 2-operator synthetic plan")
+    p.add_argument("--show-states", action="store_true",
+                   help="also list each state entry")
+    p.add_argument("--show-deps", action="store_true",
+                   help="also list each edge entry")
+    p.set_defaults(fn=cmd_inspect)
+
+    # ------------------------------------------------------------------ explain
+    p = sub.add_parser(
+        "explain",
+        help="print the canonical contract for an op-kind (+ kernel candidates if --shape given)",
+    )
+    p.add_argument("op_kind", help="operator kind, e.g. DenseMatmul, RoPE, RMSNorm")
+    p.add_argument("--shape", default=None,
+                   help="comma-separated shape dims, e.g. 1024,1024,4096")
+    p.set_defaults(fn=cmd_explain)
+
+    # ---------------------------------------------------------------------- tune
+    p = sub.add_parser(
+        "tune",
+        help="produce a deterministic synthetic TuningRecord and write it to ~/.cache/omlx/tune/",
+    )
+    p.add_argument("op_kind", help="operator kind, e.g. DenseMatmul")
+    p.add_argument("--shape", default=None,
+                   help="comma-separated shape dims, e.g. 1024,1024,4096")
+    p.add_argument("--samples", type=int, default=16,
+                   help="number of samples to take (default: 16)")
+    p.add_argument("--warmup", type=int, default=3,
+                   help="number of warmup iterations (default: 3)")
+    p.add_argument("--seed", type=int, default=0,
+                   help="seed for the deterministic jitter (default: 0)")
+    p.set_defaults(fn=cmd_tune)
+
+    # ------------------------------------------------------------------- replay
+    p = sub.add_parser(
+        "replay",
+        help="replay an execution trace JSON in human-readable form",
+    )
+    p.add_argument("trace_file", help="path to a trace JSON file")
+    p.add_argument("--filter-rejected", action="store_true",
+                   help="do not print the rejected candidates")
+    p.add_argument("--filter-selected", action="store_true",
+                   help="do not print the selected candidate")
+    p.set_defaults(fn=cmd_replay)
+
+    # ------------------------------------------------------------------ compare
+    p = sub.add_parser(
+        "compare",
+        help="side-by-side comparison of two execution traces (JSON to stdout)",
+    )
+    p.add_argument("trace_a", help="path to trace A")
+    p.add_argument("trace_b", help="path to trace B")
+    p.set_defaults(fn=cmd_compare)
+
+    # ----------------------------------------------------------------- evidence
+    p = sub.add_parser(
+        "evidence",
+        help="generate an evidence bundle (plan summary + validation + trace + tune + sys-info + git rev)",
+    )
+    p.add_argument("plan_file", help="path to a model-plan JSON file")
+    p.set_defaults(fn=cmd_evidence, _argv=[])
+
     args = parser.parse_args(argv)
+
+    # Forward the raw argv tail to commands that want it (evidence).
+    if getattr(args, "cmd", None) == "evidence":
+        args._argv = list(argv) if argv is not None else sys.argv[1:]
+
     return int(args.fn(args) or 0)
 
 
