@@ -43,6 +43,7 @@ pub mod error;
 pub mod moe;
 pub mod quantized;
 pub mod recurrent;
+pub mod speculative;
 
 // Spec'd single-file facades: re-export each model's public API from a
 // top-level module whose name matches the task spec (`attention.rs`,
@@ -98,6 +99,8 @@ pub enum KernelOp {
     TernaryPack,
     /// Sub-byte pack/unpack.
     SubBytePack,
+    /// Multi-token-prediction proposal (DeepSeek-V3 / EAGLE-style).
+    SpeculativeMtp,
 }
 
 impl KernelOp {
@@ -122,6 +125,7 @@ impl KernelOp {
             KernelOp::Remask => "remask",
             KernelOp::TernaryPack => "ternary_pack",
             KernelOp::SubBytePack => "subbyte_pack",
+            KernelOp::SpeculativeMtp => "speculative_mtp",
         }
     }
 }

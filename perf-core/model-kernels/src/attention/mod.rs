@@ -15,16 +15,23 @@
 //! Numerical contract: floats within `1e-5` absolute or `1e-4` relative.
 
 pub mod cca;
+pub mod cca_block;
 pub mod common;
 pub mod dense;
 pub mod gqa;
 pub mod mla;
+pub mod mla_cache;
 pub mod paged;
 pub mod tree;
 
 pub use cca::cca_attention;
+pub use cca_block::{cca_block_attend, cca_block_attend_oracle, CcaBlock};
 pub use dense::dense_attention;
 pub use gqa::gqa_attention;
 pub use mla::mla_attention;
+pub use mla_cache::{
+    mla_cache_append, mla_cache_append_with_capacity, mla_cache_attend, MlaCacheEntry,
+    MLA_CACHE_MAX_ENTRIES,
+};
 pub use paged::paged_attention;
 pub use tree::tree_attention_step;
