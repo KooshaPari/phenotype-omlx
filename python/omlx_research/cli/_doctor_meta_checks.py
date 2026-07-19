@@ -38,6 +38,7 @@ import json
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 from ._doctor_shared import FAIL, PASS, WARN, Check
@@ -71,12 +72,37 @@ _THRESHOLD_FAIL: int = 12
 _SUBPROCESS_TIMEOUT_SECONDS: int = 120
 
 
+def _python_source_root() -> str:
+    """Locate the on-disk source root for the ``omlx_research`` package.
+
+    The meta-check lives at ``python/omlx_research/cli/_doctor_meta_checks.py``,
+    so the source root is the parent of the ``omlx_research`` directory — that
+    is ``<repo>/python``. We compute it from :data:`__file__` rather than from
+    :data:`sys.path` because the source root is needed in the *child*
+    environment of the subprocess, not the parent's import path.
+
+    Returns the absolute path as a string. Falls back to an empty string if
+    the module is loaded from a zipapp or other location where the path
+    arithmetic cannot be performed; the caller treats an empty string as
+    "PYTHONPATH not augmented" which is correct in pip-installed environments.
+    """
+    try:
+        # .../_doctor_meta_checks.py  →  .../cli  →  .../omlx_research  →  .../python
+        return str(Path(__file__).resolve().parent.parent.parent)
+    except (OSError, ValueError):
+        return ""
+
+
 def _run_doctor_json_subprocess() -> dict[str, Any]:
     """Spawn ``doctor --json`` and return the parsed JSON envelope.
 
     Sets :data:`_META_DEPTH_ENV` in the child environment so the
     subprocess's nested meta-check short-circuits instead of recursing
-    into another subprocess.
+    into another subprocess. Also injects the on-disk ``python/``
+    source root into ``PYTHONPATH`` so the child can import
+    ``omlx_research`` even when the package is not pip-installed in the
+    user's environment (e.g. when running ``pytest`` directly from a
+    source checkout via rootdir auto-discovery).
 
     Raises ``RuntimeError`` on non-zero/non-one exit, missing/invalid
     JSON, or a missing ``checks`` key — the caller maps these to WARN.
@@ -86,6 +112,11 @@ def _run_doctor_json_subprocess() -> dict[str, Any]:
     """
     env = os.environ.copy()
     env[_META_DEPTH_ENV] = "1"
+    src_root = _python_source_root()
+    if src_root:
+        # Prepend so user-set PYTHONPATH entries still win for shadowing,
+        # but the on-disk source root is found before stdlib lookups.
+        env["PYTHONPATH"] = src_root + os.pathsep + env.get("PYTHONPATH", "")
     proc = subprocess.run(
         [sys.executable, "-m", "omlx_research.cli", "doctor", "--json"],
         capture_output=True,

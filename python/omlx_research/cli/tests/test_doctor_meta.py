@@ -315,6 +315,71 @@ def test_subprocess_invocation_uses_module_form(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# PYTHONPATH injection — turn-8 fix so live subprocess finds omlx_research
+# ---------------------------------------------------------------------------
+
+
+def test_python_source_root_is_repo_python_dir():
+    """`_python_source_root` must return the absolute path to the
+    repo's ``python/`` directory — three parents above this module
+    (cli → omlx_research → python).
+    """
+    from pathlib import Path
+
+    src = meta_mod._python_source_root()
+    assert src, "_python_source_root returned an empty string"
+    p = Path(src)
+    assert p.is_absolute(), f"_python_source_root must be absolute, got {src!r}"
+    assert (p / "omlx_research" / "cli" / "_doctor_meta_checks.py").exists(), (
+        f"_python_source_root does not point to the repo python/ root: {src!r}"
+    )
+
+
+def test_subprocess_env_includes_python_source_root(monkeypatch):
+    """The subprocess must receive PYTHONPATH containing the source
+    root so the child interpreter can ``import omlx_research`` even
+    when the package is not pip-installed.
+    """
+    _ensure_env_unset(monkeypatch)
+    monkeypatch.delenv("PYTHONPATH", raising=False)
+    envelope = _envelope([_check_entry(f"c{i}") for i in range(19)])
+    with patch.object(
+        meta_mod.subprocess, "run",
+        return_value=_completed_process(envelope),
+    ) as mock_run:
+        meta_mod.doctor_check_count_at_least_18()
+    args, kwargs = mock_run.call_args
+    env = kwargs.get("env") or args[0]
+    assert env is not None, "subprocess.run was not called with env"
+    pp = env.get("PYTHONPATH", "")
+    src = meta_mod._python_source_root()
+    assert src in pp, (
+        f"PYTHONPATH must contain source root {src!r}, got {pp!r}"
+    )
+
+
+def test_subprocess_env_preserves_existing_pythonpath(monkeypatch):
+    """An existing ``PYTHONPATH`` entry must be preserved (and the
+    source root prepended, not replaced).
+    """
+    _ensure_env_unset(monkeypatch)
+    sentinel = "/tmp/some-existing-pythonpath-entry"
+    monkeypatch.setenv("PYTHONPATH", sentinel)
+    envelope = _envelope([_check_entry(f"c{i}") for i in range(19)])
+    with patch.object(
+        meta_mod.subprocess, "run",
+        return_value=_completed_process(envelope),
+    ) as mock_run:
+        meta_mod.doctor_check_count_at_least_18()
+    args, kwargs = mock_run.call_args
+    env = kwargs.get("env")
+    pp = env.get("PYTHONPATH", "")
+    src = meta_mod._python_source_root()
+    assert sentinel in pp, f"existing PYTHONPATH entry lost: got {pp!r}"
+    assert src in pp, f"source root missing from PYTHONPATH: got {pp!r}"
+
+
+# ---------------------------------------------------------------------------
 # Live (non-mocked) sanity check — confirms the meta-check is wired in
 # ---------------------------------------------------------------------------
 
