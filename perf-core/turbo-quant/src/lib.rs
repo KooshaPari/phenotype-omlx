@@ -6,6 +6,9 @@
 //! in `shaders/turbo_quant.metallib` and consumed by `perf-core/spec-decode`'s
 //! optional `metal` feature.
 
+mod minmax;
+
+use minmax::min_max;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,33 +81,8 @@ impl QuantizedTensor {
 
         let mut bit_cursor = 0usize;
         for chunk in data.chunks(group_size) {
-            // SIMD min/max — ~4x faster on aarch64 NEON / x86_64 SSE4.2
-            #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
-            let (min, max) = {
-                use core::simd::{SimdFloat, f32x4, num::SimdFloat as _};
-                let mut min_v = f32x4::splat(f32::INFINITY);
-                let mut max_v = f32x4::splat(f32::NEG_INFINITY);
-                for lane in chunk.chunks_exact(4) {
-                    let v = f32x4::from_slice(lane);
-                    min_v = min_v.simd_min(v);
-                    max_v = max_v.simd_max(v);
-                }
-                let mut min = min_v.reduce_min();
-                let mut max = max_v.reduce_max();
-                // Handle trailing elements (< 4)
-                let tail_start = (chunk.len() / 4) * 4;
-                for &v in &chunk[tail_start..] {
-                    if v < min { min = v; }
-                    if v > max { max = v; }
-                }
-                (min, max)
-            };
-            #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
-            let (min, max) = {
-                let min = chunk.iter().cloned().fold(f32::INFINITY, f32::min);
-                let max = chunk.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-                (min, max)
-            };
+            // FR-2: NEON min/max on aarch64; portable scalar fallback elsewhere.
+            let (min, max) = min_max(chunk);
             let scale = (max - min) / qmax;
             let zero = min;
             scales.push(scale.max(1e-12));
