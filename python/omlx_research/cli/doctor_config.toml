@@ -1,7 +1,18 @@
 # Doctor check configuration — threshold for the meta-check drift detector.
 # When the live doctor check count drops below `min_check_count`, the
 # `doctor_check_count_at_least_N` check transitions from pass → warn → fail.
-# Bump this when adding new mandatory checks.
+#
+# LOCKSTEP RULE (turn-12): every time a new mandatory check is added to
+# `omlx_research.cli.doctor.CHECKS`, this `min_check_count` value MUST be
+# bumped by the same amount in the same commit. The doctor meta-check
+# (`_doctor_meta_checks.py::doctor_check_count_at_least_18`) reads this
+# value live and FAILs the doctor the moment the live count drops below
+# it. Conversely, leaving the threshold stale when a check is added
+# means the new check never actually surfaces — the meta-check will see
+# `count > threshold` and report a green drift signal even if a future
+# turn accidentally deletes the new check.
+#
+# History: 18 (turn-7) → 21 (turn-9 split) → 23 (turn-10 internal) → 25 (turn-12).
 
 [meta]
-min_check_count = 23
+min_check_count = 25

@@ -59,6 +59,10 @@ from ._doctor_internal_checks import (  # noqa: E402,F401  (re-export)
     metal_runtime_lib_test_count_at_least_25,
     python_cli_subcommand_count_at_least_6,
 )
+from ._doctor_internal_checks_turn12 import (  # noqa: E402,F401  (re-export)
+    cargo_workspace_crate_count_at_least_15,
+    ddm_continuous_schedule_variants_at_least_4,
+)
 
 
 def python_version() -> Check:

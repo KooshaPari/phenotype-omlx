@@ -29,15 +29,21 @@ Four checks live here:
    ``4..5 → WARN``, ``<4 → FAIL``. Defends against subcommand
    droppage.
 
-Adding these four lifts the live doctor check count from 19 → 23.
+Turn-12 added two more checks — ``cargo_workspace_crate_count_at_least_15``
+and ``ddm_continuous_schedule_variants_at_least_4`` — which live in
+the sibling module :mod:`omlx_research.cli._doctor_internal_checks_turn12`
+to keep this file at a manageable size. Both are still INTERNAL structural
+invariants and behave identically to the four checks documented here.
+
+Adding these six total lifts the live doctor check count from 19 → 25.
 Per the threshold-raise rule from turn-9 resume notes §7, the
 drift detector config ``doctor_config.toml`` must move from
-``min_check_count = 21`` to ``min_check_count = 23`` in the same
-batch.
+``min_check_count = 21`` to ``min_check_count = 25`` in the same
+batch. See the lockstep rule documented in that file.
 
 Re-exports
 ----------
-The four check callables are re-exported by
+The four check callables defined here are re-exported by
 :mod:`omlx_research.cli._doctor_checks` so the existing
 ``checks.<name>`` access pattern keeps working. Callers should not
 import this module directly.

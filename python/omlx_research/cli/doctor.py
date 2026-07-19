@@ -123,6 +123,15 @@ CHECKS: list[Callable[[], Check]] = [
     checks.eval_harness_suite_count_at_least_4,
     checks.metal_runtime_lib_test_count_at_least_25,
     checks.python_cli_subcommand_count_at_least_6,
+    # Added 2026-07-19 (turn-12) — two more internal structural
+    # invariants (Cargo workspace crate count, DDM
+    # ContinuousScheduleKind variant count). See
+    # _doctor_internal_checks_turn12.py — kept in a sibling
+    # module to keep each doctor's per-topic file within the
+    # 500-line cap. Both also degrade to WARN when their
+    # target file is missing.
+    checks.cargo_workspace_crate_count_at_least_15,
+    checks.ddm_continuous_schedule_variants_at_least_4,
     # Meta-check (drift detector) — MUST be last so the count it
     # observes reflects the complete registry. See
     # _doctor_meta_checks.py for the recursion guard that prevents
