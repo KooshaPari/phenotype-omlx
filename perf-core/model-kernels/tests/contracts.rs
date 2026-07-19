@@ -147,11 +147,12 @@ fn gqa_attention_groups_share_kv_per_q_head() {
     // Q values, so its two outputs must be identical under GQA.
     let mut q = vec![0.0f32; seq_q * q_heads * head_dim];
     for s in 0..seq_q {
+        let row = s * q_heads * head_dim;
         for d in 0..head_dim {
-            q[s * q_heads * head_dim + 0 * head_dim + d] = 0.5;
-            q[s * q_heads * head_dim + 1 * head_dim + d] = 0.5;
-            q[s * q_heads * head_dim + 2 * head_dim + d] = -0.25;
-            q[s * q_heads * head_dim + 3 * head_dim + d] = -0.25;
+            q[row + d] = 0.5;
+            q[row + head_dim + d] = 0.5;
+            q[row + 2 * head_dim + d] = -0.25;
+            q[row + 3 * head_dim + d] = -0.25;
         }
     }
 
@@ -171,13 +172,14 @@ fn gqa_attention_groups_share_kv_per_q_head() {
     .unwrap();
 
     for s in 0..seq_q {
+        let row = s * q_heads * head_dim;
         for d in 0..head_dim {
             // Head 0 and head 1 share kv_head 0, so they must produce
             // identical outputs. Head 2 and head 3 share kv_head 1.
-            let h0 = s * q_heads * head_dim + 0 * head_dim + d;
-            let h1 = s * q_heads * head_dim + 1 * head_dim + d;
-            let h2 = s * q_heads * head_dim + 2 * head_dim + d;
-            let h3 = s * q_heads * head_dim + 3 * head_dim + d;
+            let h0 = row + d;
+            let h1 = row + head_dim + d;
+            let h2 = row + 2 * head_dim + d;
+            let h3 = row + 3 * head_dim + d;
             assert!(
                 approx_eq(out[h0], out[h1]),
                 "head 0/1 should match at s={s} d={d}: {} vs {}",
@@ -719,7 +721,7 @@ fn weighted_reduce_matches_per_token_scalar_oracle() {
     ];
     let mut out = vec![0.0f32; tokens * n];
     weighted_reduce(&expert_outs, &weights, experts_per_token, n, &mut out).unwrap();
-    let expected = vec![0.6 * 1.0 + 0.4 * 0.0, 0.6 * 0.0 + 0.4 * 1.0, 0.7 * 2.0 + 0.3 * 1.0, 0.7 * 2.0 + 0.3 * -1.0];
+    let expected = vec![0.6 * 1.0 + 0.4 * 0.0, 0.6 * 0.0 + 0.4 * 1.0, 0.7 * 2.0 + 0.3 * 1.0, 0.7 * 2.0 - 0.3 * 1.0];
     assert_buf_close(&out, &expected, 1e-5, 1e-4);
 }
 
@@ -828,12 +830,12 @@ fn short_conv1d_matches_naive_convolution() {
     // Naive: y[t] = sum_{i=0..k-1} kernel[i] * x[t - (k-1) + i]
     let klen = kernel.len();
     let mut expected = Vec::with_capacity(inputs.len());
-    for t in 0..inputs.len() {
+    for (t, _) in inputs.iter().enumerate() {
         let mut acc = 0.0;
-        for i in 0..klen {
+        for (i, k) in kernel.iter().enumerate().take(klen) {
             let idx = t as isize - (klen as isize - 1) + i as isize;
             if idx >= 0 {
-                acc += kernel[i] * inputs[idx as usize];
+                acc += k * inputs[idx as usize];
             }
         }
         expected.push(acc);
