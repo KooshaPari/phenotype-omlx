@@ -24,12 +24,14 @@ mod metal;
 pub mod backend;
 pub mod engine;
 pub mod proposal;
+pub mod proposal_state;
 pub mod state;
 pub mod verify;
 
 pub use backend::{BackendInfo, DraftBackend, NullDraftBackend, TargetBackend, TargetOutput};
 pub use engine::{DraftCandidate, SpecDecodeEngine, SpecStats};
 pub use proposal::{MedusaHead, MedusaProposal, MockMedusaHead, TreeTopology};
+pub use proposal_state::ProposalState;
 pub use state::{EngineState, HISTORY_CAP};
 pub use verify::{verify as verify_draft, VerifyResult};
 

@@ -6,128 +6,37 @@
 //! a coverage gap; this file pins the *state-shape* contract for that
 //! path.
 //!
-//! This is a self-contained unit test for the proposal-state struct
-//! shape — it does not bind against a production `ProposalState` type
-//! (one does not exist in the checked-in crates yet). The struct lives
-//! in a private `mod proposal_state` so the tests assert the contract
-//! against an authoritative reference implementation, not a hypothetical
-//! production type. When the production `ProposalState` lands, the
-//! assertions become a verbatim migration checklist.
+//! **Promotion milestone (turn 10):** as of commit `ebfa098` the
+//! private `proposal_state` shim that lived inside this test file has
+//! been promoted to `spec_decode::proposal_state::ProposalState` — a
+//! real crate-level type in the `spec-decode` workspace member, exposed
+//! via `spec_decode::ProposalState`. The tests below now bind against
+//! this production type, removing the "hypothetical production type"
+//! gap that the prior comment called out.
 //!
 //! Tests:
 //!
-//!   1. `proposal_state_initializes_with_zero_acceptance_count` — a
-//!      freshly-constructed state has `acceptance_count == 0`, a
+//!   1. `production_proposal_state_initializes_with_zero_acceptance_count` —
+//!      a freshly-constructed state has `acceptance_count == 0`, a
 //!      zero-filled `draft_tokens` vector of the requested length, and
 //!      an empty `acceptance_history`.
-//!   2. `proposal_state_accepts_draft_tokens_byte_identical` — accepting
-//!      the first 3 of 5 drafts increments `acceptance_count` to 3,
-//!      records the run length `[3]` in `acceptance_history`, and copies
-//!      the verified prefix bytes from the input.
-//!   3. `proposal_state_rejects_with_zero_acceptance_preserves_state`
+//!   2. `production_proposal_state_accepts_draft_tokens_byte_identical` —
+//!      accepting the first 3 of 5 drafts increments `acceptance_count`
+//!      to 3, records the run length `[3]` in `acceptance_history`, and
+//!      copies the verified prefix bytes from the input.
+//!   3. `production_proposal_state_rejects_with_zero_acceptance_preserves_state`
 //!      — rejecting all 5 drafts leaves `acceptance_count` at 0 and
 //!      keeps `verified_prefix` empty; the proposal remains available
 //!      for re-attempt (state is *not* invalidated).
-//!   4. `proposal_state_bonus_token_appended_after_full_acceptance` —
-//!      after accepting all 5 drafts and recording a bonus token,
+//!   4. `production_proposal_state_bonus_token_appended_after_full_acceptance`
+//!      — after accepting all 5 drafts and recording a bonus token,
 //!      `acceptance_count == 6` (5 drafts + 1 bonus) and the bonus is
 //!      reflected in the `bonus_token` field.
 //!
 //! Convention: every test seeds with `seed=42` and a fixed `(num_drafts,
 //! vocab_size)` shape so the contract is reproducible across runs.
 
-mod proposal_state {
-    //! Self-contained reference `ProposalState`. Mirrors the contract a
-    //! production speculative decoder would expose: an accumulator of
-    //! per-round acceptance counts, the rolling `verified_prefix` of
-    //! tokens that survived the verifier, the rolling
-    //! `acceptance_history` of per-round acceptance lengths, and the
-    //! optional `bonus_token` recorded when the verifier awards an
-    //! extra sample after a fully-accepted proposal.
-
-    /// Model-owned speculative-decoding proposal state.
-    ///
-    /// `draft_tokens` holds the most recent round's proposed draft
-    /// tokens (length `num_drafts`). `acceptance_count` is the running
-    /// total of accepted drafts across rounds (drafts only — bonuses
-    /// are tracked separately). `verified_prefix` is the concatenation
-    /// of every accepted draft token, in order, across rounds.
-    /// `acceptance_history` records the per-round accepted count
-    /// (`0..=num_drafts`) for diagnostics. `bonus_token` is `Some(t)`
-    /// iff a verifier-awarded bonus token has been recorded; it does
-    /// not contribute to `acceptance_count` but does extend the
-    /// effective sequence length.
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct ProposalState {
-        pub num_drafts: usize,
-        pub vocab_size: usize,
-        pub seed: u64,
-        pub draft_tokens: Vec<u32>,
-        pub acceptance_count: usize,
-        pub verified_prefix: Vec<u32>,
-        pub acceptance_history: Vec<usize>,
-        pub bonus_token: Option<u32>,
-    }
-
-    impl ProposalState {
-        /// Construct a fresh proposal state. `draft_tokens` is
-        /// zero-initialized (not random) so the contract is
-        /// reproducible: a fresh state must never carry a residual
-        /// draft from a prior round. `seed` is recorded verbatim for
-        /// diagnostics but does not influence the initial draft bytes.
-        pub fn new(num_drafts: usize, vocab_size: usize, seed: u64) -> Self {
-            assert!(num_drafts > 0, "num_drafts must be positive");
-            assert!(vocab_size > 0, "vocab_size must be positive");
-            Self {
-                num_drafts,
-                vocab_size,
-                seed,
-                draft_tokens: vec![0u32; num_drafts],
-                acceptance_count: 0,
-                verified_prefix: Vec::new(),
-                acceptance_history: Vec::new(),
-                bonus_token: None,
-            }
-        }
-
-        /// Accept the first `n` of the current `draft_tokens` as
-        /// verified. `n` must satisfy `0 <= n <= num_drafts`. The
-        /// accepted slice is appended to `verified_prefix` and the
-        /// per-round count is pushed to `acceptance_history`.
-        pub fn accept_drafts(&mut self, n: usize) {
-            assert!(n <= self.num_drafts, "accept n={n} exceeds num_drafts={}", self.num_drafts);
-            // Append the verified prefix slice — verbatim from
-            // `draft_tokens[..n]` so the bytes are byte-identical to
-            // the proposed draft.
-            self.verified_prefix.extend_from_slice(&self.draft_tokens[..n]);
-            self.acceptance_count += n;
-            self.acceptance_history.push(n);
-        }
-
-        /// Reject the current draft round without recording any
-        /// acceptance. The proposal state is preserved verbatim so the
-        /// caller can re-attempt the round with new draft bytes.
-        pub fn reject_drafts(&mut self) {
-            // No-op on `verified_prefix`, `acceptance_count`,
-            // `acceptance_history`. The contract is "preserves state":
-            // a regression that quietly zeros `draft_tokens` or bumps
-            // a counter trips the byte-equality assertions below.
-            self.acceptance_history.push(0);
-        }
-
-        /// Record a verifier-awarded bonus token. The bonus is stored
-        /// verbatim in `bonus_token`. Per the DeepSeek-MTP contract,
-        /// the bonus counts as an additional accepted token: callers
-        /// see `acceptance_count + (bonus_token.is_some() as usize) ==
-        /// num_drafts + 1` after a full accept + bonus.
-        pub fn append_bonus(&mut self, token: u32) {
-            self.bonus_token = Some(token);
-            self.acceptance_count += 1;
-        }
-    }
-}
-
-use proposal_state::ProposalState;
+use spec_decode::ProposalState;
 
 // Canonical fixture: 5 drafts, vocab 100, seed 42. The seed is the
 // reproducibility anchor — every test reuses it so the proposal-state
@@ -157,7 +66,7 @@ fn state_with_drafts(drafts: &[u32]) -> ProposalState {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn proposal_state_initializes_with_zero_acceptance_count() {
+fn production_proposal_state_initializes_with_zero_acceptance_count() {
     let s = ProposalState::new(NUM_DRAFTS, VOCAB_SIZE, SEED);
 
     // (a) Acceptance counters are zero — no drafts accepted yet, no
@@ -194,7 +103,7 @@ fn proposal_state_initializes_with_zero_acceptance_count() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn proposal_state_accepts_draft_tokens_byte_identical() {
+fn production_proposal_state_accepts_draft_tokens_byte_identical() {
     // Distinct per-slot values so a regression that copies the wrong
     // slice (e.g. offsets by one) trips the prefix equality check.
     let drafts: [u32; NUM_DRAFTS] = [11, 22, 33, 44, 55];
@@ -223,7 +132,7 @@ fn proposal_state_accepts_draft_tokens_byte_identical() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn proposal_state_rejects_with_zero_acceptance_preserves_state() {
+fn production_proposal_state_rejects_with_zero_acceptance_preserves_state() {
     let drafts: [u32; NUM_DRAFTS] = [7, 14, 21, 28, 35];
     let mut s = state_with_drafts(&drafts);
 
@@ -258,7 +167,7 @@ fn proposal_state_rejects_with_zero_acceptance_preserves_state() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn proposal_state_bonus_token_appended_after_full_acceptance() {
+fn production_proposal_state_bonus_token_appended_after_full_acceptance() {
     let drafts: [u32; NUM_DRAFTS] = [2, 4, 6, 8, 10];
     let mut s = state_with_drafts(&drafts);
 
