@@ -1,0 +1,29 @@
+[package]
+name = "metal-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Metal-only pipeline that takes a model-plan ModelPlan and produces an executable compiled pipeline, with cache, bounded compilation, device fingerprinting, and deterministic fallback when Metal is unavailable."
+
+[lib]
+name = "metal_runtime"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[features]
+# Default is no Metal SDK at all — everything compiles and tests on Linux/macOS.
+# A future `metal` feature will add the real `metal = "0.27"` dep + codegen.
+default = []
+
+[dependencies]
+model-plan = { path = "../model-plan" }
+model-kernels = { path = "../model-kernels" }
+kernel-registry = { path = "../kernel-registry" }
+native-abi = { path = "../native-abi" }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+sha2 = "0.10"

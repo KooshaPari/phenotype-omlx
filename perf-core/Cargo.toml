@@ -19,6 +19,7 @@ members = [
     "fleet-proto-zeromq",
     "model-plan",
     "model-kernels",
+    "metal-runtime",
 ]
 
 [workspace.package]
