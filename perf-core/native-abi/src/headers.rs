@@ -41,20 +41,20 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, "#define TQ_ABI_V1_H");
     let _ = writeln!(out, "#include <stdint.h>");
     let _ = writeln!(out, "#include <stddef.h>");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "#ifdef __cplusplus");
     let _ = writeln!(out, "extern \"C\" {{");
     let _ = writeln!(out, "#endif");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* ---- Version ---- */");
     let _ = writeln!(out, "#define TQ_ABI_VERSION_MAJOR 1");
     let _ = writeln!(out, "#define TQ_ABI_VERSION_MINOR 0");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "typedef struct tq_abi_version {{");
     let _ = writeln!(out, "    uint16_t major;");
     let _ = writeln!(out, "    uint16_t minor;");
     let _ = writeln!(out, "}} tq_abi_version;");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* ---- Status codes (stable integer values) ---- */");
     let _ = writeln!(out, "typedef enum tq_abi_status {{");
     let _ = writeln!(out, "    TQ_ABI_OK                  = 0,");
@@ -67,7 +67,7 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, "    TQ_ABI_ERR_VERSION_MISMATCH = 7,");
     let _ = writeln!(out, "    TQ_ABI_ERR_BACKEND         = 8");
     let _ = writeln!(out, "}} tq_abi_status;");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* ---- Encode request ---- */");
     let _ = writeln!(out, "typedef struct tq_abi_encode_request {{");
     let _ = writeln!(out, "    tq_abi_version abi;");
@@ -84,7 +84,7 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, "    float**         out_zeros;");
     let _ = writeln!(out, "    size_t          out_zeros_capacity;");
     let _ = writeln!(out, "}} tq_abi_encode_request;");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* ---- Decode request ---- */");
     let _ = writeln!(out, "typedef struct tq_abi_decode_request {{");
     let _ = writeln!(out, "    tq_abi_version abi;");
@@ -97,7 +97,7 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, "    uint8_t        bits;");
     let _ = writeln!(out, "    float*         out_ptr;");
     let _ = writeln!(out, "}} tq_abi_decode_request;");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* ---- Encode result ---- */");
     let _ = writeln!(out, "typedef struct tq_abi_encode_result {{");
     let _ = writeln!(out, "    int32_t status;");
@@ -106,7 +106,7 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, "    size_t  written_scales_len;");
     let _ = writeln!(out, "    size_t  written_zeros_len;");
     let _ = writeln!(out, "}} tq_abi_encode_result;");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* ---- Release kinds (matching release per allocation owner) ---- */");
     let _ = writeln!(out, "typedef enum tq_abi_release_kind {{");
     let _ = writeln!(out, "    TQ_ABI_RELEASE_SHAPE   = 0,");
@@ -114,9 +114,9 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, "    TQ_ABI_RELEASE_SCALES  = 2,");
     let _ = writeln!(out, "    TQ_ABI_RELEASE_ZEROS   = 3");
     let _ = writeln!(out, "}} tq_abi_release_kind;");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* ---- ABI entry points ---- */");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* Encode `n` f32 elements into caller-owned output buffers.");
     let _ = writeln!(out, " *");
     let _ = writeln!(out, " * On entry, every `out_*` slot must point to caller-owned storage");
@@ -127,7 +127,7 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, " * to the matching error code; the caller sees a clean state.");
     let _ = writeln!(out, " */");
     let _ = writeln!(out, "tq_abi_encode_result tq_abi_encode(const tq_abi_encode_request* req);");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* Decode into a caller-owned `out_ptr` buffer of length `n`.");
     let _ = writeln!(out, " *");
     let _ = writeln!(out, " * On any validation failure the caller's `out_ptr` and its contents");
@@ -135,19 +135,19 @@ pub fn write_c_header() -> String {
     let _ = writeln!(out, " * with the reconstructed f32 values.");
     let _ = writeln!(out, " */");
     let _ = writeln!(out, "tq_abi_status tq_abi_decode(const tq_abi_decode_request* req);");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "/* Free a heap allocation previously returned by `tq_abi_encode`.");
     let _ = writeln!(out, " *");
     let _ = writeln!(out, " * `kind` selects the matching layout for the buffer; every allocate");
     let _ = writeln!(out, " * has exactly one matching release. NULL pointers are ignored.");
     let _ = writeln!(out, " */");
     let _ = writeln!(out, "void tq_abi_release(tq_abi_release_kind kind, void* ptr, size_t count);");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     let _ = writeln!(out, "#ifdef __cplusplus");
     let _ = writeln!(out, "}}");
     let _ = writeln!(out, "#endif");
     let _ = writeln!(out, "#endif /* TQ_ABI_V1_H */");
-    let _ = writeln!(out, "");
+    writeln!(out).expect("write failed");
     out
 }
 

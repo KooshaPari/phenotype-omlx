@@ -34,7 +34,7 @@ pub const fn expected_packed_len(n: usize, bits: u8) -> usize {
     if n == 0 || bits == 0 {
         0
     } else {
-        (n * bits as usize + 7) / 8
+        (n * bits as usize).div_ceil(8)
     }
 }
 
@@ -44,7 +44,7 @@ pub const fn group_count(n: usize, group_size: usize) -> usize {
     if group_size == 0 {
         0
     } else {
-        (n + group_size - 1) / group_size
+        n.div_ceil(group_size)
     }
 }
 

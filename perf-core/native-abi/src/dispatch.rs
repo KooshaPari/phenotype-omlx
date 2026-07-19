@@ -28,6 +28,14 @@ use crate::status::Status;
 
 /// Versioned encode entry. Callers fill `req` and read back the populated
 /// output slots + `EncodeResult.written_*` lengths on success.
+///
+/// # Safety
+///
+/// `req` must be a valid [`EncodeRequest`] whose output pointers are
+/// non-null, properly aligned, and point to caller-owned buffers with at
+/// least `out_*_capacity` elements. Every `*_ptr` in `req` must point to
+/// readable / writable memory of the appropriate type for `n` elements.
+/// Violating these requirements is undefined behavior.
 pub unsafe fn encode_v1(req: &EncodeRequest) -> EncodeResult {
     // Failure returns are funnelled through `fail_with_zeroed_outputs` so the
     // zero-on-failure contract is implemented in exactly one place. On
@@ -103,11 +111,11 @@ pub unsafe fn encode_v1(req: &EncodeRequest) -> EncodeResult {
         scales_slot[g] = scale;
         zeros_slot[g] = gmin;
 
-        for i in start..end {
-            let qf = ((data[i] - gmin) / scale).clamp(0.0, levels);
+        for (rel, &v) in data[start..end].iter().enumerate() {
+            let qf = ((v - gmin) / scale).clamp(0.0, levels);
             let q = (qf + 0.5) as u32;
             let q = if q > levels as u32 { levels as u32 } else { q };
-            let bit_off = (g * group_size + (i - start)) * (bits as usize);
+            let bit_off = (g * group_size + rel) * (bits as usize);
             write_bits(packed_slot, bit_off, q as u8, bits);
         }
     }
@@ -123,6 +131,13 @@ pub unsafe fn encode_v1(req: &EncodeRequest) -> EncodeResult {
 
 /// Versioned decode entry. Validates every input first; on failure the
 /// caller's `out_ptr` and its contents are guaranteed untouched.
+///
+/// # Safety
+///
+/// `req` must be a valid [`DecodeRequest`] whose pointers are non-null,
+/// properly aligned, and point to caller-owned storage with the lengths
+/// declared in `req`. `out_ptr` in particular must be writable for `n`
+/// `f32` values. Violating these requirements is undefined behavior.
 pub unsafe fn decode_v1(req: &DecodeRequest) -> Status {
     if let Err(status) = req.validate() {
         return status;
@@ -145,10 +160,10 @@ pub unsafe fn decode_v1(req: &DecodeRequest) -> Status {
         let zero = zeros[g];
         let start = g * group_size;
         let end = core::cmp::min(start + group_size, n);
-        for i in start..end {
-            let bit_off = (g * group_size + (i - start)) * (bits as usize);
+        for (rel, slot) in out[start..end].iter_mut().enumerate() {
+            let bit_off = (g * group_size + rel) * (bits as usize);
             let q = read_bits(packed, bit_off, bits) as f32;
-            out[i] = zero + q * scale;
+            *slot = zero + q * scale;
         }
     }
     Status::Ok
@@ -160,6 +175,13 @@ pub unsafe fn decode_v1(req: &DecodeRequest) -> Status {
 /// matching-release entry: every allocate has exactly one matching release.
 ///
 /// Safe to call with `ptr = NULL`; the call is a no-op.
+///
+/// # Safety
+///
+/// `ptr` must either be null or have been produced by `encode_v1` with
+/// the matching `kind`, and must not have been freed previously. Passing
+/// any other pointer — including the wrong kind for an allocation —
+/// is undefined behavior.
 pub unsafe fn release_v1(kind: ReleaseKind, ptr: *mut u8, count: usize) {
     if ptr.is_null() || count == 0 {
         return;

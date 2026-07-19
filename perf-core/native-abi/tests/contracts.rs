@@ -343,9 +343,9 @@ fn dispatch_encode_round_trips_small_uniform_input() {
     let input = [-3.0f32, -1.0, 0.5, 2.0, 7.0, 9.0, 12.0];
 
     // Allocate backing storage the dispatch will write into.
-    let n_groups = (input.len() + 3 - 1) / 3;
+    let n_groups = input.len().div_ceil(3);
     let bits: u8 = 3;
-    let packed_len = (input.len() * bits as usize + 7) / 8;
+    let packed_len = (input.len() * bits as usize).div_ceil(8);
 
     let mut shape_storage: Vec<usize> = vec![0; 1];
     let mut packed_storage: Vec<u8> = vec![0; packed_len];
