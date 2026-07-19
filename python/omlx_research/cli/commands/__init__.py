@@ -14,12 +14,18 @@ from .tune import cmd_tune
 from .replay import cmd_replay
 from .compare import cmd_compare
 from .evidence import cmd_evidence
+from .gates import cmd_gates
+from .promote import cmd_promote
+from .quarantine import cmd_quarantine
 
 __all__ = [
-    "cmd_inspect",
-    "cmd_explain",
-    "cmd_tune",
-    "cmd_replay",
     "cmd_compare",
     "cmd_evidence",
+    "cmd_explain",
+    "cmd_gates",
+    "cmd_inspect",
+    "cmd_promote",
+    "cmd_quarantine",
+    "cmd_replay",
+    "cmd_tune",
 ]

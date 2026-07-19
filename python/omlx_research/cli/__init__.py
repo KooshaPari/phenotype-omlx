@@ -15,6 +15,9 @@ Subcommands:
   replay <trace-file>     — replay an execution trace in human-readable form
   compare <trace-a> <trace-b> — side-by-side trace comparison (JSON)
   evidence <plan-file>    — generate an evidence bundle (stdout + .json)
+  promote <kernel-id>    — validate against --gates, sign and cache PromotionRecord
+  quarantine <kernel-id> — append a Hold/Rollback audit-trail entry
+  gates <list|add|remove|check> <kernel-id> — CRUD quality-gate configs
 """
 
 from __future__ import annotations
@@ -202,8 +205,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     # ------------------------------------------------------------------ inspect
     from .commands import (
-        cmd_inspect, cmd_explain, cmd_tune,
-        cmd_replay, cmd_compare, cmd_evidence,
+        cmd_compare, cmd_evidence, cmd_explain, cmd_gates,
+        cmd_inspect, cmd_promote, cmd_quarantine, cmd_replay, cmd_tune,
     )
 
     p = sub.add_parser(
@@ -274,6 +277,79 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     p.add_argument("plan_file", help="path to a model-plan JSON file")
     p.set_defaults(fn=cmd_evidence, _argv=[])
+
+    # ------------------------------------------------------------------ promote
+    p = sub.add_parser(
+        "promote",
+        help="validate a candidate against --gates and write a signed PromotionRecord to .omlx/cache/promotion/",
+    )
+    p.add_argument("kernel_id", help="candidate id (used as the cache filename)")
+    p.add_argument("--gates", required=True,
+                   help="comma-separated 'id=threshold' pairs, e.g. mmlu=0.85,gpqa=0.75")
+    p.add_argument("--sign-key", default=None,
+                   help="optional hex-encoded HMAC signing key")
+    p.add_argument("--approver", default=None,
+                   help="approver string (defaults to $USER)")
+    p.add_argument("--decision", default="auto",
+                   help="decision label stored alongside the record (default: auto)")
+    p.add_argument("--json", action="store_true",
+                   help="emit a JSON envelope to stdout instead of the human summary")
+    p.set_defaults(fn=cmd_promote)
+
+    # --------------------------------------------------------------- quarantine
+    p = sub.add_parser(
+        "quarantine",
+        help="append a Hold/Rollback audit entry for a kernel to .omlx/cache/audit.jsonl",
+    )
+    p.add_argument("kernel_id", help="candidate id to quarantine")
+    p.add_argument("--reason", required=True, help="human-readable reason for the audit entry")
+    p.add_argument("--action", choices=["hold", "rollback"], default="hold",
+                   help="audit-trail action kind (default: hold)")
+    p.add_argument("--approver", default=None,
+                   help="approver string (defaults to $USER)")
+    p.add_argument("--json", action="store_true",
+                   help="emit a JSON envelope to stdout instead of the human summary")
+    p.set_defaults(fn=cmd_quarantine)
+
+    # ------------------------------------------------------------------- gates
+    p = sub.add_parser(
+        "gates",
+        help="CRUD against per-kernel quality-gate configurations in .omlx/cache/gates/",
+    )
+    gsub = p.add_subparsers(dest="gates_action")
+    list_p = gsub.add_parser("list", help="list gates configured for a kernel")
+    list_p.add_argument("kernel_id", help="kernel id")
+    list_p.add_argument("--json", action="store_true",
+                        help="emit a JSON envelope to stdout")
+
+    add_p = gsub.add_parser("add", help="add or update a gate for a kernel")
+    add_p.add_argument("kernel_id", help="kernel id")
+    add_p.add_argument("--gate", required=True, help="gate id, e.g. mmlu")
+    add_p.add_argument("--threshold", type=float, default=None,
+                       help="numeric threshold")
+    add_p.add_argument("--at-least", action="store_true",
+                       help="require score >= threshold (default)")
+    add_p.add_argument("--at-most", action="store_true",
+                       help="require score <= threshold (perplexity-style gates)")
+    add_p.add_argument("--note", default="", help="optional human-readable note")
+    add_p.add_argument("--json", action="store_true",
+                       help="emit a JSON envelope to stdout")
+
+    remove_p = gsub.add_parser("remove", help="remove a gate from a kernel")
+    remove_p.add_argument("kernel_id", help="kernel id")
+    remove_p.add_argument("--gate", required=True, help="gate id to remove")
+    remove_p.add_argument("--json", action="store_true",
+                          help="emit a JSON envelope to stdout")
+
+    check_p = gsub.add_parser("check", help="evaluate a single gate against an observed score")
+    check_p.add_argument("kernel_id", help="kernel id")
+    check_p.add_argument("--gate", required=True, help="gate id to evaluate")
+    check_p.add_argument("--score", type=float, default=None,
+                         help="observed score to test against the gate")
+    check_p.add_argument("--json", action="store_true",
+                         help="emit a JSON envelope to stdout")
+
+    p.set_defaults(fn=cmd_gates)
 
     args = parser.parse_args(argv)
 
