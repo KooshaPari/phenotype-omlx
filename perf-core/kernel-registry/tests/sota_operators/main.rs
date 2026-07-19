@@ -271,4 +271,5 @@ mod moe_routing_top_k_small;
 mod multi_engine_metadata;
 mod qwen_agentic;
 mod recurrent;
+mod spec_decode_proposal_state;
 mod zaya_activations;
