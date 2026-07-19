@@ -1,0 +1,7 @@
+# Doctor check configuration — threshold for the meta-check drift detector.
+# When the live doctor check count drops below `min_check_count`, the
+# `doctor_check_count_at_least_N` check transitions from pass → warn → fail.
+# Bump this when adding new mandatory checks.
+
+[meta]
+min_check_count = 19

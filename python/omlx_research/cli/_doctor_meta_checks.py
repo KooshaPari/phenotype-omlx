@@ -24,12 +24,17 @@ sees the env var unset and runs the full subprocess + parse cycle.
 
 Threshold ladder
 ----------------
+The PASS threshold is configurable via the sibling TOML file
+``doctor_config.toml`` under ``[meta].min_check_count``. When the
+file is missing, malformed, or the key is absent, the meta-check
+falls back to :data:`_DEFAULT_MIN_CHECK_COUNT` (= 18).
+
 The threshold ladder is intentionally generous so a single accidental
 deletion does not immediately break CI:
 
-- ``count >= 18`` → PASS
-- ``12 <= count < 18`` → WARN
-- ``count < 12`` → FAIL
+- ``count >= threshold`` → PASS
+- ``_THRESHOLD_FAIL <= count < threshold`` → WARN
+- ``count < _THRESHOLD_FAIL`` → FAIL
 """
 
 from __future__ import annotations
@@ -40,6 +45,12 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+
+try:
+    # Python 3.11+ stdlib
+    import tomllib  # type: ignore[import-not-found]
+except ModuleNotFoundError:  # pragma: no cover — Python <3.11 fallback
+    import tomli as tomllib  # type: ignore[import-untyped,no-redef]
 
 from ._doctor_shared import FAIL, PASS, WARN, Check
 
@@ -54,11 +65,16 @@ __all__ = ["doctor_check_count_at_least_18"]
 #: ``doctor --json`` subprocess.
 _META_DEPTH_ENV = "OMLX_DOCTOR_META_DEPTH"
 
-#: Number of doctor checks at or above which the meta-check PASSes.
-#: The number is derived from the live registry at the time this
-#: meta-check was added: 18 base checks + this meta-check = 19, well
-#: above the floor.
-_THRESHOLD_PASS: int = 18
+#: Default PASS threshold when no config file is found. The current
+#: live registry is 19 checks (18 base + this meta-check), so the
+#: default of 18 preserves the prior hard-coded behavior when the
+#: config is missing, malformed, or lacks the key.
+_DEFAULT_MIN_CHECK_COUNT: int = 18
+
+#: Filename (sibling of this module) that holds the configured PASS
+#: threshold under ``[meta].min_check_count``. Loaded by
+#: :func:`_load_min_check_count`.
+_CONFIG_FILENAME: str = "doctor_config.toml"
 
 #: Number of doctor checks below which the meta-check FAILs. The
 #: band between :data:`_THRESHOLD_FAIL` (inclusive) and
@@ -91,6 +107,61 @@ def _python_source_root() -> str:
         return str(Path(__file__).resolve().parent.parent.parent)
     except (OSError, ValueError):
         return ""
+
+
+def _config_path() -> Path | None:
+    """Locate :data:`_CONFIG_FILENAME` as a sibling of this module.
+
+    Returns the resolved :class:`pathlib.Path` when the file exists on
+    disk, ``None`` otherwise. ``None`` is also returned for any path
+    resolution failure (e.g. loaded from a zipapp where ``__file__``
+    is not on disk). The caller treats ``None`` as "no config, use
+    default" — a silent degradation that keeps the doctor running.
+    """
+    try:
+        candidate = (Path(__file__).resolve().parent / _CONFIG_FILENAME)
+    except (OSError, ValueError):
+        return None
+    return candidate if candidate.is_file() else None
+
+
+def _load_min_check_count(default: int = _DEFAULT_MIN_CHECK_COUNT) -> int:
+    """Read the PASS threshold from :data:`_CONFIG_FILENAME`.
+
+    The config file is a TOML document sibling of this module. The
+    relevant key is ``[meta].min_check_count`` — an integer that the
+    meta-check compares against the live doctor check count.
+
+    Fallback policy (silent — no logging):
+
+    - Missing config file → ``default``
+    - Malformed TOML → ``default``
+    - Missing ``[meta]`` table → ``default``
+    - Missing ``min_check_count`` key → ``default``
+    - Non-integer value → ``default``
+
+    The default argument is exposed so tests can inject a synthetic
+    baseline without touching the real default.
+    """
+    path = _config_path()
+    if path is None:
+        return default
+    try:
+        with path.open("rb") as f:
+            data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return default
+    if not isinstance(data, dict):
+        return default
+    meta = data.get("meta")
+    if not isinstance(meta, dict):
+        return default
+    value = meta.get("min_check_count", default)
+    if isinstance(value, bool) or not isinstance(value, int):
+        # ``bool`` is a subclass of ``int`` in Python; reject it so
+        # ``min_check_count = true`` does not silently mean ``1``.
+        return default
+    return value
 
 
 def _run_doctor_json_subprocess() -> dict[str, Any]:
@@ -148,8 +219,14 @@ def doctor_check_count_at_least_18() -> Check:
 
     Drift detector: if someone deletes one or more checks from
     :data:`omlx_research.cli.doctor.CHECKS`, this meta-check will
-    flip to WARN (count in ``[_THRESHOLD_FAIL, _THRESHOLD_PASS)``) or
+    flip to WARN (count in ``[_THRESHOLD_FAIL, threshold)``) or
     FAIL (count below :data:`_THRESHOLD_FAIL`).
+
+    The PASS threshold is read at call time from
+    :data:`_CONFIG_FILENAME` (sibling TOML) under
+    ``[meta].min_check_count``. When the file is missing, malformed,
+    or the key is absent, the meta-check falls back to
+    :data:`_DEFAULT_MIN_CHECK_COUNT` (= 18).
 
     Implementation:
 
@@ -161,10 +238,11 @@ def doctor_check_count_at_least_18() -> Check:
       with :data:`_META_DEPTH_ENV` set in the child env, parse the
       resulting JSON envelope, and count ``envelope['checks']``.
     """
+    threshold_pass = _load_min_check_count()
     desc = (
-        f"doctor drift detector: live check count must be >= "
-        f"{_THRESHOLD_PASS} (fail < {_THRESHOLD_FAIL}, "
-        f"warn < {_THRESHOLD_PASS})"
+        f"Doctor check count >= {threshold_pass} "
+        f"(drift detector; threshold from {_CONFIG_FILENAME}; "
+        f"fail < {_THRESHOLD_FAIL}, warn < {threshold_pass})"
     )
 
     # Recursion guard: in a subprocess, skip the spawn.
@@ -201,7 +279,7 @@ def doctor_check_count_at_least_18() -> Check:
 
     checks = envelope.get("checks", [])
     count = len(checks) if isinstance(checks, list) else 0
-    if count >= _THRESHOLD_PASS:
+    if count >= threshold_pass:
         status = PASS
     elif count >= _THRESHOLD_FAIL:
         status = WARN
@@ -210,7 +288,8 @@ def doctor_check_count_at_least_18() -> Check:
 
     details = (
         f"live doctor reported {count} check(s); "
-        f"thresholds: pass >= {_THRESHOLD_PASS}, "
+        f"thresholds: pass >= {threshold_pass} "
+        f"(from {_CONFIG_FILENAME}), "
         f"warn >= {_THRESHOLD_FAIL}, fail < {_THRESHOLD_FAIL}"
     )
     return Check(

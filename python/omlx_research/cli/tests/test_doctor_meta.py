@@ -64,6 +64,17 @@ def _ensure_env_unset(monkeypatch) -> None:
     monkeypatch.delenv(meta_mod._META_DEPTH_ENV, raising=False)
 
 
+def _patch_threshold(monkeypatch, value: int):
+    """Force ``_load_min_check_count`` to return ``value`` for this test.
+
+    The threshold is now config-driven (sibling ``doctor_config.toml``).
+    The threshold-ladder tests in this module assert behavior at the
+    *prior* hard-coded values (18 / 12), so we pin the loader to those
+    values rather than letting the real config dictate the ladder.
+    """
+    monkeypatch.setattr(meta_mod, "_load_min_check_count", lambda default=18: value)
+
+
 # ---------------------------------------------------------------------------
 # Threshold ladder — pass branch
 # ---------------------------------------------------------------------------
@@ -72,6 +83,7 @@ def _ensure_env_unset(monkeypatch) -> None:
 def test_threshold_pass_when_count_equals_floor(monkeypatch):
     """count == 18 → PASS (boundary: >= 18)."""
     _ensure_env_unset(monkeypatch)
+    _patch_threshold(monkeypatch, 18)
     envelope = _envelope([_check_entry(f"c{i}") for i in range(18)])
     with patch.object(
         meta_mod.subprocess, "run", return_value=_completed_process(envelope),
@@ -85,6 +97,7 @@ def test_threshold_pass_when_count_equals_floor(monkeypatch):
 def test_threshold_pass_when_count_above_floor(monkeypatch):
     """count > 18 → PASS (the live registry currently reports 19)."""
     _ensure_env_unset(monkeypatch)
+    _patch_threshold(monkeypatch, 18)
     envelope = _envelope([_check_entry(f"c{i}") for i in range(19)])
     with patch.object(
         meta_mod.subprocess, "run", return_value=_completed_process(envelope),
@@ -102,6 +115,7 @@ def test_threshold_pass_when_count_above_floor(monkeypatch):
 def test_threshold_warn_when_count_in_warn_band(monkeypatch):
     """count == 15 (between 12 and 17) → WARN."""
     _ensure_env_unset(monkeypatch)
+    _patch_threshold(monkeypatch, 18)
     envelope = _envelope([_check_entry(f"c{i}") for i in range(15)])
     with patch.object(
         meta_mod.subprocess, "run", return_value=_completed_process(envelope),
@@ -114,6 +128,7 @@ def test_threshold_warn_when_count_in_warn_band(monkeypatch):
 def test_threshold_warn_at_lower_boundary(monkeypatch):
     """count == 12 → WARN (boundary: >= 12 and < 18)."""
     _ensure_env_unset(monkeypatch)
+    _patch_threshold(monkeypatch, 18)
     envelope = _envelope([_check_entry(f"c{i}") for i in range(12)])
     with patch.object(
         meta_mod.subprocess, "run", return_value=_completed_process(envelope),
@@ -126,6 +141,7 @@ def test_threshold_warn_at_lower_boundary(monkeypatch):
 def test_threshold_warn_at_upper_boundary(monkeypatch):
     """count == 17 → WARN (boundary: < 18)."""
     _ensure_env_unset(monkeypatch)
+    _patch_threshold(monkeypatch, 18)
     envelope = _envelope([_check_entry(f"c{i}") for i in range(17)])
     with patch.object(
         meta_mod.subprocess, "run", return_value=_completed_process(envelope),
@@ -142,6 +158,7 @@ def test_threshold_warn_at_upper_boundary(monkeypatch):
 def test_threshold_fail_when_count_below_floor(monkeypatch):
     """count == 8 (< 12) → FAIL."""
     _ensure_env_unset(monkeypatch)
+    _patch_threshold(monkeypatch, 18)
     envelope = _envelope([_check_entry(f"c{i}") for i in range(8)])
     with patch.object(
         meta_mod.subprocess, "run", return_value=_completed_process(envelope),
@@ -154,6 +171,7 @@ def test_threshold_fail_when_count_below_floor(monkeypatch):
 def test_threshold_fail_when_count_zero(monkeypatch):
     """count == 0 → FAIL."""
     _ensure_env_unset(monkeypatch)
+    _patch_threshold(monkeypatch, 18)
     envelope = _envelope([])
     with patch.object(
         meta_mod.subprocess, "run", return_value=_completed_process(envelope),
@@ -409,3 +427,99 @@ def test_meta_check_passes_on_real_registry():
     assert c.status == PASS
     assert c.id == "doctor_check_count_at_least_18"
     assert "check(s)" in c.details
+
+
+# ---------------------------------------------------------------------------
+# Config-driven threshold (turn-8 forward priority #4)
+# ---------------------------------------------------------------------------
+
+
+def test_load_min_check_count_reads_from_sibling_toml(tmp_path, monkeypatch):
+    """``_load_min_check_count`` returns the integer under
+    ``[meta].min_check_count`` in the sibling ``doctor_config.toml``.
+    """
+    cfg = tmp_path / "doctor_config.toml"
+    cfg.write_text('[meta]\nmin_check_count = 27\n')
+    # Point the loader at the temp file by patching ``__file__`` to a
+    # sibling-of-cfg marker. ``_config_path`` resolves via
+    # ``Path(__file__).resolve().parent``, so we synthesize a fake
+    # module file in tmp_path whose sibling is ``cfg``.
+    fake_module = tmp_path / "_doctor_meta_checks.py"
+    fake_module.write_text("# placeholder for path arithmetic\n")
+    monkeypatch.setattr(meta_mod, "__file__", str(fake_module))
+    assert meta_mod._load_min_check_count() == 27
+
+
+def test_load_min_check_count_falls_back_when_config_missing(tmp_path, monkeypatch):
+    """When the sibling TOML file does not exist, the loader returns the
+    supplied ``default`` argument — silent degradation.
+    """
+    fake_module = tmp_path / "_doctor_meta_checks.py"
+    fake_module.write_text("# placeholder for path arithmetic\n")
+    # ``doctor_config.toml`` is intentionally NOT created.
+    monkeypatch.setattr(meta_mod, "__file__", str(fake_module))
+    assert meta_mod._load_min_check_count() == meta_mod._DEFAULT_MIN_CHECK_COUNT
+    # Custom default is honored too.
+    assert meta_mod._load_min_check_count(default=42) == 42
+
+
+def test_load_min_check_count_falls_back_when_toml_malformed(tmp_path, monkeypatch):
+    """When the TOML is malformed, the loader returns the default —
+    it must never raise or log to the user.
+    """
+    fake_module = tmp_path / "_doctor_meta_checks.py"
+    fake_module.write_text("# placeholder for path arithmetic\n")
+    cfg = fake_module.parent / meta_mod._CONFIG_FILENAME
+    cfg.write_text("this is = not [ valid toml")  # unmatched bracket
+    monkeypatch.setattr(meta_mod, "__file__", str(fake_module))
+    assert meta_mod._load_min_check_count() == meta_mod._DEFAULT_MIN_CHECK_COUNT
+
+
+def test_load_min_check_count_falls_back_when_key_absent(tmp_path, monkeypatch):
+    """When the file parses but ``[meta].min_check_count`` is missing,
+    the loader returns the default.
+    """
+    fake_module = tmp_path / "_doctor_meta_checks.py"
+    fake_module.write_text("# placeholder for path arithmetic\n")
+    cfg = fake_module.parent / meta_mod._CONFIG_FILENAME
+    cfg.write_text('[meta]\nsome_other_key = 1\n')  # no min_check_count
+    monkeypatch.setattr(meta_mod, "__file__", str(fake_module))
+    assert meta_mod._load_min_check_count() == meta_mod._DEFAULT_MIN_CHECK_COUNT
+
+
+def test_threshold_from_config_flows_through_to_check_status(
+    tmp_path, monkeypatch,
+):
+    """End-to-end: a config-driven threshold changes the meta-check's
+    verdict. With threshold=30 and live count=19, the meta-check is
+    WARN (19 in ``[_THRESHOLD_FAIL, threshold)``). With threshold=10
+    and live count=19, the meta-check is PASS.
+
+    This is the integration test that proves the refactor preserves
+    the threshold-ladder contract while moving the knob to TOML.
+    """
+    _ensure_env_unset(monkeypatch)
+
+    # Threshold = 30: count 19 is in the warn band.
+    monkeypatch.setattr(meta_mod, "_load_min_check_count", lambda default=18: 30)
+    envelope = _envelope([_check_entry(f"c{i}") for i in range(19)])
+    with patch.object(
+        meta_mod.subprocess, "run", return_value=_completed_process(envelope),
+    ):
+        c = meta_mod.doctor_check_count_at_least_18()
+    assert c.status == WARN, (
+        f"with threshold=30 and count=19 expected WARN, got {c.status!r}"
+    )
+    assert "30" in c.description
+    assert meta_mod._CONFIG_FILENAME in c.description
+
+    # Threshold = 10: count 19 is comfortably above PASS.
+    monkeypatch.setattr(meta_mod, "_load_min_check_count", lambda default=18: 10)
+    with patch.object(
+        meta_mod.subprocess, "run", return_value=_completed_process(envelope),
+    ):
+        c = meta_mod.doctor_check_count_at_least_18()
+    assert c.status == PASS, (
+        f"with threshold=10 and count=19 expected PASS, got {c.status!r}"
+    )
+    assert "10" in c.description
