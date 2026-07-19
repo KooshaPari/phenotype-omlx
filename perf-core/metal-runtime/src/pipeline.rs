@@ -19,6 +19,7 @@ use crate::cache::{CompiledPipeline, PipelineCache};
 use crate::compile::BoundedCompiler;
 use crate::error::PipelineError;
 use crate::fingerprint::DeviceFingerprint;
+use crate::RuntimeMode;
 
 /// One step's outputs.
 #[derive(Debug, Clone, PartialEq)]
@@ -61,8 +62,27 @@ impl Pipeline {
         compiler: &BoundedCompiler,
         cache: &mut PipelineCache,
     ) -> Result<Self, PipelineError> {
+        Self::compile_with_mode(plan, fp, compiler, cache, RuntimeMode::Reference)
+    }
+
+    /// Compile `plan` under the selected runtime policy.
+    #[instrument(skip(plan, fp, compiler, cache), fields(plan_id = plan.id.0))]
+    pub fn compile_with_mode(
+        plan: &ModelPlan,
+        fp: &DeviceFingerprint,
+        compiler: &BoundedCompiler,
+        cache: &mut PipelineCache,
+        mode: RuntimeMode,
+    ) -> Result<Self, PipelineError> {
+        if mode == RuntimeMode::Production {
+            return Err(PipelineError::CompileError(
+                crate::CompileError::SourceCompilationForbidden,
+            ));
+        }
+
         // 1. Validate.
-        plan.validate().map_err(|e| PipelineError::InvalidPlan(e.to_string()))?;
+        plan.validate()
+            .map_err(|e| PipelineError::InvalidPlan(e.to_string()))?;
 
         // 2. Topo-sort to surface cycle errors before we bother compiling.
         let _topo = plan
@@ -79,18 +99,14 @@ impl Pipeline {
         }
 
         // 4. Compile.
-        let compiled = compiler.compile(plan, fp)?;
+        let compiled = compiler.compile_with_mode(plan, fp, mode)?;
         let result = Self::from_compiled(plan.clone(), fp, compiled.clone());
         cache.insert(plan.id, source_revision, key_fp, compiled);
         info!(source_revision, key_fp, "pipeline compiled and cached");
         Ok(result)
     }
 
-    fn from_compiled(
-        plan: ModelPlan,
-        fp: &DeviceFingerprint,
-        compiled: CompiledPipeline,
-    ) -> Self {
+    fn from_compiled(plan: ModelPlan, fp: &DeviceFingerprint, compiled: CompiledPipeline) -> Self {
         let max_seq_len = plan.max_seq_len;
         let shader_template = compiled.shader_source;
         let compiled_at = compiled.compiled_at_unix_ms;
@@ -142,10 +158,7 @@ impl Pipeline {
     /// task will route through a real Metal dispatch when the `metal`
     /// feature is enabled.
     #[instrument(skip(self, inputs), fields(plan_id = self.plan.id.0))]
-    pub fn step(
-        &self,
-        inputs: &HashMap<String, Vec<f32>>,
-    ) -> Result<StepOutput, PipelineError> {
+    pub fn step(&self, inputs: &HashMap<String, Vec<f32>>) -> Result<StepOutput, PipelineError> {
         let interpreter = ReferenceInterpreter::new(self.plan.clone());
         let started = Instant::now();
         let mut per_op_started = Instant::now();
@@ -222,8 +235,10 @@ const _: () = {
 mod tests {
     use super::*;
     use crate::CompileBudget;
-    use model_plan::{DType, OperatorId, OperatorKind, OperatorPlan, Precision,
-        QuantizationPolicy, SchedulerPolicy, TensorRef};
+    use model_plan::{
+        DType, OperatorId, OperatorKind, OperatorPlan, Precision, QuantizationPolicy,
+        SchedulerPolicy, TensorRef,
+    };
 
     fn make_plan() -> ModelPlan {
         let plan = ModelPlan::new_unchecked(

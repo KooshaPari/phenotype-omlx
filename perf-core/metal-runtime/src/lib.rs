@@ -35,6 +35,7 @@
 
 #![deny(unsafe_code)]
 
+pub mod artifact;
 pub mod cache;
 pub mod compile;
 pub mod dispatch;
@@ -42,6 +43,9 @@ pub mod error;
 pub mod fingerprint;
 pub mod pipeline;
 
+pub use artifact::{
+    ArtifactAllowlist, ArtifactError, MetallibArtifact, MetallibLoader, RuntimeMode,
+};
 pub use cache::{CacheKey, CacheStats, CompiledPipeline, EvictionPolicy, PipelineCache};
 pub use compile::{BoundedCompiler, CompileBudget};
 pub use error::{CompileError, PipelineError};

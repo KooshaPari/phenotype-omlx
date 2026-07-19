@@ -16,6 +16,10 @@ use thiserror::Error;
 #[derive(Debug, Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum CompileError {
+    /// Production runtimes may load verified precompiled artifacts only.
+    #[error("shader source compilation is forbidden in production mode")]
+    SourceCompilationForbidden,
+
     /// The emitted shader source exceeded `max_shader_bytes` *or* the
     /// compile time exceeded `max_ms`. Both fields are populated when
     /// both limits were violated simultaneously.

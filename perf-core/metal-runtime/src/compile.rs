@@ -24,6 +24,7 @@ use sha2::{Digest, Sha256};
 use crate::cache::CompiledPipeline;
 use crate::error::CompileError;
 use crate::fingerprint::DeviceFingerprint;
+use crate::RuntimeMode;
 
 /// Wall-clock and shader-byte budgets for [`BoundedCompiler::compile`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,19 +64,34 @@ impl BoundedCompiler {
         self.budget
     }
 
-    /// Compile `plan` into a [`CompiledPipeline`] under the configured
-    /// budget.
-    ///
-    /// Errors:
-    /// - [`CompileError::InvalidPlan`] if `plan` fails structural validation.
-    /// - [`CompileError::BudgetExceeded`] if either budget is violated.
+    /// Compile `plan` into a [`CompiledPipeline`] in reference mode.
     pub fn compile(
         &self,
         plan: &ModelPlan,
         fingerprint: &DeviceFingerprint,
     ) -> Result<CompiledPipeline, CompileError> {
+        self.compile_with_mode(plan, fingerprint, RuntimeMode::Reference)
+    }
+
+    /// Compile `plan` under the configured runtime policy and budget.
+    ///
+    /// Errors:
+    /// - [`CompileError::SourceCompilationForbidden`] in production mode.
+    /// - [`CompileError::InvalidPlan`] if `plan` fails structural validation.
+    /// - [`CompileError::BudgetExceeded`] if either budget is violated.
+    pub fn compile_with_mode(
+        &self,
+        plan: &ModelPlan,
+        fingerprint: &DeviceFingerprint,
+        mode: RuntimeMode,
+    ) -> Result<CompiledPipeline, CompileError> {
+        if mode == RuntimeMode::Production {
+            return Err(CompileError::SourceCompilationForbidden);
+        }
+
         // 1. Validate the plan structurally.
-        plan.validate().map_err(|e| CompileError::InvalidPlan(e.to_string()))?;
+        plan.validate()
+            .map_err(|e| CompileError::InvalidPlan(e.to_string()))?;
 
         // 2. Emit the MSL shader source (stub string for now).
         let shader_source = emit_msl_stub(plan, fingerprint);
@@ -88,8 +104,7 @@ impl BoundedCompiler {
         let synthetic_work = synthesize_compile_work(plan, fingerprint);
         let _ = synthetic_work; // touched so the optimizer keeps it
         let elapsed = start.elapsed();
-        let compile_ms = elapsed.as_millis() as u64
-            + synthetic_compile_time_ms(plan, fingerprint);
+        let compile_ms = elapsed.as_millis() as u64 + synthetic_compile_time_ms(plan, fingerprint);
 
         // 4. Enforce the budget. We report BOTH dimensions in the error so
         //    the caller can debug which one tripped.
@@ -272,12 +287,25 @@ mod tests {
     }
 
     #[test]
+    fn production_mode_rejects_source_compilation() {
+        let compiler = BoundedCompiler::new(CompileBudget::DEFAULT);
+        let error = compiler
+            .compile_with_mode(
+                &small_plan(),
+                &DeviceFingerprint::compute_software(),
+                RuntimeMode::Production,
+            )
+            .expect_err("production must never compile shader source");
+        assert_eq!(error, CompileError::SourceCompilationForbidden);
+    }
+
+    #[test]
     fn plan_revision_changes_when_op_added() {
         let plan = small_plan();
         let r0 = plan_revision(&plan);
         use model_plan::{
-            DType, ModelId, OperatorId, OperatorKind, OperatorPlan, Precision,
-            QuantizationPolicy, SchedulerPolicy, TensorRef,
+            DType, ModelId, OperatorId, OperatorKind, OperatorPlan, Precision, QuantizationPolicy,
+            SchedulerPolicy, TensorRef,
         };
         let bigger = ModelPlan::new_unchecked(
             ModelId(1),
