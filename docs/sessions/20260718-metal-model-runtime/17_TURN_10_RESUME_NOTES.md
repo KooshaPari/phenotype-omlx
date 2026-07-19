@@ -210,3 +210,85 @@ bash scripts/tests/test_push_wip.sh
 SNAPSHOT_IN_PROGRESS=1 bash scripts/snapshot.sh
 # expected: exit 0 immediately, no nested invocation
 ```
+
+---
+
+# Turn 11 Addendum — On-Disk State Refresh + Eval-Harness Cherry-Pick Abort
+
+> Recorded after the system surfaced an out-of-band cherry-pick
+> (target tip `87c3421 feat(eval-harness): add likelihood-scored backend execution`)
+> with 3 in-progress conflict paths in `perf-core/eval-harness/`.
+> This addendum captures the verification-first close of that disturbance.
+
+## Status verification (post `git reset --hard ba80d41`)
+
+| Gate | Result |
+|---|---|
+| `git log --oneline -13` | 11 turn-10 atomic commits + `d0020b8 turn-9 close` ancestor at `HEAD = ba80d41` |
+| `git status --porcelain` | clean |
+| `cargo test --workspace --all-targets` | **Rust 824 passed / 0 failed / 1 ignored** |
+| `python3 -m pytest -q` | **Python 250 passed / 4 skipped** |
+| `python3 -m omlx_research.cli doctor` | **21 pass / 2 warn / 0 fail / 23 total** (`min_check_count = 23` matches live count) |
+| `cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| `bash scripts/verify_lockfile.sh` | OK (`c032044b…`) |
+| `bash scripts/tests/test_push_wip.sh` | 4 / 4 pass |
+
+These match the turn-10 close-out numbers exactly; nothing has degraded.
+
+## Eval-harness cherry-pick `87c3421` — ABORTED
+
+The cherry-pick target introduced a richer type surface:
+
+- `perf-core/eval-harness/src/backend.rs` — `Backend` trait + `BackendError`,
+  `Likelihood`, `Completion` value types
+- `perf-core/eval-harness/src/lib.rs` — `EvalError` enum + `Result<T>` alias,
+  `pub use backend::{run_suite, Backend, …}` re-exports
+- `perf-core/eval-harness/src/runner.rs` — **new module**, references
+  `crate::task::{Suite, TaskSpec}` plus `Suite::MMLU`, `Suite::GPQA`,
+  `Suite::TerminalBench` variants
+- `perf-core/eval-harness/tests/backend_execution.rs` — exercises the surface
+
+The conflict surfaced through `git diff --cached` (3 paths: `AA backend.rs`,
+`UU lib.rs`, `A tests/backend_execution.rs`). Initial conflict resolution
+adopted the typed `Likelihood`/`Completion`/`BackendError` shape. The compile
+cycle then exploded into cross-module failures (`crate::task` is not a module,
+`EvalError::Backend { task_id, source }` constructors are missing fields, the
+`runner.rs` imports `task`/`Suite::MMLU`/`TaskSpec` which the cherry-pick
+patch itself never defined — they live one commit downstream).
+
+`git reset --hard ba80d41` restored the verified turn-10 close-out as the
+source of truth. `cargo clean` was not needed (no incremental artifacts
+existed at the restored HEAD).
+
+### Recommended split for the next attempt
+
+The 87c3421 patch is structurally 3 different changes glued together. It
+should be reconstructed as **3 atomic sub-cherry-picks**, each isolated and
+testable:
+
+1. **`types-only`** — `backend.rs` + `lib.rs` re-exports:
+   `Likelihood`/`Completion`/`BackendError`/`EvalError` + `RunConfig`
+   alias. **No runner imports.** Compiles on its own; test surface is
+   construct/equality of value types.
+2. **`runner-only`** — `runner.rs` + `runner_tests` definition of `Suite`,
+   `TaskSpec`, `evaluate(...)` against a mock backend. Depends on (1).
+3. **`suites-only`** — the real `Suites::MMLU` / `Suites::GPQA` /
+   `Suites::TerminalBench` task-loaders, depending on (1) + (2).
+
+This split honors the polyglot / SOTA-coverage policy: each sub-cherry-pick
+tests against the same five kernel-context × five-seed envelope already
+established for NIAH (`docs/sessions/20260718-metal-model-runtime/17_TURN_10_RESUME_NOTES.md`),
+and lands SOTA-operator coverage incrementally instead of in one
+500-line patch.
+
+## State forward to Turn 11 (revised)
+
+| Forward priority | Note |
+|---|---|
+| `metal-runtime-artifacts` crate (cargo workspace = 8) | unchanged |
+| `git-credential-phenotype-omlx-write-scope` | unchanged |
+| `mlx_lm`, `_perf` external deps WARN | unchanged |
+| DDM discrete-step L2 decay harness for `Linear + Sqrt + Sigmoid` | unchanged |
+| **NEW** eval-harness cherry-pick split (3 sub-cherry-picks) | `types-only` first |
+| **NEW** `cargo workspace` internal check (count ≥ 8) wired to doctor | this would let us catch the count drift earlier |
+
