@@ -11,9 +11,9 @@
 
 use kernel_registry::{
     evaluate_for_production, BackendKind, Candidate, CandidateId, DeviceCaps, GateDirection,
-    KernelKey, KernelRegistry, Metric, PromotionRecord, QualityAttachment, QualityError,
-    QualityEvidence, QualityGate, RejectionReason, SelectionDecision, SelectionPolicy,
-    ShapeSignature, TuningRecord,
+    KernelKey, KernelRegistry, Metric, PromotionAction, PromotionRecord, PromotionValidator,
+    QualityAttachment, QualityError, QualityEvidence, QualityGate, RejectionReason,
+    SelectionDecision, SelectionPolicy, ShapeSignature, TuningRecord,
 };
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
 use kernel_registry::record::Measurement;
@@ -414,4 +414,130 @@ fn gate_direction_at_most_rejects_when_above_threshold() {
         result,
         Err(QualityError::PromotionGateRejected { gate: ref g, .. }) if g == "perplexity"
     ));
+}
+
+fn passing_record(cand_id: CandidateId) -> PromotionRecord {
+    PromotionRecord::new(
+        cand_id,
+        "rev-test",
+        1_700_000_000_000,
+        "ci-bot-1",
+        vec![QualityGate::at_least("mmlu-pro", 0.65)],
+        vec![QualityEvidence::new(
+            "mmlu-pro",
+            0.71,
+            "MMLU-Pro@2024-06",
+            "rev-test",
+            1_700_000_000_000,
+        )],
+        "MMLU-Pro gate holds; p95 within 1.05x.",
+        Some("trace-01".into()),
+    )
+}
+
+#[test]
+fn promotion_validator_promotes_when_gates_pass() {
+    let cand = make_candidate("a", BackendKind::Metal, min_max());
+    let record = passing_record(cand.id);
+    let v = PromotionValidator { signing_key: None };
+    let action = v.promote(record, "ci-bot-1", "auto").expect("promote");
+    match action {
+        PromotionAction::Promote { record, decision } => {
+            assert_eq!(decision, "auto");
+            assert!(record.verify_content_hash());
+            assert!(record.signature.is_none());
+        }
+        _ => panic!("expected Promote variant"),
+    }
+}
+
+#[test]
+fn promotion_validator_signs_record_when_key_provided() {
+    let cand = make_candidate("a", BackendKind::Metal, min_max());
+    let record = passing_record(cand.id);
+    let v = PromotionValidator { signing_key: Some(b"k1".to_vec()) };
+    let action = v.promote(record, "ci-bot-1", "two-person").expect("promote");
+    match action {
+        PromotionAction::Promote { record, .. } => {
+            assert!(record.signature.is_some());
+            assert!(record.verify_signature(b"k1"));
+            assert!(!record.verify_signature(b"k2"));
+        }
+        _ => panic!("expected Promote variant"),
+    }
+}
+
+#[test]
+fn promotion_validator_rejects_when_gate_threshold_unmet() {
+    let cand = make_candidate("a", BackendKind::Metal, min_max());
+    let record = PromotionRecord::new(
+        cand.id,
+        "rev-test",
+        1_700_000_000_000,
+        "ci-bot-1",
+        vec![QualityGate::at_least("mmlu-pro", 0.95)], // very high
+        vec![QualityEvidence::new(
+            "mmlu-pro",
+            0.71,
+            "MMLU-Pro@2024-06",
+            "rev-test",
+            1_700_000_000_000,
+        )],
+        "",
+        None,
+    );
+    let v = PromotionValidator::default();
+    assert!(matches!(
+        v.promote(record, "ci-bot-1", "auto"),
+        Err(QualityError::PromotionGateRejected { gate: ref g, .. }) if g == "mmlu-pro"
+    ));
+}
+
+#[test]
+fn promotion_validator_quarantine_carries_record() {
+    let cand = make_candidate("a", BackendKind::Metal, min_max());
+    let record = passing_record(cand.id);
+    let v = PromotionValidator::default();
+    let action = v.quarantine(record, "ci-bot-1", "blocked-on-cve");
+    match action {
+        PromotionAction::Quarantine { decision, record } => {
+            assert_eq!(decision, "blocked-on-cve");
+            assert!(record.verify_content_hash());
+        }
+        _ => panic!("expected Quarantine variant"),
+    }
+}
+
+#[test]
+fn promotion_validator_hold_records_reason() {
+    let v = PromotionValidator::default();
+    let action = v.hold("awaiting MMLU-Pro score from rev-8");
+    match action {
+        PromotionAction::Hold { reason } => {
+            assert_eq!(reason, "awaiting MMLU-Pro score from rev-8");
+        }
+        _ => panic!("expected Hold variant"),
+    }
+}
+
+#[test]
+fn promotion_action_serde_round_trip() {
+    let cand = make_candidate("a", BackendKind::Metal, min_max());
+    let record = passing_record(cand.id);
+    let actions = vec![
+        PromotionAction::Hold { reason: "awaiting".into() },
+        PromotionAction::Quarantine {
+            record: record.clone(),
+            decision: "blocked".into(),
+        },
+        PromotionAction::Promote {
+            record,
+            decision: "auto".into(),
+        },
+    ];
+    for a in actions {
+        let json = serde_json::to_string(&a).expect("serialize");
+        let back: PromotionAction = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(a, back);
+    }
 }

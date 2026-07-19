@@ -50,8 +50,8 @@ pub use compat::{AttentionKind, DType, OperatorKind, QuantizationPolicy};
 pub use error::{Error, Result};
 pub use key::{fast_hash_bytes, KernelKey, ShapeSignature, ATTENTION_NONE};
 pub use quality::{
-    evaluate_for_production, GateDirection, PromotionRecord, QualityAttachment,
-    QualityError, QualityEvidence, QualityGate,
+    evaluate_for_production, GateDirection, PromotionAction, PromotionRecord, PromotionValidator,
+    QualityAttachment, QualityError, QualityEvidence, QualityGate,
 };
 pub use record::{Measurement, TuningRecord};
 pub use registry::{DeviceCaps, KernelRegistry};

@@ -471,3 +471,90 @@ pub fn evaluate_for_production(
     }
     Ok(())
 }
+
+/// The action a promotion workflow performs on a candidate.
+///
+/// The enum is the *audit summary* — concrete enough that a CI report can
+/// include it but small enough to stay stable. The textual decision field
+/// is intentionally free-form so per-organization workflows can attach
+/// policies (`"auto"`, `"manual"`, `"two-person"`) without an enum change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PromotionAction {
+    /// Approve a candidate for production. Always followed by a
+    /// [`PromotionRecord`] in the same audit-trail event.
+    Promote {
+        record: PromotionRecord,
+        decision: String,
+    },
+    /// Quarantine a candidate: keep evidence attached but block
+    /// production selection. The record inside explains why.
+    Quarantine {
+        record: PromotionRecord,
+        decision: String,
+    },
+    /// Hold: no promotion decision has been recorded yet (the candidate
+    /// is in the queue but awaiting evidence).
+    Hold { reason: String },
+}
+
+/// Coordinator for the promote/quarantine workflow.
+///
+/// `PromotionValidator` wraps the [`QualityError`] -> [`PromotionAction`]
+/// translation plus content-hashing/sign-hashing. Callers that want to
+/// build the same records without the wrapper can use
+/// [`PromotionRecord`] + [`evaluate_for_production`] directly.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct PromotionValidator {
+    /// Optional HMAC-style key used to sign records. `None` leaves
+    /// records unsigned (still content-hashed).
+    pub signing_key: Option<Vec<u8>>,
+}
+
+impl PromotionValidator {
+    /// Validate `record` against its gates and produce a
+    /// [`PromotionRecord`] with a fresh `content_hash` and an optional
+    /// signature derived from `signing_key`. On success returns a
+    /// [`PromotionAction::Promote`] carrying the finalized record.
+    pub fn promote(
+        &self,
+        record: PromotionRecord,
+        approver: impl Into<String>,
+        decision: impl Into<String>,
+    ) -> Result<PromotionAction, QualityError> {
+        record.validate()?;
+        let mut r = record;
+        r.approver = approver.into();
+        if let Some(k) = &self.signing_key {
+            r.sign_with(k);
+        }
+        r.content_hash = r.content_hash();
+        Ok(PromotionAction::Promote {
+            record: r,
+            decision: decision.into(),
+        })
+    }
+
+    /// Quarantine a candidate's evidence rather than promote it. The
+    /// record stays content-hashed but no signature is appended.
+    pub fn quarantine(
+        &self,
+        record: PromotionRecord,
+        approver: impl Into<String>,
+        decision: impl Into<String>,
+    ) -> PromotionAction {
+        let mut r = record;
+        r.approver = approver.into();
+        r.content_hash = r.content_hash();
+        PromotionAction::Quarantine {
+            record: r,
+            decision: decision.into(),
+        }
+    }
+
+    /// Build the next "hold" entry for the audit log (caller is waiting
+    /// on more evidence). The string is appended verbatim.
+    pub fn hold(&self, reason: impl Into<String>) -> PromotionAction {
+        PromotionAction::Hold { reason: reason.into() }
+    }
+}
