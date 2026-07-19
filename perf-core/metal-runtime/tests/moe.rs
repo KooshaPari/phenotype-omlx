@@ -17,17 +17,17 @@ fn assert_matches_reference(logits: &[f32], shape: MoeShape, top_k: usize) {
         )
         .unwrap();
         let out_start = token * top_k;
-        for rank in 0..top_k {
+        for (rank, expected_item) in expected.iter().enumerate().take(top_k) {
             assert_eq!(
                 output.expert_ids[out_start + rank],
-                expected[rank].0 as u32,
+                expected_item.0 as u32,
                 "token {token}, rank {rank}"
             );
             assert!(
-                (output.weights[out_start + rank] - expected[rank].1).abs() <= 1.0e-6,
+                (output.weights[out_start + rank] - expected_item.1).abs() <= 1.0e-6,
                 "token {token}, rank {rank}: got {}, expected {}",
                 output.weights[out_start + rank],
-                expected[rank].1
+                expected_item.1
             );
         }
     }
