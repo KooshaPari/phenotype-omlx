@@ -47,6 +47,13 @@ pub enum OperatorKind {
     Recurrent,
     /// Diffusion denoise or remask step.
     Diffusion,
+    /// Discrete (masked) diffusion language-model step (MDLM / D3PM / SEDD).
+    /// Differs from [`OperatorKind::Diffusion`] in that the noising
+    /// process replaces tokens with a dedicated `[MASK]` token rather
+    /// than adding Gaussian noise; the denoising step decodes one
+    /// masked position per call and re-masks a fraction determined by
+    /// a noise schedule (linear or cosine).
+    DiscreteDiffusion,
     /// Speculative proposal / verification path.
     Speculative,
     /// Sub-byte or ternary encode/decode and fused compute.

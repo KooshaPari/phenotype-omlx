@@ -136,6 +136,7 @@ fn discriminant_of_op(op: OperatorKind) -> u8 {
         OperatorKind::Scan => 0x0d,
         OperatorKind::Recurrent => 0x0e,
         OperatorKind::Diffusion => 0x0f,
+        OperatorKind::DiscreteDiffusion => 0x12,
         OperatorKind::Speculative => 0x10,
         OperatorKind::Quantized => 0x11,
         OperatorKind::Unknown => 0x7f,

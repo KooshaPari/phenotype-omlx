@@ -35,6 +35,7 @@ const SOTA_OPERATORS_SOURCES: &[(&str, &str)] = &[
     ("coverage_matrix.rs", include_str!("coverage_matrix.rs")),
     ("dense_envelope.rs", include_str!("dense_envelope.rs")),
     ("diffusion.rs", include_str!("diffusion.rs")),
+    ("discrete_diffusion.rs", include_str!("discrete_diffusion.rs")),
     ("mod_routing/mod.rs", include_str!("mod_routing/mod.rs")),
     ("mod_routing/policy.rs", include_str!("mod_routing/policy.rs")),
     ("multi_engine_metadata.rs", include_str!("multi_engine_metadata.rs")),
@@ -94,6 +95,7 @@ const OPERATOR_KIND_COVERED: &[OperatorKind] = &[
     OperatorKind::Scan,
     OperatorKind::Recurrent,
     OperatorKind::Diffusion,
+    OperatorKind::DiscreteDiffusion,
     OperatorKind::Speculative,
     OperatorKind::Quantized,
 ];
@@ -137,6 +139,7 @@ fn operator_kind_key(kind: OperatorKind) -> &'static str {
         OperatorKind::Scan => "scan",
         OperatorKind::Recurrent => "recurrent",
         OperatorKind::Diffusion => "diffusion",
+        OperatorKind::DiscreteDiffusion => "ddm_",
         OperatorKind::Speculative => "mtp",
         OperatorKind::Quantized => "bonsai",
         // `OperatorKind` is `#[non_exhaustive]`; the wildcard absorbs

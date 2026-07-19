@@ -261,6 +261,8 @@ mod builders_integration;
 mod coverage_matrix;
 mod diffusion;
 mod dense_envelope;
+mod discrete_diffusion;
 mod mod_routing;
+mod moe_routing;
 mod multi_engine_metadata;
 mod recurrent;
