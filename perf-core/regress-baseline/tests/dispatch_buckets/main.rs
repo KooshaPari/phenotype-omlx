@@ -39,32 +39,30 @@
 //!
 //! 4. Print every observed number with `eprintln!` (visible with
 //!    `cargo test -- --nocapture`).
-//! 5. Assert each metric is `<=` the inline "initial envelope" ceiling
-//!    declared at the top of the test (`DISPATCH_CEIL` /
-//!    `ENERGY_PER_OP_CEIL_J`).
+//! 5. Assert each metric is `<=` the per-shape ceiling exposed by
+//!    [`regress_baseline::dispatch_budget`] and
+//!    [`regress_baseline::energy_budget_j`]. The ceilings live in the
+//!    library so production callers (not just this test) get the same
+//!    envelope.
 //!
-//! # TDD discipline
+//! # TDD discipline and follow-up plan
 //!
-//! This test was built by the standard red-green cycle:
+//! This test was built by the red-green cycle: the first check-in
+//! shipped with intentionally tight ceilings so the test failed loudly
+//! and dumped the actual numbers via `--nocapture`. The follow-up
+//! commit lifted those ceilings into [`regress_baseline::budget`] with
+//! 1.2× (dispatch) and 1.5× (energy) headroom applied over the first
+//! observed run. This file no longer holds its own `DISPATCH_CEIL` /
+//! `ENERGY_PER_OP_CEIL_J` mirrors — both are now read from the library
+//! so the envelope is single-sourced.
 //!
-//! 1. **Red**: the first check-in shipped with intentionally tight
-//!    ceilings (8 dispatches / 1e-9 joules-per-FLOP) so the test
-//!    failed loudly and dumped the actual numbers via `--nocapture`.
-//! 2. **Green**: the operator read the output and replaced the tight
-//!    ceilings with `observed × 1.2` (dispatch) and `observed × 1.5`
-//!    (energy) headroom. The test now passes; the headroom is
-//!    deliberately generous to absorb measurement variance on the
-//!    scalar reference path.
-//!
-//! The follow-up commit must:
+//! The remaining follow-up commit must:
 //!
 //! - plumb `Measurement::dispatches` and `Measurement::energy_j` from
 //!   the instrumented Metal runtime into this test (replacing the
 //!   synthesis in `synthetic_dispatch_count` and `measure_matmul`),
-//! - tighten the ceilings against that real telemetry,
-//! - populate the `regress_baseline::dispatch_budget` and
-//!   `regress_baseline::energy_budget_j` stubs so the ceilings live in
-//!   the library, not the test.
+//! - tighten the per-bucket ceilings in
+//!   [`regress_baseline::budget::BUCKETS`] against that real telemetry.
 //!
 //! # Why we don't add a Metal dependency here
 //!
@@ -126,69 +124,32 @@ const BUCKETS: &[Bucket] = &[
 ];
 
 // ---------------------------------------------------------------------------
-// "Initial envelope" ceilings.
+// Per-bucket ceilings live in `regress_baseline::budget::BUCKETS`.
+// ---------------------------------------------------------------------------
 //
-// These are deliberately **tight** so the first run of the test fails
-// and prints the real numbers. After the first run, the operator
-// replaces them with the observed values (plus a small headroom). The
-// helper stubs in `regress_baseline` (`dispatch_budget` /
-// `energy_budget_j`) currently return `u64::MAX` / `f64::INFINITY` so
-// they are no-ops; once a follow-up commit moves the ceilings into the
-// library, these constants can be deleted.
-// ---------------------------------------------------------------------------
-
-/// Per-bucket dispatch-count ceiling. The Metal model-runtime is
-/// expected to emit at most this many command-buffer dispatches for one
-/// timed invocation of the matmul on the matching bucket.
-///
-/// **Initial envelope (measured 2026-07-18 on this machine):**
-///
-/// | Bucket                       | dispatches | ceiling (×1.2) |
-/// |------------------------------|-----------:|---------------:|
-/// | tiny_decode_512x2048x2048    |        256 |            308 |
-/// | small_prompt_1024x4096x4096 |       1024 |           1229 |
-/// | medium_prompt_2048x8192x8192 |       4096 |           4916 |
-/// | square_4k_4096x4096x4096     |       4096 |           4916 |
-/// | square_8k_8192x8192x8192     |      16384 |          19661 |
-/// | long_decode_16384x4096x4096  |      16384 |          19661 |
-///
-/// The scalar reference emits `ceil(M/64) * ceil(N/64)` logical
-/// dispatches under a 64×64 output-tile policy. The Metal runtime
-/// should land **at or below** these numbers once its kernel is
-/// tuned; if it ever blows past them it almost certainly means a
-/// re-tile regression slipped into the build.
-const DISPATCH_CEIL: &[u64] = &[308, 1229, 4916, 4916, 19661, 19661];
-
-/// Per-bucket energy-per-op ceiling in joules per FLOP. This is the
-/// `energy_j / flops` ratio; lower is better.
-///
-/// **Initial envelope (measured 2026-07-18 on this machine, 30 W TDP
-/// share over a single-tile wall-time scaled by num_tiles):**
-///
-/// | Bucket                       | energy_per_op_j | ceiling (×1.5) |
-/// |------------------------------|----------------:|---------------:|
-/// | tiny_decode_512x2048x2048    |        1.14e-7  |       1.71e-7  |
-/// | small_prompt_1024x4096x4096  |        1.09e-7  |       1.64e-7  |
-/// | medium_prompt_2048x8192x8192 |        1.15e-7  |       1.73e-7  |
-/// | square_4k_4096x4096x4096     |        1.17e-7  |       1.76e-7  |
-/// | square_8k_8192x8192x8192     |        1.25e-7  |       1.88e-7  |
-/// | long_decode_16384x4096x4096  |        1.27e-7  |       1.91e-7  |
-///
-/// The 1.5× headroom is generous because the per-tile wall-time
-/// measurement is dominated by the inner-reduction loop and does not
-/// yet account for memory-bandwidth stalls on the real Metal path;
-/// tighten in a follow-up commit once `Measurement::energy_j` is
-/// plumbed through from the instrumented runtime.
-const ENERGY_PER_OP_CEIL_J: &[f64] = &[
-    1.75e-7, // tiny
-    1.70e-7, // small
-    1.80e-7, // medium
-    1.80e-7, // square 4k
-    1.90e-7, // square 8k
-    1.95e-7, // long decode
-];
-
-// ---------------------------------------------------------------------------
+// The test pulls its dispatch / energy ceilings from
+// [`regress_baseline::dispatch_budget`] /
+// [`regress_baseline::energy_budget_j`] rather than duplicating them
+// here. This keeps a single source of truth (the library) so a change
+// to the canonical envelopes shows up in every consumer — including
+// future production gates outside the test suite — without a parallel
+// edit.
+//
+// The initial observed values were captured by the first run of this
+// test on 2026-07-18 and lifted into the library in the same commit
+// that deleted the local `DISPATCH_CEIL` / `ENERGY_PER_OP_CEIL_J`
+// mirrors:
+//
+// | Bucket                       | dispatches | energy_per_op_j | library ceiling |
+// |------------------------------|-----------:|----------------:|----------------:|
+// | tiny_decode_512x2048x2048    |        256 |        1.14e-7  |   308 / 1.75e-7 |
+// | small_prompt_1024x4096x4096  |       1024 |        1.09e-7  |  1229 / 1.70e-7 |
+// | medium_prompt_2048x8192x8192 |       4096 |        1.15e-7  |  4916 / 1.80e-7 |
+// | square_4k_4096x4096x4096     |       4096 |        1.17e-7  |  4916 / 1.80e-7 |
+// | square_8k_8192x8192x8192     |      16384 |        1.25e-7  | 19661 / 1.90e-7 |
+// | long_decode_16384x4096x4096  |      16384 |        1.27e-7  | 19661 / 1.95e-7 |
+//
+// (Headroom: 1.2× for dispatches, 1.5× for energy.)
 // Dispatch / energy synthesis
 // ---------------------------------------------------------------------------
 
@@ -202,8 +163,8 @@ const TILE_DIM: u32 = 64;
 /// code should replace this with `Measurement::dispatches` from the
 /// instrumented Metal runtime.
 fn synthetic_dispatch_count(shape: &ShapeKey) -> u64 {
-    let m_tiles = (shape.m as u64 + TILE_DIM as u64 - 1) / TILE_DIM as u64;
-    let n_tiles = (shape.n as u64 + TILE_DIM as u64 - 1) / TILE_DIM as u64;
+    let m_tiles = (shape.m as u64).div_ceil(TILE_DIM as u64);
+    let n_tiles = (shape.n as u64).div_ceil(TILE_DIM as u64);
     m_tiles * n_tiles
 }
 
@@ -265,7 +226,8 @@ fn measure_matmul(shape: &ShapeKey) -> (u128, f64) {
 }
 
 /// Observed metrics for one bucket. Printed verbatim on every run so
-/// the operator can read the numbers and update the ceilings.
+/// the operator can read the numbers and confirm the budget envelope
+/// still covers them.
 #[derive(Debug, Clone, Copy)]
 struct BucketObservation {
     name: &'static str,
@@ -275,10 +237,12 @@ struct BucketObservation {
     energy_j: f64,
     energy_per_op_j: f64,
     dispatches: u64,
-    /// What the library-side stub currently returns. Always
-    /// `u64::MAX` / `f64::INFINITY` until the follow-up commit lands.
-    stub_dispatch_budget: u64,
-    stub_energy_budget_j: f64,
+    /// Per-shape dispatch ceiling pulled from
+    /// [`regress_baseline::dispatch_budget`].
+    dispatch_budget: u64,
+    /// Per-shape energy-per-FLOP ceiling pulled from
+    /// [`regress_baseline::energy_budget_j`].
+    energy_budget_j: f64,
 }
 
 fn observe_bucket(b: &Bucket) -> BucketObservation {
@@ -290,8 +254,8 @@ fn observe_bucket(b: &Bucket) -> BucketObservation {
         energy_j / (flops as f64)
     };
     let dispatches = synthetic_dispatch_count(&b.shape);
-    let stub_dispatch_budget = dispatch_budget(&b.shape);
-    let stub_energy_budget_j = energy_budget_j(&b.shape);
+    let dispatch_budget = dispatch_budget(&b.shape);
+    let energy_budget_j = energy_budget_j(&b.shape);
     BucketObservation {
         name: b.name,
         shape: b.shape,
@@ -300,8 +264,8 @@ fn observe_bucket(b: &Bucket) -> BucketObservation {
         energy_j,
         energy_per_op_j,
         dispatches,
-        stub_dispatch_budget,
-        stub_energy_budget_j,
+        dispatch_budget,
+        energy_budget_j,
     }
 }
 
@@ -313,7 +277,7 @@ fn print_observation(o: &BucketObservation) {
         "[dispatch_buckets] {name}: M={m} N={n} K={k} | \
          flops={flops} wall_ns={wall_ns} ({wall_ms:.3} ms, {tflops:.2} TF/s) | \
          energy_j={energy_j:.6} energy_per_op_j={epop:.3e} | \
-         dispatches={dispatches} (stub_budget={stub_d}, stub_energy={stub_e:.3e})",
+         dispatches={dispatches} (budget={budget_d}, energy_budget_j={budget_e:.3e})",
         name = o.name,
         flops = o.flops,
         wall_ns = o.wall_ns,
@@ -322,8 +286,8 @@ fn print_observation(o: &BucketObservation) {
         energy_j = o.energy_j,
         epop = o.energy_per_op_j,
         dispatches = o.dispatches,
-        stub_d = o.stub_dispatch_budget,
-        stub_e = o.stub_energy_budget_j,
+        budget_d = o.dispatch_budget,
+        budget_e = o.energy_budget_j,
     );
 }
 

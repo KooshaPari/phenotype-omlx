@@ -88,14 +88,51 @@ mod shape_key_tests {
     }
 
     #[test]
-    fn dispatch_budget_stub_returns_max() {
-        let k = ShapeKey::new(8, 16, 32);
-        assert_eq!(dispatch_budget(&k), u64::MAX);
+    fn dispatch_budget_returns_finite_ceiling_for_known_shape() {
+        let k = ShapeKey::new(512, 2048, 2048);
+        let ceiling = dispatch_budget(&k);
+        assert!(
+            ceiling > 0 && ceiling < u64::MAX,
+            "dispatch_budget({:?}) = {} must be a finite positive ceiling",
+            (k.m, k.n, k.k),
+            ceiling,
+        );
     }
 
     #[test]
-    fn energy_budget_stub_returns_infinity() {
-        let k = ShapeKey::new(8, 16, 32);
-        assert_eq!(energy_budget_j(&k), f64::INFINITY);
+    fn energy_budget_returns_finite_ceiling_for_known_shape() {
+        let k = ShapeKey::new(8192, 8192, 8192);
+        let ceiling = energy_budget_j(&k);
+        assert!(
+            ceiling.is_finite() && ceiling > 0.0,
+            "energy_budget_j({:?}) = {} must be a finite positive joules-per-FLOP",
+            (k.m, k.n, k.k),
+            ceiling,
+        );
+    }
+
+    #[test]
+    fn dispatch_budget_is_monotone_non_decreasing_in_freedom() {
+        // 6 canonical buckets ordered smallest → largest output cell count.
+        let buckets = [
+            ShapeKey::new(512, 2048, 2048),
+            ShapeKey::new(1024, 4096, 4096),
+            ShapeKey::new(2048, 8192, 8192),
+            ShapeKey::new(4096, 4096, 4096),
+            ShapeKey::new(8192, 8192, 8192),
+            ShapeKey::new(16384, 4096, 4096),
+        ];
+        let ceilings: Vec<u64> = buckets.iter().map(dispatch_budget).collect();
+        // square_8k and long_decode share the same synthetic dispatch count
+        // (16384), so we only require monotonicity up to and including
+        // those, not strict.
+        for w in ceilings.windows(2) {
+            assert!(
+                w[1] >= w[0],
+                "dispatch_budget must be non-decreasing across the canonical ladder: {:?} -> {:?}",
+                w[0],
+                w[1],
+            );
+        }
     }
 }
