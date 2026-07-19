@@ -5,6 +5,7 @@ members = [
     "turbo-quant-go",
     "turbo-quant-nim",
     "eval-harness",
+    "kernel-registry",
     "tree-attention-spirv",
     "tree-attention",
     "spec-decode",
@@ -28,6 +29,9 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
+sha2 = "0.10"
+base64 = "0.22"
+proptest = "1"
 tracing = "0.1"
 parking_lot = "0.12"
 async-trait = "0.1"
