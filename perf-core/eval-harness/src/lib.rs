@@ -22,13 +22,20 @@
 //! assert_eq!(dataset.provenance().task_count, dataset.len());
 //! ```
 
+pub mod backend;
 pub mod dataset;
+pub mod error;
 pub mod gpqa;
 pub mod mmlu;
 pub mod perplexity;
 pub mod provenance;
 pub mod report;
+pub mod runner;
 pub mod terminal_bench;
+
+pub use backend::{Backend, BackendCompletion};
+pub use error::{EvalError, Result};
+pub use runner::{run_multiple_choice_suite, run_suite};
 
 use serde::{Deserialize, Serialize};
 
@@ -176,137 +183,6 @@ impl EvaluationReport {
     }
 }
 
-/// All errors produced by the eval harness. Every variant carries enough
-/// context (suite, path, line, field) to identify the offending record.
-///
-/// `path` is always the pure origin (file path or logical source name);
-/// `line` is a separate, structured 1-based line number wherever the
-/// underlying parser exposes one. Loaders populate `line` from
-/// `serde_json::Error::line()` or `serde_yaml::Error::location()`; when the
-/// parser does not expose a location, callers fall back to `1` (the header
-/// line) rather than reporting `0`.
-#[derive(Debug, thiserror::Error)]
-pub enum EvalError {
-    #[error("io error reading {path}: {source}")]
-    Io {
-        path: String,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("json error in {path} at line {line}: {source}")]
-    Json {
-        path: String,
-        /// 1-based line number from `serde_json::Error::line()`; `1` when
-        /// the parser does not report a location.
-        line: usize,
-        #[source]
-        source: serde_json::Error,
-    },
-    #[error("yaml error in {path} at line {line}: {source}")]
-    Yaml {
-        path: String,
-        /// 1-based line number from `serde_yaml::Error::location()`; `1`
-        /// when the parser does not report a location.
-        line: usize,
-        #[source]
-        source: serde_yaml::Error,
-    },
-    #[error("csv format error in {path} at line {line}: {message}")]
-    Csv {
-        path: String,
-        line: usize,
-        message: String,
-    },
-    #[error("missing required field '{field}' in {path}")]
-    MissingField { path: String, field: &'static str },
-    #[error("malformed record in {path} at line {line}: {message}")]
-    Malformed {
-        path: String,
-        line: usize,
-        message: String,
-    },
-    #[error("inconsistent suite in {path}: expected {expected:?}, got {actual:?}")]
-    SuiteMismatch {
-        path: String,
-        expected: Suite,
-        actual: Suite,
-    },
-}
-
-impl EvalError {
-    /// Wrap an I/O error with the originating path for richer context.
-    pub fn io(path: impl Into<String>, source: std::io::Error) -> Self {
-        EvalError::Io {
-            path: path.into(),
-            source,
-        }
-    }
-
-    /// Wrap a JSON parse error with the originating path and a 1-based line
-    /// number. The line is taken from `serde_json::Error::line()` when the
-    /// error carries one; callers that already know the line (e.g. JSONL
-    /// record position) should use [`EvalError::json_at_line`] instead.
-    pub fn json(path: impl Into<String>, source: serde_json::Error) -> Self {
-        let line = source.line();
-        EvalError::Json {
-            path: path.into(),
-            line,
-            source,
-        }
-    }
-
-    /// Like [`EvalError::json`] but uses a caller-supplied line number. Used
-    /// by JSONL loaders that know the record's position in the source file
-    /// (1-based).
-    pub fn json_at_line(path: impl Into<String>, line: usize, source: serde_json::Error) -> Self {
-        EvalError::Json {
-            path: path.into(),
-            line,
-            source,
-        }
-    }
-
-    /// Wrap a YAML parse error with the originating path and a 1-based line
-    /// number. The line is taken from `serde_yaml::Error::location()` when
-    /// the error carries one; otherwise `1` is reported as the stable fallback.
-    pub fn yaml(path: impl Into<String>, source: serde_yaml::Error) -> Self {
-        let line = source.location().map(|loc| loc.line()).unwrap_or(1);
-        EvalError::Yaml {
-            path: path.into(),
-            line,
-            source,
-        }
-    }
-
-    /// Build a CSV format error with explicit path and 1-based line number.
-    pub fn csv(path: impl Into<String>, line: usize, message: impl Into<String>) -> Self {
-        EvalError::Csv {
-            path: path.into(),
-            line,
-            message: message.into(),
-        }
-    }
-
-    /// Build a missing-field error with explicit path.
-    pub fn missing_field(path: impl Into<String>, field: &'static str) -> Self {
-        EvalError::MissingField {
-            path: path.into(),
-            field,
-        }
-    }
-
-    /// Build a malformed-record error with explicit path and 1-based line number.
-    pub fn malformed(path: impl Into<String>, line: usize, message: impl Into<String>) -> Self {
-        EvalError::Malformed {
-            path: path.into(),
-            line,
-            message: message.into(),
-        }
-    }
-}
-
-pub type Result<T> = std::result::Result<T, EvalError>;
-
 /// Normalize an answer for comparison: trim whitespace, lowercase, drop
 /// trailing non-alphanumeric characters. Designed to keep substring
 /// false-positives out of exact-match scoring (e.g. trailing punctuation,
@@ -423,32 +299,4 @@ pub fn evaluate(task: &TaskSpec, completion: &str) -> Result<TaskResult> {
         latency_ms: 0.0,
         matched_answer,
     })
-}
-
-pub trait Backend {
-    fn complete(&self, prompt: &str, max_tokens: usize) -> (String, f64);
-}
-
-pub fn run_suite<B: Backend>(suite: Suite, backend: &B, tasks: &[TaskSpec]) -> Vec<TaskResult> {
-    tasks
-        .iter()
-        .filter(|t| t.suite == suite)
-        .map(|t| {
-            let (completion, latency_ms) = backend.complete(&t.prompt, 128);
-            let mut result = evaluate(t, &completion).unwrap_or(TaskResult {
-                task_id: t.id.clone(),
-                suite: t.suite,
-                prompt_tokens: t.prompt.split_whitespace().count(),
-                completion_tokens: completion.split_whitespace().count(),
-                completion: completion.clone(),
-                normalized_completion: normalize_answer(&completion),
-                correct: false,
-                score: 0.0,
-                latency_ms,
-                matched_answer: None,
-            });
-            result.latency_ms = latency_ms;
-            result
-        })
-        .collect()
 }

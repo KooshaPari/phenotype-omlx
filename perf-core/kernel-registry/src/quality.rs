@@ -343,45 +343,70 @@ impl PromotionRecord {
     }
 
     /// Stable JSON serialization used by `content_hash` and `signature`.
-    /// The output is compact and key-ordered to avoid whitespace drift.
+    /// The output is compact, key-ordered, and explicitly sorted so two
+    /// equivalent records always hash to the same bytes — even after a
+    /// serde round-trip that re-orders fields.
+    ///
+    /// Robustness notes:
+    ///
+    /// - The 8 top-level keys are sorted lexicographically and emitted in
+    ///   that fixed order so callers cannot observe a different ordering
+    ///   across crate versions or between a freshly-built record and a
+    ///   round-tripped one.
+    /// - `gates` and `evidence` are sorted by their `id` field before
+    ///   serialization. The on-the-wire JSON does not promise order, and
+    ///   sorting here removes any reliance on Vec insertion order (which
+    ///   can drift if a caller mutates the lists in place).
+    /// - The Vec elements are serialized via `serde_json::to_string` so
+    ///   each `QualityGate` / `QualityEvidence` is encoded using its own
+    ///   declared `Serialize` impl — preserving field-name and value
+    ///   fidelity — and then concatenated under the sorted top-level key.
     fn canonical_bytes(&self) -> Vec<u8> {
-        let mut intermediate = serde_json::Map::new();
-        intermediate.insert(
-            "candidate_id".to_string(),
-            serde_json::to_value(self.candidate_id.0).unwrap_or(serde_json::Value::Null),
-        );
-        intermediate.insert(
-            "source_revision".to_string(),
-            serde_json::Value::String(self.source_revision.clone()),
-        );
-        intermediate.insert(
-            "approved_at_unix_ms".to_string(),
-            serde_json::to_value(self.approved_at_unix_ms).unwrap_or(serde_json::Value::Null),
-        );
-        intermediate.insert(
-            "approver".to_string(),
-            serde_json::Value::String(self.approver.clone()),
-        );
-        intermediate.insert(
-            "gates".to_string(),
-            serde_json::to_value(&self.gates).unwrap_or(serde_json::Value::Null),
-        );
-        intermediate.insert(
-            "evidence".to_string(),
-            serde_json::to_value(&self.evidence).unwrap_or(serde_json::Value::Null),
-        );
-        intermediate.insert(
-            "justification".to_string(),
-            serde_json::Value::String(self.justification.clone()),
-        );
-        intermediate.insert(
-            "tuning_record_id".to_string(),
-            match &self.tuning_record_id {
-                Some(s) => serde_json::Value::String(s.clone()),
-                None => serde_json::Value::Null,
-            },
-        );
-        serde_json::to_vec(&intermediate).unwrap_or_default()
+        // Sort gates + evidence by id to neutralize any caller-driven
+        // reordering. This is independent of serde_json's encoding so the
+        // bytes are guaranteed stable across runs and round-trips.
+        let mut gates_sorted: Vec<&QualityGate> = self.gates.iter().collect();
+        gates_sorted.sort_by(|a, b| a.id.cmp(&b.id));
+        let mut evidence_sorted: Vec<&QualityEvidence> = self.evidence.iter().collect();
+        evidence_sorted.sort_by(|a, b| a.id.cmp(&b.id));
+
+        let gates_json = serde_json::to_string(&gates_sorted).unwrap_or_else(|_| "[]".to_string());
+        let evidence_json = serde_json::to_string(&evidence_sorted).unwrap_or_else(|_| "[]".to_string());
+
+        // Build each field as a deterministic JSON string then concatenate
+        // the fields in a fixed lexicographic order. This avoids relying on
+        // serde_json::Map's internal ordering across crate versions.
+        let mut pairs: Vec<(&'static str, String)> = Vec::with_capacity(8);
+        pairs.push((
+            "candidate_id",
+            serde_json::to_string(&self.candidate_id.0).unwrap_or_else(|_| "0".to_string()),
+        ));
+        pairs.push(("source_revision", serde_json::to_string(&self.source_revision).unwrap_or_default()));
+        pairs.push((
+            "approved_at_unix_ms",
+            serde_json::to_string(&self.approved_at_unix_ms).unwrap_or_else(|_| "0".to_string()),
+        ));
+        pairs.push(("approver", serde_json::to_string(&self.approver).unwrap_or_default()));
+        pairs.push(("evidence", evidence_json));
+        pairs.push(("gates", gates_json));
+        pairs.push(("justification", serde_json::to_string(&self.justification).unwrap_or_default()));
+        pairs.push((
+            "tuning_record_id",
+            serde_json::to_string(&self.tuning_record_id).unwrap_or_else(|_| "null".to_string()),
+        ));
+        pairs.sort_by(|a, b| a.0.cmp(b.0));
+        let mut out = String::with_capacity(256);
+        out.push('{');
+        for (i, (k, v)) in pairs.iter().enumerate() {
+            if i > 0 {
+                out.push(',');
+            }
+            out.push_str(&serde_json::to_string(k).unwrap_or_default());
+            out.push(':');
+            out.push_str(v);
+        }
+        out.push('}');
+        out.into_bytes()
     }
 
     /// Validate that every gate in `self.gates` is satisfied by the
@@ -556,5 +581,37 @@ impl PromotionValidator {
     /// on more evidence). The string is appended verbatim.
     pub fn hold(&self, reason: impl Into<String>) -> PromotionAction {
         PromotionAction::Hold { reason: reason.into() }
+    }
+}
+
+#[cfg(test)]
+mod promotion_hash_tests {
+    use super::*;
+    use crate::candidate::CandidateId;
+
+    /// Regression: JSON round-trip must not change f64 evidence scores by a
+    /// ULP, which would break `verify_content_hash` on deserialized records.
+    #[test]
+    fn content_hash_survives_serde_round_trip_with_non_shortest_float() {
+        let record = PromotionRecord::new(
+            CandidateId(0),
+            "rev-7",
+            1_700_000_000_000,
+            "ci-bot",
+            vec![QualityGate::at_least("mmlu-pro", 0.5)],
+            vec![QualityEvidence::new(
+                "mmlu-pro",
+                0.21522935540649266,
+                "MMLU-Pro@2024-06",
+                "rev-7",
+                1_700_000_000_000,
+            )],
+            "",
+            None,
+        );
+        let json = serde_json::to_string(&record).expect("serialize");
+        let back: PromotionRecord = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(record.content_hash, back.content_hash);
+        assert!(back.verify_content_hash());
     }
 }

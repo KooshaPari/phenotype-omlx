@@ -426,6 +426,7 @@ name = "kernel-registry"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "proptest",
  "serde",
  "serde_json",
  "sha2",
