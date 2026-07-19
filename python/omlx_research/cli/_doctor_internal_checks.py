@@ -442,7 +442,22 @@ _PYTHON_CLI_INIT_REL_PATH: str = "python/omlx_research/cli/__init__.py"
 #: Regex matching a top-level ``def cmd_<name>(...)`` callable. This
 #: captures every public subcommand registration function; ``_cmd_``
 #: prefixed helpers are private and do not match.
-_PYTHON_CLI_SUBCMD_RE = re.compile(r"^def\s+cmd_[a-z][a-z0-9_]*\s*\(", re.MULTILINE)
+_PYTHON_CLI_SUBCMD_DEF_RE = re.compile(r"^def\s+cmd_[a-z][a-z0-9_]*\s*\(", re.MULTILINE)
+
+#: Regex matching a ``from .<module> import (... cmd_<name> ...)`` re-export
+#: line in ``cli/__init__.py``. After a subcommand's implementation is
+#: carved out into a sibling module (turn-9 extracted ``_cmd_eval.py``;
+#: this turn extracted ``_cmd_inference.py``), the CLI package still
+#: exposes the same ``cmd_*`` symbols via a re-export line of this shape.
+#: Counting those re-exports preserves the check's stated intent ("defend
+#: against subcommand droppage from the CLI surface") without forcing
+#: every future extraction to leave a stub ``def`` behind just to keep
+#: this counter happy.
+_PYTHON_CLI_SUBCMD_REEXPORT_NAMES_RE = re.compile(
+    r"^from\s+\.[A-Za-z_][A-Za-z0-9_]*\s+import\s*\([^)]*\bcmd_[a-z][a-z0-9_]*",
+    re.MULTILINE,
+)
+_PYTHON_CLI_SUBCMD_NAME_RE = re.compile(r"\bcmd_[a-z][a-z0-9_]*")
 
 #: PASS threshold — at least this many subcommands.
 _PYTHON_CLI_SUBCMD_THRESHOLD_PASS: int = 6
@@ -457,9 +472,18 @@ def _count_cli_subcommands(path: str) -> Tuple[bool, str]:
     """Best-effort distinct ``cmd_*`` subcommand callable count.
 
     Parses the CLI ``__init__.py`` and counts every top-level
-    ``def cmd_<name>(...)`` definition. Each match is on its own
-    line (multiline mode), so nested ``def`` inside a class or
-    inside a test helper is excluded.
+    ``def cmd_<name>(...)`` definition PLUS every ``cmd_*`` name
+    re-exported via a ``from .<sibling_module> import (..., cmd_<n>, ...)``
+    line. Both shapes register a subcommand on the CLI surface — the
+    former is the inline pattern, the latter is the documented
+    pattern for ``cmd_*`` symbols whose implementation lives in a
+    sibling module (turn-9 extracted ``_cmd_eval.py``; this turn
+    extracted ``_cmd_inference.py``). Counting both keeps the
+    invariant meaningful across future extractions.
+
+    Names are deduplicated (set) so the same ``cmd_*`` symbol that
+    is both defined inline AND re-exported (shouldn't happen in
+    practice) is counted exactly once.
 
     Returns ``(success, label)`` — on success, ``label`` carries the
     count summary; on failure (file missing, OS error) the success
@@ -473,7 +497,16 @@ def _count_cli_subcommands(path: str) -> Tuple[bool, str]:
             text = fh.read()
     except OSError as e:
         return False, f"{type(e).__name__}: {e}"
-    count = len(_PYTHON_CLI_SUBCMD_RE.findall(text))
+    names: set[str] = set()
+    for m in _PYTHON_CLI_SUBCMD_DEF_RE.finditer(text):
+        # Extract the name out of "def cmd_<name>(" for set membership.
+        snippet = m.group(0)
+        name_match = _PYTHON_CLI_SUBCMD_NAME_RE.search(snippet)
+        if name_match:
+            names.add(name_match.group(0))
+    for m in _PYTHON_CLI_SUBCMD_REEXPORT_NAMES_RE.finditer(text):
+        names.update(_PYTHON_CLI_SUBCMD_NAME_RE.findall(m.group(0)))
+    count = len(names)
     return True, f"found {count} distinct cmd_* subcommand(s)"
 
 
