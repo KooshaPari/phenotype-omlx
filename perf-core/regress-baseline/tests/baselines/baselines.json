@@ -1,6 +1,35 @@
 {
   "schema_version": 1,
   "baselines": {
+    "cca_block_attend": {
+      "input_hash": "1b0d073427336d00905d5eeb88285ea7d6201f4956a234820ec17739beb66d4f",
+      "output": {
+        "block_count": 3,
+        "head_dim": 4,
+        "kernel": "cca_block_attend",
+        "out": [
+          2.241303051607532,
+          1.7212455131881892,
+          0.9867472524778097,
+          -0.05199278968404647
+        ]
+      }
+    },
+    "mla_cache_attend": {
+      "input_hash": "be5e4468ee616ca1a68453a954a6f95395ff07b78f06ec859feb9834ef307e34",
+      "output": {
+        "d_latent": 4,
+        "d_rope": 2,
+        "kernel": "mla_cache_attend",
+        "out": [
+          0.4212736878640673,
+          0.3243108994605529,
+          0.31111078283933086,
+          0.15425821296383402
+        ],
+        "seq_k": 4
+      }
+    },
     "moe_router_topk_2of4": {
       "input_hash": "8af9ee9710be2539724bcd822bf2e469c6da92a09fbb9c11b774b2c245232ff0",
       "output": {
@@ -13,6 +42,27 @@
           { "expert_id": 1, "weight": 0.8807970779778823 },
           { "expert_id": 3, "weight": 0.11920292202211769 }
         ]
+      }
+    },
+    "qwen_deltanet_moe_end_to_end": {
+      "input_hash": "6776d9ab18425d3ada05973f146a3900bee3238965608a02c3d8997f17fd526a",
+      "output": {
+        "capacity": 2,
+        "capacity_factor": 1.5,
+        "chunk_size": 4,
+        "deltanet_outputs": [
+          [0.03498257255832317, 0.10367783352946564],
+          [-0.007415759375221491, -0.002294202351932063],
+          [-0.011464295507259211, -0.002774929016837402],
+          [0.06961694677808955, 0.189481050198067]
+        ],
+        "head_dim": 2,
+        "kernel": "qwen_deltanet_moe_end_to_end",
+        "moe_reduced_out": [-0.00498551897116146, 0.015134984270487883],
+        "moe_shared_out": [0.00016106075082136448, 0.04923174960616833],
+        "num_experts": 3,
+        "top_k": 2,
+        "top_picks": [2, 1]
       }
     },
     "swa_dense_attention_2x2": {
