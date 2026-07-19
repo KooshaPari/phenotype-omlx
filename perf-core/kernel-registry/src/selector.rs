@@ -1,13 +1,17 @@
 //! Selection policy and decision types.
 //!
 //! The selector is the *only* component in the registry that decides which
-//! kernel runs. Its two responsibilities are:
+//! kernel runs. Its three responsibilities are:
 //!
-//! 1. Filter candidates by capability, shape, dtype, and freshness of
-//!    evidence, accumulating a [`RejectionReason`] for each.
+//! 1. Filter candidates by capability, shape, dtype, freshness of
+//!    evidence, and (under [`SelectionPolicy::Production`]) quality
+//!    evidence; accumulate a [`RejectionReason`] for each rejection.
 //! 2. Pick the surviving candidates deterministically — first by the
 //!    policy metric (`p95_ns` for `Deterministic`, lower-is-better), then
 //!    by [`CandidateId`] ascending so the result is reproducible.
+//! 3. Under `Production`, refuse to promote a candidate whose
+//!    [`crate::record::TuningRecord`] does not carry an attached quality
+//!    attestation that satisfies every active [`crate::quality::QualityGate`].
 //!
 //! `ExperimentalOnly` is reserved for offline promotion experiments; it
 //! only considers candidates that already carry tuning evidence, so an
@@ -17,6 +21,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::candidate::{Candidate, CandidateId};
+use crate::quality::QualityGate;
 use crate::record::TuningRecord;
 
 /// Policy that decides which surviving candidate wins.
@@ -29,10 +34,20 @@ use crate::record::TuningRecord;
 /// `ExperimentalOnly` is the offline promotion policy: it only considers
 /// candidates with a non-stale tuning record and only candidates with
 /// `tunable == true`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+///
+/// `Production { gates, metric }` is the only policy that allows a
+/// candidate to run in production. It refuses to select any candidate
+/// whose [`crate::record::TuningRecord`] does not satisfy every
+/// [`QualityGate`] in `gates`. The selector ranking metric is governed
+/// by `metric` and defaults to `Metric::P95`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SelectionPolicy {
     Deterministic { prefer_lower_p95: bool },
     ExperimentalOnly,
+    Production {
+        gates: Vec<QualityGate>,
+        metric: Metric,
+    },
 }
 
 impl SelectionPolicy {
@@ -47,37 +62,75 @@ impl SelectionPolicy {
                 }
             }
             SelectionPolicy::ExperimentalOnly => Metric::P95,
+            SelectionPolicy::Production { metric, .. } => *metric,
         }
+    }
+
+    /// Quality gates that [`SelectionPolicy::Production`] enforces. Other
+    /// variants return an empty slice because quality enforcement is only
+    /// meaningful for production selection.
+    pub fn gates(&self) -> &[QualityGate] {
+        match self {
+            SelectionPolicy::Production { gates, .. } => gates.as_slice(),
+            _ => &[],
+        }
+    }
+
+    /// `true` when the policy requires fresh tuning evidence attached to a
+    /// [`crate::quality::QualityEvidence`]. `Production` is the only policy
+    /// that does; `Deterministic` and `ExperimentalOnly` may run on
+    /// performance-only evidence.
+    pub fn requires_quality_evidence(&self) -> bool {
+        matches!(self, SelectionPolicy::Production { .. })
     }
 }
 
-/// The latency metric used by a [`SelectionPolicy`].
+/// The latency / energy / dispatch metric used by a [`SelectionPolicy`].
+///
+/// `EnergyPerOp` and `Dispatches` only rank candidates that have measured
+/// those axes; candidates missing the metric fall through to the lower
+/// `Metric` variant so the selector still makes progress. The
+/// [`SelectionPolicy::Production`] policy additionally requires fresh
+/// quality evidence, so a candidate missing energy or dispatch data can
+/// still be promoted as long as the gates pass.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Metric {
     P95,
     P99,
+    /// Joules consumed per invocation (lower-is-better).
+    EnergyPerOp,
+    /// Dispatch count per invocation (lower-is-better). Favors fused
+    /// implementations over dispatch-heavy ones.
+    Dispatches,
 }
 
 impl Metric {
+    /// Extract the metric value from a [`TuningRecord`]. Returns `u64::MAX`
+    /// when the underlying sample is missing so missing-metric candidates
+    /// fall through to the next-best and never win on this axis.
     pub fn extract(self, rec: &TuningRecord) -> u64 {
         match self {
             Metric::P95 => rec.p95_ns,
             Metric::P99 => rec.p99_ns,
+            Metric::EnergyPerOp => rec
+                .median_energy_j
+                .map(|j| (j * 1_000_000.0) as u64)
+                .unwrap_or(u64::MAX),
+            Metric::Dispatches => rec.median_dispatches.unwrap_or(u32::MAX) as u64,
         }
     }
 }
-
 /// Why the selector rejected a candidate. The `candidate` field carries the
 /// id so traces and explanations are unambiguous when several candidates
 /// share a rejection category.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RejectionRecord {
     pub candidate: CandidateId,
     pub reason: RejectionReason,
 }
 
 /// The reason category for a [`RejectionRecord`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RejectionReason {
     /// Required capability is missing on the device.
     MissingCapability(String),
@@ -94,6 +147,18 @@ pub enum RejectionReason {
     NoTuningEvidence,
     /// Backend is not selectable under the active policy.
     PolicyExcluded(String),
+    /// No [`crate::quality::QualityEvidence`] attached to the tuning record
+    /// and the active policy requires one. The string is a human-readable
+    /// explanation referencing the failing gate family.
+    MissingQualityEvidence(String),
+    /// A [`crate::quality::QualityEvidence`] was attached but failed a gate.
+    /// The string identifies which gate failed and the observed vs.
+    /// required score.
+    QualityGateFailed {
+        gate: String,
+        observed: f64,
+        threshold: f64,
+    },
     /// Catch-all.
     Other(String),
 }
@@ -115,6 +180,13 @@ impl RejectionReason {
             ),
             RejectionReason::NoTuningEvidence => "no tuning evidence".to_string(),
             RejectionReason::PolicyExcluded(p) => format!("policy excluded: {}", p),
+            RejectionReason::MissingQualityEvidence(why) => {
+                format!("missing quality evidence: {}", why)
+            }
+            RejectionReason::QualityGateFailed { gate, observed, threshold } => format!(
+                "quality gate '{}' failed (observed={:.4}, threshold={:.4})",
+                gate, observed, threshold
+            ),
             RejectionReason::Other(o) => o.clone(),
         }
     }

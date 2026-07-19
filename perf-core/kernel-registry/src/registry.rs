@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::candidate::{Candidate, CandidateId, Capability};
 use crate::key::KernelKey;
+use crate::quality::{evaluate_for_production, QualityAttachment, QualityError};
 use crate::record::TuningRecord;
 use crate::selector::{
     Metric, RejectionReason, RejectionRecord, SelectionDecision, SelectionPolicy,
@@ -247,11 +248,57 @@ impl KernelRegistry {
         // 3. If we have tuned candidates, rank and pick.
         if !tuned.is_empty() {
             let metric = policy.metric();
-            let chosen = pick_winner(&tuned, metric);
-            return SelectionDecision::Chosen {
-                candidate: chosen.0,
-                tuning: chosen.1,
+            // 3a. Under Production, filter candidates against quality gates.
+            // A candidate without a quality attachment is rejected with
+            // `MissingQualityEvidence`; a candidate whose attachment fails a
+            // gate is rejected with `QualityGateFailed` so traces show the
+            // gate id + observed/threshold.
+            let gates_required = policy.requires_quality_evidence();
+            let survived: Vec<(Candidate, TuningRecord)> = if gates_required {
+                tuned
+                    .into_iter()
+                    .filter_map(|(c, r)| match check_production_quality(&c, &r) {
+                        Ok(()) => Some((c, r)),
+                        Err(reason) => {
+                            rejections.push(RejectionRecord::new(c.id, reason));
+                            None
+                        }
+                    })
+                    .collect()
+            } else {
+                tuned
             };
+
+            if !survived.is_empty() {
+                let chosen = pick_winner(&survived, metric);
+                return SelectionDecision::Chosen {
+                    candidate: chosen.0,
+                    tuning: chosen.1,
+                };
+            }
+            // Quality-gate enforcement filtered out every tuned candidate.
+            // Fall through to reference fallback (if any) and otherwise to
+            // a rejection that cites the gates.
+            if gates_required {
+                if let Some(refc) = reference_fallback.take() {
+                    let placeholder = TuningRecord::from_samples(
+                        refc.id,
+                        key.clone(),
+                        &[0],
+                        0,
+                        "ref-oracle",
+                        "0.0.0",
+                        now_unix_ms,
+                        "ref",
+                        None,
+                    );
+                    return SelectionDecision::Chosen {
+                        candidate: refc,
+                        tuning: placeholder,
+                    };
+                }
+                return SelectionDecision::Rejected { rejections, considered };
+            }
         }
 
         // 4. Reference fallback.
@@ -294,4 +341,57 @@ fn pick_winner(
         ma.cmp(&mb).then(a.0.id.cmp(&b.0.id))
     });
     sorted.into_iter().next().expect("non-empty")
+}
+
+/// Verify that `record`'s quality attachment (if any) lets `candidate`
+/// serve under `SelectionPolicy::Production`.
+///
+/// Translation rules:
+/// - No attachment -> `RejectionReason::MissingQualityEvidence` describing
+///   what needs to be attached.
+/// - Attachment present but empty/with `gates.is_empty()` -> same rejection.
+/// - Attachment present but a gate failed -> `QualityGateFailed`.
+/// - Signature/duplicate errors are reported as `Other` (the registry
+///   surface doesn't yet know how to react to them).
+fn check_production_quality(
+    candidate: &Candidate,
+    record: &TuningRecord,
+) -> std::result::Result<(), RejectionReason> {
+    let attachment: &QualityAttachment = match record.quality.as_ref() {
+        Some(q) => q,
+        None => {
+            return Err(RejectionReason::MissingQualityEvidence(format!(
+                "candidate {} has no quality attachment under Production policy",
+                candidate.id
+            )))
+        }
+    };
+    match evaluate_for_production(record, attachment) {
+        Ok(()) => Ok(()),
+        Err(QualityError::PromotionGateMissingEvidence { gate }) => Err(
+            RejectionReason::MissingQualityEvidence(format!(
+                "candidate {} missing evidence for gate '{}'",
+                candidate.id, gate
+            )),
+        ),
+        Err(QualityError::PromotionGateRejected {
+            gate,
+            observed,
+            threshold,
+        }) => Err(RejectionReason::QualityGateFailed {
+            gate,
+            observed,
+            threshold,
+        }),
+        Err(QualityError::PromotionWithoutGates) => Err(RejectionReason::MissingQualityEvidence(
+            format!(
+                "candidate {} attachment has no gates configured",
+                candidate.id
+            ),
+        )),
+        Err(e) => Err(RejectionReason::Other(format!(
+            "candidate {} quality check failed: {}",
+            candidate.id, e
+        ))),
+    }
 }

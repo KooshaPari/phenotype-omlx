@@ -62,12 +62,7 @@ fn candidate_from(name: &str, backend: BackendKind, requires: Vec<Capability>) -
 }
 
 fn measurement(sample: u32, latency_ns: u64) -> Measurement {
-    Measurement {
-        sample_idx: sample,
-        latency_ns,
-        energy_j: None,
-        bytes_written: 0,
-    }
+    Measurement::with_metadata(sample, latency_ns, None, None, 0)
 }
 
 fn tuning_record(
@@ -104,6 +99,8 @@ fn tuning_record(
         p95_ns: p95,
         p99_ns: p99,
         variance_ns2: variance as u64,
+        median_energy_j: None,
+        median_dispatches: None,
         samples: samples.len(),
         warmup_discarded: 3,
         compiler: compiler.to_string(),
@@ -111,6 +108,7 @@ fn tuning_record(
         captured_at_unix_ms: 1_700_000_000_000,
         source_revision: source_revision.to_string(),
         expires_at_unix_ms,
+        quality: None,
     }
 }
 

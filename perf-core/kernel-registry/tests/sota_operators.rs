@@ -64,12 +64,7 @@ fn build_record(
     let measurements: Vec<Measurement> = samples
         .iter()
         .enumerate()
-        .map(|(i, &latency_ns)| Measurement {
-            sample_idx: i as u32,
-            latency_ns,
-            energy_j: None,
-            bytes_written: 0,
-        })
+        .map(|(i, &latency_ns)| Measurement::with_metadata(i as u32, latency_ns, None, None, 0))
         .collect();
     TuningRecord {
         candidate_id,
@@ -79,6 +74,8 @@ fn build_record(
         p95_ns: sorted[p95_idx],
         p99_ns: sorted[p99_idx],
         variance_ns2: variance as u64,
+        median_energy_j: None,
+        median_dispatches: None,
         samples: n,
         warmup_discarded: 3,
         compiler: "metal-msl".to_string(),
@@ -86,6 +83,7 @@ fn build_record(
         captured_at_unix_ms: NOW_UNIX_MS,
         source_revision: "rev-sota".to_string(),
         expires_at_unix_ms,
+        quality: None,
     }
 }
 

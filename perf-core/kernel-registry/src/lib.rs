@@ -38,6 +38,7 @@ pub mod candidate;
 pub mod compat;
 pub mod error;
 pub mod key;
+pub mod quality;
 pub mod record;
 pub mod registry;
 pub mod selector;
@@ -48,6 +49,10 @@ pub use candidate::{BackendKind, Candidate, CandidateId, Capability};
 pub use compat::{AttentionKind, DType, OperatorKind, QuantizationPolicy};
 pub use error::{Error, Result};
 pub use key::{fast_hash_bytes, KernelKey, ShapeSignature, ATTENTION_NONE};
+pub use quality::{
+    evaluate_for_production, GateDirection, PromotionRecord, QualityAttachment,
+    QualityError, QualityEvidence, QualityGate,
+};
 pub use record::{Measurement, TuningRecord};
 pub use registry::{DeviceCaps, KernelRegistry};
 pub use selector::{
