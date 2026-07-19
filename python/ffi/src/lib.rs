@@ -3,19 +3,6 @@
 // Build:
 //   cd /Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/python/ffi
 //   maturin develop --release
-//
-// Ground truth (read from perf-core/ crate source):
-//   turbo_quant::QuantizedTensor::encode_uniform(&[f32], bits, group_size) -> Self
-//   turbo_quant::QuantizedTensor::decode_uniform(&self, &mut [f32])
-//   turbo_quant::TurboMode::label(&self) -> &'static str
-//   spec_decode::{DraftMode, SpecDecodeConfig, build_engine(cfg, target, draft)}
-//   spec_decode::backend::{TargetBackend (async_trait), DraftBackend,
-//                          NullDraftBackend, TargetOutput, BackendInfo}
-//   tree_attention::{TreePlan::new(w,d), .total_nodes(), tree_causal_mask(...)}
-//   concurrent_exec::{ExecBackend, ExecRequest, ExecResult, JobError}
-//   concurrent_exec::plan::AgentId(impl From<&str>)
-//   concurrent_exec::{latentmas::LatentMasBackend, jetspec::JetSpecBackend,
-//                     ssd::SsdBackend, tidar::{TidarAgent, TidarRole}}
 
 use async_trait::async_trait;
 use pyo3::prelude::*;
@@ -34,54 +21,9 @@ use spec_decode::{
     SpecDecodeEngine, build_engine,
 };
 use tree_attention::{tree_causal_mask, TreePlan};
-use turbo_quant::{QuantizedTensor, TurboMode};
 
-// ── TurboQuant ──────────────────────────────────────────────────────────────
-
-#[pyfunction]
-fn turbo_quant_label_for_bits(bits: u8) -> PyResult<String> {
-    let m = match bits {
-        4 => TurboMode::Asymmetric4,
-        3 => TurboMode::Symmetric3,
-        2 => TurboMode::Symmetric2,
-        _ => TurboMode::Symmetric4,
-    };
-    Ok(m.label().to_string())
-}
-
-#[pyfunction]
-fn turbo_quant_encode(
-    py: Python<'_>,
-    data: Vec<f32>,
-    group_size: usize,
-    bits: u8,
-) -> PyResult<PyObject> {
-    let q = QuantizedTensor::encode_uniform(&data, bits, group_size);
-    let dict = PyDict::new_bound(py);
-    dict.set_item("shape", q.shape)?;
-    dict.set_item("packed", q.packed)?;
-    dict.set_item("scales", q.scales)?;
-    dict.set_item("zeros", q.zeros)?;
-    Ok(dict.into())
-}
-
-#[pyfunction]
-#[pyo3(signature = (packed, scales, zeros, n))]
-fn turbo_quant_decode(
-    py: Python<'_>,
-    packed: Vec<u8>,
-    scales: Vec<f32>,
-    zeros: Vec<f32>,
-    n: usize,
-) -> PyResult<PyObject> {
-    let mut buf = vec![0f32; n];
-    let q = QuantizedTensor { shape: vec![n], packed, scales, zeros };
-    q.decode_uniform(&mut buf);
-    let lst = pyo3::types::PyList::new_bound(py, buf.iter().copied());
-    Ok(lst.into())
-}
-
-// ── Spec-decode ─────────────────────────────────────────────────────────────
+mod turbo_quant_ffi;
+use turbo_quant_ffi::{turbo_quant_decode, turbo_quant_encode, turbo_quant_label_for_bits};
 
 #[pyclass]
 #[derive(Clone)]
@@ -131,15 +73,11 @@ impl PySpecDecodeConfig {
     }
 }
 
-/// Real MLX target backend — loads a HuggingFace model id via `mlx_lm.load`
-/// and runs the target forward pass through `mlx_lm.generate.generate_step`.
-/// Stores the model, tokenizer, and bound `generate_step` function as PyObjects
-/// (cloned into spawn_blocking closures via Arc, then re-acquired under the
-/// GIL via `Python::with_gil`).
+/// Real MLX target backend. Stores the model and EOS token ids as
+/// PyObjects (cloned into spawn_blocking closures via Arc, then
+/// re-acquired under the GIL via `Python::with_gil`).
 struct MlxTargetBackend {
     model: Arc<PyObject>,
-    tokenizer: Arc<PyObject>,
-    generate_step: Arc<PyObject>,
     model_id: String,
     eos_token_ids: Arc<Vec<u32>>,
     kv_cache_kind: Option<String>,
@@ -147,11 +85,6 @@ struct MlxTargetBackend {
 
 impl MlxTargetBackend {
     /// Build a new MlxTargetBackend from a model id / local path.
-    ///
-    /// `model_id` is passed to `mlx_lm.load(...)`, which resolves both
-    /// hub-style ids ("mlx-community/Qwen2.5-0.5B-Instruct-4bit") and
-    /// local filesystem paths. We pre-resolve EOS token ids from the
-    /// tokenizer so the target can mark a sequence as finished.
     fn build(model_id: &str, kv_cache_kind: Option<String>) -> PyResult<Self> {
         Python::with_gil(|py| {
             let mlx_lm = py.import_bound("mlx_lm")?;
@@ -159,9 +92,6 @@ impl MlxTargetBackend {
             let pair = load.call1((model_id,))?;
             let model: PyObject = pair.get_item(0)?.into();
             let tokenizer: PyObject = pair.get_item(1)?.into();
-
-            let gen_mod = py.import_bound("mlx_lm.generate")?;
-            let generate_step: PyObject = gen_mod.getattr("generate_step")?.into();
 
             // Pull EOS token ids from the tokenizer (some tokenizers expose
             // `.eos_token_id`; mlx_lm wraps with a TokenizerWrapper that has
@@ -187,8 +117,6 @@ impl MlxTargetBackend {
 
             Ok(MlxTargetBackend {
                 model: Arc::new(model),
-                tokenizer: Arc::new(tokenizer),
-                generate_step: Arc::new(generate_step),
                 model_id: model_id.to_string(),
                 eos_token_ids: Arc::new(eos_ids),
                 kv_cache_kind,
@@ -204,7 +132,6 @@ impl TargetBackend for MlxTargetBackend {
         // tokio runtime so other tasks can run. `spawn_blocking` plus
         // `Python::with_gil` is the canonical pattern.
         let model = Arc::clone(&self.model);
-        let generate_step = Arc::clone(&self.generate_step);
         let eos = Arc::clone(&self.eos_token_ids);
         let ids: Vec<u32> = token_ids.to_vec();
 
@@ -222,21 +149,17 @@ impl TargetBackend for MlxTargetBackend {
                     .call_method1("__getitem__", (none,))
                     .map_err(|e| format!("prompt[None]: {e}"))?;
 
-                // Call model(prompt[None]) — yields mlx.core.array of logits
-                // with shape [1, seq, vocab]. Take the last token's logits
-                // via [-1] (still shape [1, vocab]) and flatten to Vec<f32>.
-                let model_ref = model.as_ref(py);
-                let logits = model_ref
+                // Model output has shape [batch, sequence, vocabulary].
+                let logits = model
+                    .bind(py)
                     .call1((batched,))
                     .map_err(|e| format!("model forward: {e}"))?;
+                let index = PyTuple::new_bound(py, [0_i32, -1_i32]);
                 let last = logits
-                    .call_method1("__getitem__", (-1_i32,))
-                    .map_err(|e| format!("logits[-1]: {e}"))?;
-                let flat = last
-                    .call_method0("reshape", )
-                    .or_else(|_| last.call_method0("flatten"))
-                    .map_err(|e| format!("flatten logits: {e}"))?;
-                let logits_py = flat.call_method0("tolist")
+                    .call_method1("__getitem__", (index,))
+                    .map_err(|e| format!("logits[0, -1]: {e}"))?;
+                let logits_py = last
+                    .call_method0("tolist")
                     .map_err(|e| format!("logits.tolist: {e}"))?;
                 let logits_vec: Vec<f32> = logits_py
                     .extract()
@@ -256,11 +179,6 @@ impl TargetBackend for MlxTargetBackend {
                     .unwrap_or(0);
 
                 let finished = eos.contains(&next_token);
-
-                // Best-effort cleanup of the generator Python object so it
-                // doesn't leak across calls; harmless if it was already
-                // dropped.
-                let _ = generate_step.as_ref(py);
 
                 Ok(TargetOutput {
                     logits: logits_vec,
@@ -284,8 +202,7 @@ impl TargetBackend for MlxTargetBackend {
     }
 }
 
-/// Python wrapper around MlxTargetBackend. Exposed as `_perf.MlxTargetBackend`
-/// so callers can build a real target and hand it to PySpecDecodeEngine.
+/// Python wrapper around MlxTargetBackend.
 #[pyclass(name = "MlxTargetBackend")]
 #[derive(Clone)]
 struct PyMlxTargetBackend {
@@ -295,6 +212,7 @@ struct PyMlxTargetBackend {
 #[pymethods]
 impl PyMlxTargetBackend {
     #[new]
+    #[pyo3(signature = (model_id, kv_cache_kind=None))]
     fn new(model_id: &str, kv_cache_kind: Option<String>) -> PyResult<Self> {
         let be = MlxTargetBackend::build(model_id, kv_cache_kind)?;
         Ok(Self { inner: Arc::new(be) })
@@ -316,7 +234,7 @@ impl PyMlxTargetBackend {
     }
 }
 
-/// `NullTargetBackend` retained for tests / plumbing when no model is loaded.
+/// NullTargetBackend retained for tests / plumbing.
 struct NullTargetBackend;
 
 #[async_trait]
@@ -350,8 +268,8 @@ impl PySpecDecodeEngine {
     #[pyo3(signature = (cfg, target=None, draft=None))]
     fn new(
         cfg: &PySpecDecodeConfig,
-        target: Option<&PyAny>,
-        draft: Option<&PyAny>,
+        target: Option<&Bound<'_, PyAny>>,
+        draft: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
         // Resolve target backend: a PyMlxTargetBackend instance wins;
         // otherwise fall back to NullTargetBackend. We can't downcast to
@@ -400,10 +318,7 @@ impl PySpecDecodeEngine {
     }
 }
 
-/// A cheap clone wrapper that lets us extract an `Arc<MlxTargetBackend>`
-/// from a `PyMlxTargetBackend` Python instance and re-wrap it as a
-/// `dyn TargetBackend` for the engine. We can't move out of a pyclass, so
-/// we clone the Arc and rebuild the trait object.
+/// Cheap clone wrapper around a PyMlxTargetBackend for engine use.
 struct MlxTargetBackendClone(Arc<MlxTargetBackend>);
 
 impl From<PyMlxTargetBackend> for MlxTargetBackendClone {
@@ -456,8 +371,6 @@ fn tree_attn_causal_mask(
     }
     Ok(outer.into())
 }
-
-// ── Concurrent-exec helpers ────────────────────────────────────────────────
 
 fn py_to_exec_request(req: &Bound<'_, PyDict>) -> PyResult<RustExecRequest> {
     let stop: Vec<String> = match req.get_item("stop").ok().flatten() {
@@ -566,8 +479,6 @@ fn run_ssd(
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     exec_result_to_py(py, res)
 }
-
-// ── Module registration ────────────────────────────────────────────────────
 
 #[pymodule]
 fn _perf(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {

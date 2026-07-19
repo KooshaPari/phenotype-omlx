@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "phenotype-omlx Rust perf-core → Python pyo3 FFI bridge"
 
+# Isolated from the outer `phenotype-registry` workspace so this
+# worktree can compile independently.
+[workspace]
+
 [lib]
 name = "_perf"
 crate-type = ["cdylib"]
