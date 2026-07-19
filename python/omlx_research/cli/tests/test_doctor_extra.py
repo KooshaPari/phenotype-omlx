@@ -103,16 +103,48 @@ def test_niah_benchmark_present_warns_when_help_fails(monkeypatch):
 # --- eval_harness_subcommand_runnable -------------------------------------
 
 
-def test_eval_harness_subcommand_fails_when_import_missing(monkeypatch):
-    """omlx_research.eval missing -> FAIL (critical surface)."""
+def test_eval_harness_subcommand_warns_when_python_missing_but_rust_present(monkeypatch):
+    """omlx_research.eval missing but Rust crate present -> WARN.
+
+    The eval-harness is currently a pure-Rust crate consumed via the
+    kernel-registry; the Python wrapper is on the roadmap but not yet
+    required. So a missing Python module plus a present Rust crate is
+    the expected steady state and degrades to WARN (not FAIL).
+    """
     monkeypatch.setattr(
         extra, "_eval_harness_module",
         lambda: (False, "ModuleNotFoundError: No module named 'omlx_research.eval'"),
     )
+    monkeypatch.setattr(
+        extra, "_eval_harness_rust_crate",
+        lambda: (True, "perf-core/eval-harness/"),
+    )
     c = checks_mod.eval_harness_subcommand_runnable()
-    assert c.status == FAIL
+    assert c.status == WARN
     assert c.id == "eval_harness_subcommand_runnable"
-    assert "omlx_research.eval failed to import" in c.details
+    assert "Rust crate" in c.details
+    assert "perf-core/eval-harness/" in c.details
+
+
+def test_eval_harness_subcommand_warns_when_both_missing(monkeypatch):
+    """omlx_research.eval missing AND Rust crate absent -> WARN.
+
+    Both surfaces gone is a serious gap, but we surface it as WARN
+    rather than FAIL because the eval-harness is consumed by the
+    kernel-registry, not the CLI directly — the CLI can still serve
+    decode/inference paths without it.
+    """
+    monkeypatch.setattr(
+        extra, "_eval_harness_module",
+        lambda: (False, "ModuleNotFoundError: No module named 'omlx_research.eval'"),
+    )
+    monkeypatch.setattr(
+        extra, "_eval_harness_rust_crate",
+        lambda: (False, "perf-core/eval-harness/Cargo.toml not found"),
+    )
+    c = checks_mod.eval_harness_subcommand_runnable()
+    assert c.status == WARN
+    assert "Both surfaces are absent" in c.details
 
 
 def test_eval_harness_subcommand_warns_when_subcmd_missing(monkeypatch):
