@@ -8,9 +8,11 @@
 pub mod conv;
 pub mod deltanet;
 pub mod mamba;
+pub mod mamba_selective;
 pub mod rwkv;
 
-pub use conv::short_conv1d_step;
+pub use conv::{gated_short_conv1d_step, short_conv1d_step};
 pub use deltanet::{deltanet_chunk, deltanet_step};
 pub use mamba::mamba_scan;
-pub use rwkv::rwkv_time_mix;
+pub use mamba_selective::{mamba_selective_scan, mamba_selective_scan_chunk, MambaSelectiveParams};
+pub use rwkv::{rwkv7_time_mix, rwkv_time_mix};

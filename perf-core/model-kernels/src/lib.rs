@@ -89,8 +89,13 @@ pub enum KernelOp {
     ShortConv,
     /// Selective state-space scan (Mamba).
     MambaScan,
-    /// RWKV time-mixing update.
+    /// Multi-channel selective state-space scan (Mamba-1/Mamba-2 SSM with
+    /// per-channel `a_log`, selective Δ, `b`, `c`, `d`).
+    MambaSelectiveScan,
+    /// RWKV time-mixing update (3-channel `[k, v, r]`).
     RwkvTimeMix,
+    /// RWKV-7 4-channel `[k, v, r, w]` time-mix with learned decay + gate.
+    Rwkv7TimeMix,
     /// LLaDA / Dream parallel denoise step.
     Denoise,
     /// Remask scheduling (pure).
@@ -120,7 +125,9 @@ impl KernelOp {
             KernelOp::DeltaNet => "deltanet",
             KernelOp::ShortConv => "short_conv",
             KernelOp::MambaScan => "mamba_scan",
+            KernelOp::MambaSelectiveScan => "mamba_selective_scan",
             KernelOp::RwkvTimeMix => "rwkv_time_mix",
+            KernelOp::Rwkv7TimeMix => "rwkv7_time_mix",
             KernelOp::Denoise => "denoise",
             KernelOp::Remask => "remask",
             KernelOp::TernaryPack => "ternary_pack",
