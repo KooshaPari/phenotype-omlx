@@ -263,6 +263,7 @@ mod deepseek_mla_mtp;
 mod diffusion;
 mod dense_envelope;
 mod discrete_diffusion;
+mod discrete_diffusion_l2;
 mod lfm_routing;
 mod mod_routing;
 mod moe_routing;
