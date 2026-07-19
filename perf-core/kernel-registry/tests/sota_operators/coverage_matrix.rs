@@ -47,7 +47,8 @@ const SOTA_OPERATORS_SOURCES: &[(&str, &str)] = &[
     ("recurrent/mamba_scan.rs", include_str!("recurrent/mamba_scan.rs")),
     ("recurrent/rwkv7.rs", include_str!("recurrent/rwkv7.rs")),
     ("spec_decode_proposal_state.rs", include_str!("spec_decode_proposal_state.rs")),
-    ("zaya_activations.rs", include_str!("zaya_activations.rs")),
+    ("zaya_activations_basic.rs", include_str!("zaya_activations_basic.rs")),
+    ("zaya_activations_advanced.rs", include_str!("zaya_activations_advanced.rs")),
     ("zaya_lfm_interaction.rs", include_str!("zaya_lfm_interaction.rs")),
 ];
 
