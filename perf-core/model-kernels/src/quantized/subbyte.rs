@@ -45,7 +45,7 @@ pub fn subbyte_pack(
         let zero = min;
         scales.push(scale);
         zeros.push(zero);
-        for (_idx, &v) in group.iter().enumerate() {
+        for &v in group.iter() {
             let q = if scale > 0.0 {
                 let normalized = ((v - zero) / scale).round();
                 normalized.clamp(0.0, levels as f32) as u32
