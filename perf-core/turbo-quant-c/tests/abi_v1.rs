@@ -94,7 +94,7 @@ fn c_abi_v1_round_trips_within_tolerance_for_uniform_input() {
         assert_eq!(tensor.shape, vec![input.len()]);
         assert_eq!(
             tensor.packed.len(),
-            (input.len() * bits as usize + 7) / 8,
+            (input.len() * bits as usize).div_ceil(8),
             "packed length must match contract"
         );
 

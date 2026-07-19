@@ -317,7 +317,7 @@ mod tests {
 
         for bits in [2u8, 3, 4] {
             let tensor = encode(&input, bits, 3).expect("supported encoding");
-            assert_eq!(tensor.packed.len(), (input.len() * bits as usize + 7) / 8);
+            assert_eq!(tensor.packed.len(), (input.len() * bits as usize).div_ceil(8));
 
             let mut out = vec![f32::NAN; input.len()];
             decode_into(&tensor, input.len(), 3, bits, &mut out);
