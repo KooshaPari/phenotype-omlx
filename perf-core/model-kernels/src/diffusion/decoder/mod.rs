@@ -11,6 +11,10 @@
 //! from a caller-supplied `u64` seed, so a trace is fully deterministic
 //! given the same seed and the same logits sequence.
 
+// `mod decoder;` matches the parent directory `decoder/`. Renaming the
+// inner file would obscure the natural mapping (`DiffusionDecoder` ↔
+// `decoder.rs`); suppress the inception lint instead.
+#[allow(clippy::module_inception)]
 mod decoder;
 mod report;
 
