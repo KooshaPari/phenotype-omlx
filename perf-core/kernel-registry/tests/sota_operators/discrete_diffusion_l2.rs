@@ -1,18 +1,34 @@
-//! (l) Discrete (masked) diffusion — L2-error timestep-scaling tests.
+//! (l) Discrete (masked) diffusion — L2-error timestep-scaling tests
+//! (legacy / linear / cosine half).
 //!
-//! Pinned invariant for *any* diffusion schedule (linear, cosine, etc.):
-//! the L2 reconstruction error must decrease as the number of
+//! Pinned invariant for *any* diffusion schedule (linear, cosine, sqrt,
+//! sigmoid): the L2 reconstruction error must decrease as the number of
 //! diffusion timesteps `T` grows, because each refinement step adds
 //! information about the clean sequence and the per-step re-mask
 //! probability shrinks like `1/T` at the boundary. This file sweeps
 //! `T ∈ DDM_T_SWEEP` (default `[2, 4, 8, 16, 32, 64, 128, 256, 512]`)
-//! for both schedules and asserts the reconstruction error at the
-//! largest `T` is at most half the error at the smallest `T`. A
-//! separate determinism test pins the byte-identical behavior under
-//! a fixed seed at `T = 64`, and a third test pins the clipping
-//! floor (`L2 < 1e-9`) at the largest `T = 512` where the decoder's
-//! bias (clean-token logit = `T`) dominates the noise (capped at
-//! 200) and the argmax is always the clean token.
+//! for the legacy `Linear` and `Cosine` schedules and asserts the
+//! reconstruction error at the largest `T` is at most half the error
+//! at the smallest `T`. A separate determinism test pins the
+//! byte-identical behavior under a fixed seed at `T = 64`, and a
+//! clipping-floor test pins `L2 < 1e-9` at the largest `T = 512`
+//! where the decoder's bias (clean-token logit = `T`) dominates the
+//! noise (capped at 200) and the argmax is always the clean token.
+//!
+//! Turn-11 expansion: the same L2-decay contract is now also pinned
+//! for the continuous `Sqrt` and `Sigmoid { k }` schedules that
+//! `discrete_diffusion_oracle.rs` introduced. The arithmetic of
+//! `Schedule::alpha_at` for the new variants mirrors
+//! `ContinuousSchedule::alpha_at` byte-for-byte (including the
+//! `t == 0` and `t == num_steps` boundary special-cases the sigmoid
+//! variant uses), so the local test surface here stays consistent
+//! with the production oracle. The turn-11 surface (Sqrt + Sigmoid
+//! L2-decay sweeps, clipping-floor pair extension, byte-identical
+//! determinism under Sqrt, and the boundary-guard + midpoint
+//! relationship pins) lives in the sibling file
+//! `discrete_diffusion_l2_continuous.rs`; this file keeps the four
+//! legacy tests and the shared helpers (`Schedule`, `lcg_next`,
+//! `reconstruction_l2_error`, `DDM_T_SWEEP`, `sweep_t_values`).
 //!
 //! All decoding is a pure scalar f32 oracle over `u32` token ids:
 //! no MLX, no GPU, just arithmetic over small deterministic tensors.
@@ -39,16 +55,35 @@
 //! to a local-maximum-noise point).
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Schedule {
+pub(crate) enum Schedule {
     Linear,
     Cosine,
+    /// Sqrt mask-fraction `alpha(t) = sqrt(1 - t / num_steps)`.
+    /// Slower-than-linear decay: at the mid-step alpha is
+    /// `sqrt(1/2) ~= 0.707`, not `0.5`. Used by SEDD-style absorption
+    /// schedules. Mirrors `ContinuousScheduleKind::Sqrt` from the
+    /// oracle file byte-for-byte.
+    Sqrt,
+    /// Sigmoid mask-fraction `alpha(t) = 1 / (1 + exp(k * (2*t/N - 1)))`,
+    /// centred at `t = N/2` with steepness `k`. Larger `k` yields a
+    /// sharper transition through the middle and gentler tails near
+    /// the boundaries. Used by MDLM-style reparameterised schedules.
+    /// Mirrors `ContinuousScheduleKind::Sigmoid { k }` from the oracle
+    /// file byte-for-byte, including the `t == 0` and `t == num_steps`
+    /// boundary special-cases that force alpha exactly to 1.0 / 0.0.
+    Sigmoid { k: i32 },
 }
 
 impl Schedule {
     /// Mask fraction at step `t` in `0..=num_steps`. Returns a value
     /// in `[0.0, 1.0]`; the oracle uses it as a probability threshold
-    /// for re-masking newly-decoded tokens.
-    fn alpha_at(self, t: usize, num_steps: usize) -> f64 {
+    /// for re-masking newly-decoded tokens. The boundary invariant
+    /// (`alpha(0) == 1.0`, `alpha(num_steps) == 0.0`) is identical to
+    /// the production `ContinuousSchedule::alpha_at` in
+    /// `discrete_diffusion_oracle.rs`; the local test surface here
+    /// exists so the L2-decay tests do not depend on the production
+    /// oracle types.
+    pub(crate) fn alpha_at(self, t: usize, num_steps: usize) -> f64 {
         debug_assert!(t <= num_steps);
         let tn = t as f64 / num_steps as f64;
         match self {
@@ -57,6 +92,22 @@ impl Schedule {
                 let c =
                     (t as f64 * std::f64::consts::PI / (2.0 * num_steps as f64)).cos();
                 (c * c).clamp(0.0, 1.0)
+            }
+            Schedule::Sqrt => (1.0 - tn).max(0.0).sqrt(),
+            Schedule::Sigmoid { k } => {
+                // Boundary special-case mirrors the oracle: force
+                // alpha exactly to 1.0 / 0.0 at the endpoints so the
+                // shared boundary invariant holds regardless of
+                // floating-point rounding in the sigmoid body.
+                if t == 0 {
+                    return 1.0;
+                }
+                if t == num_steps {
+                    return 0.0;
+                }
+                let kf = k as f64;
+                let z = kf * (2.0 * tn - 1.0);
+                1.0 / (1.0 + z.exp())
             }
         }
     }
@@ -86,7 +137,7 @@ pub(crate) const DDM_T_SWEEP: &[usize] = &[
 /// reasons (so callers don't need to import the slice constant
 /// directly) and to give future sweeps (e.g. a non-uniform log-spaced
 /// variant for SOTA stress coverage) a single insertion point.
-fn sweep_t_values() -> Vec<usize> {
+pub(crate) fn sweep_t_values() -> Vec<usize> {
     DDM_T_SWEEP.to_vec()
 }
 
@@ -94,7 +145,7 @@ fn sweep_t_values() -> Vec<usize> {
 /// seed-stable, and avoids pulling in `rand`. Same formula as the LCG
 /// used by the reference oracle in the parent `discrete_diffusion`
 /// test file, so the two stay arithmetically aligned.
-fn lcg_next(state: u64) -> u64 {
+pub(crate) fn lcg_next(state: u64) -> u64 {
     state
         .wrapping_mul(6_364_136_223_846_793_005)
         .wrapping_add(1_442_695_040_888_963_407)
@@ -106,7 +157,7 @@ fn lcg_next(state: u64) -> u64 {
 /// the decoded token ids and `clean`. The LCG seed is mixed through
 /// `(seed, position, step, vocab_index)` so the result is fully
 /// deterministic across calls with the same seed.
-fn reconstruction_l2_error(
+pub(crate) fn reconstruction_l2_error(
     num_steps: usize,
     schedule: Schedule,
     tokens: &[u32],
