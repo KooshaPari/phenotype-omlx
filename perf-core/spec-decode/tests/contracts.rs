@@ -95,9 +95,11 @@ fn engine_state_snapshot_reflects_initial_zero_counters() {
 
 #[test]
 fn engine_state_records_drafted_and_accepted_after_step() {
-    let mut config = SpecDecodeConfig::default();
-    config.mode = DraftMode::DraftModel;
-    config.max_draft_tokens = 2;
+    let config = SpecDecodeConfig {
+        mode: DraftMode::DraftModel,
+        max_draft_tokens: 2,
+        ..Default::default()
+    };
 
     let _engine = SpecDecodeEngine::new(
         config,
@@ -223,9 +225,11 @@ fn engine_step_cancellation_token_aborts_before_state_mutation() {
 fn engine_step_medusa_collects_candidates_from_each_head() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let mut config = SpecDecodeConfig::default();
-        config.mode = DraftMode::Medusa;
-        config.max_draft_tokens = 6;
+        let config = SpecDecodeConfig {
+            mode: DraftMode::Medusa,
+            max_draft_tokens: 6,
+            ..Default::default()
+        };
 
         let mut engine = SpecDecodeEngine::new(
             config,
@@ -248,9 +252,11 @@ fn engine_step_medusa_collects_candidates_from_each_head() {
 fn engine_step_medusa_deduplicates_by_token_id_preserving_order() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
-        let mut config = SpecDecodeConfig::default();
-        config.mode = DraftMode::Medusa;
-        config.max_draft_tokens = 8;
+        let config = SpecDecodeConfig {
+            mode: DraftMode::Medusa,
+            max_draft_tokens: 8,
+            ..Default::default()
+        };
 
         let heads: Vec<Box<dyn MedusaHead>> = vec![
             Box::new(MockMedusaHead::new(vec![11, 12])),
@@ -283,10 +289,11 @@ fn engine_step_medusa_deduplicates_by_token_id_preserving_order() {
 
 #[test]
 fn engine_step_medusa_respects_max_draft_tokens_cap() {
-    let mut config = SpecDecodeConfig::default();
-    config.mode = DraftMode::Medusa;
-    config.max_draft_tokens = 3;
-
+    let config = SpecDecodeConfig {
+        mode: DraftMode::Medusa,
+        max_draft_tokens: 3,
+        ..Default::default()
+    };
     let max = config.max_draft_tokens;
     let heads: Vec<Box<dyn MedusaHead>> = vec![
         Box::new(MockMedusaHead::new(vec![1, 2, 3, 4, 5, 6, 7, 8])),
@@ -389,8 +396,10 @@ fn verify_is_deterministic_with_fixed_seed() {
 
 #[test]
 fn verify_clamps_draft_longer_than_max_draft_tokens() {
-    let mut cfg = SpecDecodeConfig::default();
-    cfg.max_draft_tokens = 2;
+    let cfg = SpecDecodeConfig {
+        max_draft_tokens: 2,
+        ..Default::default()
+    };
     let mut logits = vec![0.0_f32; 8];
     logits[4] = 10.0;
     let draft = vec![4_u32, 4, 4, 4, 4];
