@@ -115,6 +115,7 @@ mod tests {
         t
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn run_sw(q: &[f32], k: &[f32], v: &[f32], qh_: usize, kvh: usize, hd: usize,
               sq: usize, sk: usize, ws: usize) -> Vec<f32> {
         let mut out = vec![0.0f32; sq * qh_ * hd];
@@ -145,7 +146,7 @@ mod tests {
                 }
                 softmax(&mut scores);
                 let out_row = &mut out[s * qh_ * hd + qh * hd..s * qh_ * hd + qh * hd + hd];
-                for d in 0..hd { out_row[d] = 0.0; }
+                for d in out_row.iter_mut().take(hd) { *d = 0.0; }
                 for t in 0..=s {
                     let p = scores[t];
                     if p == 0.0 { continue; }
@@ -217,15 +218,14 @@ mod tests {
             v[2 * kvh * hd + d] = 1.0 + d as f32;
             v[3 * kvh * hd + d] = 2.0 + d as f32 * 0.5;
         }
-        for t in 0..seq * kvh * hd { if v[t] == 0.0 { v[t] = 50.0; } }
+        for x in v.iter_mut() { if *x == 0.0 { *x = 50.0; } }
         let out = run_sw(&q, &vec![0.5; seq * kvh * hd], &v, qh_, kvh, hd, seq, seq, 2);
         for d in 0..hd {
             let got = out[3 * qh_ * hd + d];
             assert!(got < 49.0, "Q3 leaked sentinel: got {got} at d={d}");
             assert!(got > 0.5 && got < 3.0, "Q3 not convex combo: got {got} at d={d}");
         }
-        for d in 0..hd {
-            let got = out[d];
+        for (d, got) in out.iter().take(hd).copied().enumerate() {
             assert!((got - 50.0).abs() < 1e-4, "Q0 must output V[0]=50: got {got} at d={d}");
         }
     }
@@ -254,8 +254,8 @@ mod tests {
     }
 
     #[test] fn sliding_window_bad_grouping_rejected() {
-        let q = vec![0.0f32; 4 * 1 * 2]; let k = vec![0.0f32; 4 * 1 * 2];
-        let v = vec![0.0f32; 4 * 1 * 2]; let mut out = vec![0.0f32; 4 * 1 * 2];
+        let q = vec![0.0f32; 4 * 2]; let k = vec![0.0f32; 4 * 2];
+        let v = vec![0.0f32; 4 * 2]; let mut out = vec![0.0f32; 4 * 2];
         let err = sliding_window_attention(&q, &k, &v, 4, 3, 2, 4, 4, 1, 2, &mut out).unwrap_err();
         assert!(matches!(err, KernelError::BadGqaGrouping { q_heads: 4, kv_heads: 3 }));
     }
@@ -270,10 +270,10 @@ mod tests {
         assert!(matches!(err, KernelError::BadBufferLength { what: "q", .. }));
         let mut out = vec![0.0; cap];
         let err = sliding_window_attention(
-            &q, &vec![0.0; 3 * 1 * 2], &v, 2, 1, 2, 2, 2, 2, 3, &mut out).unwrap_err();
+            &q, &[0.0; 3 * 2], &v, 2, 1, 2, 2, 2, 2, 3, &mut out).unwrap_err();
         assert!(matches!(err, KernelError::BadBufferLength { what: "k/v", .. }));
         let err = sliding_window_attention(
-            &q, &k, &vec![0.0; 4 + 1], 2, 1, 2, 2, 2, 2, 3, &mut out).unwrap_err();
+            &q, &k, &[0.0; 4 + 1], 2, 1, 2, 2, 2, 2, 3, &mut out).unwrap_err();
         assert!(matches!(err, KernelError::BadBufferLength { what: "k/v", .. }));
         let err = sliding_window_attention(
             &q, &k, &v, 2, 1, 2, 2, 2, 2, 3, &mut vec![0.0; cap - 1]).unwrap_err();
@@ -307,12 +307,10 @@ mod tests {
             v_probe[t * kvh * hd + d] = ((t * 11 + d * 3 + 1) as f32) * 0.1 + 1.0;
         }}
         let out2 = run_sw(&q, &k, &v_probe, qh_, kvh, hd, seq, seq, 4);
-        for d in 0..hd {
-            let got = out2[7 * qh_ * hd + d];
+        for (d, got) in out2[7 * qh_ * hd..].iter().take(hd).copied().enumerate() {
             assert!(got < 50.0, "Q[7] must not see sentinel V[0..4]=99: got {got} at d={d}");
         }
-        for d in 0..hd {
-            let got = out2[d];
+        for (d, got) in out2.iter().take(hd).copied().enumerate() {
             assert!((got - 99.0).abs() < 1e-4, "Q[0] must output V[0]=99: got {got} at d={d}");
         }
     }
@@ -346,8 +344,7 @@ mod tests {
                 if v > max_w { max_w = v; }
             }
         }
-        for d in 0..hd {
-            let got = out[d];
+        for (d, got) in out.iter().take(hd).copied().enumerate() {
             assert!((got - 88.0).abs() > 1e-4,
                 "decode Q[0] window=[2,6) must not see sentinel V[0..2]=88: got {got}");
             assert!(got >= min_w - 1e-5 && got <= max_w + 1e-5,

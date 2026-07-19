@@ -167,7 +167,7 @@ mod tests {
     fn kernel_matches_oracle_on_random_trace() {
         use crate::common::Lcg;
         let head_dim = 8;
-        let mut rng = Lcg::new(0xCCA_BB10_C);
+        let mut rng = Lcg::new(0xCCAB_B10C);
         let q: Vec<f32> = (0..head_dim).map(|_| rng.next_signed()).collect();
         let sizes = [3usize, 5, 2, 4];
         let mut blocks = Vec::with_capacity(sizes.len());

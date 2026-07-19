@@ -41,6 +41,10 @@ fn reference_chunk_for_one(
     deltanet_chunk(q, k, v, chunk_size, head_dim, initial_state).unwrap()
 }
 
+/// Stacked per-`(batch, head)` oracle buffers fed to
+/// `deltanet_batched_chunk`: `(q, k, v, initial_state, exp_outs, exp_states)`.
+type StackedOracle = (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>);
+
 /// Build per-`(b, h)` inputs and the expected stacked outputs using
 /// distinct LCG seeds. Returns `(q, k, v, initial_state, exp_outs,
 /// exp_states)` ready to feed `deltanet_batched_chunk` and compare.
@@ -49,7 +53,7 @@ fn stacked_oracle(
     num_heads: usize,
     chunk_size: usize,
     head_dim: usize,
-) -> (Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+) -> StackedOracle {
     let mut q = Vec::new();
     let mut k = Vec::new();
     let mut v = Vec::new();
