@@ -103,7 +103,7 @@ impl QuantizedTensor {
         );
 
         let qmax = ((1u32 << bits) - 1) as f32;
-        let n_packed = (data.len() * bits as usize + 7) / 8;
+        let n_packed = (data.len() * bits as usize).div_ceil(8);
         let mut packed = vec![0u8; n_packed];
         let mut scales = Vec::new();
         let mut zeros = Vec::new();
@@ -333,7 +333,7 @@ mod tests {
                 bits, group_size
             );
             // scale/zero length must equal ceil(n / group_size)
-            let expected_groups = (data.len() + group_size - 1) / group_size;
+            let expected_groups = data.len().div_ceil(group_size);
             assert_eq!(q.scales.len(), expected_groups);
             assert_eq!(q.zeros.len(), expected_groups);
         }
