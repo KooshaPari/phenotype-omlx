@@ -38,9 +38,32 @@ os.environ.setdefault("TRANSFORMERS_OFFLINE", "0")
 REPO = Path("/Users/kooshapari/CodeProjects/Phenotype/repos")
 sys.path.insert(0, str(REPO / "phenotype-omlx/python"))
 
-import psutil
-import mlx.core as mx
-import mlx_lm
+# Heavy / optional imports are deferred so `--help` (and any other
+# argparse-only invocation) works without mlx / mlx_lm installed.
+# This is what lets the doctor check ``scripts/niah_benchmark.py --help``
+# transitions to PASS on a machine where only the Python bindings are
+# present and the actual MLX stack is not.
+try:
+    import psutil  # type: ignore
+except ImportError:  # pragma: no cover - psutil absent in CI
+    psutil = None  # type: ignore[assignment]
+
+# Module-level lazy import helpers — the values are resolved on first
+# use inside ``run_one`` so ``--help`` never touches them.
+_mx = None
+_mlx_lm = None
+
+
+def _ensure_mlx():
+    """Lazily import ``mlx.core`` and ``mlx_lm`` on first use."""
+    global _mx, _mlx_lm
+    if _mx is None:
+        import mlx.core as _m  # type: ignore
+        _mx = _m
+    if _mlx_lm is None:
+        import mlx_lm as _ml  # type: ignore
+        _mlx_lm = _ml
+    return _mx, _mlx_lm
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -93,6 +116,7 @@ class BenchResult:
 
 def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResult:
     """Run one (mode, length) benchmark. Returns a BenchResult."""
+    mx, mlx_lm = _ensure_mlx()
     rss_before = rss_mb()
 
     # ── 1. Build the prompt ──
@@ -235,6 +259,7 @@ def main():
 
     print("Loading model...")
     t0 = time.perf_counter()
+    mx, mlx_lm = _ensure_mlx()
     model, tokenizer = mlx_lm.load(args.model)
     load_ms = (time.perf_counter() - t0) * 1000.0
     print(f"  Model loaded in {load_ms:.0f}ms, RSS now {rss_mb():.0f} MB")

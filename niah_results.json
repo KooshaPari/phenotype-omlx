@@ -1,1 +1,905 @@
-[]
+{
+  "schema_version": 1,
+  "kind": "niah_target_rows",
+  "generated_at": "2026-07-19T00:00:00Z",
+  "description": "NIAH (needle-in-a-haystack) target rows for the doctor regression envelope. Each row pins the expected pass rate for one (kernel_id, context_length, seed) combination so subsequent real runs can be diffed against this snapshot. Synthetic but realistic: pass rates follow a sigmoid-shaped decay anchored on the published baselines for mlx-community/Qwen2.5-0.5B-Instruct-4bit.",
+  "model": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+  "context_lengths": [
+    1024,
+    4096,
+    16384,
+    65536,
+    262144
+  ],
+  "kernels": [
+    "baseline_fp16",
+    "turbo_asymmetric",
+    "turbo_symmetric",
+    "turbo4",
+    "mlx_native_kv4"
+  ],
+  "seeds": [
+    7,
+    19,
+    42,
+    73,
+    101
+  ],
+  "targets": [
+    {
+      "pass_rate": 0.9779,
+      "target": 0.9779,
+      "context_length": 1024,
+      "seed": 7,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9752,
+      "target": 0.9752,
+      "context_length": 1024,
+      "seed": 19,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9845,
+      "target": 0.9845,
+      "context_length": 1024,
+      "seed": 42,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9594,
+      "target": 0.9594,
+      "context_length": 1024,
+      "seed": 73,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9661,
+      "target": 0.9661,
+      "context_length": 1024,
+      "seed": 101,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9321,
+      "target": 0.9321,
+      "context_length": 4096,
+      "seed": 7,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9349,
+      "target": 0.9349,
+      "context_length": 4096,
+      "seed": 19,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9312,
+      "target": 0.9312,
+      "context_length": 4096,
+      "seed": 42,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9238,
+      "target": 0.9238,
+      "context_length": 4096,
+      "seed": 73,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9173,
+      "target": 0.9173,
+      "context_length": 4096,
+      "seed": 101,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8573,
+      "target": 0.8573,
+      "context_length": 16384,
+      "seed": 7,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8682,
+      "target": 0.8682,
+      "context_length": 16384,
+      "seed": 19,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8753,
+      "target": 0.8753,
+      "context_length": 16384,
+      "seed": 42,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8579,
+      "target": 0.8579,
+      "context_length": 16384,
+      "seed": 73,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8832,
+      "target": 0.8832,
+      "context_length": 16384,
+      "seed": 101,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8266,
+      "target": 0.8266,
+      "context_length": 65536,
+      "seed": 7,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.831,
+      "target": 0.831,
+      "context_length": 65536,
+      "seed": 19,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8074,
+      "target": 0.8074,
+      "context_length": 65536,
+      "seed": 42,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8093,
+      "target": 0.8093,
+      "context_length": 65536,
+      "seed": 73,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.8052,
+      "target": 0.8052,
+      "context_length": 65536,
+      "seed": 101,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.7566,
+      "target": 0.7566,
+      "context_length": 262144,
+      "seed": 7,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.7631,
+      "target": 0.7631,
+      "context_length": 262144,
+      "seed": 19,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.7707,
+      "target": 0.7707,
+      "context_length": 262144,
+      "seed": 42,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.7757,
+      "target": 0.7757,
+      "context_length": 262144,
+      "seed": 73,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.7654,
+      "target": 0.7654,
+      "context_length": 262144,
+      "seed": 101,
+      "kernel_id": "baseline_fp16"
+    },
+    {
+      "pass_rate": 0.9289,
+      "target": 0.9289,
+      "context_length": 1024,
+      "seed": 7,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.9531,
+      "target": 0.9531,
+      "context_length": 1024,
+      "seed": 19,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.9439,
+      "target": 0.9439,
+      "context_length": 1024,
+      "seed": 42,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.9365,
+      "target": 0.9365,
+      "context_length": 1024,
+      "seed": 73,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.9408,
+      "target": 0.9408,
+      "context_length": 1024,
+      "seed": 101,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8776,
+      "target": 0.8776,
+      "context_length": 4096,
+      "seed": 7,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.87,
+      "target": 0.87,
+      "context_length": 4096,
+      "seed": 19,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8753,
+      "target": 0.8753,
+      "context_length": 4096,
+      "seed": 42,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8724,
+      "target": 0.8724,
+      "context_length": 4096,
+      "seed": 73,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.877,
+      "target": 0.877,
+      "context_length": 4096,
+      "seed": 101,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8266,
+      "target": 0.8266,
+      "context_length": 16384,
+      "seed": 7,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8169,
+      "target": 0.8169,
+      "context_length": 16384,
+      "seed": 19,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8137,
+      "target": 0.8137,
+      "context_length": 16384,
+      "seed": 42,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8187,
+      "target": 0.8187,
+      "context_length": 16384,
+      "seed": 73,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.8329,
+      "target": 0.8329,
+      "context_length": 16384,
+      "seed": 101,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.7535,
+      "target": 0.7535,
+      "context_length": 65536,
+      "seed": 7,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.7499,
+      "target": 0.7499,
+      "context_length": 65536,
+      "seed": 19,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.7502,
+      "target": 0.7502,
+      "context_length": 65536,
+      "seed": 42,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.763,
+      "target": 0.763,
+      "context_length": 65536,
+      "seed": 73,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.7477,
+      "target": 0.7477,
+      "context_length": 65536,
+      "seed": 101,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.7148,
+      "target": 0.7148,
+      "context_length": 262144,
+      "seed": 7,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.7044,
+      "target": 0.7044,
+      "context_length": 262144,
+      "seed": 19,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.6881,
+      "target": 0.6881,
+      "context_length": 262144,
+      "seed": 42,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.7135,
+      "target": 0.7135,
+      "context_length": 262144,
+      "seed": 73,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.6898,
+      "target": 0.6898,
+      "context_length": 262144,
+      "seed": 101,
+      "kernel_id": "turbo_asymmetric"
+    },
+    {
+      "pass_rate": 0.9224,
+      "target": 0.9224,
+      "context_length": 1024,
+      "seed": 7,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.9118,
+      "target": 0.9118,
+      "context_length": 1024,
+      "seed": 19,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.9083,
+      "target": 0.9083,
+      "context_length": 1024,
+      "seed": 42,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.9252,
+      "target": 0.9252,
+      "context_length": 1024,
+      "seed": 73,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.9299,
+      "target": 0.9299,
+      "context_length": 1024,
+      "seed": 101,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.8645,
+      "target": 0.8645,
+      "context_length": 4096,
+      "seed": 7,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.8555,
+      "target": 0.8555,
+      "context_length": 4096,
+      "seed": 19,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.8577,
+      "target": 0.8577,
+      "context_length": 4096,
+      "seed": 42,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.8609,
+      "target": 0.8609,
+      "context_length": 4096,
+      "seed": 73,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.8574,
+      "target": 0.8574,
+      "context_length": 4096,
+      "seed": 101,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7714,
+      "target": 0.7714,
+      "context_length": 16384,
+      "seed": 7,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7795,
+      "target": 0.7795,
+      "context_length": 16384,
+      "seed": 19,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7714,
+      "target": 0.7714,
+      "context_length": 16384,
+      "seed": 42,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7922,
+      "target": 0.7922,
+      "context_length": 16384,
+      "seed": 73,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.774,
+      "target": 0.774,
+      "context_length": 16384,
+      "seed": 101,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7027,
+      "target": 0.7027,
+      "context_length": 65536,
+      "seed": 7,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7212,
+      "target": 0.7212,
+      "context_length": 65536,
+      "seed": 19,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7009,
+      "target": 0.7009,
+      "context_length": 65536,
+      "seed": 42,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7137,
+      "target": 0.7137,
+      "context_length": 65536,
+      "seed": 73,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.7156,
+      "target": 0.7156,
+      "context_length": 65536,
+      "seed": 101,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.6432,
+      "target": 0.6432,
+      "context_length": 262144,
+      "seed": 7,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.6303,
+      "target": 0.6303,
+      "context_length": 262144,
+      "seed": 19,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.6375,
+      "target": 0.6375,
+      "context_length": 262144,
+      "seed": 42,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.6473,
+      "target": 0.6473,
+      "context_length": 262144,
+      "seed": 73,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.6532,
+      "target": 0.6532,
+      "context_length": 262144,
+      "seed": 101,
+      "kernel_id": "turbo_symmetric"
+    },
+    {
+      "pass_rate": 0.948,
+      "target": 0.948,
+      "context_length": 1024,
+      "seed": 7,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.9265,
+      "target": 0.9265,
+      "context_length": 1024,
+      "seed": 19,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.9273,
+      "target": 0.9273,
+      "context_length": 1024,
+      "seed": 42,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.9507,
+      "target": 0.9507,
+      "context_length": 1024,
+      "seed": 73,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.9328,
+      "target": 0.9328,
+      "context_length": 1024,
+      "seed": 101,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8754,
+      "target": 0.8754,
+      "context_length": 4096,
+      "seed": 7,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8728,
+      "target": 0.8728,
+      "context_length": 4096,
+      "seed": 19,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8856,
+      "target": 0.8856,
+      "context_length": 4096,
+      "seed": 42,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8657,
+      "target": 0.8657,
+      "context_length": 4096,
+      "seed": 73,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8797,
+      "target": 0.8797,
+      "context_length": 4096,
+      "seed": 101,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8095,
+      "target": 0.8095,
+      "context_length": 16384,
+      "seed": 7,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8084,
+      "target": 0.8084,
+      "context_length": 16384,
+      "seed": 19,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8148,
+      "target": 0.8148,
+      "context_length": 16384,
+      "seed": 42,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8142,
+      "target": 0.8142,
+      "context_length": 16384,
+      "seed": 73,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8146,
+      "target": 0.8146,
+      "context_length": 16384,
+      "seed": 101,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7727,
+      "target": 0.7727,
+      "context_length": 65536,
+      "seed": 7,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7609,
+      "target": 0.7609,
+      "context_length": 65536,
+      "seed": 19,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7691,
+      "target": 0.7691,
+      "context_length": 65536,
+      "seed": 42,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7706,
+      "target": 0.7706,
+      "context_length": 65536,
+      "seed": 73,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7497,
+      "target": 0.7497,
+      "context_length": 65536,
+      "seed": 101,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.6929,
+      "target": 0.6929,
+      "context_length": 262144,
+      "seed": 7,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7087,
+      "target": 0.7087,
+      "context_length": 262144,
+      "seed": 19,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.6943,
+      "target": 0.6943,
+      "context_length": 262144,
+      "seed": 42,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7095,
+      "target": 0.7095,
+      "context_length": 262144,
+      "seed": 73,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.7046,
+      "target": 0.7046,
+      "context_length": 262144,
+      "seed": 101,
+      "kernel_id": "turbo4"
+    },
+    {
+      "pass_rate": 0.8688,
+      "target": 0.8688,
+      "context_length": 1024,
+      "seed": 7,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.8691,
+      "target": 0.8691,
+      "context_length": 1024,
+      "seed": 19,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.8665,
+      "target": 0.8665,
+      "context_length": 1024,
+      "seed": 42,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.883,
+      "target": 0.883,
+      "context_length": 1024,
+      "seed": 73,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.8663,
+      "target": 0.8663,
+      "context_length": 1024,
+      "seed": 101,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.8037,
+      "target": 0.8037,
+      "context_length": 4096,
+      "seed": 7,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7822,
+      "target": 0.7822,
+      "context_length": 4096,
+      "seed": 19,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7825,
+      "target": 0.7825,
+      "context_length": 4096,
+      "seed": 42,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7765,
+      "target": 0.7765,
+      "context_length": 4096,
+      "seed": 73,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7806,
+      "target": 0.7806,
+      "context_length": 4096,
+      "seed": 101,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7034,
+      "target": 0.7034,
+      "context_length": 16384,
+      "seed": 7,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7113,
+      "target": 0.7113,
+      "context_length": 16384,
+      "seed": 19,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7134,
+      "target": 0.7134,
+      "context_length": 16384,
+      "seed": 42,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7009,
+      "target": 0.7009,
+      "context_length": 16384,
+      "seed": 73,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.7106,
+      "target": 0.7106,
+      "context_length": 16384,
+      "seed": 101,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.6378,
+      "target": 0.6378,
+      "context_length": 65536,
+      "seed": 7,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.6336,
+      "target": 0.6336,
+      "context_length": 65536,
+      "seed": 19,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.6277,
+      "target": 0.6277,
+      "context_length": 65536,
+      "seed": 42,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.6284,
+      "target": 0.6284,
+      "context_length": 65536,
+      "seed": 73,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.6448,
+      "target": 0.6448,
+      "context_length": 65536,
+      "seed": 101,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.5551,
+      "target": 0.5551,
+      "context_length": 262144,
+      "seed": 7,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.5562,
+      "target": 0.5562,
+      "context_length": 262144,
+      "seed": 19,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.5361,
+      "target": 0.5361,
+      "context_length": 262144,
+      "seed": 42,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.5531,
+      "target": 0.5531,
+      "context_length": 262144,
+      "seed": 73,
+      "kernel_id": "mlx_native_kv4"
+    },
+    {
+      "pass_rate": 0.5587,
+      "target": 0.5587,
+      "context_length": 262144,
+      "seed": 101,
+      "kernel_id": "mlx_native_kv4"
+    }
+  ]
+}
