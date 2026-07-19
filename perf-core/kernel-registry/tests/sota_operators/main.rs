@@ -267,5 +267,6 @@ mod lfm_routing;
 mod mod_routing;
 mod moe_routing;
 mod multi_engine_metadata;
+mod qwen_agentic;
 mod recurrent;
 mod zaya_activations;
