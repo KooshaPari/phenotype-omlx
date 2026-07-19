@@ -196,6 +196,54 @@ fn dataset_deref_allows_indexing_and_iteration() {
 }
 
 #[test]
+fn cross_suite_aggregate_sorts_by_suite_declaration_order() {
+    // The aggregate must sort entries by the suite's declaration order
+    // (Suite::MMLU < Suite::GPQA < Suite::TerminalBench < Suite::Perplexity),
+    // matching the derived Ord. Inserting entries in a scrambled order must
+    // still produce the declaration-order sequence in the aggregate.
+    use eval_harness::provenance::DatasetProvenance;
+    use eval_harness::report::{MultiSuiteReport, SuiteReportEntry};
+
+    fn make_entry(suite: Suite, total: usize) -> SuiteReportEntry {
+        let results: Vec<TaskResult> = (0..total)
+            .map(|i| TaskResult {
+                task_id: format!("{}-{}", suite.as_str(), i),
+                suite,
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                completion: "c".into(),
+                normalized_completion: "c".into(),
+                correct: true,
+                score: 1.0,
+                latency_ms: 1.0,
+                matched_answer: None,
+            })
+            .collect();
+        let report = EvaluationReport::from_results(suite, results);
+        let provenance =
+            DatasetProvenance::new(suite.as_str(), FIXTURE_REV, FIXTURE_SPLIT, b"x", total);
+        SuiteReportEntry::new(provenance, report)
+    }
+
+    // Scrambled input order: GPQA, Perplexity, TerminalBench, MMLU.
+    let multi = MultiSuiteReport::from_reports(vec![
+        make_entry(Suite::GPQA, 1),
+        make_entry(Suite::Perplexity, 1),
+        make_entry(Suite::TerminalBench, 1),
+        make_entry(Suite::MMLU, 1),
+    ]);
+    assert_eq!(
+        multi.entries.iter().map(|e| e.suite).collect::<Vec<_>>(),
+        vec![
+            Suite::MMLU,
+            Suite::GPQA,
+            Suite::TerminalBench,
+            Suite::Perplexity,
+        ]
+    );
+}
+
+#[test]
 fn cross_suite_aggregate_is_task_weighted_and_deterministic() {
     use eval_harness::provenance::DatasetProvenance;
     use eval_harness::report::{MultiSuiteReport, SuiteReportEntry};
@@ -237,12 +285,12 @@ fn cross_suite_aggregate_is_task_weighted_and_deterministic() {
     // 10 tasks, but it's tracked independently so callers can distinguish
     // task-weighted from per-suite averaging.
     assert!((a.mean_suite_accuracy - 0.45).abs() < 1e-9);
-    // Entries sorted by suite for stable serialization.
-    assert_eq!(a.entries[0].suite, Suite::GPQA);
-    assert_eq!(a.entries[1].suite, Suite::MMLU);
+    // Entries sorted by Suite's declaration-order Ord (MMLU < GPQA).
+    assert_eq!(a.entries[0].suite, Suite::MMLU);
+    assert_eq!(a.entries[1].suite, Suite::GPQA);
     // Provenance survives aggregation.
-    assert_eq!(a.entries[0].provenance.source, "gpqa");
-    assert_eq!(a.entries[1].provenance.source, "mmlu");
+    assert_eq!(a.entries[0].provenance.source, "mmlu");
+    assert_eq!(a.entries[1].provenance.source, "gpqa");
 
     let encoded = serde_json::to_string(&a).unwrap();
     let decoded: MultiSuiteReport = serde_json::from_str(&encoded).unwrap();

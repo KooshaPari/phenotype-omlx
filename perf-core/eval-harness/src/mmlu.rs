@@ -72,7 +72,7 @@ pub fn load_csv_bytes(
 fn parse_csv(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
     let mut reader = csv::ReaderBuilder::new()
         .has_headers(true)
-        .flexible(false)
+        .flexible(true)
         .from_reader(content.as_bytes());
 
     let header = reader

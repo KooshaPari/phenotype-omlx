@@ -65,10 +65,12 @@ pub struct MultiSuiteReport {
 }
 
 impl MultiSuiteReport {
-    /// Aggregate per-suite reports. The input is sorted by `suite` so the
-    /// resulting entries are reproducible regardless of call order.
+    /// Aggregate per-suite reports. The input is sorted by [`Suite`]'s
+    /// declaration-order `Ord` so the resulting entries are reproducible
+    /// regardless of call order, and consistent with any other consumer of
+    /// `Suite`'s derived ordering.
     pub fn from_reports(mut entries: Vec<SuiteReportEntry>) -> Self {
-        entries.sort_by_key(|entry| entry.suite.as_str());
+        entries.sort_by_key(|entry| entry.suite);
 
         let task_count: usize = entries.iter().map(|e| e.task_count()).sum();
         let correct_count: usize = entries.iter().map(|e| e.correct_count()).sum();
@@ -148,9 +150,9 @@ mod tests {
         assert_eq!(multi.overall_accuracy, 0.5);
         assert_eq!(multi.mean_suite_accuracy, 0.5);
         assert_eq!(multi.mean_suite_score, 0.5);
-        // Entries sorted by suite.
-        assert_eq!(multi.entries[0].suite, Suite::GPQA);
-        assert_eq!(multi.entries[1].suite, Suite::MMLU);
+        // Entries sorted by Suite's declaration-order Ord (MMLU < GPQA).
+        assert_eq!(multi.entries[0].suite, Suite::MMLU);
+        assert_eq!(multi.entries[1].suite, Suite::GPQA);
     }
 
     #[test]

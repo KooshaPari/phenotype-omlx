@@ -80,8 +80,8 @@ fn parse_jsonl(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
         if line.trim().is_empty() {
             continue;
         }
-        let row: GpqaRow = serde_json::from_str(line)
-            .map_err(|e| EvalError::json_at_line(path, line_no, e))?;
+        let row: GpqaRow =
+            serde_json::from_str(line).map_err(|e| EvalError::json_at_line(path, line_no, e))?;
         validate_row(&row, path, line_no)?;
         let labeled: Vec<String> = row
             .choices
@@ -148,22 +148,6 @@ fn validate_row(row: &GpqaRow, path: &str, line_no: usize) -> Result<()> {
         ));
     }
     Ok(())
-}
-
-/// Annotate a JSON/YAML error with the offending line number while preserving
-/// the original error variant. Kept as a no-op shim for callers that still
-/// route errors through a single mapper; new code should construct errors
-/// with their line directly via [`EvalError::json_at_line`] or [`EvalError::json`].
-#[allow(dead_code)]
-fn wrap_line(err: EvalError, line_no: usize) -> EvalError {
-    match err {
-        EvalError::Json { path, source, .. } => EvalError::Json {
-            path,
-            line: line_no,
-            source,
-        },
-        other => other,
-    }
 }
 
 #[cfg(test)]
