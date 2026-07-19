@@ -135,6 +135,15 @@ impl Capability {
 /// candidate to be eligible. `min_shape` and `max_shape` bound the
 /// shape envelope. `supports_dtypes` is the dtype whitelist. `tunable`
 /// indicates whether the candidate may acquire tuning evidence at runtime.
+/// `engine_name` is an optional metadata tag identifying an *external*
+/// inference engine (e.g. `SGLang`, `vLLM`, `TRT-LLM`, `llama.cpp`) that
+/// the candidate represents for audit/observability. This is **not** a
+/// [`BackendKind`] variant — `BackendKind` describes the *kernel
+/// substrate* (Metal, Cuda, Zig, ...) while `engine_name` describes the
+/// *external serving engine* the kernel is associated with. When `Some`,
+/// the engine name is folded into `source_hash` deterministically and
+/// surfaced in [`crate::ExecutionTrace::human_explanation`] so the audit
+/// trail records which engine was selected.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Candidate {
     pub id: CandidateId,
@@ -146,10 +155,19 @@ pub struct Candidate {
     pub max_shape: ShapeSignature,
     pub supports_dtypes: Vec<DType>,
     pub tunable: bool,
+    /// Optional external-engine tag (e.g. `SGLang`, `vLLM`, `TRT-LLM`,
+    /// `llama.cpp`). `None` for in-tree MLX/Metal/CPU/etc. candidates.
+    /// See the module-level docs for the BackendKind vs engine_name
+    /// distinction.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine_name: Option<String>,
 }
 
 impl Candidate {
-    /// Convenience constructor that derives `id` from `name` + `backend`.
+    /// Convenience constructor that derives `id` from `name` + `backend`
+    /// and leaves `engine_name` as `None`. Use [`Candidate::with_engine`]
+    /// when registering a candidate that represents an external inference
+    /// engine.
     pub fn new(
         name: impl Into<String>,
         backend: BackendKind,
@@ -172,6 +190,54 @@ impl Candidate {
             max_shape,
             supports_dtypes,
             tunable,
+            engine_name: None,
+        }
+    }
+
+    /// Build a candidate with an external-engine tag. When `engine_name` is
+    /// `Some`, the value is folded into `source_hash` deterministically
+    /// (suffix `[engine:<name>]`) so two candidates with identical source
+    /// bytes but different engines are distinguishable on disk and in
+    /// audit logs. When `engine_name` is `None`, the source hash is used
+    /// unchanged.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_engine(
+        name: impl Into<String>,
+        backend: BackendKind,
+        source_hash: impl Into<String>,
+        engine_name: Option<impl Into<String>>,
+        requires: Vec<Capability>,
+        min_shape: ShapeSignature,
+        max_shape: ShapeSignature,
+        supports_dtypes: Vec<DType>,
+        tunable: bool,
+    ) -> Self {
+        let name = name.into();
+        let id = CandidateId::derive(&name, backend);
+        let base_hash: String = source_hash.into();
+        let engine_name: Option<String> = engine_name.map(Into::into);
+        let source_hash = Self::fold_engine_into_source_hash(&base_hash, engine_name.as_deref());
+        Self {
+            id,
+            name,
+            backend,
+            source_hash,
+            requires,
+            min_shape,
+            max_shape,
+            supports_dtypes,
+            tunable,
+            engine_name,
+        }
+    }
+
+    /// Deterministic `[engine:<name>]` suffix applied to `source_hash`
+    /// when an `engine_name` is present. Centralized so tests can pin
+    /// the exact form.
+    fn fold_engine_into_source_hash(base: &str, engine: Option<&str>) -> String {
+        match engine {
+            Some(name) => format!("{base}[engine:{name}]"),
+            None => base.to_string(),
         }
     }
 

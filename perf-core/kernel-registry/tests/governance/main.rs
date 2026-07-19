@@ -57,6 +57,7 @@ fn make_candidate(
         max_shape: mx,
         supports_dtypes: vec![DType::Fp16],
         tunable: true,
+        engine_name: None,
     }
 }
 

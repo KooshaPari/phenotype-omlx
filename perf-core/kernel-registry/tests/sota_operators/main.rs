@@ -105,6 +105,7 @@ pub(crate) fn make_candidate(
         max_shape,
         supports_dtypes,
         tunable,
+        engine_name: None,
     }
 }
 
@@ -257,7 +258,9 @@ mod attention;
 mod attention_sliding_window;
 mod bonsai_qwen;
 mod builders_integration;
+mod coverage_matrix;
 mod diffusion;
 mod dense_envelope;
 mod mod_routing;
+mod multi_engine_metadata;
 mod recurrent;

@@ -65,6 +65,7 @@ fn candidate_shape_range_filter_rejects_out_of_range() {
         max_shape: shape_with(128, 128, 128, 4, 128, 4),
         supports_dtypes: vec![DType::Fp16],
         tunable: true,
+        engine_name: None,
     };
     let id = cand.id;
     reg.register_candidate(cand);

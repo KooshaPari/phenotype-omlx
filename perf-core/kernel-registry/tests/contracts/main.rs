@@ -72,6 +72,7 @@ pub(crate) fn candidate_from(
         max_shape: shape_with(4096, 4096, 4096, 64, 4096, 64),
         supports_dtypes: vec![DType::Fp16, DType::Bf16],
         tunable: true,
+        engine_name: None,
     }
 }
 

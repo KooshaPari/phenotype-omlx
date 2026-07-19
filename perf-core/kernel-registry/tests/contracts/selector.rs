@@ -168,6 +168,7 @@ fn selector_falls_back_to_reference_when_no_tuning_records() {
         max_shape: shape_with(usize::MAX / 4, usize::MAX / 4, usize::MAX / 4, 1, 1, 1),
         supports_dtypes: vec![DType::Fp16],
         tunable: false,
+        engine_name: None,
     };
     let id_ref = reference.id;
     let id_fast = fast.id;
@@ -207,6 +208,7 @@ fn selector_returns_rejected_with_human_explanation_when_no_candidate_matches() 
         max_shape: shape_with(4096, 4096, 4096, 64, 4096, 64),
         supports_dtypes: vec![DType::Bf16], // does not support Fp16
         tunable: true,
+        engine_name: None,
     };
     reg.register_candidate(cand);
 

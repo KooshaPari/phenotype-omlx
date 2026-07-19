@@ -66,6 +66,7 @@ impl ExecutionTrace {
                     tuning_record_id,
                     0,
                 )
+                .with_engine(candidate.engine_name.as_deref())
             }
             SelectionDecision::Rejected { rejections, considered: _ } => {
                 let mut sorted: Vec<&crate::selector::RejectionRecord> = rejections.iter().collect();
@@ -88,6 +89,26 @@ impl ExecutionTrace {
                 )
             }
         }
+    }
+
+    /// Annotate the trace's `human_explanation` with the chosen
+    /// candidate's external-engine tag (if any). External engines
+    /// (SGLang / vLLM / TRT-LLM / llama.cpp) are part of the audit trail
+    /// even when the underlying kernel substrate is Metal, Cuda, or CPU,
+    /// so we append `(engine: <name>)` to the chosen explanation. `None`
+    /// is a no-op so the default trace shape stays the same for
+    /// in-tree candidates.
+    pub fn with_engine(mut self, engine: Option<&str>) -> Self {
+        if let (Some(name), Some(sel)) = (engine, self.selected) {
+            // Only re-format the leading "selected ..." line; rejection
+            // explanations are unaffected.
+            let prefix = format!("selected {sel} ");
+            if let Some(rest) = self.human_explanation.strip_prefix(&prefix) {
+                self.human_explanation =
+                    format!("{prefix}(engine: {name}) {rest}");
+            }
+        }
+        self
     }
 
     /// Build a trace from a list of (candidate, reason) pairs and an
