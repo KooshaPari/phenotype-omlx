@@ -4,6 +4,9 @@
 // `PyValueError` with a descriptive message rather than panicking or
 // silently corrupting packed bytes.
 
+// PyO3's generated wrappers contain identity conversions which trigger this lint.
+#![allow(clippy::useless_conversion)]
+
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
@@ -78,11 +81,7 @@ fn contain_panic<T>(operation: impl FnOnce() -> PyResult<T>) -> PyResult<T> {
 }
 
 fn validate_finite(name: &str, values: &[f32]) -> PyResult<()> {
-    if let Some((idx, v)) = values
-        .iter()
-        .enumerate()
-        .find(|(_, v)| !v.is_finite())
-    {
+    if let Some((idx, v)) = values.iter().enumerate().find(|(_, v)| !v.is_finite()) {
         return Err(PyValueError::new_err(format!(
             "{name}[{idx}] = {v} is not finite"
         )));
@@ -153,8 +152,8 @@ pub fn turbo_quant_decode(
     )?;
     validate_finite("scales", &scales)?;
     validate_finite("zeros", &zeros)?;
-    if scales.iter().any(|s| *s == 0.0) {
-        return Err(PyValueError::new_err("scales must be non-zero"));
+    if scales.iter().any(|scale| *scale <= 0.0) {
+        return Err(PyValueError::new_err("scales must be > 0"));
     }
     let q = QuantizedTensor {
         shape: vec![n],
@@ -176,6 +175,8 @@ pub fn turbo_quant_decode(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pyo3::exceptions::PyValueError;
+    use pyo3::types::{PyDict, PyList};
 
     #[test]
     fn invalid_bits_are_rejected() {
@@ -196,5 +197,84 @@ mod tests {
         let error = contain_panic(|| -> PyResult<()> { panic!("core invariant") })
             .expect_err("panic must become a Python exception");
         assert!(error.to_string().contains("core invariant"));
+    }
+
+    #[test]
+    fn exported_decode_rejects_non_positive_scales_as_value_error() {
+        Python::with_gil(|py| {
+            for scale in [0.0, -0.25] {
+                let error = turbo_quant_decode(py, vec![0], vec![scale], vec![0.0], 2, 2, 4)
+                    .expect_err("non-positive scale must be rejected");
+                assert!(error.is_instance_of::<PyValueError>(py));
+            }
+        });
+    }
+
+    #[test]
+    fn exported_encode_decode_round_trip_preserves_metadata_and_values() {
+        Python::with_gil(|py| {
+            let encoded =
+                turbo_quant_encode(py, vec![-1.0, 0.0, 1.0], 2, 4).expect("encode succeeds");
+            let encoded = encoded.bind(py).downcast::<PyDict>().expect("dict payload");
+            let packed = encoded
+                .get_item("packed")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            let scales = encoded
+                .get_item("scales")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            let zeros = encoded
+                .get_item("zeros")
+                .unwrap()
+                .unwrap()
+                .extract()
+                .unwrap();
+            assert_eq!(
+                encoded
+                    .get_item("bits")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<u8>()
+                    .unwrap(),
+                4
+            );
+            assert_eq!(
+                encoded
+                    .get_item("group_size")
+                    .unwrap()
+                    .unwrap()
+                    .extract::<usize>()
+                    .unwrap(),
+                2
+            );
+
+            let decoded =
+                turbo_quant_decode(py, packed, scales, zeros, 3, 2, 4).expect("decode succeeds");
+            let values = decoded
+                .bind(py)
+                .downcast::<PyList>()
+                .unwrap()
+                .extract::<Vec<f32>>()
+                .unwrap();
+            assert_eq!(values.len(), 3);
+            for (actual, expected) in values.iter().zip([-1.0, 0.0, 1.0]) {
+                assert!((actual - expected).abs() <= 0.14);
+            }
+        });
+    }
+
+    #[test]
+    fn exported_validation_errors_use_value_error() {
+        Python::with_gil(|py| {
+            let encode_error = turbo_quant_encode(py, vec![], 64, 4).unwrap_err();
+            assert!(encode_error.is_instance_of::<PyValueError>(py));
+            let label_error = turbo_quant_label_for_bits(1).unwrap_err();
+            assert!(label_error.is_instance_of::<PyValueError>(py));
+        });
     }
 }

@@ -2,7 +2,7 @@
 //
 // Build:
 //   cd /Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/python/ffi
-//   maturin develop --release
+//   maturin develop --release --features extension-module
 
 use async_trait::async_trait;
 use pyo3::prelude::*;
