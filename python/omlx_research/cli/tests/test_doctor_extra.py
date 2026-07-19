@@ -1,19 +1,25 @@
-"""Tests for the four doctor checks added 2026-07-19.
+"""Tests for the doctor checks added 2026-07-19.
 
-Mirrors the patterns in :mod:`omlx_research.cli.tests.test_doctor`
-but isolates the new check coverage into its own module so
-``test_doctor.py`` stays under the 500L hard cap. Each test exercises
-either a monkey-patched failure branch (for ``unittest.mock.patch``-
-style coverage of missing modules) or a real-repo smoke test that
-runs against the live repository.
+Covers both the turn-4 batch (omlx_research version, NIAH benchmark,
+eval-harness, regress-baseline dispatch envelope) and the turn-5 batch
+(NIAH regression baseline, dispatch script probes). Mirrors the
+patterns in :mod:`omlx_research.cli.tests.test_doctor` but isolates
+the new check coverage into its own module so ``test_doctor.py``
+stays under the 500L hard cap. Each test exercises either a
+monkey-patched failure branch (for ``unittest.mock.patch``-style
+coverage of missing modules) or a real-repo smoke test that runs
+against the live repository.
 """
 
 from __future__ import annotations
 
+import json
+import os
 import sys
 
 from omlx_research.cli import _doctor_checks as checks_mod
 from omlx_research.cli import _doctor_extra_checks as extra
+from omlx_research.cli import _doctor_turn5_checks as turn5
 from omlx_research.cli.doctor import (
     FAIL,
     PASS,
@@ -244,3 +250,86 @@ def test_regress_baseline_dispatch_envelope_real_repo():
     c = checks_mod.regress_baseline_dispatch_envelope()
     assert c.status in (PASS, WARN)
     assert c.id == "regress_baseline_dispatch_envelope"
+
+
+# ===========================================================================
+# Turn-5 batch: NIAH regression baseline + dispatch script probes
+# ===========================================================================
+
+
+# --- niah_regression_baseline_exists --------------------------------------
+
+
+def test_niah_regression_baseline_warns_when_missing(tmp_path, monkeypatch):
+    """When the baseline file is missing, the check returns WARN."""
+    monkeypatch.setattr(turn5, "project_root", lambda: str(tmp_path))
+    c = turn5.niah_regression_baseline_exists()
+    assert c.status == WARN
+    assert c.id == "niah_regression_baseline_exists"
+    assert "not on disk" in c.details
+
+
+def test_niah_regression_baseline_fails_when_wrong_schema(tmp_path, monkeypatch):
+    """A baseline with the wrong schema_version escalates to FAIL."""
+    baseline = tmp_path / "research" / "baselines"
+    baseline.mkdir(parents=True)
+    (baseline / "niah_baseline.json").write_text(
+        json.dumps({"schema_version": 99, "kind": "wrong_kind"})
+    )
+    monkeypatch.setattr(turn5, "project_root", lambda: str(tmp_path))
+    c = turn5.niah_regression_baseline_exists()
+    assert c.status == FAIL
+    assert "schema_version=99" in c.details
+
+
+def test_niah_regression_baseline_passes_when_seed_is_valid():
+    """The committed seed baseline is valid -> PASS."""
+    c = turn5.niah_regression_baseline_exists()
+    assert c.status == PASS
+    assert c.id == "niah_regression_baseline_exists"
+    assert "chars JSON" in c.details
+
+
+# --- dispatch script probes ----------------------------------------------
+
+
+def test_dispatch_script_metal_warns_when_script_missing(tmp_path, monkeypatch):
+    """Missing metal.sh -> WARN."""
+    monkeypatch.setattr(turn5, "project_root", lambda: str(tmp_path))
+    c = turn5.dispatch_script_metal_exists()
+    assert c.status == WARN
+    assert "scripts/dispatch/metal.sh not on disk" in c.details
+
+
+def test_dispatch_script_metal_warns_when_not_executable(tmp_path, monkeypatch):
+    """Present but not chmod +x -> WARN."""
+    dispatch_dir = tmp_path / "scripts" / "dispatch"
+    dispatch_dir.mkdir(parents=True)
+    script = dispatch_dir / "metal.sh"
+    script.write_text("#!/bin/sh\necho hi\n")
+    os.chmod(script, 0o644)
+    monkeypatch.setattr(turn5, "project_root", lambda: str(tmp_path))
+    c = turn5.dispatch_script_metal_exists()
+    assert c.status == WARN
+    assert "not executable" in c.details
+
+
+def test_dispatch_script_metal_passes_when_real_stub_works():
+    """The committed metal.sh is a real executable stub -> PASS."""
+    c = turn5.dispatch_script_metal_exists()
+    assert c.status == PASS
+    assert "--help exits 0" in c.details
+
+
+def test_dispatch_script_sglang_passes_when_real_stub_works():
+    """The committed sglang.sh is a real executable stub -> PASS."""
+    c = turn5.dispatch_script_sglang_exists()
+    assert c.status == PASS
+    assert "--help exits 0" in c.details
+
+
+def test_dispatch_script_vllm_passes_when_real_stub_works():
+    """The committed vllm.sh is a real executable stub -> PASS."""
+    c = turn5.dispatch_script_vllm_exists()
+    assert c.status == PASS
+    assert "--help exits 0" in c.details

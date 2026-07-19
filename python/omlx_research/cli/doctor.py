@@ -101,6 +101,11 @@ CHECKS: list[Callable[[], Check]] = [
     checks.niah_benchmark_present,
     checks.eval_harness_subcommand_runnable,
     checks.regress_baseline_dispatch_envelope,
+    # Added 2026-07-19 (turn-5) — see _doctor_turn5_checks.py.
+    checks.niah_regression_baseline_exists,
+    checks.dispatch_script_metal_exists,
+    checks.dispatch_script_sglang_exists,
+    checks.dispatch_script_vllm_exists,
 ]
 
 

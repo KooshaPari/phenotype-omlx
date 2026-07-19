@@ -38,6 +38,12 @@ from ._doctor_extra_checks import (  # noqa: E402,F401  (re-export)
     omlx_research_version,
     regress_baseline_dispatch_envelope,
 )
+from ._doctor_turn5_checks import (  # noqa: E402,F401  (re-export)
+    dispatch_script_metal_exists,
+    dispatch_script_sglang_exists,
+    dispatch_script_vllm_exists,
+    niah_regression_baseline_exists,
+)
 
 
 def python_version() -> Check:
