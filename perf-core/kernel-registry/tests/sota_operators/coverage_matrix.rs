@@ -43,6 +43,7 @@ const SOTA_OPERATORS_SOURCES: &[(&str, &str)] = &[
     ("recurrent/dispatch_envelope.rs", include_str!("recurrent/dispatch_envelope.rs")),
     ("recurrent/mamba_scan.rs", include_str!("recurrent/mamba_scan.rs")),
     ("recurrent/rwkv7.rs", include_str!("recurrent/rwkv7.rs")),
+    ("zaya_activations.rs", include_str!("zaya_activations.rs")),
 ];
 
 /// Spec-mandated families from
@@ -63,6 +64,7 @@ const MATRIX_FAMILIES: &[(&str, &[&str])] = &[
     ("MoD", &["mod_routing", "mod_"]),
     ("SlidingWindow", &["sliding_window"]),
     ("DeltaNetBatched", &["deltanet_batched", "deltanet"]),
+    ("ZayaActivation", &["zaya_binary_act"]),
 ];
 
 /// Dispatch-envelope families that must each have at least one

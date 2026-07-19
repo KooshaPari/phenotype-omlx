@@ -266,3 +266,4 @@ mod mod_routing;
 mod moe_routing;
 mod multi_engine_metadata;
 mod recurrent;
+mod zaya_activations;
