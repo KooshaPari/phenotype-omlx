@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "turbo-quant-c",
-    "vpu/agents",
     "turbo-quant-go",
     "turbo-quant-nim",
     "tree-attention-spirv",
@@ -18,7 +17,6 @@ members = [
     "fleet-proto",
     "fleet-proto-zeromq",
     "model-plan",
-    "model-kernels",
 ]
 
 [workspace.package]
