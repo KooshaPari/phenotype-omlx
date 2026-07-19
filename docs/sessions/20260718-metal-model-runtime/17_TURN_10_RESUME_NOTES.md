@@ -161,7 +161,32 @@ Plus: cherry-pick `4fb4443` merge resolved (ebfa098), pre-push recursion bug fix
 
 ---
 
-## 11. Verification Commands Re-runnable
+## 11. Final Gated Snapshot (turn-10 close, end of session)
+
+`bash scripts/snapshot.sh` ran at HEAD `a9245ff`. Gate-by-gate outcome:
+
+| Gate | Check | Result |
+|------|-------|--------|
+| 1    | `cargo test --workspace --all-targets` | 824 passed, 0 failed, 1 ignored (was 806 / 0 / 1 at turn-9 close; +18 net) |
+| 2    | `cargo clippy --workspace --all-targets -- -D warnings` | clean |
+| 3    | `pytest -q` | 250 passed, 4 skipped (was 216 / 4; +34 net) |
+| 4    | `python -m omlx_research.cli doctor` | 21 pass / 2 warn / 0 fail / 23 total (was 19 / 2 / 0 / 21) |
+| 5    | `airlock-v2 --version` reachable on PATH | yes (v0.1.0) |
+| 6    | `bash scripts/verify_lockfile.sh` | OK (Cargo.lock SHA-256 unchanged after turn-10's 11 commits) |
+| 7    | `bash scripts/tests/test_push_wip.sh` | 4 / 4 pass |
+
+**Airlock-v2 push:** attempted on `wip/turn-10-final` to `github.com:KooshaPari/phenotype-omlx.git`. The push itself succeeded locally (the airlock-v2 client returned a 200 envelope) but the remote repository rejected the receive with `403 Forbidden: Resource not accessible by integration` — i.e. the integration token bound to this checkout's git-credential store does not have write scope on the `phenotype-omlx.git` remote.
+
+This is a **tooling / credential limitation, not a code defect**:
+- All 6 code-quality gates above are GREEN.
+- The repo is committed, the snapshot is recorded, and the work is fully captured in 11 atomic commits on top of turn-9 close (`d0020b8`).
+- The airlock-v2 push-retry wrapper added in turn-10 (`scripts/push_wip.sh`) is exercised by its own 4-case test suite; the script itself works correctly. The credential gap is upstream of the script's contract.
+
+**Recording the missing tool / capability:** `git-credential-phenotype-omlx-write-scope`. Without this credential scope, the WIP branch cannot be auto-promoted to the shared `origin` even when airlock-v2 is healthy. Turn 11's first action item should be either (a) provisioning the integration token, or (b) recording the limitation in `docs/sessions/20260718-metal-model-runtime/18_TURN_11_RESUME_NOTES.md` and shifting close-out to a manual push.
+
+---
+
+## 12. Verification Commands Re-runnable
 
 ```sh
 # Rust workspace
@@ -180,4 +205,8 @@ DRY_RUN=1 bash scripts/snapshot.sh
 
 # push_wip
 bash scripts/tests/test_push_wip.sh
+
+# Recursion-guard verification
+SNAPSHOT_IN_PROGRESS=1 bash scripts/snapshot.sh
+# expected: exit 0 immediately, no nested invocation
 ```
