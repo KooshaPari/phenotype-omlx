@@ -1,0 +1,23 @@
+[package]
+name = "regress-baseline"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Deterministic regression baselines for model-runtime kernels: record/verify a known-good (inputs, outputs) snapshot per kernel."
+
+[lib]
+name = "regress_baseline"
+path = "src/lib.rs"
+crate-type = ["lib"]
+
+[dependencies]
+model-kernels = { path = "../model-kernels" }
+model-plan = { path = "../model-plan" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+sha2 = "0.10"
+
+[dev-dependencies]
+tempfile = "3"
