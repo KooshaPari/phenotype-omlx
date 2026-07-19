@@ -73,8 +73,8 @@ pub fn cca_block_attend(
     }
 
     // Zero the output up front so the loop below can accumulate into it.
-    for d in 0..head_dim {
-        out[d] = 0.0;
+    for d in out.iter_mut() {
+        *d = 0.0;
     }
     if blocks.is_empty() {
         return Ok(());
@@ -85,8 +85,8 @@ pub fn cca_block_attend(
     let mut max = f32::NEG_INFINITY;
     for block in blocks {
         let mut dot = 0.0f32;
-        for d in 0..head_dim {
-            dot += q[d] * block.block_summary[d];
+        for (d, &q_d) in q.iter().enumerate() {
+            dot += q_d * block.block_summary[d];
         }
         let s = dot * block.block_summary_scale;
         scores.push(s);
@@ -119,8 +119,8 @@ pub fn cca_block_attend(
     // 3) accumulate block_size-weighted summaries into out
     for (block, &w) in blocks.iter().zip(weights.iter()) {
         let scale = w * (block.block_size() as f32);
-        for d in 0..head_dim {
-            out[d] += scale * block.block_summary[d];
+        for (d, o) in out.iter_mut().enumerate() {
+            *o += scale * block.block_summary[d];
         }
     }
     Ok(())
@@ -139,8 +139,8 @@ pub fn cca_block_attend_oracle(q: &[f32], blocks: &[CcaBlock], head_dim: usize) 
     let mut max = f32::NEG_INFINITY;
     for block in blocks {
         let mut dot = 0.0f32;
-        for d in 0..head_dim {
-            dot += q[d] * block.block_summary[d];
+        for (d, &q_d) in q.iter().enumerate() {
+            dot += q_d * block.block_summary[d];
         }
         let s = dot * block.block_summary_scale;
         scores.push(s);
@@ -163,8 +163,8 @@ pub fn cca_block_attend_oracle(q: &[f32], blocks: &[CcaBlock], head_dim: usize) 
     }
     for (block, &w) in blocks.iter().zip(weights.iter()) {
         let scale = w * (block.block_size() as f32);
-        for d in 0..head_dim {
-            out[d] += scale * block.block_summary[d];
+        for (d, o) in out.iter_mut().enumerate() {
+            *o += scale * block.block_summary[d];
         }
     }
     out

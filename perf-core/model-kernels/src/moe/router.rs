@@ -42,7 +42,6 @@ pub fn router_topk(
         .iter()
         .copied()
         .enumerate()
-        .map(|(e, l)| (e, l))
         .collect();
     // Sort by (score DESC, expert_id ASC). Using reversed sort key.
     indexed.sort_by(|(ea, la), (eb, lb)| {

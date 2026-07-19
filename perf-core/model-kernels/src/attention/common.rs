@@ -60,15 +60,15 @@ pub(crate) fn dense_attention_unchecked(
             }
         }
         let mut sum = 0.0f32;
-        for t in 0..seq_k {
-            let e = (scores[t] - max).exp();
-            scores[t] = e;
+        for score in scores.iter_mut().take(seq_k) {
+            let e = (*score - max).exp();
+            *score = e;
             sum += e;
         }
         let inv = if sum > 0.0 { 1.0 / sum } else { 0.0 };
         let out_row = &mut out[s * head_dim..s * head_dim + head_dim];
-        for d in 0..head_dim {
-            out_row[d] = 0.0;
+        for d in out_row.iter_mut() {
+            *d = 0.0;
         }
         for t in 0..seq_k {
             let p = scores[t] * inv;

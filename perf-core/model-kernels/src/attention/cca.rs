@@ -84,15 +84,15 @@ pub fn cca_attention(
             }
         }
         let mut sum = 0.0f32;
-        for k in 0..compressed_len {
-            let e = (scores[k] - max).exp();
-            scores[k] = e;
+        for (_k, score) in scores.iter_mut().enumerate().take(compressed_len) {
+            let e = (*score - max).exp();
+            *score = e;
             sum += e;
         }
         let inv = if sum > 0.0 { 1.0 / sum } else { 0.0 };
         let out_row = &mut out[s * head_dim..s * head_dim + head_dim];
-        for d in 0..head_dim {
-            out_row[d] = 0.0;
+        for d in out_row.iter_mut() {
+            *d = 0.0;
         }
         for k in 0..compressed_len {
             let p = scores[k] * inv;

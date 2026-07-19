@@ -37,18 +37,14 @@ pub fn short_conv1d_step(x: &[f32], kernel: &[f32], state: &mut Vec<f32>) -> Res
     }
     // Build the sliding window: [state[0..k-1], x[0]].
     let mut window = vec![0.0f32; kernel.len()];
-    for i in 0..expected_state_len {
-        window[i] = state[i];
-    }
+    window[..expected_state_len].copy_from_slice(&state[..expected_state_len]);
     window[expected_state_len] = x[0];
     let mut acc = 0.0;
     for i in 0..kernel.len() {
         acc += kernel[i] * window[i];
     }
     // Shift state left and append the new input.
-    for i in 0..expected_state_len {
-        state[i] = window[i + 1];
-    }
+    state[..expected_state_len].copy_from_slice(&window[1..(expected_state_len + 1)]);
     Ok(acc)
 }
 

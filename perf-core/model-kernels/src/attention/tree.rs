@@ -85,19 +85,19 @@ pub fn tree_attention_step(
             }
         }
         let mut sum = 0.0f32;
-        for c in 0..seq_k {
-            if scores[c].is_finite() {
-                let e = (scores[c] - max).exp();
-                scores[c] = e;
+        for score in scores.iter_mut().take(seq_k) {
+            if score.is_finite() {
+                let e = (*score - max).exp();
+                *score = e;
                 sum += e;
             } else {
-                scores[c] = 0.0;
+                *score = 0.0;
             }
         }
         let inv = if sum > 0.0 { 1.0 / sum } else { 0.0 };
         let out_row = &mut out[r * head_dim..r * head_dim + head_dim];
-        for d in 0..head_dim {
-            out_row[d] = 0.0;
+        for d in out_row.iter_mut() {
+            *d = 0.0;
         }
         for c in 0..seq_k {
             let p = scores[c] * inv;

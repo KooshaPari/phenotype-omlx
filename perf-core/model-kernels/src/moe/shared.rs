@@ -73,7 +73,7 @@ pub fn shared_expert(x: &[f32], w: &[f32], out: &mut [f32]) -> Result<()> {
             break;
         }
     }
-    let k = k.ok_or_else(|| KernelError::BadBufferLength {
+    let k = k.ok_or(KernelError::BadBufferLength {
         what: "x/w/out shapes inconsistent",
         expected: total,
         got: w.len(),
@@ -94,8 +94,8 @@ pub fn shared_expert(x: &[f32], w: &[f32], out: &mut [f32]) -> Result<()> {
         let x_row_base = t * k;
         let out_row_base = t * n;
         let out_row = &mut out[out_row_base..out_row_base + n];
-        for j in 0..n {
-            out_row[j] = 0.0;
+        for j in out_row.iter_mut() {
+            *j = 0.0;
         }
         let n4 = n & !3usize; // largest multiple of 4 not exceeding n
         for kk in 0..k {

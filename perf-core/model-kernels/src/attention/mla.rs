@@ -108,16 +108,16 @@ pub fn mla_attention(
             }
         }
         let mut sum = 0.0f32;
-        for t in 0..seq_k {
-            let e = (scores[t] - max).exp();
-            scores[t] = e;
+        for score in scores.iter_mut().take(seq_k) {
+            let e = (*score - max).exp();
+            *score = e;
             sum += e;
         }
         let inv = if sum > 0.0 { 1.0 / sum } else { 0.0 };
         let out_row =
             &mut out[s * (d_latent + d_rope)..s * (d_latent + d_rope) + d_latent + d_rope];
-        for d in 0..d_latent {
-            out_row[d] = 0.0;
+        for d in out_row.iter_mut().take(d_latent) {
+            *d = 0.0;
         }
         for t in 0..seq_k {
             let p = scores[t] * inv;
@@ -126,8 +126,8 @@ pub fn mla_attention(
                 out_row[d] += p * vl[d];
             }
         }
-        for d in d_latent..(d_latent + d_rope) {
-            out_row[d] = 0.0;
+        for d in out_row.iter_mut().skip(d_latent).take(d_rope) {
+            *d = 0.0;
         }
     }
     Ok(())

@@ -8,6 +8,7 @@ use crate::error::{KernelError, Result};
 /// `q` is `[seq_q, q_heads, head_dim]`, `k` / `v` are
 /// `[seq_k, kv_heads, head_dim]`, `out` is `[seq_q, q_heads, head_dim]`.
 /// `group_size = q_heads / kv_heads` is asserted to be exact.
+#[allow(clippy::too_many_arguments)]
 pub fn gqa_attention(
     q: &[f32],
     k: &[f32],
@@ -85,6 +86,7 @@ pub fn gqa_attention(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn gqa_attention_unchecked(
     q: &[f32],
     k: &[f32],
@@ -120,8 +122,8 @@ fn gqa_attention_unchecked(
                 softmax(&mut scores);
                 let out_row = &mut out[s * q_heads * head_dim + qh * head_dim
                     ..s * q_heads * head_dim + qh * head_dim + head_dim];
-                for d in 0..head_dim {
-                    out_row[d] = 0.0;
+                for d in out_row.iter_mut() {
+                    *d = 0.0;
                 }
                 for t in 0..seq_k {
                     let p = scores[t];

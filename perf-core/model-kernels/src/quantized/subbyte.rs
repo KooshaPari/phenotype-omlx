@@ -114,7 +114,7 @@ pub fn subbyte_unpack(
     let bits_us = bits as usize;
     let levels = (1u32 << bits_us) - 1;
     let mut bit_pos = 0usize;
-    for i in 0..n {
+    for (i, o) in out.iter_mut().enumerate().take(n) {
         let g = i / group_size;
         if g >= scales.len() || g >= zeros.len() {
             return Err(KernelError::BadBufferLength {
@@ -154,14 +154,14 @@ pub fn subbyte_unpack(
             } else {
                 0
             };
-            (low_part | (high_part << low)) as u32
+            low_part | (high_part << low)
         };
         let v = if levels == 0 {
             zero
         } else {
             zero + (q as f32) * scale
         };
-        out[i] = v;
+        *o = v;
         bit_pos += bits_us;
     }
     Ok(())

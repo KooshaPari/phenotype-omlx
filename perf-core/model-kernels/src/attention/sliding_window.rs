@@ -13,6 +13,7 @@ use crate::error::{KernelError, Result};
 /// Causal sliding-window GQA attention. `q` is `[seq_q, q_heads, head_dim]`,
 /// `k` / `v` are `[seq_k, kv_heads, head_dim]`, `out` is
 /// `[seq_q, q_heads, head_dim]`; `window_size` is the per-row width.
+#[allow(clippy::too_many_arguments)]
 pub fn sliding_window_attention(
     q: &[f32], k: &[f32], v: &[f32],
     q_heads: usize, kv_heads: usize, head_dim: usize,
@@ -50,6 +51,7 @@ pub fn sliding_window_attention(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sliding_window_attention_unchecked(
     q: &[f32], k: &[f32], v: &[f32],
     q_heads: usize, kv_heads: usize, head_dim: usize,
@@ -70,7 +72,6 @@ fn sliding_window_attention_unchecked(
                 let lo = offset
                     .checked_add(1)
                     .and_then(|x| x.checked_sub(window_size))
-                    .map(|v| v as usize)
                     .unwrap_or(0);
                 let hi = (offset + 1).min(seq_k);
                 let q_row = &q[s * q_heads * head_dim + qh * head_dim
@@ -86,7 +87,7 @@ fn sliding_window_attention_unchecked(
                 softmax(&mut scores);
                 let out_row = &mut out[s * q_heads * head_dim + qh * head_dim
                     ..s * q_heads * head_dim + qh * head_dim + head_dim];
-                for d in 0..head_dim { out_row[d] = 0.0; }
+                for d in out_row.iter_mut() { *d = 0.0; }
                 for t in lo..hi {
                     let p = scores[t];
                     if p == 0.0 { continue; }

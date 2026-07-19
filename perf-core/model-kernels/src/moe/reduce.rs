@@ -55,8 +55,8 @@ pub fn weighted_reduce(
     }
     for t in 0..num_tokens {
         let out_row = &mut out[t * hidden..t * hidden + hidden];
-        for h in 0..hidden {
-            out_row[h] = 0.0;
+        for h in out_row.iter_mut() {
+            *h = 0.0;
         }
         for e in 0..experts_per_token {
             let w = weights[t * experts_per_token + e];

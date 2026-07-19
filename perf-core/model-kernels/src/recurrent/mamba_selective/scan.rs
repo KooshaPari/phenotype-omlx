@@ -57,19 +57,19 @@ pub fn mamba_selective_scan(
     }
 
     let mut ys = Vec::with_capacity(n);
-    for t in 0..n {
+    for (t, &u_t) in u.iter().enumerate().take(n) {
         // Per-channel decay at this step.
         let dt = params.dt[t];
         // Discretized B: dt * b[t] (Mamba-1 convention).
-        let dbu = dt * params.b[t] * u[t];
+        let dbu = dt * params.b[t] * u_t;
         // Per-channel skip-gain (D is per-time-step in our convention).
-        let d_skip = params.d[t] * u[t];
+        let d_skip = params.d[t] * u_t;
         // Sum over channels of c[t] * state[c].
         let mut acc = d_skip;
-        for c_idx in 0..state_dim {
+        for (c_idx, s) in initial_state.iter_mut().enumerate().take(state_dim) {
             let decay = (dt * params.a_log[c_idx].exp()).exp();
-            initial_state[c_idx] = decay * initial_state[c_idx] + dbu;
-            acc += params.c[t] * initial_state[c_idx];
+            *s = decay * *s + dbu;
+            acc += params.c[t] * *s;
         }
         ys.push(acc);
     }

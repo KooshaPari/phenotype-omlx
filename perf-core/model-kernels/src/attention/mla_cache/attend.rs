@@ -93,12 +93,12 @@ pub fn mla_cache_attend(
     let mut max = f32::NEG_INFINITY;
     for entry in cache {
         let mut dot_l = 0.0f32;
-        for d in 0..d_latent {
-            dot_l += q_latent[d] * entry.compressed_kv[d];
+        for (d, &q_d) in q_latent.iter().enumerate() {
+            dot_l += q_d * entry.compressed_kv[d];
         }
         let mut dot_r = 0.0f32;
-        for d in 0..d_rope {
-            dot_r += q_rope[d] * entry.k_rope[d];
+        for (d, &q_r) in q_rope.iter().enumerate() {
+            dot_r += q_r * entry.k_rope[d];
         }
         let s = dot_l + dot_r;
         scores.push(s);
@@ -124,8 +124,8 @@ pub fn mla_cache_attend(
     }
     for (t, entry) in cache.iter().enumerate() {
         let p = scores[t];
-        for d in 0..d_latent {
-            out[d] += p * entry.compressed_kv[d];
+        for (d, o) in out.iter_mut().enumerate() {
+            *o += p * entry.compressed_kv[d];
         }
     }
     Ok(())
