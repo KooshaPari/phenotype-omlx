@@ -27,6 +27,8 @@
 //! - [`bonsai`] — exact ternary block layout + round-trip oracle.
 //! - [`qwen_deltanet`] — Qwen-style DeltaNet chunked linear-recurrent update.
 //! - [`qwen_moe`] — sparse MoE pipeline (router / dispatch / shared / reduce).
+//! - [`qwen_moe_v2`] — sparse-MoE per-stage composition with the tiled
+//!   GEMM, tiled weighted reduce, and dispatch-aware writeback stages.
 //! - [`qwen_mini_trace`] — end-to-end agentic DeltaNet + MoE composition.
 
 use model_kernels::common::{approx_eq, Lcg};
@@ -97,3 +99,4 @@ mod bonsai;
 mod qwen_deltanet;
 mod qwen_mini_trace;
 mod qwen_moe;
+mod qwen_moe_v2;

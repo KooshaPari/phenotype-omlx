@@ -1,5 +1,3 @@
-//! End-to-end trace baselines for the documented model families.
-//!
 //! Each test pins down a different acceptance-matrix row from
 //! `02_SPECIFICATIONS.md`:
 //!
@@ -8,6 +6,7 @@
 //! | `cca_block_baseline_round_trip` | ZAYA — CCA & compact nonlinear expert path | Three block summaries + query → softmax-weighted output |
 //! | `mla_cache_baseline_round_trip` | DeepSeek — MLA, routed experts, proposal/MTP | Four `compressed_kv` + `k_rope` cache entries + query |
 //! | `qwen_deltanet_moe_end_to_end_baseline_round_trip` | Qwen agentic — long-context decode, GQA or DeltaNet state, sparse MoE | DeltaNet recurrence over a four-token chunk → top-k sparse-MoE |
+//! | `qwen_moe_end_to_end_v2_baseline_round_trip` | Qwen agentic — sparse-MoE per-stage composition (tiled GEMM + tiled reduce + writeback) | Router → dispatch → grouped_gemm_tiled → weighted_reduce_tiled → stage_expert_outputs + coalesced_writeback over `num_tokens=4, num_experts=3, top_k=2, hidden=4, k=4, capacity_factor=2.0` |
 //! | `moe_writeback_2x8_baseline_round_trip` | Qwen agentic — turn-12 dispatch-aware DRAM writeback | top_k=2, 8 tokens, 3 experts, hidden=4, LCG-seeded expert outputs |
 //!
 //! The per-family `seed` is part of the inputs so the input hash
@@ -351,5 +350,151 @@ fn moe_writeback_2x8_baseline_round_trip() {
     let r = recorder
         .verify("moe_writeback_2x8", &inputs, &recorded.output)
         .expect("verify moe_writeback_2x8");
+    assert_eq!(r, VerifyResult::Ok);
+}
+
+// =========================================================================
+// qwen_moe_end_to_end_v2 — sparse-MoE per-stage composition (tiled GEMM +
+// tiled reduce + writeback). Mirrors `model-kernels/tests/qwen_bonsai/qwen_moe_v2.rs`.
+
+const QWEN_MOE_V2_NUM_TOKENS: usize = 4;
+const QWEN_MOE_V2_NUM_EXPERTS: usize = 3;
+const QWEN_MOE_V2_TOP_K: usize = 2;
+const QWEN_MOE_V2_HIDDEN: usize = 4;
+const QWEN_MOE_V2_K: usize = 4;
+const QWEN_MOE_V2_CAPACITY_FACTOR: f32 = 2.0;
+const QWEN_MOE_V2_SEED: u64 = 0xCAFE_BABE_DEAD_BEEF;
+
+fn qwen_moe_v2_det(n: usize, salt: u64) -> Vec<f32> {
+    (0..n).map(|_| model_kernels::common::Lcg::new(QWEN_MOE_V2_SEED ^ salt).next_signed()).collect()
+}
+
+/// Returns `(top_picks, router_logits, shared_out, reduced_out,
+/// writeback_out)` for the `qwen_moe_end_to_end_v2` pipeline. Same
+/// pipeline + salts as the integration test in
+/// `model-kernels/tests/qwen_bonsai/qwen_moe_v2.rs`.
+#[allow(clippy::type_complexity)]
+fn compute_qwen_moe_end_to_end_v2_output()
+-> (Vec<usize>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+    use model_kernels::moe::{
+        coalesced_writeback, grouped_gemm_tiled, moe_dispatch, router_topk, shared_expert,
+        stage_expert_outputs, weighted_reduce_tiled,
+    };
+    let n_t = QWEN_MOE_V2_NUM_TOKENS;
+    let n_e = QWEN_MOE_V2_NUM_EXPERTS;
+    let top_k = QWEN_MOE_V2_TOP_K;
+    let h = QWEN_MOE_V2_HIDDEN;
+    let k = QWEN_MOE_V2_K;
+
+    // Router logits (per-token salt) + per-token top-k picks.
+    let router_logits: Vec<f32> = (0..n_t)
+        .flat_map(|t| qwen_moe_v2_det(n_e, 0xE0_01 + t as u64))
+        .collect();
+    let mut assignments: Vec<(usize, f32)> = Vec::with_capacity(n_t);
+    let mut picks_per_token: Vec<Vec<(usize, f32)>> = Vec::with_capacity(n_t);
+    let mut top_picks: Vec<usize> = Vec::with_capacity(n_t);
+    for t in 0..n_t {
+        let picks = router_topk(&router_logits[t * n_e..(t + 1) * n_e], n_e, top_k, 0)
+            .expect("router_topk must accept well-formed inputs");
+        assignments.push(picks[0]);
+        top_picks.push(picks[0].0);
+        picks_per_token.push(picks);
+    }
+    let plan = moe_dispatch(&(0..n_t).collect::<Vec<_>>(), &assignments, n_e, QWEN_MOE_V2_CAPACITY_FACTOR)
+        .expect("dispatch must accept well-formed inputs");
+
+    // Activations and weights — same salts as the integration test.
+    let a = qwen_moe_v2_det(n_t * k, 0xA_CE);
+    let w = qwen_moe_v2_det(h * h, 0xB_EE);
+    let b: Vec<f32> = (0..n_e).flat_map(|e| qwen_moe_v2_det(k * h, 0xB0_E0 + e as u64)).collect();
+
+    // Shared-expert projection + routed-GEMM (tiled) into `[n_t, h]`.
+    let mut shared_out = vec![0.0f32; n_t * h];
+    shared_expert(&a, &w, &mut shared_out).expect("shared_expert must accept well-formed inputs");
+    let mut routed = vec![0.0f32; n_t * h];
+    grouped_gemm_tiled(&a, &b, &plan.expert_buckets, 0, k, h, &mut routed)
+        .expect("grouped_gemm_tiled must accept well-formed inputs");
+
+    // Build `[n_t, top_k, h]` expert-outs + per-token top-k weights:
+    // slot 0 from the routed GEMM, slot 1 from a scalar matmul over
+    // the second top-k pick.
+    let mut expert_outs = vec![0.0f32; n_t * top_k * h];
+    let mut weights = vec![0.0f32; n_t * top_k];
+    for (t, picks) in picks_per_token.iter().enumerate() {
+        expert_outs[(t * top_k) * h..(t * top_k + 1) * h]
+            .copy_from_slice(&routed[t * h..(t + 1) * h]);
+        let b_off = picks[1].0 * k * h;
+        for j in 0..h {
+            let acc: f32 = (0..k).map(|kk| a[t * k + kk] * b[b_off + kk * h + j]).sum();
+            expert_outs[(t * top_k + 1) * h + j] = acc;
+        }
+        for (e_idx, &(_, w)) in picks.iter().enumerate() {
+            weights[t * top_k + e_idx] = w;
+        }
+    }
+
+    // Tiled weighted-reduce + stage + coalesced writeback.
+    let mut reduced_out = vec![0.0f32; n_t * h];
+    weighted_reduce_tiled(&expert_outs, &weights, top_k, h, &mut reduced_out)
+        .expect("weighted_reduce_tiled must accept well-formed inputs");
+    let stage = stage_expert_outputs(&routed, &plan, h)
+        .expect("stage_expert_outputs must accept well-formed inputs");
+    let mut writeback_out = vec![0.0f32; n_t * h];
+    coalesced_writeback(&stage, n_t, h, &mut writeback_out)
+        .expect("coalesced_writeback must accept well-formed inputs");
+
+    (top_picks, router_logits, shared_out, reduced_out, writeback_out)
+}
+
+/// `qwen_moe_end_to_end_v2` baseline round-trip. `inputs` carries every
+/// field that influences `BaselineRecorder::hash_inputs`. `expected_out`
+/// is built via [`compute_qwen_moe_end_to_end_v2_output`] at test time
+/// and pinned to `baselines.json` via byte-equality against the
+/// recorded entry (`f32 -> f64` promotion is exact).
+#[test]
+fn qwen_moe_end_to_end_v2_baseline_round_trip() {
+    let (top_picks, router_logits, shared_out, reduced_out, writeback_out) =
+        compute_qwen_moe_end_to_end_v2_output();
+    let to_f64 = |v: &[f32]| -> Vec<f64> { v.iter().map(|&x| x as f64).collect() };
+    let capacity = (QWEN_MOE_V2_CAPACITY_FACTOR * QWEN_MOE_V2_NUM_TOKENS as f32
+        / QWEN_MOE_V2_NUM_EXPERTS as f32)
+        .ceil() as u64;
+    let inputs = json!({
+        "kernel": "qwen_moe_end_to_end_v2",
+        "num_tokens": QWEN_MOE_V2_NUM_TOKENS,
+        "num_experts": QWEN_MOE_V2_NUM_EXPERTS,
+        "top_k": QWEN_MOE_V2_TOP_K,
+        "hidden": QWEN_MOE_V2_HIDDEN,
+        "k": QWEN_MOE_V2_K,
+        "capacity_factor": QWEN_MOE_V2_CAPACITY_FACTOR,
+        "seed": QWEN_MOE_V2_SEED,
+    });
+    let expected_out = json!({
+        "kernel": "qwen_moe_end_to_end_v2",
+        "num_tokens": QWEN_MOE_V2_NUM_TOKENS,
+        "num_experts": QWEN_MOE_V2_NUM_EXPERTS,
+        "top_k": QWEN_MOE_V2_TOP_K,
+        "hidden": QWEN_MOE_V2_HIDDEN,
+        "k": QWEN_MOE_V2_K,
+        "capacity_factor": QWEN_MOE_V2_CAPACITY_FACTOR,
+        "capacity": capacity,
+        "top_picks": top_picks.iter().map(|&x| x as u64).collect::<Vec<u64>>(),
+        "router_logits": to_f64(&router_logits),
+        "shared_out": to_f64(&shared_out),
+        "reduced_out": to_f64(&reduced_out),
+        "writeback_out": to_f64(&writeback_out),
+    });
+    let recorder = BaselineRecorder::new(checked_in_baselines_dir());
+    let file = recorder.load().expect("load checked-in baselines");
+    assert!(
+        file.baselines.contains_key("qwen_moe_end_to_end_v2"),
+        "checked-in baselines must contain qwen_moe_end_to_end_v2 entry"
+    );
+    let recorded = file.baselines["qwen_moe_end_to_end_v2"].clone();
+    assert_eq!(BaselineRecorder::hash_inputs(&inputs), recorded.input_hash);
+    assert_close_envelope(&recorded.output, &expected_out);
+    let r = recorder
+        .verify("qwen_moe_end_to_end_v2", &inputs, &recorded.output)
+        .expect("verify qwen_moe_end_to_end_v2");
     assert_eq!(r, VerifyResult::Ok);
 }
