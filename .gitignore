@@ -37,3 +37,4 @@ zig-cache/
 
 # Rust static libs from cargo test
 *.a
+/perf-core/turbo-quant-nim/nim-src/turboquant_test

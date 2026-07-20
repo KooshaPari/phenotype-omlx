@@ -404,14 +404,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "model-kernels"
-version = "0.1.0"
-dependencies = [
- "thiserror",
- "tree-attention",
-]
-
-[[package]]
 name = "model-plan"
 version = "0.1.0"
 dependencies = [
@@ -806,13 +798,6 @@ dependencies = [
  "getrandom",
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "vpu-agents"
-version = "0.1.0"
-dependencies = [
- "serde",
 ]
 
 [[package]]
