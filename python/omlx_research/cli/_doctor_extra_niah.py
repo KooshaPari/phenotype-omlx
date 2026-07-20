@@ -102,7 +102,16 @@ def _load_niah_results() -> tuple[bool, str, int]:
             f"{type(targets).__name__}, expected list",
             0,
         )
-    return True, f"{_NIAH_RESULTS_REL_PATH} ({len(targets)} target rows)", len(targets)
+    ev = payload.get("evidence_label")
+    if isinstance(ev, str) and ev.strip():
+        ev_note = f", evidence_label={ev!r}"
+    else:
+        ev_note = ", evidence_label=<missing>"
+    return (
+        True,
+        f"{_NIAH_RESULTS_REL_PATH} ({len(targets)} target rows{ev_note})",
+        len(targets),
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -343,10 +343,34 @@ def main():
         print(f"    {m:22s}: exact={exact}/{len(mr)} partial={partial} miss={miss}")
 
     if args.output:
-        Path(args.output).write_text(json.dumps(
-            [asdict(r) for r in results], indent=2, default=str
-        ))
-        print(f"\n  Results written to: {args.output}")
+        # FR-5 E4: never write raw rows without an evidence class.
+        # In-process MLX runs are live_verified; do not overwrite
+        # the committed synthetic niah_results.json envelope.
+        out_path = Path(args.output)
+        if "qwen3.5" in args.model.lower() or "qwen3_5" in args.model.lower():
+            caveat = (
+                "Qwen3.5 family may use linear attention; standard "
+                "KV-cache compression metrics are not applicable "
+                "(see kitty-specs/complete-polyglot-vpu-stack/spec.md)."
+            )
+        else:
+            caveat = None
+        envelope = {
+            "schema_version": 1,
+            "kind": "niah_live_run",
+            "evidence_label": "live_verified",
+            "reported": True,
+            "synthetic": False,
+            "model": args.model,
+            "backend": "mlx_lm_inprocess",
+            "architecture_caveat": caveat,
+            "seed": args.seed,
+            "lengths": args.lengths,
+            "modes": args.modes,
+            "results": [asdict(r) for r in results],
+        }
+        out_path.write_text(json.dumps(envelope, indent=2, default=str) + "\n")
+        print(f"\n  Results written to: {args.output} (evidence_label=live_verified)")
 
     print(f"\n  Final RSS: {rss_mb():.0f} MB")
 

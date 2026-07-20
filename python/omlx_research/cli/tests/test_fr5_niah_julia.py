@@ -1,13 +1,16 @@
-"""FR-5 / E1–E2 tests: Julia required (fail loud) + NIAH non-legacy paths.
+"""FR-5 / E1–E4 tests: Julia, non-legacy paths, evidence-class discipline.
 
 Acceptance:
 - E1: ``julia`` required on the eval/doctor path — FAIL (not WARN) if missing.
 - E2: ``scripts/niah_benchmark.py`` must not use legacy ``phenotype-omlx/python``.
+- E4: committed ``niah_results.json`` must declare synthetic evidence class;
+  live smoke must refuse to overwrite that envelope.
 """
 
 from __future__ import annotations
 
-import os
+import importlib.util
+import json
 from pathlib import Path
 
 from omlx_research.cli import _doctor_checks as checks_mod
@@ -90,3 +93,28 @@ def test_niah_benchmark_legacy_path_doctor_passes_for_repo_relative(monkeypatch,
     monkeypatch.setattr(niah_extra, "_find_niah_benchmark", lambda: str(good))
     c = niah_extra.niah_benchmark_non_legacy_path()
     assert c.status == PASS
+
+
+def test_niah_results_committed_envelope_is_synthetic_not_live():
+    """FR-5 E4: committed niah_results.json must declare synthetic evidence class."""
+
+    root = Path(project_root())
+    path = root / "niah_results.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data.get("evidence_label") == "synthetic_target_rows"
+    assert data.get("synthetic") is True
+    assert data.get("reported") is True
+    assert data.get("evidence_label") != "live_verified"
+    assert len(data.get("targets") or []) >= 25
+
+
+def test_niah_live_artifact_must_not_overwrite_envelope_name():
+    """FR-5 E4: live smoke refuses to target niah_results.json."""
+
+    script = Path(project_root()) / "scripts" / "niah_server_smoke.py"
+    spec = importlib.util.spec_from_file_location("niah_server_smoke", script)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    rc = mod.main(["--output", "niah_results.json", "--server-url", "http://127.0.0.1:9"])
+    assert rc == 2

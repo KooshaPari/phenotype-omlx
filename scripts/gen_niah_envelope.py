@@ -163,6 +163,10 @@ def build_envelope(
     return {
         "schema_version": 1,
         "kind": "niah_target_rows",
+        # FR-5 E4: committed envelope is synthetic targets — never "live verified".
+        "evidence_label": "synthetic_target_rows",
+        "reported": True,
+        "synthetic": True,
         "generated_at": generated_at,
         "description": (
             "NIAH (needle-in-a-haystack) target rows for the doctor "
@@ -172,7 +176,8 @@ def build_envelope(
             "against this snapshot. Synthetic but realistic: pass "
             "rates follow a sigmoid-shaped decay anchored on the "
             "published baselines for "
-            "mlx-community/Qwen2.5-0.5B-Instruct-4bit."
+            "mlx-community/Qwen2.5-0.5B-Instruct-4bit. "
+            "evidence_label=synthetic_target_rows — not a live model run."
         ),
         "model": model,
         "context_lengths": [int(c) for c in context_lengths],

@@ -1,8 +1,11 @@
 {
   "schema_version": 1,
   "kind": "niah_target_rows",
+  "evidence_label": "synthetic_target_rows",
+  "reported": true,
+  "synthetic": true,
   "generated_at": "2026-07-19T00:00:00Z",
-  "description": "NIAH (needle-in-a-haystack) target rows for the doctor regression envelope. Each row pins the expected pass rate for one (kernel_id, context_length, seed) combination so subsequent real runs can be diffed against this snapshot. Synthetic but realistic: pass rates follow a sigmoid-shaped decay anchored on the published baselines for mlx-community/Qwen2.5-0.5B-Instruct-4bit.",
+  "description": "NIAH (needle-in-a-haystack) target rows for the doctor regression envelope. Each row pins the expected pass rate for one (kernel_id, context_length, seed) combination so subsequent real runs can be diffed against this snapshot. Synthetic but realistic: pass rates follow a sigmoid-shaped decay anchored on the published baselines for mlx-community/Qwen2.5-0.5B-Instruct-4bit. evidence_label=synthetic_target_rows \u2014 not a live model run.",
   "model": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
   "context_lengths": [
     1024,
