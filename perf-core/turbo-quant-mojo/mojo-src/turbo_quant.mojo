@@ -113,25 +113,49 @@ def tq_mojo_encode(
     n: Int,
     bits: UInt8,
     group_size: Int,
-    shape_result: UnsafePointer[UnsafePointer[Int, MutUntrackedOrigin], MutUntrackedOrigin],
-    out_shape_len: UnsafePointer[Int],
-    packed_result: UnsafePointer[UnsafePointer[UInt8, MutUntrackedOrigin], MutUntrackedOrigin],
-    out_packed_len: UnsafePointer[Int],
-    scales_result: UnsafePointer[UnsafePointer[Float32, MutUntrackedOrigin], MutUntrackedOrigin],
-    out_scales_len: UnsafePointer[Int],
-    zeros_result: UnsafePointer[UnsafePointer[Float32, MutUntrackedOrigin], MutUntrackedOrigin],
-    out_zeros_len: UnsafePointer[Int],
-) abi("C") -> Bool:
-    let q = encode_uniform(data_ptr, n, bits, group_size)
-    shape_result.store(0, q.shape_ptr)
-    out_shape_len[0] = q.shape_len
-    packed_result.store(0, q.packed_ptr)
-    out_packed_len[0] = q.packed_len
-    scales_result.store(0, q.scales_ptr)
-    out_scales_len[0] = q.scales_len
-    zeros_result.store(0, q.zeros_ptr)
-    out_zeros_len[0] = q.zeros_len
+    shape_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_shape_len: UnsafePointer[Int, MutUntrackedOrigin],
+    packed_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_packed_len: UnsafePointer[Int, MutUntrackedOrigin],
+    scales_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_scales_len: UnsafePointer[Int, MutUntrackedOrigin],
+    zeros_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
+    out_zeros_len: UnsafePointer[Int, MutUntrackedOrigin],
+) -> Bool:
+    var data_ptr = UnsafePointer[Float32, MutUntrackedOrigin](unsafe_from_address=data_addr)
+
+    var gs: Int = 64 if group_size == 0 else group_size
+    var bits_i: Int = Int(bits)
+    var n_groups: Int = (n + gs - 1) // gs
+    var per_group_packed_bytes: Int = (gs * bits_i + 7) // 8
+    var total_packed: Int = n_groups * per_group_packed_bytes
+
+    var shape_ptr = alloc[Int](1)
+    var packed_ptr = alloc[UInt8](total_packed)
+    var scales_ptr = alloc[Float32](n_groups)
+    var zeros_ptr = alloc[Float32](n_groups)
+
+    encode_uniform(
+        data_ptr, n, bits, group_size,
+        packed_ptr, scales_ptr, zeros_ptr, out_packed_len,
+    )
+
+    shape_ptr[0] = n
+    shape_ptr_out[0] = Int(shape_ptr)
+    out_shape_len[0] = 1
+    packed_ptr_out[0] = Int(packed_ptr)
+    scales_ptr_out[0] = Int(scales_ptr)
+    out_scales_len[0] = n_groups
+    zeros_ptr_out[0] = Int(zeros_ptr)
+    out_zeros_len[0] = n_groups
     return True
+
+
+# Addresses must come from tq_mojo_encode and be released exactly once.
+@export("tq_mojo_free")
+def tq_mojo_free(address: Int) -> None:
+    var ptr = UnsafePointer[UInt8, MutUntrackedOrigin](unsafe_from_address=address)
+    ptr.free()
 
 @export("tq_mojo_decode")
 def tq_mojo_decode(

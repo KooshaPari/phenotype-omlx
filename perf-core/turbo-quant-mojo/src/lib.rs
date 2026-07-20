@@ -44,7 +44,7 @@ impl MojoQuantizedTensor {
 #[cfg(feature = "mojo")]
 mod native {
     use super::MojoQuantizedTensor;
-    use std::os::raw::{c_uchar, c_void};
+    use std::os::raw::c_uchar;
 
     extern "C" {
         fn tq_mojo_encode(
@@ -62,7 +62,7 @@ mod native {
             out_ptr: *mut f32,
         );
 
-        fn free(ptr: *mut c_void);
+        fn tq_mojo_free(address: isize);
     }
 
     pub(super) fn mojo_encode(
@@ -94,10 +94,10 @@ mod native {
         let zeros  = unsafe { std::slice::from_raw_parts(zeros_ptr,  zeros_len)  }.to_vec();
 
         unsafe {
-            free(shape_ptr  as *mut c_void);
-            free(packed_ptr as *mut c_void);
-            free(scales_ptr as *mut c_void);
-            free(zeros_ptr  as *mut c_void);
+            tq_mojo_free(shape_addr);
+            tq_mojo_free(packed_addr);
+            tq_mojo_free(scales_addr);
+            tq_mojo_free(zeros_addr);
         }
 
         Ok(MojoQuantizedTensor { shape, packed, scales, zeros })
