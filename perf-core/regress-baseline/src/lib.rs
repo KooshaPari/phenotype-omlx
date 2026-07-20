@@ -58,6 +58,7 @@
 #![deny(unsafe_code)]
 
 pub mod budget;
+pub mod perf_guard;
 pub mod recorder;
 pub mod types;
 
@@ -67,6 +68,7 @@ mod json_diff;
 // change. The internal modules are also exposed as `pub mod` above so
 // callers can opt into per-module paths if they prefer.
 pub use crate::budget::{dispatch_budget, energy_budget_j, ShapeKey};
+pub use crate::perf_guard::{perf_guard_active, PerfGuard, PerfGuardConfig};
 pub use crate::recorder::BaselineRecorder;
 pub use crate::types::{BaselineEntry, BaselineError, BaselinesFile, VerifyResult, SCHEMA_VERSION};
 
