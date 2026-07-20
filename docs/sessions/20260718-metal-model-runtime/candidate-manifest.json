@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "candidate": {
     "branch": "agent/argis-g2-candidate-20260719",
-    "head": "577be07",
+    "head": "f0ac108",
     "base": "4ae832e",
     "freeze_status": "scoped-evidence-ready",
     "evidence_complete": false
@@ -48,7 +48,7 @@
       "sha256": "b7e81f7bd264790d9e72eae50f20dc7c4b82f3497eef908c269c0556365fca24",
       "build_command": "mojo build mojo-src/turbo_quant.mojo --emit shared-lib -o libturbo_quant_mojo.dylib"
     },
-    "json_validation": "pending manifest commit"
+    "json_validation": "python3 -m json.tool candidate-manifest.json: exit 0"
   },
   "remaining_freeze_gates": [
     "Commit this manifest after JSON and diff checks",
