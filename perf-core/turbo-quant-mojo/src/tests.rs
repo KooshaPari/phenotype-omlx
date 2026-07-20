@@ -76,7 +76,7 @@ fn minimal_valid_tensor() -> MojoQuantizedTensor {
 // ─── Canonical roundtrip (preserved) ────────────────────────────────────
 
 #[test]
-fn mojo_encode_decode_roundtrip_todo_fr_omlx_poly_001_null_out_pointers() {
+fn mojo_encode_decode_roundtrip_ffi_owned_outputs() {
     let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
     match MojoQuantizedTensor::encode(&data, 4, 32) {
         Ok(q) => {
@@ -87,7 +87,7 @@ fn mojo_encode_decode_roundtrip_todo_fr_omlx_poly_001_null_out_pointers() {
         }
         Err(e) if e.contains("null output pointers") => {
             panic!(
-                "TODO FR-OMLX-POLY-001: Mojo @export out-pointer ABI returns null on 1.0.0b3 — {e}"
+                "Mojo @export out-pointer ABI returned null after ABI hardening — {e}"
             );
         }
         Err(e) => panic!("Mojo encode failed unexpectedly: {e}"),
