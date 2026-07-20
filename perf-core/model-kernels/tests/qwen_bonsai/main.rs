@@ -29,6 +29,8 @@
 //! - [`qwen_moe`] — sparse MoE pipeline (router / dispatch / shared / reduce).
 //! - [`qwen_moe_v2`] — sparse-MoE per-stage composition with the tiled
 //!   GEMM, tiled weighted reduce, and dispatch-aware writeback stages.
+//! - [`olmoe_moe`] — OLMoE-1B-7B per-stage composition (64 experts,
+//!   top_k=8, 1 shared expert) generalizing the Qwen-MoE v2 trace.
 //! - [`qwen_mini_trace`] — end-to-end agentic DeltaNet + MoE composition.
 
 use model_kernels::common::{approx_eq, Lcg};
@@ -96,6 +98,7 @@ fn run_qwen_deltanet_trace(
 }
 
 mod bonsai;
+mod olmoe_moe;
 mod qwen_deltanet;
 mod qwen_mini_trace;
 mod qwen_moe;
