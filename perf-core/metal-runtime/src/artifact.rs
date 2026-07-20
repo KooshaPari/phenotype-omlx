@@ -117,18 +117,27 @@ fn validate_name(name: &str) -> Result<(), ArtifactError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    /// Monotonic per-process counter so concurrent test threads do not
+    /// collide on the same temp-dir name even when their nanos coalesce.
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn fixture(bytes: &[u8]) -> (PathBuf, ArtifactAllowlist) {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
-            "metal-runtime-artifact-{}-{}",
+            "metal-runtime-artifact-{}-{}-{seq}",
             std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
+            nanos
         ));
-        std::fs::create_dir(&root).unwrap();
+        // `create_dir_all` is idempotent — defence in depth against
+        // any future name collision.
+        std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("model.metallib"), bytes).unwrap();
         let digest = Sha256::digest(bytes).into();
         (
