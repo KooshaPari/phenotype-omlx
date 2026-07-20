@@ -48,7 +48,8 @@ workspace tests, benchmark comparison, and Airlock snapshot before the next depe
 
     MoE top-k router [complete]
       -> grouped expert GEMM [complete — model-kernels::moe::gemm_tiled, scalar-tile path, oracle parity pinned, kernel-registry candidate wired with tuning + coverage]
-      -> weighted expert reduction
+      -> weighted expert reduction [complete — model-kernels::moe::reduce_tiled, scalar-tile path, oracle parity pinned, kernel-registry candidate wired with tuning + coverage]
+      -> end-to-end Qwen/OLMoE model run
       -> Step / Kimi K2 / GLM / OLMoE / MiniMax conformance
 
     KDA chunk scan
@@ -66,11 +67,14 @@ workspace tests, benchmark comparison, and Airlock snapshot before the next depe
     active-position compaction
       -> remasking scheduler
       -> Seed Diffusion / Mercury coding acceptance
-
-Current critical path: weighted reduction -> end-to-end Qwen/OLMoE model run ->
-latency, memory, energy, and quality regression baselines. The previous critical-path item
-(grouped expert GEMM) was completed at turn-12 with `model-kernels::moe::gemm_tiled`,
-oracle parity pinned against the scalar reference, a `grouped_gemm_moe` kernel-registry
-candidate (scalar + tiled) wired into `coverage_matrix.rs` and the SOTA operator suite,
-and a deterministic bench envelope emitted to
-`research/baselines/moe_grouped_gemm_20260719.json`.
+Current critical path: end-to-end Qwen/OLMoE model run -> latency, memory,
+energy, and quality regression baselines. The previous critical-path item
+(weighted expert reduction) was completed at turn-13 with
+`model-kernels::moe::reduce_tiled`, oracle parity pinned against the
+scalar reference, a `weighted_reduce_moe` kernel-registry candidate
+(scalar + tiled) wired into `coverage_matrix.rs` and the SOTA operator
+suite, and a deterministic bench envelope (5 row contexts × 5 seeds = 25
+rows) mirrored against the `grouped_gemm_moe` envelope so the two
+families are directly comparable. The turn-12 critical-path item
+(grouped expert GEMM) was completed at commit c735ea0 with
+`model-kernels::moe::gemm_tiled`.

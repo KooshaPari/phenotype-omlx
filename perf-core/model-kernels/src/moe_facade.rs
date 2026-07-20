@@ -14,6 +14,12 @@
 //!   unroll the accumulator. Used by the SOTA candidate
 //!   `GroupedGemmMoeTiled` in kernel-registry.
 //! - [`weighted_reduce`] — top-k expert output blending.
+//! - [`weighted_reduce_tiled`] — tile/blocked scalar variant of
+//!   [`weighted_reduce`]. Same
+//!   `(expert_outs, weights, experts_per_token, hidden, out)` signature;
+//!   iterates the hidden dimension in `tile`-sized blocks
+//!   (`tile = min(64, hidden)`). Used by the SOTA candidate
+//!   `WeightedMoeReduceTiled` in kernel-registry.
 //! - [`shared_expert`] — dense matmul for always-on shared experts.
 //!
 //! All routers, dispatchers, and reducers are pure functions of their
@@ -23,5 +29,6 @@ pub use crate::moe::dispatch::{moe_dispatch, DispatchPlan};
 pub use crate::moe::gemm::grouped_gemm;
 pub use crate::moe::gemm_tiled::grouped_gemm_tiled;
 pub use crate::moe::reduce::weighted_reduce;
+pub use crate::moe::reduce_tiled::weighted_reduce_tiled;
 pub use crate::moe::router::router_topk;
 pub use crate::moe::shared::shared_expert;

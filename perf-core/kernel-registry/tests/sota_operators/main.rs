@@ -276,6 +276,7 @@ mod multi_engine_metadata;
 mod qwen_agentic;
 mod recurrent;
 mod spec_decode_proposal_state;
+mod weighted_reduce_moe;
 mod zaya_activations_advanced;
 mod zaya_activations_basic;
 mod zaya_lfm_interaction;
