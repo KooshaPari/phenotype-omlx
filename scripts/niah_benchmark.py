@@ -130,9 +130,21 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
 
     # ── 2. Build the KV cache list (one per layer) ──
     n_layers = len(model.layers)
+    is_qwen35 = "qwen3_5" in type(model).__module__ or "qwen3_5" in str(getattr(model, "model_type", ""))
+    if is_qwen35 and mode != "baseline_fp16":
+        return BenchResult(
+            mode=mode, target_len=length, actual_len=actual_len,
+            prefill_ms=0, decode_ms=0, decode_tok_per_sec=0,
+            rss_mb_before=rss_before, rss_mb_after=rss_mb(), needle=needle,
+            answer="", exact_match=False, partial_match=False,
+            contains_secret=False,
+            error="unsupported: Qwen3.5 mixed linear/full attention has no KV-only cache for this mode",
+        )
     if mode == "baseline_fp16":
-        from mlx_lm.models.cache import KVCache
-        cache_list = [KVCache() for _ in range(n_layers)]
+        from mlx_lm.models import cache
+        # Qwen3.5 requires mixed recurrent/attention cache state; constructing
+        # one KVCache per layer is invalid and breaks create_attention_mask.
+        cache_list = cache.make_prompt_cache(model)
     elif mode in ("turbo_asymmetric", "turbo4"):
         from mlx.nn.layers.turbo_kv_cache import TurboKVCache
         cache_list = [TurboKVCache(bits=4, key_bits=None) for _ in range(n_layers)]
