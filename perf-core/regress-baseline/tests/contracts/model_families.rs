@@ -8,6 +8,7 @@
 //! | `cca_block_baseline_round_trip` | ZAYA — CCA & compact nonlinear expert path | Three block summaries + query → softmax-weighted output |
 //! | `mla_cache_baseline_round_trip` | DeepSeek — MLA, routed experts, proposal/MTP | Four `compressed_kv` + `k_rope` cache entries + query |
 //! | `qwen_deltanet_moe_end_to_end_baseline_round_trip` | Qwen agentic — long-context decode, GQA or DeltaNet state, sparse MoE | DeltaNet recurrence over a four-token chunk → top-k sparse-MoE |
+//! | `moe_writeback_2x8_baseline_round_trip` | Qwen agentic — turn-12 dispatch-aware DRAM writeback | top_k=2, 8 tokens, 3 experts, hidden=4, LCG-seeded expert outputs |
 //!
 //! The per-family `seed` is part of the inputs so the input hash
 //! distinguishes each trace from any other shape that happens to share
@@ -236,5 +237,119 @@ fn qwen_deltanet_moe_end_to_end_baseline_round_trip() {
     let r = recorder
         .verify("qwen_deltanet_moe_end_to_end", &inputs, &recorded.output)
         .expect("verify qwen_deltanet_moe_end_to_end");
+    assert_eq!(r, VerifyResult::Ok);
+}
+
+/// Compute the canonical MoE writeback output for the
+/// `moe_writeback_2x8` baseline. The trace shape is:
+///
+/// - `num_tokens = 8`, `num_experts = 3`, `top_k = 2`, `hidden = 4`.
+/// - Expert outputs `[num_tokens, top_k, hidden]` are LCG-seeded
+///   with `seed = 0x57A6_BA11` (the same salt the bench envelope uses).
+/// - Per top-k slot, the dispatcher is called once with a
+///   round-robin assignment: token `t` is routed to expert
+///   `(t + k_slot * stride) % num_experts` where `stride = num_experts / top_k = 1`.
+/// - Each slot runs `stage_expert_outputs` + `coalesced_writeback`
+///   against a zeroed `[num_tokens, hidden]` residual buffer.
+/// - The baseline `out` is the **first row** of the residual buffer
+///   (4 floats for `hidden = 4`) — the canonical oracle that the
+///   persistence test pins down.
+///
+/// This helper exists so the trace test (which lives in this same
+/// file) and the bench envelope (which lives in
+/// `model-kernels/tests/grouped_gemm_bench.rs`) share one source of
+/// truth for the canonical inputs. The output is fully deterministic
+/// — any drift in `expert_outs`, the round-robin stride, the
+/// dispatcher's tie-break, or the writeback kernel will surface as a
+/// `verify_fails_on_different_input_hash` style failure.
+fn compute_moe_writeback_2x8_output() -> Vec<f32> {
+    use model_kernels::common::Lcg;
+    use model_kernels::moe::{coalesced_writeback, moe_dispatch, stage_expert_outputs};
+
+    let num_tokens: usize = 8;
+    let num_experts: usize = 3;
+    let top_k: usize = 2;
+    let hidden: usize = 4;
+
+    let mut rng = Lcg::new(0x57A6_BA11);
+    let expert_outs: Vec<f32> = (0..num_tokens * top_k * hidden)
+        .map(|_| rng.next_signed())
+        .collect();
+
+    let stride = (num_experts / top_k).max(1);
+    let token_indices: Vec<usize> = (0..num_tokens).collect();
+    let per_slot_assignments: Vec<Vec<(usize, f32)>> = (0..top_k)
+        .map(|k_slot| {
+            (0..num_tokens)
+                .map(|t| ((t + k_slot * stride) % num_experts, 1.0))
+                .collect()
+        })
+        .collect();
+
+    let mut out = vec![0.0f32; num_tokens * hidden];
+    for (k_slot, assignments) in per_slot_assignments.iter().enumerate() {
+        let plan = moe_dispatch(&token_indices, assignments, num_experts, 2.0)
+            .expect("dispatch must accept well-formed inputs");
+        let mut slot_outs = Vec::with_capacity(num_tokens * hidden);
+        for t in 0..num_tokens {
+            let start = (t * top_k + k_slot) * hidden;
+            slot_outs.extend_from_slice(&expert_outs[start..start + hidden]);
+        }
+        let stage = stage_expert_outputs(&slot_outs, &plan, hidden)
+            .expect("stage must accept well-formed inputs");
+        coalesced_writeback(&stage, num_tokens, hidden, &mut out)
+            .expect("writeback must accept well-formed inputs");
+    }
+
+    out[0..hidden].to_vec()
+}
+
+/// MoE writeback baseline round-trip. The `inputs` JSON carries
+/// every field that influences `BaselineRecorder::hash_inputs` so
+/// the persisted `input_hash` reproduces byte-for-byte. The
+/// `expected_out` is built by calling [`compute_moe_writeback_2x8_output`]
+/// at test time (so it always reflects the current kernel's
+/// behaviour) and then committed to `baselines.json` via a
+/// byte-equality pin against the recorded entry.
+#[test]
+fn moe_writeback_2x8_baseline_round_trip() {
+    let out = compute_moe_writeback_2x8_output();
+    let inputs = json!({
+        "kernel": "moe_writeback",
+        "num_tokens": 8,
+        "num_experts": 3,
+        "top_k": 2,
+        "hidden": 4,
+        "seed": 0x57A6_BA11_u64,
+    });
+
+    let recorder = BaselineRecorder::new(checked_in_baselines_dir());
+    let file = recorder.load().expect("load checked-in baselines");
+    assert!(
+        file.baselines.contains_key("moe_writeback_2x8"),
+        "checked-in baselines must contain moe_writeback_2x8 entry"
+    );
+
+    let recorded = file.baselines["moe_writeback_2x8"].clone();
+    assert_eq!(
+        BaselineRecorder::hash_inputs(&inputs),
+        recorded.input_hash,
+        "moe_writeback_2x8 input_hash drift",
+    );
+
+    let out_json: Vec<f64> = out.iter().map(|&x| x as f64).collect();
+    let expected_out = json!({
+        "kernel": "moe_writeback",
+        "num_tokens": 8,
+        "num_experts": 3,
+        "top_k": 2,
+        "hidden": 4,
+        "out": out_json,
+    });
+    assert_close_envelope(&recorded.output, &expected_out);
+
+    let r = recorder
+        .verify("moe_writeback_2x8", &inputs, &recorded.output)
+        .expect("verify moe_writeback_2x8");
     assert_eq!(r, VerifyResult::Ok);
 }

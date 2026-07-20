@@ -21,6 +21,13 @@
 //!   (`tile = min(64, hidden)`). Used by the SOTA candidate
 //!   `WeightedMoeReduceTiled` in kernel-registry.
 //! - [`shared_expert`] — dense matmul for always-on shared experts.
+//! - [`stage_expert_outputs`] / [`coalesced_writeback`] /
+//!   [`WritebackPlan`] — dispatch-aware DRAM writeback for the MoE
+//!   expert activations. The next kernel in the DAG after
+//!   [`weighted_reduce_tiled`]. `stage_expert_outputs` packs the
+//!   per-token activations into per-expert contiguous blocks; the
+//!   matching `coalesced_writeback` populates the residual stream in
+//!   token-major order.
 //!
 //! All routers, dispatchers, and reducers are pure functions of their
 //! inputs plus any caller-provided seed. No FFI, no global state.
@@ -32,3 +39,4 @@ pub use crate::moe::reduce::weighted_reduce;
 pub use crate::moe::reduce_tiled::weighted_reduce_tiled;
 pub use crate::moe::router::router_topk;
 pub use crate::moe::shared::shared_expert;
+pub use crate::moe::writeback::{coalesced_writeback, stage_expert_outputs, WritebackPlan};

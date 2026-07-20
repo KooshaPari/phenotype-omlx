@@ -30,6 +30,22 @@
         "seq_k": 4
       }
     },
+    "moe_writeback_2x8": {
+      "input_hash": "479b992410f8ec6ffb4f3e628cca83103d8b63ab290e10693944584ef375c358",
+      "output": {
+        "hidden": 4,
+        "kernel": "moe_writeback",
+        "num_experts": 3,
+        "num_tokens": 8,
+        "out": [
+          -0.9235052,
+          0.1325779,
+          -0.7258748,
+          -0.8661256
+        ],
+        "top_k": 2
+      }
+    },
     "moe_router_topk_2of4": {
       "input_hash": "8af9ee9710be2539724bcd822bf2e469c6da92a09fbb9c11b774b2c245232ff0",
       "output": {

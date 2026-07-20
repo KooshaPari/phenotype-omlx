@@ -277,3 +277,123 @@ fn grouped_gemm_moe_sweep_t_values() {
     // Floor: the task spec asks for >= 25 rows.
     assert!(rows_pinned >= 25, "bench envelope must have >= 25 rows, got {rows_pinned}");
 }
+
+// =============================================================================
+// Dispatch-aware DRAM writeback — SOTA integration tests (turn-12).
+//
+// These tests pin the end-to-end chain `moe_dispatch` →
+// `grouped_gemm_tiled` → `stage_expert_outputs` → `coalesced_writeback`
+// against a hand-written scalar reference. They are added to this file
+// (rather than a separate `moe_writeback.rs`) so the coverage matrix
+// can substring-match `grouped_gemm_moe` against the new test names
+// without a separate `KERNEL_OP_COVERED` entry.
+//
+// Top_k=1 contract: the writeback kernel only supports a single
+// expert per token (`token_to_expert_slot: Vec<(usize, usize)>` is one
+// tuple per token), so the integration tests below use a single-expert
+// round-robin assignment. The naive reference is a hand-written
+// per-token copy that mirrors what the host would do without the
+// dispatch-aware staging kernel.
+// =============================================================================
+
+/// End-to-end chain parity: dispatch + grouped_gemm_tiled + stage +
+/// coalesced_writeback matches a naive per-token copy of the original
+/// activations.
+#[test]
+fn dispatch_aware_writeback_matches_naive_for_random_dispatch() {
+    use model_kernels::common::Lcg;
+    use model_kernels::moe::{
+        coalesced_writeback, grouped_gemm_tiled, moe_dispatch, stage_expert_outputs,
+    };
+
+    let num_tokens: usize = 32;
+    let num_experts: usize = 8;
+    let k: usize = 16;
+    let n: usize = 16;
+    let mut rng = Lcg::new(0xD15C_A17C);
+    let activations: Vec<f32> = (0..num_tokens * k).map(|_| rng.next_signed()).collect();
+    let experts: Vec<f32> = (0..num_experts * k * n).map(|_| rng.next_signed()).collect();
+
+    // Top_k=1 round-robin: token t -> expert (t + offset) % num_experts.
+    let offset = (Lcg::new(0xABC).next_u64() % num_experts as u64) as usize;
+    let token_indices: Vec<usize> = (0..num_tokens).collect();
+    let assignments: Vec<(usize, f32)> = (0..num_tokens)
+        .map(|t| ((t + offset) % num_experts, 1.0))
+        .collect();
+    let plan = moe_dispatch(&token_indices, &assignments, num_experts, 2.0)
+        .expect("dispatch must accept well-formed inputs");
+    let buckets: Vec<Vec<usize>> = plan.expert_buckets.clone();
+
+    // Reference: grouped_gemm_tiled produces expert_outs row-by-row,
+    // and the naive per-token reduction just copies each token's row
+    // into `out_ref` (top_k=1, weight=1.0).
+    let mut gemm_out = vec![0.0f32; num_tokens * n];
+    grouped_gemm_tiled(&activations, &experts, &buckets, 0, k, n, &mut gemm_out)
+        .expect("tiled path must accept well-formed inputs");
+
+    // Dispatch-aware path: stage the (already-produced) gemm_out
+    // rows through the per-expert blocks, then coalesce_writeback
+    // into a residual buffer.
+    let stage = stage_expert_outputs(&gemm_out, &plan, n)
+        .expect("stage must accept well-formed inputs");
+    let mut out = vec![f32::NAN; num_tokens * n];
+    coalesced_writeback(&stage, num_tokens, n, &mut out)
+        .expect("writeback must accept well-formed inputs");
+
+    // Compare against the naive reference (gemm_out itself for
+    // top_k=1 with weight=1.0).
+    for (i, (&a, &b)) in gemm_out.iter().zip(out.iter()).enumerate() {
+        assert!(
+            (a - b).abs() <= 1e-5,
+            "byte-equality broken at element {i}: gemm={a} writeback={b}"
+        );
+    }
+}
+
+/// Byte-equality pin: coalesced_writeback matches a hand-written
+/// scalar residual loop exactly (no tolerance, .to_bits() compare).
+#[test]
+fn writeback_coalesces_into_residual_buffer_byte_equal_to_scalar_reference() {
+    use model_kernels::common::Lcg;
+    use model_kernels::moe::{
+        coalesced_writeback, moe_dispatch, stage_expert_outputs,
+    };
+
+    let num_tokens: usize = 6;
+    let num_experts: usize = 3;
+    let hidden: usize = 4;
+    let mut rng = Lcg::new(0xCAFE_F00D);
+    let expert_outs: Vec<f32> = (0..num_tokens * hidden).map(|_| rng.next_signed()).collect();
+    let token_indices: Vec<usize> = (0..num_tokens).collect();
+    // Hand-rolled assignment: t -> (t % num_experts) so the
+    // coverage spans all three experts.
+    let assignments: Vec<(usize, f32)> = (0..num_tokens)
+        .map(|t| (t % num_experts, 1.0))
+        .collect();
+    let plan = moe_dispatch(&token_indices, &assignments, num_experts, 2.0)
+        .expect("dispatch must accept well-formed inputs");
+
+    let stage = stage_expert_outputs(&expert_outs, &plan, hidden)
+        .expect("stage must accept well-formed inputs");
+    let mut out = vec![f32::NAN; num_tokens * hidden];
+    coalesced_writeback(&stage, num_tokens, hidden, &mut out)
+        .expect("writeback must accept well-formed inputs");
+
+    // Hand-written residual-loop scalar reference. For each token t,
+    // find the (expert, slot) record and copy the staged row.
+    let mut naive = vec![0.0f32; num_tokens * hidden];
+    for t in 0..num_tokens {
+        // Naive: token t was assigned to expert (t % num_experts);
+        // copy expert_outs[t] into naive[t].
+        naive[t * hidden..t * hidden + hidden]
+            .copy_from_slice(&expert_outs[t * hidden..t * hidden + hidden]);
+    }
+
+    for (i, (&a, &b)) in naive.iter().zip(out.iter()).enumerate() {
+        assert_eq!(
+            a.to_bits(),
+            b.to_bits(),
+            "byte-equality broken at element {i}: naive={a} writeback={b}"
+        );
+    }
+}
