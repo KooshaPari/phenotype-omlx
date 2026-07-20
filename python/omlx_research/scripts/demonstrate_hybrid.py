@@ -11,7 +11,11 @@ No pytorch fallback, no llamacpp-as-strategy — only the strategy's declared
 compatible_backends are used.
 """
 import sys, time, asyncio
-sys.path.insert(0, "/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/python")
+# Repo-relative import path (FR-5 E2 — no hard-coded absolute repos python join).
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_ROOT / "python"))
 
 from omlx_research.nanovm import (
     discover_plugins, list_available_backends, list_available_strategies,

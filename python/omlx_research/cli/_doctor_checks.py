@@ -38,6 +38,8 @@ from ._doctor_shared import (
 #   * `_doctor_extra_kernel.py` — package version +
 #                                 regress-baseline dispatch envelope
 from ._doctor_extra_niah import (  # noqa: E402,F401  (re-export)
+    julia_required_on_eval_path,
+    niah_benchmark_non_legacy_path,
     niah_benchmark_present,
 )
 from ._doctor_extra_eval import (  # noqa: E402,F401  (re-export)

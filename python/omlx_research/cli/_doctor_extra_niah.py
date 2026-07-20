@@ -22,11 +22,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from typing import Optional
 
 from ._doctor_shared import (
+    FAIL,
     PASS,
     WARN,
     Check,
@@ -36,9 +38,17 @@ from ._doctor_shared import (
 
 __all__ = [
     "niah_benchmark_present",
+    "niah_benchmark_non_legacy_path",
+    "julia_required_on_eval_path",
     "_load_niah_results",
     "_find_niah_benchmark",
 ]
+
+_LEGACY_NIAH_PATH_MARKERS = (
+    'REPO / "phenotype-omlx/python"',
+    "REPO / 'phenotype-omlx/python'",
+    'Path("/Users/kooshapari/CodeProjects/Phenotype/repos")',
+)
 
 
 # ---------------------------------------------------------------------------
@@ -217,4 +227,111 @@ def niah_benchmark_present() -> Check:
             f"{rel} present but `python3 {rel} --help` exited {proc.returncode}: "
             f"{err_tail[:200]}"
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# FR-5 / E2 — reject legacy absolute phenotype-omlx/python path
+# ---------------------------------------------------------------------------
+
+
+def niah_benchmark_non_legacy_path() -> Check:
+    """FAIL if ``scripts/niah_benchmark.py`` still embeds the legacy path.
+
+    The absorbed-crate layout must import via repo-relative ``<root>/python``,
+    never a hard-coded absolute ``…/repos`` + ``phenotype-omlx/python`` join.
+    """
+    desc = (
+        "NIAH benchmark uses repo-relative python/ "
+        "(no legacy absolute repos path join)"
+    )
+    script_path = _find_niah_benchmark()
+    if script_path is None:
+        return Check(
+            id="niah_benchmark_non_legacy_path",
+            description=desc,
+            status=FAIL,
+            details="NIAH benchmark script missing — cannot verify path layout",
+        )
+    try:
+        with open(script_path, "r", encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError as e:
+        return Check(
+            id="niah_benchmark_non_legacy_path",
+            description=desc,
+            status=FAIL,
+            details=f"could not read {script_path}: {type(e).__name__}: {e}",
+        )
+    rel = os.path.relpath(script_path, project_root())
+    hits = [m for m in _LEGACY_NIAH_PATH_MARKERS if m in text]
+    if hits:
+        return Check(
+            id="niah_benchmark_non_legacy_path",
+            description=desc,
+            status=FAIL,
+            details=(
+                f"{rel} still embeds legacy marker {hits[0]!r} — use "
+                'Path(__file__).resolve().parents[1] / "python"'
+            ),
+        )
+    return Check(
+        id="niah_benchmark_non_legacy_path",
+        description=desc,
+        status=PASS,
+        details=f"{rel} — repo-relative python/ path (no legacy absolute join)",
+    )
+
+
+# ---------------------------------------------------------------------------
+# FR-5 / E1 — Julia required on eval path (fail loud)
+# ---------------------------------------------------------------------------
+
+
+def julia_required_on_eval_path() -> Check:
+    """FAIL if ``julia`` is not on PATH (FR-5 / toolchain policy).
+
+    Presence is mandatory for the NIAH/eval path. Missing Julia is not a
+    soft WARN — ship gates require fail-loud dependency signaling.
+    """
+    desc = "Julia required on NIAH/eval path (FR-5 E1; fail loud if missing)"
+    julia_bin = shutil.which("julia")
+    if julia_bin is None:
+        return Check(
+            id="julia_required_on_eval_path",
+            description=desc,
+            status=FAIL,
+            details=(
+                "julia not found on PATH — install Julia and ensure `julia` "
+                "resolves before running NIAH/eval (no optional/stub path)"
+            ),
+        )
+    version = ""
+    try:
+        proc = subprocess.run(
+            [julia_bin, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if proc.returncode == 0:
+            version = (proc.stdout or proc.stderr or "").strip().splitlines()[0]
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return Check(
+            id="julia_required_on_eval_path",
+            description=desc,
+            status=FAIL,
+            details=(
+                f"julia found at {julia_bin} but `--version` failed: "
+                f"{type(e).__name__}: {e}"
+            ),
+        )
+    details = f"{julia_bin}"
+    if version:
+        details = f"{julia_bin} ({version})"
+    return Check(
+        id="julia_required_on_eval_path",
+        description=desc,
+        status=PASS,
+        details=details,
     )

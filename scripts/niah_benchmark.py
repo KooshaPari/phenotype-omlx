@@ -35,8 +35,10 @@ os.environ["HF_HUB_OFFLINE"] = "0"
 os.environ["HF_HOME"] = "/Users/kooshapari/.cache/huggingface"
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "0")
 
-REPO = Path("/Users/kooshapari/CodeProjects/Phenotype/repos")
-sys.path.insert(0, str(REPO / "phenotype-omlx/python"))
+# Absorbed-crate / worktree layout: always import from this repo's python/.
+# Never use a hard-coded absolute repos/.../python sys.path (FR-5 E2).
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "python"))
 
 # Heavy / optional imports are deferred so `--help` (and any other
 # argparse-only invocation) works without mlx / mlx_lm installed.
@@ -228,6 +230,20 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
 
 # ── Main ─────────────────────────────────────────────────────────────────
 
+def require_julia() -> None:
+    """FR-5 E1: Julia is mandatory on the NIAH eval path — fail loud if missing."""
+    import shutil
+
+    if shutil.which("julia") is None:
+        print(
+            "ERROR: julia is required on the NIAH eval path (FR-5 / E1). "
+            "Install Julia and ensure `julia` is on PATH "
+            "(no optional/stub fallback).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def main():
     parser = argparse.ArgumentParser(description="NIAH benchmark for TurboQuant+ MLX")
     parser.add_argument("--lengths", type=int, nargs="+",
@@ -244,6 +260,9 @@ def main():
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for needle/filler")
     args = parser.parse_args()
+
+    # After argparse so `--help` still works without Julia; real runs fail loud.
+    require_julia()
 
     random.seed(args.seed)
 

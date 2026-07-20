@@ -106,6 +106,8 @@ CHECKS: list[Callable[[], Check]] = [
     # modules (see _doctor_extra_{niah,eval,kernel}.py).
     checks.omlx_research_version,
     checks.niah_benchmark_present,
+    checks.niah_benchmark_non_legacy_path,
+    checks.julia_required_on_eval_path,
     checks.eval_harness_subcommand_runnable,
     checks.regress_baseline_dispatch_envelope,
     # Added 2026-07-19 (turn-5) — see _doctor_turn5_checks.py.
