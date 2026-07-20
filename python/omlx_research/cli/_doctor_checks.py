@@ -53,9 +53,19 @@ from ._doctor_turn5_checks import (  # noqa: E402,F401  (re-export)
     dispatch_script_vllm_exists,
     niah_regression_baseline_exists,
 )
+# Turn-10 INTERNAL checks live in two sibling modules to keep each
+# file at or below the 500-line cap. After turn-12 measured
+# ``_doctor_internal_checks.py`` at 576 lines, the two longest checks
+# (``metal_runtime_lib_test_count_at_least_25`` and
+# ``python_cli_subcommand_count_at_least_6``) were carved out into
+# :mod:`omlx_research.cli._doctor_internal_checks_split`. Both halves
+# are re-exported here so the existing ``checks.<name>`` access
+# pattern keeps working.
 from ._doctor_internal_checks import (  # noqa: E402,F401  (re-export)
     coverage_tag_count_at_least_25,
     eval_harness_suite_count_at_least_4,
+)
+from ._doctor_internal_checks_split import (  # noqa: E402,F401  (re-export)
     metal_runtime_lib_test_count_at_least_25,
     python_cli_subcommand_count_at_least_6,
 )
