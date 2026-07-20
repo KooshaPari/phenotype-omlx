@@ -19,6 +19,7 @@ Subcommands:
   promote <kernel-id>    — validate against --gates, sign and cache PromotionRecord
   quarantine <kernel-id> — append a Hold/Rollback audit-trail entry
   gates <list|add|remove|check> <kernel-id> — CRUD quality-gate configs
+  vpu-dashboard          — FR-7 oMLX vPU dashboard (health + status + panel)
 """
 
 from __future__ import annotations
@@ -312,6 +313,20 @@ def main(argv: Optional[list[str]] = None) -> int:
                          help="emit a JSON envelope to stdout")
 
     p.set_defaults(fn=cmd_gates)
+
+    # ----------------------------------------------------------- vpu-dashboard
+    def _cmd_vpu_dashboard(a: argparse.Namespace) -> int:
+        from omlx_research.vpu_dashboard import serve
+
+        return serve(host=a.host, port=a.port)
+
+    p = sub.add_parser(
+        "vpu-dashboard",
+        help="FR-7: serve canonical oMLX vPU dashboard (panel + /health + status JSON)",
+    )
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8787)
+    p.set_defaults(fn=_cmd_vpu_dashboard)
 
     args = parser.parse_args(argv)
 

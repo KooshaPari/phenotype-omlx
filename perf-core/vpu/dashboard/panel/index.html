@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>oMLX vPU Dashboard</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0f1419; --fg: #e7ecf3; --muted: #8b98a8; --accent: #3d9cf0; }
+    body { margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); color: var(--fg); }
+    main { max-width: 52rem; margin: 0 auto; padding: 2.5rem 1.25rem; }
+    h1 { font-size: 1.35rem; letter-spacing: 0.04em; margin: 0 0 0.35rem; }
+    p { color: var(--muted); margin: 0 0 1.5rem; line-height: 1.45; }
+    a { color: var(--accent); }
+    pre { background: #161d26; border: 1px solid #243041; padding: 1rem; overflow: auto; font-size: 0.8rem; }
+    .pill { display: inline-block; border: 1px solid #243041; padding: 0.15rem 0.55rem; color: var(--muted); font-size: 0.75rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="pill">FR-7 · oMLX · Salmon</p>
+    <h1>vPU dashboard</h1>
+    <p>Canonical panel for polyglot tier health, eval, and promotion snapshots. Not the pheno-harness UI.</p>
+    <p>
+      <a href="/vpu/health">/vpu/health</a> ·
+      <a href="/vpu/api/v1/status">/vpu/api/v1/status</a>
+    </p>
+    <pre id="status">loading…</pre>
+  </main>
+  <script>
+    fetch("/vpu/api/v1/status").then(r => r.json()).then(j => {
+      document.getElementById("status").textContent = JSON.stringify(j, null, 2);
+    }).catch(e => {
+      document.getElementById("status").textContent = String(e);
+    });
+  </script>
+</body>
+</html>

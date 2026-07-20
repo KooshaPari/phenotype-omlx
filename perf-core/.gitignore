@@ -1,1 +1,4 @@
-vpu/
+# Generated / local agent crates (not part of FR-7 dashboard surface).
+vpu/*
+!vpu/dashboard/
+!vpu/dashboard/**
