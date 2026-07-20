@@ -269,6 +269,7 @@ mod discrete_diffusion_sampler;
 mod discrete_diffusion_schedule;
 mod discrete_diffusion_schedule_derivative;
 mod discrete_diffusion_schedule_convexity;
+mod discrete_diffusion_schedule_midpoint;
 mod grouped_gemm_moe;
 mod lfm_routing;
 mod mod_routing;
