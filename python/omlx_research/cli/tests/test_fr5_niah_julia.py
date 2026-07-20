@@ -149,3 +149,88 @@ def test_niah_qwen35_live_artifact_is_qwen35():
     assert data["exact_match"] is True
     assert data.get("architecture_caveat")
     assert data.get("kv_modes_applicable") is False
+
+
+def test_niah_prompt_ids_hit_requested_token_length():
+    """NIAH prompt construction must produce the requested token count exactly."""
+
+    import importlib.util
+
+    script = Path(project_root()) / "scripts" / "niah_benchmark.py"
+    spec = importlib.util.spec_from_file_location("niah_benchmark", script)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    class FakeTokenizer:
+        def encode(self, text):
+            return list(range(len(text.split())))
+
+    prompt_ids = mod.build_needle_prompt_ids(
+        FakeTokenizer(), 128, "the secret code is 123-456-alpha"
+    )
+    assert len(prompt_ids) == 128
+
+
+def test_niah_does_not_call_removed_turbo_cache_compress_api():
+    """TurboKVCache compression must be reported through its current API only."""
+
+    script = Path(project_root()) / "scripts" / "niah_benchmark.py"
+    text = script.read_text(encoding="utf-8")
+    assert "c.compress()" not in text
+    assert "measure_turbo_cache_metrics" in text
+    assert "compressed_layers" in text
+    assert "make_sampler(temp=0.0)" in text
+
+
+def test_measure_turbo_cache_metrics_full_attn_only():
+    """FR-5 E3: metrics count TurboKV layers only; packed bytes ⇒ effective."""
+
+    import importlib.util
+
+    script = Path(project_root()) / "scripts" / "niah_benchmark.py"
+    spec = importlib.util.spec_from_file_location("niah_benchmark", script)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    class _Arr:
+        def __init__(self, nbytes: int):
+            self.nbytes = nbytes
+
+    class TurboKVCache:  # noqa: N801 — mirror runtime type name for isinstance-free check
+        def __init__(self, *, compressed: bool, packed: int = 0, raw: int = 0):
+            self._is_compressed = compressed
+            self._packed_keys = _Arr(packed) if packed else None
+            self._packed_values = None
+            self._key_norms = None
+            self._value_norms = None
+            self._raw_keys = _Arr(raw) if raw else None
+            self._raw_values = None
+            self._fp_keys = None
+            self._fp_values = None
+            self._decoded_keys = None
+            self._decoded_values = None
+            self._pending_raw_keys = []
+            self._pending_raw_values = []
+
+    class KVCache:
+        pass
+
+    caches = [
+        KVCache(),
+        TurboKVCache(compressed=False, raw=1000),
+        TurboKVCache(compressed=True, packed=200, raw=0),
+        KVCache(),
+    ]
+    m = mod.measure_turbo_cache_metrics(caches)
+    assert m["turbo_layers"] == 2
+    assert m["attention_layers"] == 2
+    assert m["compressed_layers"] == 1
+    assert m["kv_packed_bytes"] == 200
+    assert m["kv_raw_bytes"] == 1000
+    assert m["compression_effective"] is True
+
+    empty = mod.measure_turbo_cache_metrics([KVCache(), KVCache()])
+    assert empty["turbo_layers"] == 0
+    assert empty["compression_effective"] is False

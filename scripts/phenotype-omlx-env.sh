@@ -38,7 +38,7 @@ fi
 # subtree, not the full turboquant_plus source tree (which would shadow
 # the venv's numpy on Python 3.12).
 OMLX_TURBOQUANT_PERSISTENT="${HOME}/.omlx/turboquant-plus/mlx/nn/layers"
-if [[ -d "${OMLX_TURBOQUANT_PERSISTENT}/turbo_kv_cache.py" ]]; then
+if [[ -f "${OMLX_TURBOQUANT_PERSISTENT}/turbo_kv_cache.py" ]]; then
     # The file lives at .../mlx/nn/layers/turbo_kv_cache.py, so the
     # importable path is the parent of `mlx/`, which is
     # `~/.omlx/turboquant-plus/`.
