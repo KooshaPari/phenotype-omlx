@@ -118,3 +118,34 @@ def test_niah_live_artifact_must_not_overwrite_envelope_name():
     spec.loader.exec_module(mod)
     rc = mod.main(["--output", "niah_results.json", "--server-url", "http://127.0.0.1:9"])
     assert rc == 2
+
+
+def test_niah_qwen35_live_rejects_qwen25():
+    """FR-5 E3: helper must refuse Qwen2.5 / non-Qwen3.5 model ids."""
+
+    import importlib.util
+
+    script = Path(project_root()) / "scripts" / "niah_qwen35_live.py"
+    spec = importlib.util.spec_from_file_location("niah_qwen35_live", script)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    try:
+        mod._require_qwen35("mlx-community/Qwen2.5-0.5B-Instruct-4bit")
+        raise AssertionError("expected SystemExit")
+    except SystemExit as e:
+        assert "Qwen3.5" in str(e)
+    mod._require_qwen35("Qwen/Qwen3.5-0.8B")  # no raise
+
+
+def test_niah_qwen35_live_artifact_is_qwen35():
+    """FR-5 E3 acceptance artifact must be Qwen3.5 live_verified."""
+
+    path = Path(project_root()) / "research" / "fr5_niah_qwen35_live.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert "Qwen3.5" in data["model"]
+    assert "Qwen2.5" not in data["model"]
+    assert data["evidence_label"] == "live_verified"
+    assert data["exact_match"] is True
+    assert data.get("architecture_caveat")
+    assert data.get("kv_modes_applicable") is False

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "kind": "niah_qwen35_live",
+  "evidence_label": "live_verified",
+  "reported": true,
+  "synthetic": false,
+  "model": "Qwen/Qwen3.5-0.8B",
+  "backend": "mlx_lm_inprocess_plain_generate",
+  "run_at": "2026-07-20T10:20:03Z",
+  "architecture_caveat": "Qwen3.5 (incl. OptiQ-4bit variants) may use linear attention; standard KV-cache compression metrics are not applicable (kitty-specs/complete-polyglot-vpu-stack/spec.md FR-5).",
+  "kv_modes_applicable": false,
+  "needle": "42-alpha",
+  "prompt": "Read the passage and reply with ONLY the secret code.\n\nPassage: Notes about weather and tea. The secret code is 42-alpha. More filler about cats.\n\nSecret code:",
+  "answer": "42-alpha\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A passage (\"Notes about weather",
+  "exact_match": true,
+  "partial_match": false,
+  "load_seconds": 3.591,
+  "generate_seconds": 6.247
+}
