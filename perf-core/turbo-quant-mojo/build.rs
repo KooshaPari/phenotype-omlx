@@ -1,4 +1,4 @@
-// build.rs — look for `libturbo_quant_mojo.a` produced by `mojo build`.
+// build.rs — look for `libturbo_quant_mojo.dylib` produced by `mojo build --emit shared-lib`.
 //
 // If found (and the `mojo` feature is enabled), link it. Otherwise emit
 // a warning and the crate compiles as a no-op stub.
@@ -22,22 +22,22 @@ fn main() {
         return;
     }
 
-    // Search for pre-built Mojo staticlib in common locations
+    // Search for pre-built Mojo shared library in common locations.
     let candidates = [
-        manifest_dir.join("libturbo_quant_mojo.a"),
-        out_dir.join("libturbo_quant_mojo.a"),
-        PathBuf::from("/usr/local/lib/libturbo_quant_mojo.a"),
-        PathBuf::from("/opt/homebrew/lib/libturbo_quant_mojo.a"),
+        manifest_dir.join("libturbo_quant_mojo.dylib"),
+        out_dir.join("libturbo_quant_mojo.dylib"),
+        PathBuf::from("/usr/local/lib/libturbo_quant_mojo.dylib"),
+        PathBuf::from("/opt/homebrew/lib/libturbo_quant_mojo.dylib"),
     ];
 
     if let Some(found) = candidates.iter().find(|p| p.exists()) {
         let parent = found.parent().unwrap();
         println!("cargo:rustc-link-search=native={}", parent.display());
-        println!("cargo:rustc-link-lib=static=turbo_quant_mojo");
+        println!("cargo:rustc-link-lib=dylib=turbo_quant_mojo");
         println!("cargo:info=mojo staticlib found at {}", found.display());
     } else {
-        println!("cargo:warning=libturbo_quant_mojo.a not found — turbo-quant-mojo is a no-op stub");
-        println!("cargo:warning=build with:  mojo build mojo-src/turbo_quant.mojo -o libturbo_quant_mojo.a");
+        println!("cargo:warning=libturbo_quant_mojo.dylib not found — turbo-quant-mojo is a no-op stub");
+        println!("cargo:warning=build with:  mojo build mojo-src/turbo_quant.mojo --emit shared-lib -o libturbo_quant_mojo.dylib");
         println!("cargo:warning=install:     modular install mojo");
     }
 }
