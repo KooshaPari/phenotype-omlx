@@ -2,7 +2,7 @@
   "schema_version": "0.1",
   "candidate": {
     "branch": "agent/argis-g2-candidate-20260719",
-    "head": "f0ac108",
+    "head": "d4c0def",
     "base": "4ae832e",
     "freeze_status": "scoped-evidence-ready",
     "evidence_complete": false
@@ -16,7 +16,7 @@
       "6816a10", "dff8b6b"
     ],
     "merge_base_with_declared_base": "0d6ddd6",
-    "ahead_behind_against_declared_base": {"ahead": 15, "behind": 12}
+    "ahead_behind_against_declared_base": {"ahead": 18, "behind": 12}
   },
   "changes": {
     "production_paths": [
@@ -51,7 +51,7 @@
     "json_validation": "python3 -m json.tool candidate-manifest.json: exit 0"
   },
   "remaining_freeze_gates": [
-    "Commit this manifest after JSON and diff checks",
+    "Manifest committed after JSON and diff checks",
     "Resolve or explicitly exclude the pre-existing untracked convergence plan",
     "Attach maximus's independent C/Go/Nim/Zig FFI evidence and classifications",
     "Salmon review of this exact candidate HEAD"
