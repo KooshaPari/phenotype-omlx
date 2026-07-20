@@ -535,6 +535,7 @@ dependencies = [
 name = "model-kernels"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "thiserror",
  "tree-attention",
 ]
