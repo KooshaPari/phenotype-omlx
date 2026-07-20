@@ -1,14 +1,8 @@
-# turbo-quant-mojo — Mojo implementation of TurboQuant
+# turbo-quant-mojo — Mojo implementation of TurboQuant.
 #
-# Build:
-#   1. Install Mojo:        `modular install mojo`
-#   2. Compile the C-ABI lib from this Mojo source:
-#        mojo build mojo-src/turbo_quant.mojo -o libturbo_quant_mojo.a --emit shared
-#   3. Cargo will pick it up via the build script.
-#
-# Without Mojo installed, this crate compiles but is a no-op stub
-# (matching the "no language forbidden" policy — the crate exists as a
-# scaffold for when the toolchain is added).
+# Build (required — build.rs invokes this automatically):
+#   modular install mojo
+#   mojo build mojo-src/turbo_quant.mojo -o libturbo_quant_mojo.dylib --emit shared-lib
 
 from std.memory import UnsafePointer, alloc
 
@@ -84,12 +78,6 @@ def encode_uniform(data: UnsafePointer[Float32, MutUntrackedOrigin], n: Int, bit
                 bp += 1
             bit_pos += Int(bits)
 
-    return QuantizedTensor(
-        shape_ptr=shape, shape_len=1,
-        packed_ptr=packed, packed_len=n_groups * per_group_packed_bytes,
-        scales_ptr=scales, scales_len=n_groups,
-        zeros_ptr=zeros, zeros_len=n_groups,
-    )
 
 def decode_uniform(q: QuantizedTensor, n: Int, group_size: Int, bits: UInt8, result: UnsafePointer[Float32, MutUntrackedOrigin]):
     """Inverse of encode_uniform — writes f32 reconstructed values into `out`."""
@@ -117,7 +105,20 @@ def decode_uniform(q: QuantizedTensor, n: Int, group_size: Int, bits: UInt8, res
             bit_pos += Int(bits)
         g += 1
 
+
 # ── C ABI exports (consumed by Rust `extern "C"` wrapper) ───────────────
+#
+# The Rust side computes n_groups / total_packed upfront, pre-allocates
+# the output buffers, and passes the raw address of the data pointer as
+# an Int (we reconstruct the UnsafePointer inside via the
+# `unsafe_from_address=` constructor). All output slots are typed as
+# `UnsafePointer[Int, ...]` so the caller can read pointer addresses
+# back as Int values without per-element type confusion.
+#
+# Note: Mojo 1.0.0b3's @export emits an "abi() effect required" warning.
+# Exported symbols must be visible to the Rust dylib linker — build fails
+# loudly if encode returns null output pointers (see Rust roundtrip tests).
+
 
 @export("tq_mojo_encode")
 def tq_mojo_encode(

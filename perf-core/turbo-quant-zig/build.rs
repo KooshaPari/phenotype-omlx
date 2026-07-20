@@ -1,7 +1,7 @@
-// build.rs — invoke `zig build-lib` to produce the C-ABI static library
-// that the Rust wrapper links against. Only emits `rustc-link-*` directives
-// when the .a file was actually produced, so the crate compiles cleanly
-// on hosts that don't have the `zig` toolchain installed.
+// build.rs — always compile the Zig kernel via `zig build-obj` and link it.
+//
+// Zig 0.16's `build-lib` emits misaligned macOS archives; we emit a Mach-O
+// object and link it directly. Missing toolchain or failed build panics.
 
 use std::env;
 use std::path::PathBuf;
@@ -12,61 +12,45 @@ fn main() {
     let zig_src = manifest_dir.join("zig-src");
     let zig_file = zig_src.join("root.zig");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-    let lib_path = out_dir.join("libturbo_quant_zig.a");
+    let obj_path = out_dir.join("turbo_quant_zig.o");
 
     println!("cargo:rerun-if-changed={}", zig_file.display());
     println!("cargo:rerun-if-env-changed=ZIG_PATH");
 
-    let zig = env::var("ZIG_PATH").ok()
+    let zig = env::var("ZIG_PATH")
+        .ok()
         .map(PathBuf::from)
-        .or_else(|| which("zig"));
-
-    let zig = match zig {
-        Some(z) => z,
-        None => {
-            // No zig toolchain available — skip the link entirely so cargo
-            // doesn't try to bind against a missing .a. The crate's Rust
-            // surface still compiles, but the native kernels will be no-ops
-            // (handled via the feature-gated code in src/lib.rs).
-            println!("cargo:warning=zig compiler not found in PATH; turbo-quant-zig will not be functional");
-            println!("cargo:warning=install with: brew install zig  (or set ZIG_PATH)");
-            return;
-        }
-    };
+        .or_else(|| which("zig"))
+        .unwrap_or_else(|| {
+            panic!(
+                "turbo-quant-zig: Zig compiler required in PATH \
+                 (install: brew install zig; or set ZIG_PATH)"
+            );
+        });
 
     let status = Command::new(&zig)
-        .arg("build-lib")
+        .arg("build-obj")
         .arg("-O")
         .arg("ReleaseFast")
         .arg(format!("--name"))
         .arg("turbo_quant_zig")
         .arg(format!("-femit-bin={}", lib_path.display()))
         .arg(&zig_file)
-        .status();
+        .status()
+        .unwrap_or_else(|e| panic!("turbo-quant-zig: failed to invoke zig build-obj: {e}"));
 
-    let produced = match status {
-        Ok(s) if s.success() => {
-            println!("cargo:info=zig build-lib succeeded -> {}", lib_path.display());
-            lib_path.exists()
-        }
-        Ok(s) => {
-            println!("cargo:warning=zig build-lib failed with exit code: {:?}", s.code());
-            false
-        }
-        Err(e) => {
-            println!("cargo:warning=failed to invoke zig: {}", e);
-            false
-        }
-    };
-
-    if produced {
-        // Only emit link directives when the .a was actually built
-        println!("cargo:rustc-link-search=native={}", out_dir.display());
-        println!("cargo:rustc-link-lib=static=turbo_quant_zig");
-        println!("cargo:info=linking against libturbo_quant_zig.a");
-    } else {
-        println!("cargo:warning=libturbo_quant_zig.a not produced; native bindings will be inert");
+    if !status.success() || !obj_path.exists() {
+        panic!(
+            "turbo-quant-zig: `zig build-obj` failed — \
+             cannot link native kernel (install: brew install zig)"
+        );
     }
+
+    println!("cargo:rustc-link-arg={}", obj_path.display());
+    println!(
+        "cargo:info=linking Zig object at {}",
+        obj_path.display()
+    );
 }
 
 fn which(name: &str) -> Option<PathBuf> {

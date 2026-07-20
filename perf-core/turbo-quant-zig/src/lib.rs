@@ -1,15 +1,9 @@
 // turbo-quant-zig — Rust wrapper for the Zig implementation.
 //
-// Build pipeline (build.rs, when feature = "zig"):
-//   1. `zig build-lib` produces `libturbo_quant_zig.a` (C ABI)
-//   2. We `extern "C"` declare those functions
-//   3. We expose them through a Rust-friendly API matching perf-core/turbo-quant
-//
-// All hot-path work runs in Zig (LLVM-compiled to native). The Rust wrapper
-// is zero-cost.
-//
-// Without `--features zig`, the crate compiles to a no-op stub (so the
-// workspace always builds, even when `zig` is not installed).
+// Requires the Zig compiler in PATH (`brew install zig`). build.rs compiles
+// zig-src/turbo_quant.zig via `zig build-lib` and links it unconditionally.
+
+use native::{zig_decode, zig_encode};
 
 #[cfg(feature = "zig")]
 use native::{zig_encode, zig_decode, zig_encode_v1, zig_decode_v1};
@@ -24,31 +18,13 @@ pub struct ZigQuantizedTensor {
 
 impl ZigQuantizedTensor {
     /// Encode `data` to TurboQuant via the Zig kernel.
-    /// Without feature "zig", returns an error stub.
     pub fn encode(data: &[f32], bits: u8, group_size: usize) -> Result<Self, String> {
-        #[cfg(feature = "zig")]
-        {
-            zig_encode(data, bits, group_size)
-        }
-        #[cfg(not(feature = "zig"))]
-        {
-            let _ = (data, bits, group_size);
-            Err("turbo-quant-zig: built without --features zig".to_string())
-        }
+        zig_encode(data, bits, group_size)
     }
 
     /// Decode a TurboQuant tensor.
-    /// Without feature "zig", returns zeros.
     pub fn decode(&self, n: usize, group_size: usize, bits: u8) -> Vec<f32> {
-        #[cfg(feature = "zig")]
-        {
-            zig_decode(&self.packed, &self.scales, &self.zeros, n, group_size, bits)
-        }
-        #[cfg(not(feature = "zig"))]
-        {
-            let _ = (n, group_size, bits);
-            vec![0.0; n]
-        }
+        zig_decode(&self.packed, &self.scales, &self.zeros, n, group_size, bits)
     }
 
     /// Encode via the versioned Native ABI v1 contract. Returns the matching
@@ -93,8 +69,6 @@ impl ZigQuantizedTensor {
     }
 }
 
-// ── Zig-native implementation ──────────────────────────────────────────
-#[cfg(feature = "zig")]
 mod native {
     use super::ZigQuantizedTensor;
     use std::os::raw::{c_uchar, c_void};
@@ -139,7 +113,9 @@ mod native {
     }
 
     pub(super) fn zig_encode(
-        data: &[f32], bits: u8, group_size: usize,
+        data: &[f32],
+        bits: u8,
+        group_size: usize,
     ) -> Result<ZigQuantizedTensor, String> {
         let mut shape_ptr: *mut usize = std::ptr::null_mut();
         let mut shape_len: usize = 0;
@@ -170,10 +146,10 @@ mod native {
             return Err("Zig tq_zig_encode returned false".to_string());
         }
 
-        let shape  = unsafe { std::slice::from_raw_parts(shape_ptr,  shape_len)  }.to_vec();
+        let shape = unsafe { std::slice::from_raw_parts(shape_ptr, shape_len) }.to_vec();
         let packed = unsafe { std::slice::from_raw_parts(packed_ptr, packed_len) }.to_vec();
         let scales = unsafe { std::slice::from_raw_parts(scales_ptr, scales_len) }.to_vec();
-        let zeros  = unsafe { std::slice::from_raw_parts(zeros_ptr,  zeros_len)  }.to_vec();
+        let zeros = unsafe { std::slice::from_raw_parts(zeros_ptr, zeros_len) }.to_vec();
 
         unsafe {
             tq_zig_free(shape_ptr  as *mut c_void, shape_len * std::mem::size_of::<usize>());
@@ -182,12 +158,21 @@ mod native {
             tq_zig_free(zeros_ptr  as *mut c_void, zeros_len * std::mem::size_of::<f32>());
         }
 
-        Ok(ZigQuantizedTensor { shape, packed, scales, zeros })
+        Ok(ZigQuantizedTensor {
+            shape,
+            packed,
+            scales,
+            zeros,
+        })
     }
 
     pub(super) fn zig_decode(
-        packed: &[u8], scales: &[f32], zeros: &[f32],
-        n: usize, group_size: usize, bits: u8,
+        packed: &[u8],
+        scales: &[f32],
+        zeros: &[f32],
+        n: usize,
+        group_size: usize,
+        bits: u8,
     ) -> Vec<f32> {
         let mut out = vec![0.0f32; n];
         if n == 0 {
@@ -294,16 +279,12 @@ mod native {
     }
 }
 
-// ── Tests ───────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn zig_stub_returns_error_without_feature() {
-        // When built without `--features zig`, encode returns an error.
-        // This makes the crate's behavior deterministic on any host.
+    fn zig_encode_decode_roundtrip() {
         let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
         let r = ZigQuantizedTensor::encode(&data, 4, 32);
         #[cfg(feature = "zig")]
