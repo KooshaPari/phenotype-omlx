@@ -128,6 +128,121 @@ mod tests {
     use super::*;
     use crate::common::Lcg;
 
+    // =========================================================================
+    // SOTA opt-in tests — historical note (turn-12 follow-up)
+    // =========================================================================
+    //
+    // Turn-11's forward-priority note (see
+    // `docs/sessions/20260718-metal-model-runtime/18_TURN_11_RESUME_NOTES.md`
+    // §13 line 200) recorded that `weighted_reduce_tiled` carries four
+    // `#[ignore]`-marked SOTA opt-in tests covering the f32 / f16 / bf16 / i8
+    // SIMD reference paths and instructed turn-12 to "lift these into the
+    // default test surface if CI carries the SIMD toolchain, or keep them
+    // gated behind a documented env flag if it does not."
+    //
+    // On inspection at turn-12, this historical claim does **not** match the
+    // checked-in code. `weighted_reduce_tiled` (added at commit `706b28d`
+    // on top of the archived SIMD baseline `6de65d0`) ships exactly five
+    // active tests below — none of them are `#[ignore]`-marked and none are
+    // named with the `sota_*` prefix. A repository-wide search confirms:
+    //
+    //   * no function or method named `weighted_reduce_simd*` exists in
+    //     `perf-core/` (the only SIMD-dispatch site is
+    //     `perf-core/turbo-quant/src/minmax.rs`, gated by
+    //     `#[cfg(target_arch = "aarch64")]` for the NEON path);
+    //   * the four candidate test names (`sota_f32_path_matches_simd_reference`,
+    //     `sota_f16_path_matches_simd_reference`,
+    //     `sota_bf16_path_matches_simd_reference`,
+    //     `sota_quantized_int8_path_matches_simd_reference`) appear in zero
+    //     files across the workspace, including under `.archive/`.
+    //
+    // In other words, the SIMD dispatch path for `weighted_reduce_tiled`
+    // was never wired in this branch — the present branch
+    // (`chore/archive-no-simd-lib-rs-2026-07-18`) was cut specifically to
+    // archive the experimental non-SIMD lib.rs variant (see commit
+    // `6de65d0 chore: archive experimental non-SIMD lib.rs variant`), and
+    // the SIMD path itself lives only in
+    // `.archive/lib.rs.no-simd-2026-07-18.bak` (a no-SIMD reference, not
+    // a SIMD implementation).
+    //
+    // Path-C resolution: do NOT introduce four `#[ignore]`-marked SOTA
+    // tests here until the SIMD reference path the tests would assert
+    // against actually exists. Doing so would create dead assertions
+    // pinned to a kernel that has not been merged, which is the precise
+    // failure mode the turn-11 note tried to flag.
+    //
+    // What each SOTA test will assert once the SIMD path lands:
+    //
+    // 1. `sota_f32_path_matches_simd_reference` —
+    //    `weighted_reduce_tiled_simd_f32(&expert_outs, &weights, ept, hidden,
+    //    &mut out)` must match `weighted_reduce_tiled` element-wise within
+    //    `1e-6` on random `f32` inputs of canonical Qwen-MoE shape
+    //    `(num_tokens=8, experts_per_token=3, hidden=128)`. Pins the
+    //    fused-multiply-add order across the SIMD tile so cross-tile
+    //    boundary sums cannot drift.
+    //
+    // 2. `sota_f16_path_matches_simd_reference` —
+    //    same parity contract as (1) but for the `f16` half-precision
+    //    reference path; tolerance widens to `1e-3` to accommodate `f16`
+    //    mantissa rounding. Asserts the down-cast
+    //    `f32 expert_outs → f16 → f32 out` round-trip stays within the
+    //    expected precision envelope.
+    //
+    // 3. `sota_bf16_path_matches_simd_reference` —
+    //    same parity contract as (1) but for `bf16` (bfloat16). Tolerance
+    //    `1e-2` (same dynamic range as `f32`, 7-bit mantissa). Pins the
+    //    bfloat16 SIMD lane width contract so a future migration to a
+    //    narrower SIMD lane does not silently degrade output.
+    //
+    // 4. `sota_quantized_int8_path_matches_simd_reference` —
+    //    asserts the quantized INT8 path matches the `f32` reference
+    //    within a scale-aware tolerance (typically `scale * 2^-7` where
+    //    `scale = max(|expert_outs|) / 127.0`). Pins the symmetric INT8
+    //    quantization + dequantization contract end-to-end across the
+    //    SIMD tile so the row-wise scale factor is applied correctly.
+    //
+    // Which kernel / commit should introduce that path:
+    //
+    //   * The next kernel on the metal-model-runtime forward DAG
+    //     (see `docs/sessions/20260718-metal-model-runtime/03_DAG_WBS.md`
+    //     lines 49–53) is the **dispatch-aware writeback stage**, not the
+    //     SIMD reference path itself. The SIMD reference for
+    //     `weighted_reduce_tiled` is a re-introduction of the work that
+    //     was archived at commit `6de65d0`; resurrecting it requires
+    //     first un-ignoring the `.archive/lib.rs.no-simd-2026-07-18.bak`
+    //     variant, then re-deriving the SIMD path against the current
+    //     `weighted_reduce_tiled` scalar-tile reference.
+    //   * The `KernelOp::MoeReduce` candidate in
+    //     `perf-core/kernel-registry/tests/sota_operators/coverage_matrix.rs`
+    //     already declares a `MoeReduceTiled` backend tagged `'moe_reduce'`;
+    //     the SIMD path is expected to slot in as a sibling backend
+    //     (e.g. `MoeReduceTiledSimd`) without disturbing the
+    //     `MoeReduceScalar` reference or the current SOTA selector
+    //     contract.
+    //
+    // How a contributor lifts this note (file an issue, link the DAG):
+    //
+    //   1. File an issue titled
+    //      "Add SIMD reference path for `weighted_reduce_tiled` (f32/f16/bf16/i8)"
+    //      and link the dispatch sub-DAG item from
+    //      `03_DAG_WBS.md` line 198 (the dispatch-aware writeback stage
+    //      item that immediately follows `weighted_reduce_tiled` in the
+    //      forward DAG).
+    //   2. Land the SIMD reference kernel in a sibling module
+    //      (`perf-core/model-kernels/src/moe/reduce_tiled_simd.rs` or
+    //      inline under `#[cfg(target_arch = "aarch64")]`, mirroring the
+    //      gating pattern in `perf-core/turbo-quant/src/minmax.rs`).
+    //   3. Re-derive the four `sota_*` tests listed above against the
+    //      new SIMD kernel, then merge them with **active** (no
+    //      `#[ignore]`) so they run in the default `cargo test` surface.
+    //      The 859 + 4 passing / 2 - 4 ignored target from the turn-12
+    //      task spec then lands cleanly.
+    //
+    // Until those steps complete, the five active tests below are the
+    // complete test surface for this module and the SIMD opt-in claim
+    // from turn-11 §13 remains a forward item, not a missing assertion.
+    // =========================================================================
+
     /// Build a deterministic `[num_tokens, experts_per_token, hidden]`
     /// expert-output tensor.
     fn deterministic_expert_outs(
