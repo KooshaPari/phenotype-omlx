@@ -243,6 +243,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     p.add_argument("kernel_id", help="candidate id (used as the cache filename)")
     p.add_argument("--gates", required=True,
                    help="comma-separated 'id=threshold' pairs, e.g. mmlu=0.85,gpqa=0.75")
+    p.add_argument(
+        "--report",
+        default=None,
+        help="path to eval-harness EvaluationReport JSON (FR-6; replaces synthetic evidence)",
+    )
     p.add_argument("--sign-key", default=None,
                    help="optional hex-encoded HMAC signing key")
     p.add_argument("--approver", default=None,

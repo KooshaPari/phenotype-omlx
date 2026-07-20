@@ -174,6 +174,50 @@ fn promotion_validator_hold_records_reason() {
 }
 
 #[test]
+fn promotion_validator_promotes_from_evaluation_report_fixture() {
+    // FR-6 P2: PromotionValidator consumes scores from eval-harness JSON.
+    let fixture = include_bytes!("../fixtures/evaluation_report_mmlu.json");
+    let evidence = QualityEvidence::from_evaluation_report_json(
+        fixture,
+        "rev-eval-fixture",
+        1_700_000_000_000,
+    )
+    .expect("parse EvaluationReport fixture");
+    assert_eq!(evidence.id, "mmlu");
+    assert!((evidence.score - 0.71).abs() < 1e-9);
+
+    let cand = make_candidate("a", BackendKind::Metal, min_max());
+    let record = PromotionRecord::new(
+        cand.id,
+        "rev-eval-fixture",
+        1_700_000_000_000,
+        "ci-bot-1",
+        vec![QualityGate::at_least("mmlu", 0.65)],
+        vec![evidence],
+        "FR-6: promote from EvaluationReport fixture",
+        None,
+    );
+    let v = PromotionValidator::default();
+    let action = v.promote(record, "ci-bot-1", "auto").expect("promote");
+    match action {
+        PromotionAction::Promote { record, decision } => {
+            assert_eq!(decision, "auto");
+            assert!(record.verify_content_hash());
+            assert_eq!(record.evidence[0].id, "mmlu");
+            assert!((record.evidence[0].score - 0.71).abs() < 1e-9);
+        }
+        _ => panic!("expected Promote variant"),
+    }
+}
+
+#[test]
+fn evaluation_report_json_rejects_malformed() {
+    let err = QualityEvidence::from_evaluation_report_json(b"{}", "rev", 1)
+        .expect_err("missing fields");
+    assert!(matches!(err, QualityError::InvalidEvaluationReport(_)));
+}
+
+#[test]
 fn promotion_action_serde_round_trip() {
     let cand = make_candidate("a", BackendKind::Metal, min_max());
     let record = passing_record(cand.id);

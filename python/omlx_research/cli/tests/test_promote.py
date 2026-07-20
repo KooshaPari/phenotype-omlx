@@ -25,6 +25,7 @@ from omlx_research.cli.commands.promote import (
     canonical_bytes,
     cmd_promote,
     content_hash,
+    evidence_from_evaluation_report,
     gate_passes,
     parse_gates,
     promotion_path,
@@ -351,6 +352,7 @@ def test_cmd_promote_json_output_is_structured(cache):
             approver="alice",
             decision="manual",
             json=True,
+            report=None,
         ))
     assert rc == 0
     payload = json.loads(io.stdout.getvalue())
@@ -360,3 +362,90 @@ def test_cmd_promote_json_output_is_structured(cache):
     assert payload["gate_count"] == 1
     assert payload["signature"] is not None
     assert len(payload["content_hash"]) == 64
+
+
+def test_evidence_from_evaluation_report_fixture(tmp_path):
+    """FR-6 P1/P3: import accuracy from EvaluationReport JSON."""
+    fixture = tmp_path / "evaluation_report_mmlu.json"
+    fixture.write_text(json.dumps({
+        "suite": "mmlu",
+        "task_count": 100,
+        "correct_count": 71,
+        "accuracy": 0.71,
+        "mean_score": 0.71,
+        "results": [],
+    }))
+    rows = evidence_from_evaluation_report(str(fixture))
+    assert len(rows) == 1
+    assert rows[0]["id"] == "mmlu"
+    assert rows[0]["score"] == 0.71
+    assert rows[0]["dataset_revision"] == "eval-harness:mmlu"
+
+
+def test_cmd_promote_from_report_fixture(cache, tmp_path):
+    """FR-6 P3: promote --report uses EvaluationReport scores (not synthetic)."""
+    fixture = tmp_path / "evaluation_report_mmlu.json"
+    fixture.write_text(json.dumps({
+        "suite": "mmlu",
+        "task_count": 100,
+        "correct_count": 71,
+        "accuracy": 0.71,
+        "mean_score": 0.71,
+        "results": [],
+    }))
+    with _IO() as io:
+        rc = cmd_promote(_ns(
+            kernel_id="knl-promote-report",
+            gates="mmlu=0.65",
+            sign_key=None,
+            approver="salmon",
+            decision="auto",
+            json=True,
+            report=str(fixture),
+        ))
+    assert rc == 0
+    payload = json.loads(io.stdout.getvalue())
+    assert payload["ok"] is True
+    assert payload["evidence"][0]["score"] == 0.71
+    assert payload["evidence"][0]["id"] == "mmlu"
+    rec = json.loads(open(promotion_path("knl-promote-report")).read())
+    assert "EvaluationReport" in rec["justification"]
+
+
+def test_cmd_promote_report_missing_returns_exit_2(cache):
+    with _IO() as io:
+        rc = cmd_promote(_ns(
+            kernel_id="knl-promote-noreport",
+            gates="mmlu=0.0",
+            sign_key=None,
+            approver="t",
+            decision="auto",
+            json=False,
+            report="/nonexistent/evaluation_report.json",
+        ))
+    assert rc == 2
+    assert "not found" in io.stderr.getvalue()
+
+
+def test_cmd_promote_report_gate_mismatch_rejects(cache, tmp_path):
+    fixture = tmp_path / "gpqa.json"
+    fixture.write_text(json.dumps({
+        "suite": "gpqa",
+        "accuracy": 0.9,
+        "task_count": 1,
+        "correct_count": 1,
+        "mean_score": 0.9,
+        "results": [],
+    }))
+    with _IO() as io:
+        rc = cmd_promote(_ns(
+            kernel_id="knl-promote-mismatch",
+            gates="mmlu=0.5",
+            sign_key=None,
+            approver="t",
+            decision="auto",
+            json=False,
+            report=str(fixture),
+        ))
+    assert rc == 2
+    assert "no evidence" in io.stderr.getvalue() or "promotion rejected" in io.stderr.getvalue()

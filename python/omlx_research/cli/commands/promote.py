@@ -23,9 +23,13 @@ On failure:
 - exit 2 with a structured error showing which gate failed and the
   observed/threshold values
 
+When ``--report PATH`` is supplied, evidence is imported from an
+eval-harness ``EvaluationReport`` JSON file (FR-6) instead of synthetic
+scores. Missing/malformed reports fail loud (exit 2).
+
 Exit codes:
     0 — record promoted (signed and cached)
-    2 — user error: malformed --gates, failed validation, bad key
+    2 — user error: malformed --gates, failed validation, bad key, bad report
     3 — internal error: cannot write cache file
 """
 
@@ -204,6 +208,48 @@ def _synthetic_evidence(kernel_id: str, gates: list[dict[str, Any]]) -> list[dic
     return out
 
 
+def evidence_from_evaluation_report(
+    report_path: str,
+    source_revision: str | None = None,
+) -> list[dict[str, Any]]:
+    """Import ``QualityEvidence`` rows from an eval-harness EvaluationReport JSON.
+
+    Mirrors ``QualityEvidence::from_evaluation_report_json`` in quality.rs:
+    suite name becomes the gate id (``_`` → ``-``); score is ``accuracy``.
+    """
+    try:
+        with open(report_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError as e:
+        raise ValueError(f"--report path not found: {report_path}") from e
+    except OSError as e:
+        raise ValueError(f"--report unreadable: {e}") from e
+    except json.JSONDecodeError as e:
+        raise ValueError(f"--report is not valid JSON: {e}") from e
+
+    if not isinstance(data, dict):
+        raise ValueError("--report JSON must be an object")
+    suite = data.get("suite")
+    accuracy = data.get("accuracy")
+    if not isinstance(suite, str) or not suite.strip():
+        raise ValueError("--report missing non-empty string field 'suite'")
+    if not isinstance(accuracy, (int, float)) or accuracy != accuracy:  # NaN
+        raise ValueError("--report field 'accuracy' must be a finite number")
+    if accuracy in (float("inf"), float("-inf")):
+        raise ValueError("--report field 'accuracy' must be a finite number")
+
+    gate_id = suite.replace("_", "-")
+    src = source_revision or f"eval-report:{os.path.basename(report_path)}"
+    return [{
+        "id": gate_id,
+        "score": float(accuracy),
+        "dataset_revision": f"eval-harness:{gate_id}",
+        "source_revision": src,
+        "captured_at_unix_ms": int(time.time() * 1000),
+        "note": f"imported from EvaluationReport JSON ({report_path})",
+    }]
+
+
 def _load_cached_record(kernel_id: str) -> dict[str, Any] | None:
     """Return the cached record if present, else ``None``.
 
@@ -227,25 +273,31 @@ def build_candidate(
     kernel_id: str,
     gates: list[dict[str, Any]],
     cached: dict[str, Any] | None,
+    report_evidence: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Build an in-memory candidate PromotionRecord from gates + cached evidence.
+    """Build an in-memory candidate PromotionRecord from gates + evidence.
 
-    When a cached record exists we reuse its ``evidence`` field verbatim
-    (so the gate scores are stable across runs). Otherwise we synthesize
-    deterministic evidence.
+    Evidence precedence:
+    1. ``report_evidence`` from ``--report`` (FR-6 EvaluationReport import)
+    2. cached record ``evidence`` when present
+    3. deterministic synthetic evidence (CLI smoke without a harness)
 
     The returned dict has the canonical field order; ``signature`` and
     ``content_hash`` are populated by the caller.
     """
-    if cached is not None and isinstance(cached.get("evidence"), list):
+    if report_evidence is not None:
+        evidence = list(report_evidence)
+        src_rev = report_evidence[0]["source_revision"] if report_evidence else "eval-report"
+    elif cached is not None and isinstance(cached.get("evidence"), list):
         evidence = list(cached["evidence"])
+        src_rev = (
+            cached["source_revision"]
+            if isinstance(cached.get("source_revision"), str)
+            else "synthetic-rev-0"
+        )
     else:
         evidence = _synthetic_evidence(kernel_id, gates)
-
-    # Carry the source_revision forward if the cache had one.
-    src_rev = "synthetic-rev-0"
-    if cached and isinstance(cached.get("source_revision"), str):
-        src_rev = cached["source_revision"]
+        src_rev = "synthetic-rev-0"
 
     tuning_id = None
     if cached and isinstance(cached.get("tuning_record_id"), str):
@@ -254,6 +306,8 @@ def build_candidate(
     justification = ""
     if cached and isinstance(cached.get("justification"), str):
         justification = cached["justification"]
+    if report_evidence is not None:
+        justification = "FR-6: evidence imported from EvaluationReport JSON"
 
     return {
         "candidate_id": kernel_id,
@@ -395,15 +449,24 @@ def _json_summary(
 # ---------------------------------------------------------------------------
 
 def cmd_promote(args: argparse.Namespace) -> int:
-    """CLI entry point: ``promote <kernel_id> --gates ... [--sign-key ...] [--json]``"""
+    """CLI entry point: ``promote <kernel_id> --gates ... [--report ...] [--sign-key ...]``"""
     try:
         gates = parse_gates(args.gates)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
 
-    cached = _load_cached_record(args.kernel_id)
-    candidate = build_candidate(args.kernel_id, gates, cached)
+    report_path = getattr(args, "report", None)
+    report_evidence: list[dict[str, Any]] | None = None
+    if report_path:
+        try:
+            report_evidence = evidence_from_evaluation_report(report_path)
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+
+    cached = None if report_evidence is not None else _load_cached_record(args.kernel_id)
+    candidate = build_candidate(args.kernel_id, gates, cached, report_evidence)
 
     # Validate before signing/hashing so a bad gate doesn't bloat the cache.
     try:

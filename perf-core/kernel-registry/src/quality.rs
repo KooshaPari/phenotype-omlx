@@ -143,6 +143,49 @@ impl QualityEvidence {
     pub fn satisfies(&self, gate: &QualityGate) -> bool {
         self.id == gate.id && gate.passes(self.score)
     }
+
+    /// Build evidence from an eval-harness [`EvaluationReport`] JSON blob.
+    ///
+    /// Thin adapter: does **not** depend on the `eval-harness` crate. Expects
+    /// the public report shape (`suite`, `accuracy`, …). Gate id is the suite
+    /// name with `_` → `-` (e.g. `terminal_bench` → `terminal-bench`).
+    ///
+    /// Score is `accuracy` (fraction correct). `dataset_revision` is
+    /// `eval-harness:<suite>`.
+    pub fn from_evaluation_report_json(
+        bytes: &[u8],
+        source_revision: impl Into<String>,
+        captured_at_unix_ms: u64,
+    ) -> Result<Self, QualityError> {
+        #[derive(Deserialize)]
+        struct EvaluationReportView {
+            suite: String,
+            accuracy: f64,
+        }
+
+        let view: EvaluationReportView = serde_json::from_slice(bytes).map_err(|e| {
+            QualityError::InvalidEvaluationReport(format!("parse EvaluationReport JSON: {e}"))
+        })?;
+        if view.suite.trim().is_empty() {
+            return Err(QualityError::InvalidEvaluationReport(
+                "suite must be a non-empty string".into(),
+            ));
+        }
+        if !view.accuracy.is_finite() {
+            return Err(QualityError::InvalidEvaluationReport(
+                "accuracy must be a finite f64".into(),
+            ));
+        }
+        let id = view.suite.replace('_', "-");
+        Ok(Self {
+            id: id.clone(),
+            score: view.accuracy,
+            dataset_revision: format!("eval-harness:{id}"),
+            source_revision: source_revision.into(),
+            captured_at_unix_ms,
+            note: "imported from EvaluationReport JSON".into(),
+        })
+    }
 }
 
 /// Optional attachment to a [`crate::record::TuningRecord`] that carries
@@ -220,6 +263,8 @@ pub enum QualityError {
     PromotionGateMissingEvidence { gate: String },
     #[error("promotion rejected: signature mismatch (expected={expected}, got={got})")]
     SignatureMismatch { expected: String, got: String },
+    #[error("invalid EvaluationReport JSON: {0}")]
+    InvalidEvaluationReport(String),
 }
 
 /// Promotion audit-trail artifact. Immutable once written; the
