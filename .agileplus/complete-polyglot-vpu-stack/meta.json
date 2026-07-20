@@ -1,0 +1,10 @@
+{
+  "feature_slug": "complete-polyglot-vpu-stack",
+  "merged_branches": [
+    "feature/complete-polyglot-vpu-stack/wp01"
+  ],
+  "shipped_at": "2026-07-20T11:24:03.680141+00:00",
+  "state": "shipped",
+  "target_branch": "main",
+  "wp_count": 1
+}
