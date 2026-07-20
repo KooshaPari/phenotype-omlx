@@ -1,18 +1,18 @@
 // build.rs — look for `libturbo_quant_mojo.dylib` produced by `mojo build --emit shared-lib`.
 //
-// Missing Mojo SDK or a failed `mojo build` is a hard error (fail loudly).
+// If found (and the `mojo` feature is enabled), link it. Otherwise emit
+// a warning and the crate compiles as a no-op stub.
 
 use std::env;
 use std::path::PathBuf;
-use std::process::Command;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let mojo_src = manifest_dir.join("mojo-src").join("turbo_quant.mojo");
 
     println!("cargo:rerun-if-changed={}", mojo_src.display());
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-env-changed=MOJO_PATH");
 
     // Gate the native link behind the `mojo` feature. Without it the crate
     // builds as a Rust-only stub that returns graceful no-ops.

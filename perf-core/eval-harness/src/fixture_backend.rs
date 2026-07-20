@@ -4,7 +4,8 @@
 //! `run_suite` can be exercised end-to-end against checked-in task loaders
 //! without a live model runtime.
 
-use crate::{Backend, TaskSpec};
+use crate::backend::{Backend, BackendError, Completion, Likelihood};
+use crate::TaskSpec;
 
 /// Backend that completes with the expected answer for a matching prompt.
 ///
@@ -29,8 +30,36 @@ impl<'a> OracleBackend<'a> {
 }
 
 impl Backend for OracleBackend<'_> {
-    fn complete(&self, prompt: &str, _max_tokens: usize) -> (String, f64) {
-        (self.expected_for_prompt(prompt), 0.0)
+    fn complete(
+        &self,
+        prompt: &str,
+        _max_tokens: usize,
+    ) -> std::result::Result<Completion, BackendError> {
+        let text = self.expected_for_prompt(prompt);
+        Ok(Completion {
+            text,
+            prompt_tokens: 0,
+            completion_tokens: 1,
+            latency_ms: 0.0,
+        })
+    }
+
+    fn log_likelihood(
+        &self,
+        prompt: &str,
+        continuation: &str,
+    ) -> std::result::Result<Likelihood, BackendError> {
+        let expected = self.expected_for_prompt(prompt);
+        let log_probability = if continuation.trim() == expected.trim() {
+            0.0
+        } else {
+            -10.0
+        };
+        Ok(Likelihood {
+            log_probability,
+            token_count: 1,
+            latency_ms: 0.0,
+        })
     }
 }
 
@@ -43,14 +72,15 @@ mod tests {
     fn oracle_backend_returns_expected_letter() {
         let tasks = [TaskSpec {
             id: "q1".into(),
-            suite: Suite::MMLU,
+            suite: Suite::Mmlu,
             prompt: "Pick one\nAnswer:".into(),
             expected: Some("B".into()),
-            choices: None,
+            choices: vec!["A".into(), "B".into()],
+            criteria: None,
         }];
         let backend = OracleBackend::new(&tasks);
-        let (completion, latency_ms) = backend.complete("Pick one\nAnswer:", 8);
-        assert_eq!(completion, "B");
-        assert_eq!(latency_ms, 0.0);
+        let completion = backend.complete("Pick one\nAnswer:", 8).unwrap();
+        assert_eq!(completion.text, "B");
+        assert_eq!(completion.latency_ms, 0.0);
     }
 }

@@ -25,6 +25,7 @@
 pub mod backend;
 pub mod dataset;
 pub mod error;
+pub mod fixture_backend;
 pub mod gpqa;
 pub mod mmlu;
 pub mod perplexity;
@@ -35,6 +36,7 @@ pub mod terminal_bench;
 
 pub use backend::{Backend, BackendCompletion};
 pub use error::{EvalError, Result};
+pub use fixture_backend::OracleBackend;
 pub use runner::{run_multiple_choice_suite, run_suite};
 
 use serde::{Deserialize, Serialize};
