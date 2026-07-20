@@ -68,7 +68,6 @@ unsafe impl Send for ZeroMqHandle {} // libzmq sockets are not thread-safe; this
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     #[test]
     fn construction_does_not_panic() {
         // We don't actually open a socket in unit tests (would need a running

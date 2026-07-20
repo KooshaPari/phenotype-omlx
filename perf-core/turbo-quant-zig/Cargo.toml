@@ -10,5 +10,6 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 libc = "0.2"
+native-abi = { path = "../native-abi" }
 
 [build-dependencies]

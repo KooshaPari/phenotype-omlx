@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://phenotype.local/omlx/vpu/dashboard/status.v1.json",
+  "title": "OMLX vPU Dashboard Status v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "build_head",
+    "polyglot_tiers",
+    "eval_snapshot_id",
+    "promotion_snapshot_id",
+    "errors",
+    "owner"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "build_head": { "type": "string", "minLength": 1 },
+    "polyglot_tiers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok", "degraded", "absent", "unknown"]
+          },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "eval_snapshot_id": { "type": ["string", "null"] },
+    "promotion_snapshot_id": { "type": ["string", "null"] },
+    "errors": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "owner": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

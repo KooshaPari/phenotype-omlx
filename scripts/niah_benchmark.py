@@ -35,12 +35,37 @@ os.environ["HF_HUB_OFFLINE"] = "0"
 os.environ["HF_HOME"] = "/Users/kooshapari/.cache/huggingface"
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "0")
 
-REPO = Path("/Users/kooshapari/CodeProjects/Phenotype/repos")
-sys.path.insert(0, str(REPO / "phenotype-omlx/python"))
+# Absorbed-crate / worktree layout: always import from this repo's python/.
+# Never use a hard-coded absolute repos/.../python sys.path (FR-5 E2).
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "python"))
 
-import psutil
-import mlx.core as mx
-import mlx_lm
+# Heavy / optional imports are deferred so `--help` (and any other
+# argparse-only invocation) works without mlx / mlx_lm installed.
+# This is what lets the doctor check ``scripts/niah_benchmark.py --help``
+# transitions to PASS on a machine where only the Python bindings are
+# present and the actual MLX stack is not.
+try:
+    import psutil  # type: ignore
+except ImportError:  # pragma: no cover - psutil absent in CI
+    psutil = None  # type: ignore[assignment]
+
+# Module-level lazy import helpers — the values are resolved on first
+# use inside ``run_one`` so ``--help`` never touches them.
+_mx = None
+_mlx_lm = None
+
+
+def _ensure_mlx():
+    """Lazily import ``mlx.core`` and ``mlx_lm`` on first use."""
+    global _mx, _mlx_lm
+    if _mx is None:
+        import mlx.core as _m  # type: ignore
+        _mx = _m
+    if _mlx_lm is None:
+        import mlx_lm as _ml  # type: ignore
+        _mlx_lm = _ml
+    return _mx, _mlx_lm
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -93,6 +118,7 @@ class BenchResult:
 
 def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResult:
     """Run one (mode, length) benchmark. Returns a BenchResult."""
+    mx, mlx_lm = _ensure_mlx()
     rss_before = rss_mb()
 
     # ── 1. Build the prompt ──
@@ -104,9 +130,21 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
 
     # ── 2. Build the KV cache list (one per layer) ──
     n_layers = len(model.layers)
+    is_qwen35 = "qwen3_5" in type(model).__module__ or "qwen3_5" in str(getattr(model, "model_type", ""))
+    if is_qwen35 and mode != "baseline_fp16":
+        return BenchResult(
+            mode=mode, target_len=length, actual_len=actual_len,
+            prefill_ms=0, decode_ms=0, decode_tok_per_sec=0,
+            rss_mb_before=rss_before, rss_mb_after=rss_mb(), needle=needle,
+            answer="", exact_match=False, partial_match=False,
+            contains_secret=False,
+            error="unsupported: Qwen3.5 mixed linear/full attention has no KV-only cache for this mode",
+        )
     if mode == "baseline_fp16":
-        from mlx_lm.models.cache import KVCache
-        cache_list = [KVCache() for _ in range(n_layers)]
+        from mlx_lm.models import cache
+        # Qwen3.5 requires mixed recurrent/attention cache state; constructing
+        # one KVCache per layer is invalid and breaks create_attention_mask.
+        cache_list = cache.make_prompt_cache(model)
     elif mode in ("turbo_asymmetric", "turbo4"):
         from mlx.nn.layers.turbo_kv_cache import TurboKVCache
         cache_list = [TurboKVCache(bits=4, key_bits=None) for _ in range(n_layers)]
@@ -204,6 +242,20 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
 
 # ── Main ─────────────────────────────────────────────────────────────────
 
+def require_julia() -> None:
+    """FR-5 E1: Julia is mandatory on the NIAH eval path — fail loud if missing."""
+    import shutil
+
+    if shutil.which("julia") is None:
+        print(
+            "ERROR: julia is required on the NIAH eval path (FR-5 / E1). "
+            "Install Julia and ensure `julia` is on PATH "
+            "(no optional/stub fallback).",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
 def main():
     parser = argparse.ArgumentParser(description="NIAH benchmark for TurboQuant+ MLX")
     parser.add_argument("--lengths", type=int, nargs="+",
@@ -221,6 +273,9 @@ def main():
                         help="Random seed for needle/filler")
     args = parser.parse_args()
 
+    # After argparse so `--help` still works without Julia; real runs fail loud.
+    require_julia()
+
     random.seed(args.seed)
 
     # ── Load model ──
@@ -235,6 +290,7 @@ def main():
 
     print("Loading model...")
     t0 = time.perf_counter()
+    mx, mlx_lm = _ensure_mlx()
     model, tokenizer = mlx_lm.load(args.model)
     load_ms = (time.perf_counter() - t0) * 1000.0
     print(f"  Model loaded in {load_ms:.0f}ms, RSS now {rss_mb():.0f} MB")
@@ -299,10 +355,34 @@ def main():
         print(f"    {m:22s}: exact={exact}/{len(mr)} partial={partial} miss={miss}")
 
     if args.output:
-        Path(args.output).write_text(json.dumps(
-            [asdict(r) for r in results], indent=2, default=str
-        ))
-        print(f"\n  Results written to: {args.output}")
+        # FR-5 E4: never write raw rows without an evidence class.
+        # In-process MLX runs are live_verified; do not overwrite
+        # the committed synthetic niah_results.json envelope.
+        out_path = Path(args.output)
+        if "qwen3.5" in args.model.lower() or "qwen3_5" in args.model.lower():
+            caveat = (
+                "Qwen3.5 family may use linear attention; standard "
+                "KV-cache compression metrics are not applicable "
+                "(see kitty-specs/complete-polyglot-vpu-stack/spec.md)."
+            )
+        else:
+            caveat = None
+        envelope = {
+            "schema_version": 1,
+            "kind": "niah_live_run",
+            "evidence_label": "live_verified",
+            "reported": True,
+            "synthetic": False,
+            "model": args.model,
+            "backend": "mlx_lm_inprocess",
+            "architecture_caveat": caveat,
+            "seed": args.seed,
+            "lengths": args.lengths,
+            "modes": args.modes,
+            "results": [asdict(r) for r in results],
+        }
+        out_path.write_text(json.dumps(envelope, indent=2, default=str) + "\n")
+        print(f"\n  Results written to: {args.output} (evidence_label=live_verified)")
 
     print(f"\n  Final RSS: {rss_mb():.0f} MB")
 

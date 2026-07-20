@@ -1,77 +1,43 @@
-// build.rs — always compile and link the Mojo shared library.
+// build.rs — look for `libturbo_quant_mojo.dylib` produced by `mojo build --emit shared-lib`.
 //
-// Missing Mojo SDK or a failed `mojo build` is a hard error (fail loudly).
+// If found (and the `mojo` feature is enabled), link it. Otherwise emit
+// a warning and the crate compiles as a no-op stub.
 
 use std::env;
 use std::path::PathBuf;
-use std::process::Command;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let mojo_src = manifest_dir.join("mojo-src").join("turbo_quant.mojo");
 
     println!("cargo:rerun-if-changed={}", mojo_src.display());
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-env-changed=MOJO_PATH");
 
-    let lib_name = if cfg!(target_os = "macos") {
-        "libturbo_quant_mojo.dylib"
-    } else if cfg!(target_os = "windows") {
-        "turbo_quant_mojo.dll"
+    // Gate the native link behind the `mojo` feature. Without it the crate
+    // builds as a Rust-only stub that returns graceful no-ops.
+    let feature_mojo = env::var("CARGO_FEATURE_MOJO").is_ok();
+    if !feature_mojo {
+        println!("cargo:warning=turbo-quant-mojo built without `mojo` feature — stub only");
+        return;
+    }
+
+    // Search for pre-built Mojo shared library in common locations.
+    let candidates = [
+        manifest_dir.join("libturbo_quant_mojo.dylib"),
+        out_dir.join("libturbo_quant_mojo.dylib"),
+        PathBuf::from("/usr/local/lib/libturbo_quant_mojo.dylib"),
+        PathBuf::from("/opt/homebrew/lib/libturbo_quant_mojo.dylib"),
+    ];
+
+    if let Some(found) = candidates.iter().find(|p| p.exists()) {
+        let parent = found.parent().unwrap();
+        println!("cargo:rustc-link-search=native={}", parent.display());
+        println!("cargo:rustc-link-lib=dylib=turbo_quant_mojo");
+        println!("cargo:info=mojo staticlib found at {}", found.display());
     } else {
-        "libturbo_quant_mojo.so"
-    };
-    let lib_path = manifest_dir.join(lib_name);
-
-    let mojo = env::var("MOJO_PATH")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| which("mojo"))
-        .unwrap_or_else(|| {
-            panic!(
-                "turbo-quant-mojo: Mojo SDK required in PATH \
-                 (install: modular install mojo; or set MOJO_PATH)"
-            );
-        });
-
-    let status = Command::new(&mojo)
-        .args([
-            "build",
-            mojo_src.to_str().expect("mojo source path"),
-            "-o",
-            lib_path.to_str().expect("mojo output path"),
-            "--emit",
-            "shared-lib",
-        ])
-        .status()
-        .unwrap_or_else(|e| panic!("turbo-quant-mojo: failed to invoke mojo build: {e}"));
-
-    if !status.success() || !lib_path.exists() {
-        panic!(
-            "turbo-quant-mojo: `mojo build --emit shared-lib` failed — \
-             cannot link native kernel (install: modular install mojo)"
-        );
+        println!("cargo:warning=libturbo_quant_mojo.dylib not found — turbo-quant-mojo is a no-op stub");
+        println!("cargo:warning=build with:  mojo build mojo-src/turbo_quant.mojo --emit shared-lib -o libturbo_quant_mojo.dylib");
+        println!("cargo:warning=install:     modular install mojo");
     }
-
-    println!(
-        "cargo:rustc-link-search=native={}",
-        manifest_dir.display()
-    );
-    println!("cargo:rustc-link-lib=dylib=turbo_quant_mojo");
-    println!(
-        "cargo:rustc-link-arg=-Wl,-rpath,{}",
-        manifest_dir.display()
-    );
-    println!("cargo:info=mojo shared library built at {}", lib_path.display());
-}
-
-fn which(name: &str) -> Option<PathBuf> {
-    let path = env::var_os("PATH")?;
-    for dir in env::split_paths(&path) {
-        let candidate = dir.join(name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-    None
 }

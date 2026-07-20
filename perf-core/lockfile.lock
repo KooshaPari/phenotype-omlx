@@ -1,0 +1,5 @@
+# Reproducibility fingerprint for perf-core/Cargo.lock.
+# Recompute via: scripts/verify_lockfile.sh
+# Algorithm: sha256 (SHA-2, FIPS 180-4) of the verbatim bytes of perf-core/Cargo.lock.
+sha256: d914d7af8c027616811b402a0d8117e43888c1d3d460d3c39f99905508c37c05
+generated_at: 2026-07-19T20:00:00Z

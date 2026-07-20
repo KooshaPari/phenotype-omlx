@@ -37,6 +37,27 @@ def _model_local_path() -> Optional[str]:
         return None
 
 
+def _require_mlx_lm() -> None:
+    """Skip the calling test if `mlx_lm` (the inference runtime) is missing.
+
+    The structural tests in TestMlxBackendInit run without it because they
+    only exercise __init__ and the lazy _rust_perf resolver. The end-to-end
+    tests in TestMlxBackendTurboQuantProduction call MlxBackend._load() /
+    generate_with_turbo_cache(), which import `mlx_lm` at the top of
+    `MlxBackend._load`. If the runtime is unavailable in this environment,
+    every production-path test must skip (not fail) so the suite stays
+    runnable on non-Apple-Silicon CI hosts that still have `mlx.core`.
+    """
+    try:
+        import mlx_lm  # noqa: F401
+    except ImportError as e:  # pragma: no cover - exercised only when missing
+        raise unittest.SkipTest(
+            "mlx_lm not installed in this environment; production-path "
+            "tests require it (pip install mlx-lm): "
+            f"{e}"
+        )
+
+
 class TestMlxBackendInit(unittest.TestCase):
     """Structural tests — run anywhere with the package importable."""
 
@@ -74,6 +95,50 @@ class TestMlxBackendInit(unittest.TestCase):
         self.assertEqual(r1, r2)
 
 
+class TestRequireMlxLmHelper(unittest.TestCase):
+    """The helper gates production-path tests on the `mlx_lm` runtime.
+
+    Without this gate the production-path tests fail with ModuleNotFoundError
+    on environments that have `mlx.core` but no `mlx_lm` (e.g. CI runners
+    that only exercise the structural / decode-path coverage). The helper
+    must skip cleanly so the suite stays green.
+    """
+
+    def test_helper_skips_when_mlx_lm_missing(self):
+        """If `mlx_lm` cannot be imported, _require_mlx_lm must raise SkipTest.
+
+        We simulate the missing-dependency path by hiding the real `mlx_lm`
+        via sys.modules manipulation; the helper must re-raise as SkipTest.
+        """
+        import sys
+        # Make sure the helper sees a missing `mlx_lm`. We only stash a
+        # sentinel under that name to force ImportError on next import;
+        # afterwards we restore the original mapping so other tests are
+        # not affected.
+        original = sys.modules.get("mlx_lm")
+        sys.modules["mlx_lm"] = None  # type: ignore[assignment]
+        try:
+            with self.assertRaises(unittest.SkipTest) as cm:
+                _require_mlx_lm()
+            self.assertIn("mlx_lm not installed", str(cm.exception))
+        finally:
+            if original is None:
+                sys.modules.pop("mlx_lm", None)
+            else:
+                sys.modules["mlx_lm"] = original
+
+    def test_helper_passes_when_mlx_lm_importable(self):
+        """If `mlx_lm` is importable, _require_mlx_lm must return None."""
+        try:
+            import mlx_lm  # noqa: F401
+        except ImportError:
+            raise unittest.SkipTest(
+                "mlx_lm not installed — cannot exercise the happy path of "
+                "_require_mlx_lm on this host."
+            )
+        self.assertIsNone(_require_mlx_lm())
+
+
 class TestMlxBackendTurboQuantProduction(unittest.TestCase):
     """End-to-end tests against Qwen2.5-0.5B-Instruct-4bit on MLX/Metal.
 
@@ -82,6 +147,11 @@ class TestMlxBackendTurboQuantProduction(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Cheap gate first: mlx_lm must be importable; skip otherwise.
+        # This avoids forcing a HuggingFace model download on hosts that
+        # have `mlx.core` but no `mlx_lm` (e.g. CI runners that only need
+        # to exercise the structural / decode-path coverage).
+        _require_mlx_lm()
         cls.model_path = _model_local_path()
         if cls.model_path is None:
             raise unittest.SkipTest(

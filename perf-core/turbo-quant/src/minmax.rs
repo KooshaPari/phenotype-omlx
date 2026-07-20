@@ -1,9 +1,3 @@
-//! FR-2: f32 min/max reduction for TurboQuant group scaling.
-//!
-//! On `aarch64`, uses explicit NEON intrinsics (`vminq_f32` / `vmaxq_f32`) with a
-//! scalar tail for lengths not divisible by four. All other targets dispatch to
-//! [`scalar_min_max`], which is also the parity oracle in unit tests.
-
 #[cfg(any(test, not(target_arch = "aarch64")))]
 pub(crate) fn scalar_min_max(data: &[f32]) -> (f32, f32) {
     let mut min = f32::INFINITY;
@@ -77,8 +71,6 @@ mod tests {
         }
     }
 
-    /// arm64 CI gate (FR-2): NEON path must match the scalar oracle on tails and
-    /// unaligned sub-slices. Skipped automatically on non-aarch64 hosts.
     #[test]
     #[cfg(target_arch = "aarch64")]
     fn neon_handles_unaligned_slice_and_scalar_tail() {

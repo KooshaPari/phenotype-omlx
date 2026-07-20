@@ -1,0 +1,59 @@
+{
+  "schema_version": "0.1",
+  "candidate": {
+    "branch": "agent/argis-g2-candidate-20260719",
+    "head": "d4c0def",
+    "base": "4ae832e",
+    "freeze_status": "scoped-evidence-ready",
+    "evidence_complete": false
+  },
+  "ancestry": {
+    "applied_requested_commits": ["5280da0", "3c8a038"],
+    "resolved_commits": ["f7b0a7d", "12cf98b"],
+    "base_sync_commits": [
+      "8664403", "aa76ede", "a8e979c", "5c50507", "0d011bf",
+      "9bbb498", "6100037", "d72f096", "9a17152", "6eb6132",
+      "6816a10", "dff8b6b"
+    ],
+    "merge_base_with_declared_base": "0d6ddd6",
+    "ahead_behind_against_declared_base": {"ahead": 18, "behind": 12}
+  },
+  "changes": {
+    "production_paths": [
+      "perf-core/turbo-quant-mojo/build.rs",
+      "perf-core/turbo-quant-mojo/mojo-src/turbo_quant.mojo",
+      "perf-core/turbo-quant-mojo/mojo-src/turbo_quant_smoke.mojo",
+      "perf-core/turbo-quant-mojo/src/lib.rs",
+      "perf-core/turbo-quant-mojo/src/native.rs",
+      "perf-core/turbo-quant-mojo/src/validation.rs",
+      "perf-core/turbo-quant-mojo/src/tests.rs",
+      "perf-core/turbo-quant-mojo/src/tests_validation.rs"
+    ],
+    "todo_fr_omlx_poly_001": "removed",
+    "out_of_scope_untracked": [
+      "docs/sessions/20260718-metal-model-runtime/08_CANDIDATE_CONVERGENCE.md"
+    ],
+    "workspace_prerequisite": "perf-core/vpu/agents is ignored/local-only and was supplied from the declared base checkout to load the Cargo workspace"
+  },
+  "verification": {
+    "command": "cargo test -p turbo-quant-mojo --all-features",
+    "exit_code": 0,
+    "tests_passed": 64,
+    "tests_failed": 0,
+    "doc_tests_passed": 0,
+    "warnings": ["Mojo unused-variable warnings", "Mojo @export abi() warnings"],
+    "artifact": {
+      "path": "perf-core/turbo-quant-mojo/libturbo_quant_mojo.dylib",
+      "format": "Mach-O 64-bit dynamically linked shared library arm64",
+      "sha256": "b7e81f7bd264790d9e72eae50f20dc7c4b82f3497eef908c269c0556365fca24",
+      "build_command": "mojo build mojo-src/turbo_quant.mojo --emit shared-lib -o libturbo_quant_mojo.dylib"
+    },
+    "json_validation": "python3 -m json.tool candidate-manifest.json: exit 0"
+  },
+  "remaining_freeze_gates": [
+    "Manifest committed after JSON and diff checks",
+    "Resolve or explicitly exclude the pre-existing untracked convergence plan",
+    "Attach maximus's independent C/Go/Nim/Zig FFI evidence and classifications",
+    "Salmon review of this exact candidate HEAD"
+  ]
+}

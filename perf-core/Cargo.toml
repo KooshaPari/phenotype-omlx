@@ -2,10 +2,9 @@
 resolver = "2"
 members = [
     "turbo-quant-c",
+    "vpu/agents",
     "turbo-quant-go",
     "turbo-quant-nim",
-    "eval-harness",
-    "kernel-registry",
     "tree-attention-spirv",
     "tree-attention",
     "spec-decode",
@@ -13,9 +12,15 @@ members = [
     "concurrent-exec-cuda",
     "turbo-quant",
     "turbo-quant-mojo",
-    "turbo-quant-zig",
+    "eval-harness",
+    "kernel-registry",
+    "native-abi",
     "fleet-proto",
     "fleet-proto-zeromq",
+    "model-plan",
+    "model-kernels",
+    "metal-runtime",
+    "regress-baseline",
 ]
 
 [workspace.package]
@@ -31,7 +36,7 @@ serde_json = "1"
 thiserror = "1"
 sha2 = "0.10"
 base64 = "0.22"
-proptest = "1"
+proptest = "1.4"
 tracing = "0.1"
 parking_lot = "0.12"
 async-trait = "0.1"

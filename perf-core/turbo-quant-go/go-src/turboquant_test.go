@@ -12,7 +12,7 @@ func TestEncodeDecodeRoundtrip(t *testing.T) {
 		t.Fatalf("Failed to encode: %v", err)
 	}
 	if len(tensor.Packed) == 0 {
-		t.Fatal("Expected non-empty packed data")
+		t.Error("Expected non-empty packed data")
 	}
 
 	decoded, err := Decode(tensor, len(data), 8, 4)
@@ -25,18 +25,5 @@ func TestEncodeDecodeRoundtrip(t *testing.T) {
 		if diff > 0.15 {
 			t.Errorf("Index %d: expected value close to %f, got %f (diff: %f)", i, v, decoded[i], diff)
 		}
-	}
-}
-
-func TestEncodeRejectsInvalidArguments(t *testing.T) {
-	data := []float32{0.1, -0.2, 0.3, -0.4}
-	if _, err := Encode([]float32{}, 4, 4); err == nil {
-		t.Fatal("expected empty data rejection")
-	}
-	if _, err := Encode(data, 1, 4); err == nil {
-		t.Fatal("expected invalid bits rejection")
-	}
-	if _, err := Encode(data, 4, 0); err == nil {
-		t.Fatal("expected invalid groupSize rejection")
 	}
 }

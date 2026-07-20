@@ -1,0 +1,17 @@
+[package]
+name = "model-kernels"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Model-family kernel packages: attention, MoE, recurrent, diffusion, and quantization primitives with scalar oracles and Rust kernels."
+
+[lib]
+name = "model_kernels"
+path = "src/lib.rs"
+
+[dependencies]
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tree-attention = { path = "../tree-attention" }

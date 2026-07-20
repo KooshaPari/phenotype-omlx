@@ -1,165 +1,127 @@
-# turbo-quant-mojo — Mojo implementation of TurboQuant.
+# turbo-quant-mojo — Mojo implementation of TurboQuant
 #
-# Build (required — build.rs invokes this automatically):
-#   modular install mojo
-#   mojo build mojo-src/turbo_quant.mojo -o libturbo_quant_mojo.dylib --emit shared-lib
+# Build:
+#   1. Install Mojo:        `modular install mojo`
+#   2. Compile the C-ABI lib from this Mojo source:
+#        mojo build mojo-src/turbo_quant.mojo -o libturbo_quant_mojo.a --emit shared
+#   3. Cargo will pick it up via the build script.
+#
+# Without Mojo installed, this crate compiles but is a no-op stub
+# (matching the "no language forbidden" policy — the crate exists as a
+# scaffold for when the toolchain is added).
 
-from std.memory import alloc, UnsafePointer
+from std.memory import UnsafePointer, alloc
 
+struct QuantizedTensor:
+    var shape_ptr: UnsafePointer[Int, MutUntrackedOrigin]
+    var shape_len: Int
+    var packed_ptr: UnsafePointer[UInt8, MutUntrackedOrigin]
+    var packed_len: Int
+    var scales_ptr: UnsafePointer[Float32, MutUntrackedOrigin]
+    var scales_len: Int
+    var zeros_ptr: UnsafePointer[Float32, MutUntrackedOrigin]
+    var zeros_len: Int
 
-def _bit_count[
-    origin: MutOrigin
-](
-    data: UnsafePointer[Float32, origin], start: Int, end: Int
-) -> Tuple[Float32, Float32]:
-    var lo: Float32 = data[start]
-    var hi: Float32 = data[start]
-    for i in range(start + 1, end):
-        var v: Float32 = data[i]
-        if v < lo:
-            lo = v
-        if v > hi:
-            hi = v
-    return (lo, hi)
+    def __init__(out self, shape_ptr: UnsafePointer[Int, MutUntrackedOrigin], shape_len: Int,
+                packed_ptr: UnsafePointer[UInt8, MutUntrackedOrigin], packed_len: Int,
+                scales_ptr: UnsafePointer[Float32, MutUntrackedOrigin], scales_len: Int,
+                zeros_ptr: UnsafePointer[Float32, MutUntrackedOrigin], zeros_len: Int):
+        self.shape_ptr = shape_ptr
+        self.shape_len = shape_len
+        self.packed_ptr = packed_ptr
+        self.packed_len = packed_len
+        self.scales_ptr = scales_ptr
+        self.scales_len = scales_len
+        self.zeros_ptr = zeros_ptr
+        self.zeros_len = zeros_len
 
-
-def _write_bits[
-    origin: MutOrigin
-](
-    packed: UnsafePointer[UInt8, origin],
-    group_byte_offset: Int,
-    value: Int,
-    bits: Int,
-    bit_pos: Int,
-) -> Int:
-    var bp: Int = bit_pos
-    for b in range(bits):
-        var byte_idx: Int = bp // 8
-        var bit_idx: Int = bp % 8
-        var bit: UInt8 = UInt8((value >> (bits - 1 - b)) & 1)
-        var current: UInt8 = packed[group_byte_offset + byte_idx]
-        current |= bit << UInt8(7 - bit_idx)
-        packed[group_byte_offset + byte_idx] = current
-        bp += 1
-    return bp
-
-
-def _read_bits[
-    origin: MutOrigin
-](
-    packed: UnsafePointer[UInt8, origin],
-    group_byte_offset: Int,
-    bits: Int,
-    bit_pos: Int,
-) -> Int:
-    var value: Int = 0
-    var bp: Int = bit_pos
-    for b in range(bits):
-        var byte_idx: Int = bp // 8
-        var bit_idx: Int = bp % 8
-        var bit: Int = Int((packed[group_byte_offset + byte_idx] >> UInt8(7 - bit_idx)) & UInt8(1))
-        value = (value << 1) | bit
-        bp += 1
-    return value
-
-
-def encode_uniform[
-    d_origin: MutOrigin,
-    p_origin: MutOrigin,
-    s_origin: MutOrigin,
-    z_origin: MutOrigin,
-    l_origin: MutOrigin,
-](
-    data: UnsafePointer[Float32, d_origin],
-    n: Int,
-    bits: UInt8,
-    group_size: Int,
-    out_packed: UnsafePointer[UInt8, p_origin],
-    out_scales: UnsafePointer[Float32, s_origin],
-    out_zeros: UnsafePointer[Float32, z_origin],
-    out_packed_len: UnsafePointer[Int, l_origin],
-):
+def encode_uniform(data: UnsafePointer[Float32, MutUntrackedOrigin], n: Int, bits: UInt8, group_size: Int) -> QuantizedTensor:
+    """Uniform group quantizer on `bits` levels. group_size=0 → default 64."""
     var gs: Int = 64 if group_size == 0 else group_size
-    var bits_i: Int = Int(bits)
-    var levels: Int = (1 << bits_i) - 1
+    var levels: Int = (1 << Int(bits)) - 1
     var n_groups: Int = (n + gs - 1) // gs
-    var per_group_packed_bytes: Int = (gs * bits_i + 7) // 8
-    var total_packed: Int = n_groups * per_group_packed_bytes
+    var per_group_packed_bytes: Int = (gs * Int(bits) + 7) // 8
 
-    out_packed_len[0] = total_packed
-    for i in range(total_packed):
-        out_packed[i] = UInt8(0)
+    var shape = alloc[Int](1)
+    shape.store(0, n)
+    var packed = alloc[UInt8](n_groups * per_group_packed_bytes)
+    var scales = alloc[Float32](n_groups)
+    var zeros = alloc[Float32](n_groups)
+    for i in range(n_groups * per_group_packed_bytes):
+        packed.store(i, UInt8(0))
 
     for g in range(n_groups):
         var start: Int = g * gs
         var end: Int = min(start + gs, n)
 
-        var bounds = _bit_count(data, start, end)
-        var lo: Float32 = bounds[0]
-        var hi: Float32 = bounds[1]
-        var range_v: Float32 = hi - lo
-        var scale: Float32 = range_v / Float32(levels) if range_v > 0 else Float32(1.0)
+        var lo: Float32 = data.load(start)[0]
+        var hi: Float32 = data.load(start)[0]
+        for i in range(start + 1, end):
+            var v: Float32 = data.load(i)[0]
+            if v < lo: lo = v
+            if v > hi: hi = v
+        var span: Float32 = hi - lo
+        var scale: Float32 = span / Float32(levels) if span > 0 else Float32(1.0)
         var zero: Float32 = lo
-        out_scales[g] = scale
-        out_zeros[g] = zero
+        scales.store(g, scale)
+        zeros.store(g, zero)
 
         var bit_pos: Int = 0
         for i in range(start, end):
-            var normalized: Float32 = (data[i] - zero) / scale
+            var normalized: Float32 = (data.load(i)[0] - zero) / scale
             var clamped: Float32 = max(Float32(0), min(Float32(levels), round(normalized)))
             var q: Int = Int(clamped)
-            bit_pos = _write_bits(out_packed, g * per_group_packed_bytes, q, bits_i, bit_pos)
+            # Pack `bits` bits of q into packed[g * per_group_packed_bytes..]
+            var v: Int = q
+            var bp: Int = bit_pos
+            for b in range(Int(bits)):
+                var byte_idx: Int = bp // 8
+                var bit_idx: Int = bp % 8
+                var bit: UInt8 = UInt8((v >> (Int(bits) - 1 - b)) & 1)
+                var current = packed.load(g * per_group_packed_bytes + byte_idx)[0]
+                current |= bit << UInt8(7 - bit_idx)
+                packed.store(g * per_group_packed_bytes + byte_idx, current)
+                bp += 1
+            bit_pos += Int(bits)
 
+    return QuantizedTensor(
+        shape_ptr=shape, shape_len=1,
+        packed_ptr=packed, packed_len=n_groups * per_group_packed_bytes,
+        scales_ptr=scales, scales_len=n_groups,
+        zeros_ptr=zeros, zeros_len=n_groups,
+    )
 
-def decode_uniform[
-    p_origin: MutOrigin,
-    s_origin: MutOrigin,
-    z_origin: MutOrigin,
-    r_origin: MutOrigin,
-](
-    packed: UnsafePointer[UInt8, p_origin],
-    scales: UnsafePointer[Float32, s_origin],
-    zeros: UnsafePointer[Float32, z_origin],
-    n: Int,
-    group_size: Int,
-    bits: UInt8,
-    result: UnsafePointer[Float32, r_origin],
-):
+def decode_uniform(q: QuantizedTensor, n: Int, group_size: Int, bits: UInt8, result: UnsafePointer[Float32, MutUntrackedOrigin]):
+    """Inverse of encode_uniform — writes f32 reconstructed values into `out`."""
     var gs: Int = 64 if group_size == 0 else group_size
-    var bits_i: Int = Int(bits)
-    var per_group_packed_bytes: Int = (gs * bits_i + 7) // 8
+    var levels_f: Float32 = Float32((1 << Int(bits)) - 1)
+    var per_group_packed_bytes: Int = (gs * Int(bits) + 7) // 8
 
     var g: Int = 0
     while g * gs < n:
         var start: Int = g * gs
         var end: Int = min(start + gs, n)
-        var scale: Float32 = scales[g]
-        var zero: Float32 = zeros[g]
+        var scale: Float32 = q.scales_ptr.load(g)[0]
+        var zero: Float32 = q.zeros_ptr.load(g)[0]
         var bit_pos: Int = 0
         for i in range(start, end):
-            var value: Int = _read_bits(packed, g * per_group_packed_bytes, bits_i, bit_pos)
-            result[i] = zero + Float32(value) * scale
-            bit_pos += bits_i
+            var value: Int = 0
+            var bp: Int = bit_pos
+            for b in range(Int(bits)):
+                var byte_idx: Int = bp // 8
+                var bit_idx: Int = bp % 8
+                var bit: Int = Int(q.packed_ptr.load(g * per_group_packed_bytes + byte_idx)[0] >> UInt8(7 - bit_idx)) & 1
+                value = (value << 1) | bit
+                bp += 1
+            result.store(i, zero + Float32(value) * scale)
+            bit_pos += Int(bits)
         g += 1
 
-
 # ── C ABI exports (consumed by Rust `extern "C"` wrapper) ───────────────
-#
-# The Rust side computes n_groups / total_packed upfront, pre-allocates
-# the output buffers, and passes the raw address of the data pointer as
-# an Int (we reconstruct the UnsafePointer inside via the
-# `unsafe_from_address=` constructor). All output slots are typed as
-# `UnsafePointer[Int, ...]` so the caller can read pointer addresses
-# back as Int values without per-element type confusion.
-#
-# Note: Mojo 1.0.0b3's @export emits an "abi() effect required" warning.
-# Exported symbols must be visible to the Rust dylib linker — build fails
-# loudly if encode returns null output pointers (see Rust roundtrip tests).
-
 
 @export("tq_mojo_encode")
 def tq_mojo_encode(
-    data_addr: Int,
+    data_ptr: UnsafePointer[Float32, MutUntrackedOrigin],
     n: Int,
     bits: UInt8,
     group_size: Int,
@@ -172,7 +134,6 @@ def tq_mojo_encode(
     zeros_ptr_out: UnsafePointer[Int, MutUntrackedOrigin],
     out_zeros_len: UnsafePointer[Int, MutUntrackedOrigin],
 ) -> Bool:
-    var data_ptr = UnsafePointer[Float32, MutUntrackedOrigin](unsafe_from_address=data_addr)
 
     var gs: Int = 64 if group_size == 0 else group_size
     var bits_i: Int = Int(bits)
@@ -180,42 +141,41 @@ def tq_mojo_encode(
     var per_group_packed_bytes: Int = (gs * bits_i + 7) // 8
     var total_packed: Int = n_groups * per_group_packed_bytes
 
-    var shape_ptr = alloc[Int](1)
-    var packed_ptr = alloc[UInt8](total_packed)
-    var scales_ptr = alloc[Float32](n_groups)
-    var zeros_ptr = alloc[Float32](n_groups)
-
-    encode_uniform(
-        data_ptr, n, bits, group_size,
-        packed_ptr, scales_ptr, zeros_ptr, out_packed_len,
-    )
-
-    shape_ptr[0] = n
-    shape_ptr_out[0] = Int(shape_ptr)
-    out_shape_len[0] = 1
-    packed_ptr_out[0] = Int(packed_ptr)
-    out_scales_len[0] = n_groups
-    zeros_ptr_out[0] = Int(zeros_ptr)
-    out_zeros_len[0] = n_groups
+    var q = encode_uniform(data_ptr, n, bits, group_size)
+    shape_ptr_out[0] = Int(q.shape_ptr)
+    out_shape_len[0] = q.shape_len
+    packed_ptr_out[0] = Int(q.packed_ptr)
+    out_packed_len[0] = q.packed_len
+    scales_ptr_out[0] = Int(q.scales_ptr)
+    out_scales_len[0] = q.scales_len
+    zeros_ptr_out[0] = Int(q.zeros_ptr)
+    out_zeros_len[0] = q.zeros_len
     return True
 
 
+# Addresses must come from tq_mojo_encode and be released exactly once.
+@export("tq_mojo_free")
+def tq_mojo_free(address: Int) -> None:
+    var ptr = UnsafePointer[UInt8, MutUntrackedOrigin](unsafe_from_address=address)
+    ptr.free()
+
 @export("tq_mojo_decode")
-def tq_mojo_decode[
-    p_origin: MutOrigin,
-    s_origin: MutOrigin,
-    z_origin: MutOrigin,
-    r_origin: MutOrigin,
-](
-    packed_ptr: UnsafePointer[UInt8, p_origin],
+def tq_mojo_decode(
+    packed_ptr: UnsafePointer[UInt8, MutUntrackedOrigin],
     packed_len: Int,
-    scales_ptr: UnsafePointer[Float32, s_origin],
-    zeros_ptr: UnsafePointer[Float32, z_origin],
+    scales_ptr: UnsafePointer[Float32, MutUntrackedOrigin],
+    zeros_ptr: UnsafePointer[Float32, MutUntrackedOrigin],
     n: Int,
     group_size: Int,
     bits: UInt8,
-    result_ptr: UnsafePointer[Float32, r_origin],
-) -> None:
-    decode_uniform(
-        packed_ptr, scales_ptr, zeros_ptr, n, group_size, bits, result_ptr,
+    result_ptr: UnsafePointer[Float32, MutUntrackedOrigin],
+) abi("C"):
+    var gs: Int = 64 if group_size == 0 else group_size
+    var n_groups = (n + gs - 1) // gs
+    var q = QuantizedTensor(
+        shape_ptr=alloc[Int](1), shape_len=1,
+        packed_ptr=packed_ptr, packed_len=packed_len,
+        scales_ptr=scales_ptr, scales_len=n_groups,
+        zeros_ptr=zeros_ptr, zeros_len=n_groups,
     )
+    decode_uniform(q, n, group_size, bits, result_ptr)
