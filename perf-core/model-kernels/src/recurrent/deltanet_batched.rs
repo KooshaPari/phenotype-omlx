@@ -32,6 +32,7 @@ use crate::recurrent::deltanet::{deltanet_chunk, deltanet_step};
 /// identical to running the sequential path `batch_size * num_heads`
 /// times. The implementation is intentionally scalar so the optimized
 /// Metal kernel can be measured against the same reference.
+#[allow(clippy::too_many_arguments)] // batched oracle: qkv + state + layout dims
 pub fn deltanet_batched_chunk(
     q: &[f32],
     k: &[f32],
@@ -123,6 +124,7 @@ pub fn deltanet_batched_chunk(
 /// Exposed for tests and for callers that want to instrument the
 /// per-step inner loop directly.
 #[allow(dead_code)]
+#[allow(clippy::too_many_arguments)] // stepwise twin of deltanet_batched_chunk
 pub(crate) fn deltanet_batched_chunk_stepwise(
     q: &[f32],
     k: &[f32],

@@ -8,6 +8,7 @@ use crate::error::{KernelError, Result};
 /// column `c`. The caller supplies the mask built by
 /// `tree-attention::tree_causal_mask`. `q`, `k`, `v` are single-head
 /// `[seq, head_dim]`.
+#[allow(clippy::too_many_arguments)] // kernel API: qkv + mask + layout dims
 pub fn tree_attention_step(
     q: &[f32],
     k: &[f32],

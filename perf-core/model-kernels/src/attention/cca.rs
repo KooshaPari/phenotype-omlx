@@ -8,6 +8,7 @@ use crate::error::{KernelError, Result};
 /// `[seq_k / compressed_factor, head_dim]`. Each compressed slot
 /// implicitly covers `compressed_factor` logical keys, but the kernel
 /// only attends to the `compressed_factor`-length compressed sequence.
+#[allow(clippy::too_many_arguments)] // kernel API: tensors + layout dims
 pub fn cca_attention(
     compressed_k: &[f32],
     compressed_v: &[f32],
