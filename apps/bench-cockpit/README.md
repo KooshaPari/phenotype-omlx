@@ -52,8 +52,8 @@ Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
 
 ## Observability (Langfuse primary)
 
-**Recommendation:** use **Langfuse** for tracing + scores — MIT OSS, self-hostable with
-full feature control and no SaaS meter. LangSmith remains optional/legacy.
+**Recommendation:** use **Langfuse** for tracing, playground, and hosted LLM-as-judge —
+MIT OSS, self-hostable, full feature control. LangSmith is optional/legacy only.
 
 ```bash
 # .env (gitignored)
@@ -61,32 +61,51 @@ OBSERVABILITY_BACKEND=langfuse
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
 LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # or self-host URL
+MINIMAX_API_KEY=...                               # offline judges + coding-plan
+MINIMAX_JUDGE_MODEL=MiniMax-M3
 ```
 
-- **Langfuse** view: seed V5 cells as traces + run Minimax judges onto Langfuse scores.
-- CLI: `python3 scripts/evals/run_langfuse_evaluators.py status|seed|judge --limit 40`
-- Self-host later via Podman / Apple Container (never Docker) for unlimited local control.
+### Hosted Minimax judges (preferred)
 
-Minimax coding-plan key: `MINIMAX_API_KEY` or keychain `minimax-coding-plan`.
+1. **UI once:** Langfuse → Settings → LLM Connections → custom provider:
+   - Provider name: `Minimax`
+   - Adapter: `anthropic`
+   - Base URL: `https://api.minimax.io/anthropic`
+   - Custom model: `Minimax-M3`
+   - API key: MiniMax coding-plan key
+2. **Sync evaluators + live observation rules:**
+
+```bash
+python3 scripts/evals/setup_langfuse_judges.py
+# or: python3 scripts/evals/run_langfuse_evaluators.py sync
+```
+
+Creates project evaluators `bench-correctness` / `bench-hallucination` /
+`bench-code-checker` (provider `Minimax`, model `Minimax-M3`) plus observation
+rules. Seed then emits `generation-create` so those rules can score cells.
+
+Playground and Evaluators UI use the same LLM connection (provider bills usage).
+
+### Offline Minimax → Langfuse scores
+
+Fallback when hosted preflight is flaky:
+
+```bash
+python3 scripts/evals/run_langfuse_evaluators.py seed --limit 40
+python3 scripts/evals/run_langfuse_evaluators.py judge --limit 20
+```
+
+- **Langfuse** view: Sync hosted judges · Seed traces+generations · Offline scores.
+- Self-host later via Podman / Apple Container (never Docker).
 
 ## LangSmith (optional legacy)
 
-Put `LANGSMITH_API_KEY` in gitignored `.env` only if still needed.
-
-### Hosted Minimax (OpenAI-compat)
-
-1. **UI once:** Settings → Provider secrets (`MINIMAX_API_KEY`) → Model configurations
-   (OpenAI Compatible Endpoint, base `https://api.minimax.io/v1`, model `MiniMax-M3`,
-   temperature 0). Enable under Feature Access → Evaluators.
-2. **API:** push Hub StructuredPrompts + register LLM evaluators + attach project run rules:
+Put `LANGSMITH_API_KEY` in gitignored `.env` only if still needed for old Harbor
+experiments. Prefer Langfuse for new eval work.
 
 ```bash
-uv venv --python python3.12 .venv-evals
-uv pip install --python .venv-evals/bin/python langsmith langchain-core
+# legacy only
 .venv-evals/bin/python scripts/evals/setup_hosted_judges.py
+python3 scripts/evals/run_evaluators.py sync|run|all --limit 20
+bash scripts/evals/harbor_langsmith_smoke.sh   # -e apple-container
 ```
-
-### Offline
-
-- CLI: `python3 scripts/evals/run_evaluators.py sync|run|all --limit 20`
-- Harbor smoke: `bash scripts/evals/harbor_langsmith_smoke.sh` (`-e apple-container`).

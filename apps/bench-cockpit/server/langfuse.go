@@ -119,6 +119,22 @@ func langfuseStatusHandler(w http.ResponseWriter, r *http.Request) {
 		out["projects"] = projects
 	}
 	out["dashboard_url"] = langfuseBase()
+
+	if code, raw, err := langfuseDo(http.MethodGet, "/api/public/llm-connections?limit=20", nil); err == nil && code < 300 {
+		var conns any
+		_ = json.Unmarshal(raw, &conns)
+		out["llm_connections"] = conns
+	}
+	if code, raw, err := langfuseDo(http.MethodGet, "/api/public/unstable/evaluators?limit=50", nil); err == nil && code < 300 {
+		var evals any
+		_ = json.Unmarshal(raw, &evals)
+		out["evaluators"] = evals
+	}
+	if code, raw, err := langfuseDo(http.MethodGet, "/api/public/unstable/evaluation-rules?limit=50", nil); err == nil && code < 300 {
+		var rules any
+		_ = json.Unmarshal(raw, &rules)
+		out["evaluation_rules"] = rules
+	}
 	_ = json.NewEncoder(w).Encode(out)
 }
 
@@ -158,10 +174,26 @@ func langfuseSetupHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, c := range cells {
 		tid := newUUID()
+		oid := newUUID()
 		traceIDs = append(traceIDs, tid)
 		genOK := c.GenOk
 		if genOK == 0 && c.PassAt1 != 0 {
 			genOK = c.PassAt1
+		}
+		inp := map[string]any{
+			"prompt":  truncate(c.Prompt, 2000),
+			"suite":   c.Suite,
+			"task_id": c.TaskID,
+			"variant": c.Variant,
+		}
+		outBody := map[string]any{
+			"reply":             truncate(c.Reply, 2000),
+			"ok":                c.OK,
+			"gen_ok":            genOK,
+			"partial_credit":    c.PartialCredit,
+			"pass_at_1":         c.PassAt1,
+			"wall_clock_s":      c.WallClockS,
+			"tokens_per_second": c.TokensPerSecond,
 		}
 		batch = append(batch, map[string]any{
 			"id":        newUUID(),
@@ -184,20 +216,29 @@ func langfuseSetupHandler(w http.ResponseWriter, r *http.Request) {
 					"scoring_method":     c.ScoringMethod,
 					"source":             "bench-cockpit",
 				},
-				"input": map[string]any{
-					"prompt":  truncate(c.Prompt, 2000),
+				"input":  inp,
+				"output": outBody,
+			},
+		})
+		// GENERATION so observation-target hosted judges can run.
+		batch = append(batch, map[string]any{
+			"id":        newUUID(),
+			"type":      "generation-create",
+			"timestamp": now,
+			"body": map[string]any{
+				"id":        oid,
+				"traceId":   tid,
+				"name":      "bench-cell",
+				"model":     c.Variant,
+				"input":     inp,
+				"output":    outBody,
+				"startTime": now,
+				"endTime":   now,
+				"metadata": map[string]any{
 					"suite":   c.Suite,
 					"task_id": c.TaskID,
 					"variant": c.Variant,
-				},
-				"output": map[string]any{
-					"reply":             truncate(c.Reply, 2000),
-					"ok":                c.OK,
-					"gen_ok":            genOK,
-					"partial_credit":    c.PartialCredit,
-					"pass_at_1":         c.PassAt1,
-					"wall_clock_s":      c.WallClockS,
-					"tokens_per_second": c.TokensPerSecond,
+					"source":  "bench-cockpit",
 				},
 			},
 		})
@@ -206,12 +247,13 @@ func langfuseSetupHandler(w http.ResponseWriter, r *http.Request) {
 			"type":      "score-create",
 			"timestamp": now,
 			"body": map[string]any{
-				"id":       newUUID(),
-				"traceId":  tid,
-				"name":     "gen_ok",
-				"value":    genOK,
-				"dataType": "NUMERIC",
-				"comment":  "generation success (not verified pass@1)",
+				"id":            newUUID(),
+				"traceId":       tid,
+				"observationId": oid,
+				"name":          "gen_ok",
+				"value":         genOK,
+				"dataType":      "NUMERIC",
+				"comment":       "generation success (not verified pass@1)",
 			},
 		})
 		if c.PartialCredit > 0 {
@@ -220,11 +262,12 @@ func langfuseSetupHandler(w http.ResponseWriter, r *http.Request) {
 				"type":      "score-create",
 				"timestamp": now,
 				"body": map[string]any{
-					"id":       newUUID(),
-					"traceId":  tid,
-					"name":     "partial_credit",
-					"value":    c.PartialCredit,
-					"dataType": "NUMERIC",
+					"id":            newUUID(),
+					"traceId":       tid,
+					"observationId": oid,
+					"name":          "partial_credit",
+					"value":         c.PartialCredit,
+					"dataType":      "NUMERIC",
 				},
 			})
 		}

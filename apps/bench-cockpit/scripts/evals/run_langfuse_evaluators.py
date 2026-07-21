@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Seed Langfuse traces from V5 JSON and optionally run Minimax offline judges.
+"""Seed Langfuse traces/generations from V5 JSON and run Minimax judges.
 
 Preferred observability backend (OSS / self-hostable). LangSmith remains optional.
 
@@ -8,8 +8,9 @@ Preferred observability backend (OSS / self-hostable). LangSmith remains optiona
   LANGFUSE_SECRET_KEY=sk-...
   LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 
-  python3 scripts/evals/run_langfuse_evaluators.py seed --limit 40
-  python3 scripts/evals/run_langfuse_evaluators.py judge --limit 20
+  # Hosted judges need Settings → LLM Connections → Minimax (anthropic adapter)
+  python3 scripts/evals/setup_langfuse_judges.py
+  python3 scripts/evals/run_langfuse_evaluators.py sync|seed|judge --limit 40
 """
 from __future__ import annotations
 
@@ -139,8 +140,24 @@ def seed(limit: int, data_path: Path) -> dict[str, Any]:
     traces: list[str] = []
     for c in cells:
         tid = str(uuid.uuid4())
+        oid = str(uuid.uuid4())
         traces.append(tid)
         gen_ok = float(c.get("gen_ok") if c.get("gen_ok") is not None else c.get("pass_at_1") or 0)
+        prompt = (c.get("prompt") or "")[:2000]
+        reply = (c.get("reply") or "")[:2000]
+        inp = {
+            "prompt": prompt,
+            "suite": c.get("suite"),
+            "task_id": c.get("task_id"),
+            "variant": c.get("variant"),
+        }
+        out = {
+            "reply": reply,
+            "gen_ok": gen_ok,
+            "partial_credit": c.get("partial_credit"),
+            "pass_at_1": c.get("pass_at_1"),
+            "wall_clock_s": c.get("wall_clock_s"),
+        }
         batch.append(
             {
                 "id": str(uuid.uuid4()),
@@ -158,19 +175,32 @@ def seed(limit: int, data_path: Path) -> dict[str, Any]:
                         "verified_pass_at_1": c.get("verified_pass_at_1", 0),
                         "source": "bench-cockpit",
                     },
-                    "input": {
-                        "prompt": (c.get("prompt") or "")[:2000],
+                    "input": inp,
+                    "output": out,
+                },
+            }
+        )
+        # GENERATION observations so hosted observation-target eval rules fire.
+        batch.append(
+            {
+                "id": str(uuid.uuid4()),
+                "type": "generation-create",
+                "timestamp": ts,
+                "body": {
+                    "id": oid,
+                    "traceId": tid,
+                    "name": "bench-cell",
+                    "model": str(c.get("model") or c.get("variant") or "bench"),
+                    "input": inp,
+                    "output": out,
+                    "metadata": {
                         "suite": c.get("suite"),
                         "task_id": c.get("task_id"),
                         "variant": c.get("variant"),
+                        "source": "bench-cockpit",
                     },
-                    "output": {
-                        "reply": (c.get("reply") or "")[:2000],
-                        "gen_ok": gen_ok,
-                        "partial_credit": c.get("partial_credit"),
-                        "pass_at_1": c.get("pass_at_1"),
-                        "wall_clock_s": c.get("wall_clock_s"),
-                    },
+                    "startTime": ts,
+                    "endTime": ts,
                 },
             }
         )
@@ -182,6 +212,7 @@ def seed(limit: int, data_path: Path) -> dict[str, Any]:
                 "body": {
                     "id": str(uuid.uuid4()),
                     "traceId": tid,
+                    "observationId": oid,
                     "name": "gen_ok",
                     "value": gen_ok,
                     "dataType": "NUMERIC",
@@ -314,16 +345,57 @@ def judge(limit: int) -> dict[str, Any]:
     }
 
 
+def sync_hosted() -> dict[str, Any]:
+    """Delegate to setup_langfuse_judges.py (hosted Minimax evaluators + rules)."""
+    script = ROOT / "scripts" / "evals" / "setup_langfuse_judges.py"
+    if not script.is_file():
+        die(f"missing {script}")
+    env = os.environ.copy()
+    proc = subprocess.run(
+        [sys.executable, str(script)],
+        cwd=str(ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
+    out: dict[str, Any] = {"returncode": proc.returncode}
+    try:
+        out["result"] = json.loads(proc.stdout) if proc.stdout.strip() else {}
+    except json.JSONDecodeError:
+        out["stdout"] = proc.stdout[-4000:]
+    if proc.stderr:
+        out["stderr"] = proc.stderr[-2000:]
+    if proc.returncode != 0:
+        die(json.dumps(out, indent=2))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["seed", "judge", "status"])
+    ap.add_argument("action", choices=["seed", "judge", "status", "sync"])
     ap.add_argument("--limit", type=int, default=40)
     ap.add_argument("--data", type=Path, default=None)
     args = ap.parse_args()
     if args.action == "status":
         code, health = lf_request("GET", "/api/public/health")
         _, projects = lf_request("GET", "/api/public/projects")
-        print(json.dumps({"health_code": code, "health": health, "projects": projects, "base": BASE}, indent=2))
+        _, conns = lf_request("GET", "/api/public/llm-connections?limit=20")
+        print(
+            json.dumps(
+                {
+                    "health_code": code,
+                    "health": health,
+                    "projects": projects,
+                    "llm_connections": conns,
+                    "base": BASE,
+                },
+                indent=2,
+            )
+        )
+        return
+    if args.action == "sync":
+        print(json.dumps(sync_hosted(), indent=2))
         return
     if args.action == "seed":
         out = seed(args.limit, args.data or default_data_path())
