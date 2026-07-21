@@ -63,6 +63,9 @@ export default function SummaryBar({
           <span>{cells} total</span>
           {filteredCount !== cells && <span className="faint"> · {filteredCount} shown</span>}
         </div>
+        <div className="sb-data-hint faint">
+          {cells >= 100 ? 'live V5 contract' : cells <= 2 ? 'lint demo' : 'smoke fixture'}
+        </div>
       </div>
 
       <div className="sb-connection">

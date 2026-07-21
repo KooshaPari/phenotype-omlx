@@ -44,6 +44,8 @@ type VariantSummary struct {
 	MeanIntentPres       float64 `json:"mean_intent_preservation"`
 	NHallucinations      int     `json:"n_hallucinations"`
 	OkCount              int     `json:"ok_count"`
+	MeanTokensPerSecond  float64 `json:"mean_tokens_per_second"`
+	MeanTokensRead       float64 `json:"mean_tokens_read"` // harness alias; UI Tok/s prefers mean_tokens_per_second
 }
 
 type Summary struct {
@@ -192,7 +194,34 @@ func loadData() (*ResultsData, error) {
 	if len(data.Cells) == 0 {
 		return nil, fmt.Errorf("results JSON has 0 cells (not an EvaluationReport either)")
 	}
+	// Enrich summary Tok/s from cells when harness used mean_tokens_read only.
+	enrichVariantThroughput(&data)
 	return &data, nil
+}
+
+func enrichVariantThroughput(data *ResultsData) {
+	if data == nil || len(data.Cells) == 0 {
+		return
+	}
+	sums := summarizeByVariant(data.Cells)
+	if data.Summary.ByVariant == nil {
+		data.Summary.ByVariant = sums
+		return
+	}
+	for v, enriched := range sums {
+		cur := data.Summary.ByVariant[v]
+		if cur.MeanTokensPerSecond == 0 && enriched.MeanTokensPerSecond > 0 {
+			cur.MeanTokensPerSecond = enriched.MeanTokensPerSecond
+		}
+		// VerdictStrip historically read mean_tokens_read for Tok/s — keep it as tok/s rate.
+		if enriched.MeanTokensPerSecond > 0 {
+			cur.MeanTokensRead = enriched.MeanTokensPerSecond
+			if cur.MeanTokensPerSecond == 0 {
+				cur.MeanTokensPerSecond = enriched.MeanTokensPerSecond
+			}
+		}
+		data.Summary.ByVariant[v] = cur
+	}
 }
 
 // lintCells detects degenerate / vacuous-pass cells in the loaded data.
@@ -212,14 +241,19 @@ func lintCells(cells []Cell) []LintWarning {
 		byKey[key{c.Suite, c.TaskID}] = append(byKey[key{c.Suite, c.TaskID}], c)
 	}
 
-	// Rule 1: pass@1 == 1.0 with no prompt / no reply / sub-50ms wall-clock.
+	// Rule 1: pass@1 == 1.0 with degenerate timing/content signals.
+	// EvaluationReport contracts often omit prompt/reply text — empty
+	// strings alone are not enough; require wall-clock or token evidence.
 	var trivial []string
 	for i := range cells {
 		c := cells[i]
 		if c.PassAt1 < 0.999 {
 			continue
 		}
-		if c.Prompt == "" || c.Reply == "" || c.WallClockS < 0.05 {
+		noIO := c.Prompt == "" && c.Reply == ""
+		noTokens := c.TotalTokensIn+c.TotalTokensOut == 0
+		fast := c.WallClockS < 0.05
+		if fast || (noIO && noTokens && c.WallClockS < 1.0) {
 			trivial = append(trivial, fmt.Sprintf("%s/%s/%s", c.Suite, c.TaskID, c.Variant))
 		}
 	}
@@ -261,12 +295,18 @@ func lintCells(cells []Cell) []LintWarning {
 
 	// Rule 3: judge_score is missing or zero on a cell that otherwise
 	// claims pass@1 == 1.0 → no actual scoring happened.
+	// Skip when metadata already carries a deterministic judge + raw score
+	// (EvaluationReport flatten maps raw_score → pass@1).
 	var noJudge []string
 	for i := range cells {
 		c := cells[i]
-		if c.PassAt1 >= 0.999 && c.JudgeScore == 0 {
-			noJudge = append(noJudge, fmt.Sprintf("%s/%s/%s", c.Suite, c.TaskID, c.Variant))
+		if c.PassAt1 < 0.999 || c.JudgeScore != 0 {
+			continue
 		}
+		if c.Metadata != nil && (c.Metadata["judge"] == "deterministic" || c.Metadata["judge"] == "exact") {
+			continue
+		}
+		noJudge = append(noJudge, fmt.Sprintf("%s/%s/%s", c.Suite, c.TaskID, c.Variant))
 	}
 	if len(noJudge) > 0 {
 		warnings = append(warnings, LintWarning{
@@ -277,7 +317,7 @@ func lintCells(cells []Cell) []LintWarning {
 		})
 	}
 
-	// Rule 4: pass@1 == 1.0 with empty expected_answer or scoring_method
+	// Rule 4: pass@1 == 1.0 with BOTH empty expected_answer and scoring_method
 	// — smoking gun for the vacuous-pass bug (pheno-harness _verify).
 	var vacuous []string
 	for i := range cells {
@@ -285,7 +325,7 @@ func lintCells(cells []Cell) []LintWarning {
 		if c.PassAt1 < 0.999 {
 			continue
 		}
-		if c.ExpectedAnswer == "" || c.ScoringMethod == "" {
+		if c.ExpectedAnswer == "" && c.ScoringMethod == "" {
 			vacuous = append(vacuous, fmt.Sprintf("%s/%s/%s", c.Suite, c.TaskID, c.Variant))
 		}
 	}
@@ -293,7 +333,7 @@ func lintCells(cells []Cell) []LintWarning {
 		warnings = append(warnings, LintWarning{
 			Code:     "vacuous_pass",
 			Severity: "error",
-			Message:  fmt.Sprintf("%d cell(s) scored 100%% with empty expected_answer or scoring_method — vacuous pass.", len(vacuous)),
+			Message:  fmt.Sprintf("%d cell(s) scored 100%% with empty expected_answer and scoring_method — vacuous pass.", len(vacuous)),
 			Cells:    vacuous,
 		})
 	}

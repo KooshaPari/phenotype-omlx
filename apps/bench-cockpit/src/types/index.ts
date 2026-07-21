@@ -3,6 +3,8 @@
 export type ViewType =
   | 'overview'
   | 'suites'
+  | 'suite'
+  | 'task'
   | 'cells'
   | 'comparison'
   | 'failures'
@@ -99,6 +101,7 @@ export interface Cell {
   system_prompt_hash?: string;
   progress_trace?: any[];
   expected_answer?: string;
+  metadata?: Record<string, string>;
   [k: string]: any;
 }
 

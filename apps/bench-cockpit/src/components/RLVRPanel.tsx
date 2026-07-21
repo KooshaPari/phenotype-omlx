@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Cell } from '../types';
+import { resolveRlvr } from '../lib/rlvr';
 
 interface Props {
   cells: Cell[];
@@ -13,36 +14,20 @@ interface Props {
  */
 export default function RLVRPanel({ cells }: Props) {
   const rows = useMemo(() => {
-    return cells
-      .filter((c) => c.rlvr_reward != null || c.rlvr_composite != null || c.RLVRReward != null)
-      .map((c) => {
-        const composite =
-          c.rlvr_composite ??
-          c.RLVRReward ??
-          c.rlvr_reward ??
-          0;
-        const breakdown =
-          c.rlvr_reward_breakdown ??
-          c.RLVRRewardBreakdown ??
-          {};
-        return {
-          cell: c,
-          composite: Number(composite) || 0,
-          l0: Number(c.rlvr_l0 ?? breakdown.l0 ?? 0),
-          l1: Number(c.rlvr_l1 ?? breakdown.l1 ?? 0),
-          l2: Number(c.rlvr_l2 ?? breakdown.l2 ?? 0),
-          l3: Number(c.rlvr_l3 ?? breakdown.l3 ?? 0),
-          tournamentDelta: Number(c.rlvr_tournament_delta ?? c.RLVRTournamentDelta ?? 0),
-          verifiable: Boolean(c.rlvr_verifiable ?? c.RLVRVerifiable),
-          passed: Boolean(c.rlvr_passed ?? c.RLVRPassed),
-          breakdown: breakdown as Record<string, number>,
-        };
-      });
+    return cells.map((c) => {
+      const r = resolveRlvr(c);
+      return { cell: c, ...r };
+    });
   }, [cells]);
 
   const verifiableShare = cells.length
     ? rows.filter((r) => r.verifiable).length / Math.max(1, cells.length)
     : 0;
+  const sourceCounts = useMemo(() => {
+    const m = { harness: 0, trace: 0, derived: 0 };
+    for (const r of rows) m[r.source]++;
+    return m;
+  }, [rows]);
 
   const components = [
     'json',
@@ -55,11 +40,10 @@ export default function RLVRPanel({ cells }: Props) {
     'tokens_saved',
   ];
 
-  if (!rows.length) {
+  if (!cells.length) {
     return (
       <div className="empty-state" data-testid="rlvr-empty">
-        No RLVR fields on cells yet. Wire harness JSON with rlvr_composite / rlvr_* keys.
-        Primary scalar = L0/L1/L2/L3 composite.
+        No cells loaded.
       </div>
     );
   }
@@ -70,14 +54,22 @@ export default function RLVRPanel({ cells }: Props) {
         <div className="viz-toolbar">
           <span className="viz-title">RLVR-AF · primary = L0–L3 composite</span>
           <span className="viz-hint">
-            verifiable share {(verifiableShare * 100).toFixed(0)}% · secondary = tournament Δ
+            verifiable {(verifiableShare * 100).toFixed(0)}% · sources harness {sourceCounts.harness} /
+            trace {sourceCounts.trace} / derived {sourceCounts.derived}
           </span>
         </div>
+        {sourceCounts.derived === rows.length && (
+          <div className="warn-banner">
+            No harness <code>rlvr_*</code> fields — showing <b>derived</b> L0–L3 from quality/perf
+            metrics. Wire progress_trace reward spans or top-level rlvr_* for true RLVR-AF.
+          </div>
+        )}
         <table className="heat-table">
           <thead>
             <tr>
               <th>task</th>
               <th>variant</th>
+              <th>src</th>
               <th>composite</th>
               <th>L0</th>
               <th>L1</th>
@@ -92,6 +84,7 @@ export default function RLVRPanel({ cells }: Props) {
               <tr key={i}>
                 <td>{r.cell.task_id}</td>
                 <td>{r.cell.variant}</td>
+                <td><span className="badge">{r.source}</span></td>
                 <td>{r.composite.toFixed(3)}</td>
                 <td>{r.l0.toFixed(2)}</td>
                 <td>{r.l1.toFixed(2)}</td>

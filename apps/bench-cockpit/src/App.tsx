@@ -12,6 +12,8 @@ import Viz from './components/Viz';
 import Throughput from './components/Throughput';
 import RLVRPanel from './components/RLVRPanel';
 import Audit from './components/Audit';
+import SuitePage from './components/SuitePage';
+import TaskPage from './components/TaskPage';
 import Drawer from './components/Drawer';
 import { Cell, ViewType, Insight } from './types';
 
@@ -119,6 +121,8 @@ export default function App() {
   const [selected, setSelected] = useState<Cell | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [focusSuite, setFocusSuite] = useState<string | null>(null);
+  const [focusTask, setFocusTask] = useState<{ suite: string; taskId: string; variant: 'stock' | 'ours' } | null>(null);
 
   // --- Toasts ---
   const addToast = useCallback((message: string, type: Toast['type'] = 'info') => {
@@ -147,15 +151,60 @@ export default function App() {
     return [];
   }, [state.payload, filteredCells]);
 
+  const focusSuites = useMemo(
+    () => [...state.filters.suite].sort(),
+    [state.filters.suite],
+  );
+
   // --- Selection Logic ---
   const handleSelect = useCallback((c: Cell | null) => {
     setSelected(c);
   }, []);
 
   const onJumpToSuite = useCallback((suite: string) => {
-    dispatch({ type: 'SET_VIEW', view: 'cells' });
-    dispatch({ type: 'SET_FILTER', filterKey: 'suite', value: suite });
+    setFocusSuite(suite);
+    dispatch({ type: 'SET_VIEW', view: 'suite' });
   }, [dispatch]);
+
+  const onOpenTaskPage = useCallback((suite: string, taskId: string, variant: 'stock' | 'ours' = 'ours') => {
+    setFocusSuite(suite);
+    setFocusTask({ suite, taskId, variant });
+    dispatch({ type: 'SET_VIEW', view: 'task' });
+  }, [dispatch]);
+
+  // Persist suite/task focus into hash (alongside useBenchState view params).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    if (focusSuite) p.set('suite', focusSuite);
+    else p.delete('suite');
+    if (focusTask) {
+      p.set('task', focusTask.taskId);
+      p.set('variant', focusTask.variant);
+      p.set('suite', focusTask.suite);
+    } else {
+      p.delete('task');
+      p.delete('variant');
+    }
+    const next = p.toString();
+    if (window.location.hash.replace(/^#/, '') !== next) {
+      window.location.hash = next;
+    }
+  }, [focusSuite, focusTask]);
+
+  // Restore focus from hash on first mount / external hash edits.
+  useEffect(() => {
+    const apply = () => {
+      const p = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const suite = p.get('suite');
+      const task = p.get('task');
+      const variant = (p.get('variant') === 'stock' ? 'stock' : 'ours') as 'stock' | 'ours';
+      if (suite) setFocusSuite(suite);
+      if (suite && task) setFocusTask({ suite, taskId: task, variant });
+    };
+    apply();
+    window.addEventListener('hashchange', apply);
+    return () => window.removeEventListener('hashchange', apply);
+  }, []);
 
   const statusLevel = state.payload ? 'connected' : 'error';
   const statusText = state.payload ? 'LIVE' : 'DISCONNECTED';
@@ -243,8 +292,57 @@ export default function App() {
     switch (state.view) {
       case 'overview':
         return <Overview cells={allCells} summary={summary!} onJumpToSuite={onJumpToSuite} />;
-      case 'suites':
-        return <Suites cells={allCells} />;
+      case 'suites': {
+        const untrusted = (state.payload?.warnings ?? []).some(
+          (w) => w.code === 'synthetic_100pct' || w.code === 'all_variants_pass',
+        );
+        return (
+          <Suites
+            cells={allCells}
+            focusSuites={focusSuites}
+            onSelect={handleSelect}
+            passAt1Untrusted={untrusted}
+            onOpenSuite={(suite) => {
+              setFocusSuite(suite);
+              dispatch({ type: 'SET_VIEW', view: 'suite' });
+            }}
+            onOpenTask={(taskId, variant, suite) => onOpenTaskPage(suite, taskId, variant)}
+          />
+        );
+      }
+      case 'suite':
+        if (!focusSuite) {
+          return <div className="empty-state">No suite selected.</div>;
+        }
+        return (
+          <SuitePage
+            suite={focusSuite}
+            cells={allCells}
+            onBack={() => dispatch({ type: 'SET_VIEW', view: 'suites' })}
+            onOpenTask={(taskId, variant) => onOpenTaskPage(focusSuite, taskId, variant)}
+          />
+        );
+      case 'task':
+        if (!focusTask) {
+          return <div className="empty-state">No task selected.</div>;
+        }
+        return (
+          <TaskPage
+            suite={focusTask.suite}
+            taskId={focusTask.taskId}
+            cells={allCells}
+            history={history}
+            initialVariant={focusTask.variant}
+            onBack={() => {
+              setFocusSuite(focusTask.suite);
+              dispatch({ type: 'SET_VIEW', view: 'suite' });
+            }}
+            onOpenSuite={() => {
+              setFocusSuite(focusTask.suite);
+              dispatch({ type: 'SET_VIEW', view: 'suite' });
+            }}
+          />
+        );
       case 'cells':
         return <CellsTable cells={cells} state={state} onSelect={handleSelect} onSort={(k) => dispatch({ type: 'SORT', key: k })} onGroup={(g) => dispatch({ type: 'GROUP', group: g })} />;
       case 'comparison':
@@ -284,7 +382,16 @@ export default function App() {
           state={state}
           cells={allCells.length}
           filteredCount={cells.length}
-          onChangeView={(v) => dispatch({ type: 'SET_VIEW', view: v })}
+          onChangeView={(v) => {
+            if (v !== 'suite' && v !== 'task') {
+              setFocusTask(null);
+            }
+            if (v !== 'suite' && v !== 'task') {
+              // keep focusSuite for jump-back from Overview; clear only leaving suite tree
+              if (v !== 'suites') setFocusSuite(null);
+            }
+            dispatch({ type: 'SET_VIEW', view: v });
+          }}
           onSearch={(s) => dispatch({ type: 'SET_SEARCH', search: s })}
           onReconnect={connectWS}
           onExportMd={onExportMd}
@@ -307,16 +414,21 @@ export default function App() {
           
           {(insights.length > 0 || (state.payload?.warnings?.length ?? 0) > 0) && (
             <div className="insights-strip">
-              {state.payload?.warnings?.filter(w => w.severity === 'error').slice(0, 1).map((w, i) => (
-                <button key={`lint-err-${i}`} className="insight-pill insight-bad" onClick={() => dispatch({ type: 'SET_VIEW', view: 'calibration' })}>
-                  LINT: {w.code} ({w.cells?.length ?? 0} cell(s))
+              {/* Overview stays quiet: one Calibration chip instead of ERROR banner spam.
+                  Full lint demos remain on Calibration (+ fixtures/smoke_lint_demo.json). */}
+              {(state.payload?.warnings?.length ?? 0) > 0 && (
+                <button
+                  className={`insight-pill ${
+                    state.payload!.warnings!.some((w) => w.severity === 'error')
+                      ? 'insight-warn'
+                      : 'insight-good'
+                  }`}
+                  onClick={() => dispatch({ type: 'SET_VIEW', view: 'calibration' })}
+                >
+                  Calibration · {state.payload!.warnings!.length} finding
+                  {state.payload!.warnings!.length === 1 ? '' : 's'}
                 </button>
-              ))}
-              {state.payload?.warnings?.filter(w => w.severity === 'warning').slice(0, 1).map((w, i) => (
-                <button key={`lint-warn-${i}`} className="insight-pill insight-warn" onClick={() => dispatch({ type: 'SET_VIEW', view: 'calibration' })}>
-                  LINT: {w.code} ({w.cells?.length ?? 0} cell(s))
-                </button>
-              ))}
+              )}
               {insights.filter(i => !state.dismissedInsights.has(i.kind)).map(i => (
                 <button key={i.kind} className={`insight-pill insight-${i.level}`} onClick={() => onInsightAction(i)}>
                   {i.text}

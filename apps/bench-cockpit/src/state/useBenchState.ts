@@ -416,6 +416,7 @@ export function useBenchState() {
 
   /* ── URL hash persistence ──────────────────────────────────────── */
   useEffect(() => {
+    const prev = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const p = new URLSearchParams();
     p.set('view', state.view);
     if (state.search) p.set('q', state.search);
@@ -424,6 +425,11 @@ export function useBenchState() {
     if (state.groupBy !== 'none') p.set('group', state.groupBy);
     if (state.failMode !== 'all') p.set('fail', state.failMode);
     if (state.scatterScale !== 1) p.set('scale', String(state.scatterScale));
+    // Preserve detail-page focus params owned by App.
+    for (const key of ['suite', 'task', 'variant'] as const) {
+      const v = prev.get(key);
+      if (v) p.set(key, v);
+    }
     window.location.hash = p.toString();
   }, [state.view, state.search, state.sortKey, state.sortDir, state.groupBy, state.failMode, state.scatterScale]);
 

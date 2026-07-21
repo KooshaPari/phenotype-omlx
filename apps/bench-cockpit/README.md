@@ -18,16 +18,29 @@ capacity / fleet plane of the same platform.
 
 Always use **bun** (never npm/yarn/pnpm):
 
+# Prefer V5 EvaluationReport when present; override with BENCH_DATA.
+# Clean smoke (no vacuous lint ERROR): BENCH_DATA=fixtures/smoke_results.json …
+# Lint detector demo: BENCH_DATA=fixtures/smoke_lint_demo.json …
+# Overview shows one Calibration chip (not ERROR banner spam); full lints on Calib view.
+
 ```bash
 # one-shot (prefers V5 EvaluationReport when present)
 bash scripts/start-dev.sh
 # override data: BENCH_DATA=/path/to/results.json bash scripts/start-dev.sh
+# clean smoke (no vacuous lint ERROR): BENCH_DATA=fixtures/smoke_results.json …
+# lint detector demo: BENCH_DATA=fixtures/smoke_lint_demo.json …
+```
 
+**Suites view:** each suite is an expandable row; expand to per-task stock/ours
+metrics (click a task to open the cell drawer). Overview suite cards jump here
+and auto-expand the suite.
+
+```bash
 # or manual:
 cd server && go run . \
   -data /Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json \
   -port 8090
-bun install && bun run dev
+bun install && bun run build && # serve via Go -dist ../dist
 ```
 
 The Go server auto-detects pheno-harness **EvaluationReport v0.1**

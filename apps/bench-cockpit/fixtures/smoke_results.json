@@ -9,22 +9,21 @@
         "stock",
         "ours"
       ],
-      "n_cells": 19,
+      "n_cells": 18,
       "difficulty_mix": {
-        "medium": 18,
-        "easy": 1
+        "medium": 18
       }
     },
     "by_variant": {
       "stock": {
-        "n_cells": 10,
+        "n_cells": 9,
         "pass_at_1": 0.42,
         "mean_wall_clock_s": 2.5,
         "mean_partial_credit": 0.38,
         "mean_format_compliance": 0.95,
         "mean_intent_preservation": 0.8,
         "n_hallucinations": 1,
-        "ok_count": 10
+        "ok_count": 9
       },
       "ours": {
         "n_cells": 9,
@@ -992,34 +991,6 @@
       "failure_analysis": {
         "primary_factor": "ok"
       }
-    },
-    {
-      "suite": "mmlu",
-      "task_id": "vacuous-001",
-      "difficulty": "easy",
-      "variant": "stock",
-      "ok": true,
-      "wall_clock_s": 0.01,
-      "tokens_per_second": 0,
-      "first_token_latency_ms": 0,
-      "peak_rss_mb": 0,
-      "peak_gpu_mem_mb": 0,
-      "energy_proxy_joules": 0,
-      "pass_at_1": 1.0,
-      "partial_credit": 1.0,
-      "judge_score": 0,
-      "intent_preservation_rate": 0,
-      "hallucination_count": 0,
-      "tool_call_success_rate": 0,
-      "retry_count": 0,
-      "format_compliance_rate": 0,
-      "reply": "",
-      "prompt": "",
-      "expected_answer": "",
-      "scoring_method": "",
-      "total_tokens_in": 0,
-      "total_tokens_out": 0,
-      "cost_usd": 0
     }
   ]
 }

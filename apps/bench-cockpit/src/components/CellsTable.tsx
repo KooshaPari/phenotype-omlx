@@ -32,8 +32,11 @@ const COLS: Array<{ key: string; label: string; w: number; fmt: (v: any) => stri
   { key: 'energy_proxy_joules', label: 'J', w: 52, fmt: v => v ? v.toFixed(1) : '—' },
 ];
 
+const ROW_WIDTH = COLS.reduce((s, c) => s + c.w, 0);
+
 export default function CellsTable({ cells, state, onSort, onSelect, onGroup }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
   const sorted = useCallback(() => {
     const arr = [...cells];
     const k = state.sortKey;
@@ -73,6 +76,12 @@ export default function CellsTable({ cells, state, onSort, onSelect, onGroup }: 
     overscan: 20,
   });
 
+  const onBodyScroll = () => {
+    if (parentRef.current && headerRef.current) {
+      headerRef.current.scrollLeft = parentRef.current.scrollLeft;
+    }
+  };
+
   const sortedKey = state.sortKey;
   const col = COLS.find(c => c.key === sortedKey);
   const colLabel = col?.label || sortedKey;
@@ -89,21 +98,31 @@ export default function CellsTable({ cells, state, onSort, onSelect, onGroup }: 
         </div>
       </div>
       <div className="cells-wrap">
-        <div className="cells-header">
-          {COLS.map(c => (
-            <div key={c.key} className="ch" style={{ width: c.w }} onClick={() => onSort(c.key)}>
-              {c.label}
-              {sortedKey === c.key && <span className="csort">{state.sortDir < 0 ? '▼' : '▲'}</span>}
-            </div>
-          ))}
+        <div ref={headerRef} className="cells-header" style={{ width: '100%' }}>
+          <div className="cells-header-inner" style={{ width: ROW_WIDTH }}>
+            {COLS.map(c => (
+              <div key={c.key} className="ch" style={{ width: c.w, minWidth: c.w }} onClick={() => onSort(c.key)}>
+                {c.label}
+                {sortedKey === c.key && <span className="csort">{state.sortDir < 0 ? '▼' : '▲'}</span>}
+              </div>
+            ))}
+          </div>
         </div>
-        <div ref={parentRef} className="cells-scroll">
-          <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
+        <div ref={parentRef} className="cells-scroll" onScroll={onBodyScroll}>
+          <div style={{ height: virtualizer.getTotalSize(), position: 'relative', width: ROW_WIDTH }}>
             {virtualizer.getVirtualItems().map(virtualItem => {
               const row = rows[virtualItem.index];
               if (row.kind === 'group') {
                 return (
-                  <div key={virtualItem.index} className="cg-row" style={{ height: 28, transform: `translateY(${virtualItem.start}px)` }}>
+                  <div
+                    key={virtualItem.index}
+                    className="cg-row"
+                    style={{
+                      height: 28,
+                      width: ROW_WIDTH,
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
                     <span className="cg-label">{row.label}</span>
                   </div>
                 );
@@ -113,11 +132,15 @@ export default function CellsTable({ cells, state, onSort, onSelect, onGroup }: 
                 <div
                   key={virtualItem.index}
                   className={`cd-row ${state.selectedCell?.task_id === c.task_id && state.selectedCell?.variant === c.variant ? 'selected' : ''}`}
-                  style={{ height: 28, transform: `translateY(${virtualItem.start}px)` }}
+                  style={{
+                    height: 28,
+                    width: ROW_WIDTH,
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
                   onClick={() => onSelect(c)}
                 >
                   {COLS.map(col => (
-                    <div key={col.key} className="cd" style={{ width: col.w }}>
+                    <div key={col.key} className="cd" style={{ width: col.w, minWidth: col.w }}>
                       {col.key === 'ok' ? (
                         <span className={`sp ${c.ok ? 'ok' : 'fail'}`}>{c.ok ? 'ok' : 'fail'}</span>
                       ) : col.key === 'variant' ? (
@@ -125,7 +148,15 @@ export default function CellsTable({ cells, state, onSort, onSelect, onGroup }: 
                       ) : col.key === 'difficulty' ? (
                         <span className={`dp ${c.difficulty}`}>{c.difficulty}</span>
                       ) : col.key === 'wall_clock_s' ? (
-                        <><span className="mini-bar" style={{ width: Math.min(c.wall_clock_s / 60 * 100, 100) + '%', background: c.wall_clock_s > 30 ? 'var(--amber)' : 'var(--accent-dim)' }} />{col.fmt(c[col.key])}</>
+                        <>
+                          <span
+                            className={`mini-bar ${c.wall_clock_s > 30 ? 'warn' : 'ours'}`}
+                            title={`${c.wall_clock_s.toFixed(2)}s`}
+                          >
+                            <div style={{ width: `${Math.min((c.wall_clock_s / 60) * 100, 100)}%` }} />
+                          </span>
+                          {col.fmt(c[col.key])}
+                        </>
                       ) : (
                         col.fmt(c[col.key])
                       )}

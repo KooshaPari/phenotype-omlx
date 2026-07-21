@@ -88,9 +88,9 @@ export default function Overview({ cells, summary, onJumpToSuite }: Props) {
           return (
             <div key={suite} className="suite-card" onClick={() => onJumpToSuite(suite)}>
               <div className="suite-name">{suite} <span className="n">{grp.stock.length + grp.ours.length}</span></div>
-              <div className="suite-row"><span className="swatch stock" />stock <span className="suite-val">{sW.toFixed(2)}s</span></div>
-              <div className="suite-row"><span className="swatch ours" />ours <span className="suite-val">{oW.toFixed(2)}s</span><span className={`suite-delta ${cls}`}>{dWall >= 0 ? '+' : ''}{dWall.toFixed(2)}s</span></div>
-              <div className="suite-row"><span className="swatch" style={{ background: 'var(--green)' }} />p@1 <span className="suite-val">{(sP * 100).toFixed(0)}% / {(oP * 100).toFixed(0)}%</span></div>
+              <div className="suite-card-row"><span className="swatch stock" />stock <span className="suite-val">{sW.toFixed(2)}s</span></div>
+              <div className="suite-card-row"><span className="swatch ours" />ours <span className="suite-val">{oW.toFixed(2)}s</span><span className={`suite-delta ${cls}`}>{dWall >= 0 ? '+' : ''}{dWall.toFixed(2)}s</span></div>
+              <div className="suite-card-row"><span className="swatch" style={{ background: 'var(--green)' }} />p@1 <span className="suite-val">{(sP * 100).toFixed(0)}% / {(oP * 100).toFixed(0)}%</span></div>
             </div>
           );
         })}

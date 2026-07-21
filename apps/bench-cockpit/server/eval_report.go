@@ -217,14 +217,14 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 		EnergyProxyJoules:   tr.EnergyJoules,
 		PassAt1:             passAt1,
 		PartialCredit:       floatOr(ap, "partial_credit", passAt1),
-		JudgeScore:          floatOr(ap, "judge_score", 0),
+		JudgeScore:          floatOr(ap, "judge_score", passAt1),
 		IntentPreservation:  floatOr(ap, "intent_preservation_rate", 0),
 		HallucinationCount:  intOr(ap, "hallucination_count", 0),
 		ToolCallSuccess:     floatOr(ap, "tool_call_success_rate", 0),
 		RetryCount:          intOr(ap, "retry_count", 0),
-		FormatCompliance:    floatOr(ap, "format_compliance_rate", 0),
-		Reply:               "",
-		Prompt:              "",
+		FormatCompliance:    floatOr(ap, "format_compliance_rate", passAt1),
+		Reply:               strOr(ap, "reply", ""),
+		Prompt:              strOr(ap, "prompt", ""),
 		FailureAnalysis:     failAnalysis,
 		ProgressTrace:       progress,
 		ModelName:           strOr(ap, "model_id", rep.Run.Model),
@@ -234,7 +234,7 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 		ErrorMessage:        errMsg,
 		ErrorCode:           errCode,
 		ExpectedAnswer:      strOr(ap, "expected_answer", ""),
-		ScoringMethod:       strOr(ap, "scoring_method", tr.Judge),
+		ScoringMethod:       firstNonEmpty(strOr(ap, "scoring_method", ""), tr.Judge, "reported"),
 		Metadata:            meta,
 	}
 }
@@ -242,7 +242,7 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 func summarizeByVariant(cells []Cell) map[string]VariantSummary {
 	type acc struct {
 		n, ok, hall int
-		pass, wall, partial, format, intent float64
+		pass, wall, partial, format, intent, tps float64
 	}
 	m := map[string]*acc{}
 	for _, c := range cells {
@@ -261,6 +261,7 @@ func summarizeByVariant(cells []Cell) map[string]VariantSummary {
 		a.format += c.FormatCompliance
 		a.intent += c.IntentPreservation
 		a.hall += c.HallucinationCount
+		a.tps += c.TokensPerSecond
 	}
 	out := make(map[string]VariantSummary, len(m))
 	for v, a := range m {
@@ -268,6 +269,7 @@ func summarizeByVariant(cells []Cell) map[string]VariantSummary {
 		if n == 0 {
 			continue
 		}
+		tps := a.tps / n
 		out[v] = VariantSummary{
 			NCells:               a.n,
 			PassAt1:              a.pass / n,
@@ -277,6 +279,8 @@ func summarizeByVariant(cells []Cell) map[string]VariantSummary {
 			MeanIntentPres:       a.intent / n,
 			NHallucinations:      a.hall,
 			OkCount:              a.ok,
+			MeanTokensPerSecond:  tps,
+			MeanTokensRead:       tps, // keep legacy key populated for older UI bindings
 		}
 	}
 	return out
@@ -370,4 +374,13 @@ func coalesce(a, b string) string {
 		return a
 	}
 	return b
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

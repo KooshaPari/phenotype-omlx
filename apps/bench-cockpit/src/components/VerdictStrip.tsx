@@ -12,7 +12,7 @@ const METRICS = [
   { key: 'mean_partial_credit', label: 'PC',          fmt: (v: number) => v.toFixed(3),                better: 'up' },
   { key: 'mean_format_compliance', label: 'Fmt',      fmt: (v: number) => (v * 100).toFixed(0) + '%',  better: 'up' },
   { key: 'n_hallucinations',    label: 'Halluc',      fmt: (v: number) => String(v),                   better: 'down' },
-  { key: 'mean_tokens_read',    label: 'Tok/s',        fmt: (v: number) => v.toFixed(0),               better: 'up' },
+  { key: 'mean_tokens_per_second', label: 'Tok/s',    fmt: (v: number) => v ? v.toFixed(1) : '—',      better: 'up' },
 ];
 
 const METRICS_WITH_TOTALS = [
@@ -21,13 +21,20 @@ const METRICS_WITH_TOTALS = [
   { key: 'mean_cost_usd',       label: 'Cost',       fmt: (v: number) => v ? '$' + v.toFixed(4) : '—',      better: 'down' },
 ];
 
+function metricValue(side: Record<string, number>, key: string): number {
+  if (key === 'mean_tokens_per_second') {
+    return side.mean_tokens_per_second || side.mean_decode_speed_tps || side.mean_tokens_read || 0;
+  }
+  return side[key] ?? 0;
+}
+
 export default function VerdictStrip({ summary, statusText, statusLevel }: VerdictStripProps) {
   const s = summary.stock, o = summary.ours;
   return (
     <div className="verdict-strip">
       {METRICS.map(m => {
-        const sv = s[m.key] ?? 0;
-        const ov = o[m.key] ?? 0;
+        const sv = metricValue(s, m.key);
+        const ov = metricValue(o, m.key);
         const delta = ov - sv;
         const isBetter = (m.better === 'up' ? delta > 0 : delta < 0);
         const cls = Math.abs(delta) > 0.0001 ? (isBetter ? 'positive' : 'negative') : 'neutral';
