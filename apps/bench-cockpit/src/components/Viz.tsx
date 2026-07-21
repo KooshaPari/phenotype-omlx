@@ -13,7 +13,7 @@ export default function Viz({ cells, onSelect }: Props) {
   return (
     <div className="view-stack" data-testid="viz-view">
       <Scatter cells={cells} onSelect={onSelect} />
-      <Heatmap cells={cells} />
+      <Heatmap cells={cells} onSelect={onSelect} />
       <FailMatrix cells={cells} onSelect={onSelect} />
     </div>
   );

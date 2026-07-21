@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
+import React, { Suspense, lazy, useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { useBenchState } from './state/useBenchState';
 import SummaryBar from './components/SummaryBar';
 import VerdictStrip from './components/VerdictStrip';
@@ -8,7 +8,6 @@ import CellsTable from './components/CellsTable';
 import Comparison from './components/Comparison';
 import Failures from './components/Failures';
 import Calibration from './components/Calibration';
-import Viz from './components/Viz';
 import Throughput from './components/Throughput';
 import RLVRPanel from './components/RLVRPanel';
 import Audit from './components/Audit';
@@ -16,6 +15,9 @@ import SuitePage from './components/SuitePage';
 import TaskPage from './components/TaskPage';
 import Drawer from './components/Drawer';
 import { Cell, ViewType, Insight } from './types';
+
+/** echarts-heavy viz — lazy so initial bundle stays lean. */
+const Viz = lazy(() => import('./components/Viz'));
 
 // --- Toast System ---
 interface Toast {
@@ -358,7 +360,11 @@ export default function App() {
           />
         );
       case 'viz':
-        return <Viz cells={allCells} onSelect={handleSelect} />;
+        return (
+          <Suspense fallback={<div className="viz-hint">Loading charts…</div>}>
+            <Viz cells={allCells} onSelect={handleSelect} />
+          </Suspense>
+        );
       case 'throughput':
         return <Throughput cells={allCells} />;
       case 'rlvr':

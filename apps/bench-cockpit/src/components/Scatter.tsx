@@ -1,15 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import ReactECharts from 'echarts-for-react';
-import type { ComponentType } from 'react';
+import { EChart } from '../lib/echart';
 import { Cell } from '../types';
-
-// echarts-for-react types lag React 19 — cast once.
-const Chart = ReactECharts as unknown as ComponentType<{
-  option: Record<string, unknown>;
-  style?: React.CSSProperties;
-  opts?: { renderer?: string };
-  onEvents?: Record<string, (p: { value?: [number, number, string] }) => void>;
-}>;
 
 interface Props {
   cells: Cell[];
@@ -90,10 +81,11 @@ export default function Scatter({ cells, onSelect }: Props) {
   }, [cells, metric]);
 
   return (
-    <div className="scatter-panel">
-      <div className="scatter-toolbar">
+    <div className="viz-panel" data-testid="scatter">
+      <div className="viz-toolbar">
+        <span className="viz-title">Pareto scatter</span>
         <label>
-          Y metric{' '}
+          Y{' '}
           <select value={metric} onChange={(e) => setMetric(e.target.value as YMetric)}>
             <option value="judge_score">judge_score</option>
             <option value="pass_at_1">pass_at_1</option>
@@ -101,13 +93,14 @@ export default function Scatter({ cells, onSelect }: Props) {
           </select>
         </label>
       </div>
-      <Chart
+      <EChart
         option={option}
         style={{ height: 380, width: '100%' }}
         opts={{ renderer: 'canvas' }}
         onEvents={{
           click: (p) => {
-            const key = p.value?.[2];
+            const val = p.value as [number, number, string] | undefined;
+            const key = val?.[2];
             const c = key ? byKey.get(key) : undefined;
             if (c && onSelect) onSelect(c);
           },
