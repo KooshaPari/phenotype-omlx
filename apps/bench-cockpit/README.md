@@ -96,7 +96,34 @@ python3 scripts/evals/run_langfuse_evaluators.py judge --limit 20
 ```
 
 - **Langfuse** view: Sync hosted judges · Seed traces+generations · Offline scores.
-- Self-host later via Podman / Apple Container (never Docker).
+
+### Self-host (preferred over freemium Cloud Hobby)
+
+Unlimited units/retention vs Hobby (50k / 30d / 2 users). Same product images.
+
+```bash
+bash scripts/langfuse/self-host.sh init
+bash scripts/langfuse/self-host.sh up     # Apple Container or Podman — never Docker
+# then LANGFUSE_BASE_URL=http://127.0.0.1:3000 in .env
+```
+
+Guide: `../../docs/guides/LANGFUSE_SELF_HOST.md` (dual-write / migrate strategies).
+
+### MCP · CLI · Agent Skill
+
+```bash
+npx skills add langfuse/skills --skill "langfuse"          # preferred for agents
+bash scripts/langfuse/mcp-auth-header.sh                   # Basic token + MCP URL
+bash scripts/langfuse/print-cursor-mcp-snippet.sh          # Cursor MCP JSON
+npx langfuse-cli api <resource> <action>                   # full API from shell
+```
+
+Guide: `../../docs/guides/LANGFUSE_MCP_CLI.md`.
+
+### Why Langfuse (not Phoenix / Braintrust / …)
+
+Decision record: `../../docs/research/LANGFUSE_ALTERNATIVES.md` — Langfuse stays
+primary; Phoenix/Braintrust only as optional side tools.
 
 ## LangSmith (optional legacy)
 
