@@ -19,6 +19,22 @@ func portageBin() string {
 	return "uv run harbor"
 }
 
+// portageRoot returns the portage-TEMP checkout. Required — no hardcoded worktrees.
+func portageRoot() (string, error) {
+	v := strings.TrimSpace(os.Getenv("PORTAGE_ROOT"))
+	if v == "" {
+		return "", fmt.Errorf(
+			"PORTAGE_ROOT required (portage-TEMP / Harbor checkout); " +
+				"see docs/guides/EVAL_PORTAGE_LANGSMITH.md",
+		)
+	}
+	info, err := os.Stat(v)
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("PORTAGE_ROOT is not a directory: %s", v)
+	}
+	return v, nil
+}
+
 func portageJobsDir() string {
 	if v := strings.TrimSpace(os.Getenv("PORTAGE_JOBS_DIR")); v != "" {
 		return v
@@ -27,10 +43,20 @@ func portageJobsDir() string {
 }
 
 // portageRunHandler accepts a JSON job stub, writes YAML, shells to harbor.
-// Degrades to 503 when the binary is missing.
+// Degrades to 503 when the binary is missing; 400 when PORTAGE_ROOT unset.
 func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	root, err := portageRoot()
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"error":  "portage_root_required",
+			"detail": err.Error(),
+		})
 		return
 	}
 	var stub map[string]interface{}
@@ -57,7 +83,7 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	args := append(parts[1:], "run", "-c", jobPath, "-o", dir)
 	cmd := exec.CommandContext(ctx, parts[0], args...)
-	cmd.Dir = dir
+	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	_ = os.WriteFile(filepath.Join(dir, "stdout.log"), out, 0o644)
 	if err != nil {

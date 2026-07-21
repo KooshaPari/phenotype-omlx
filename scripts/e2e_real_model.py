@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Real end-to-end test: standard Qwen2.5-0.5B transformer through the full
+Real end-to-end test: Qwen3.5 (SSOT) through the full
 phenotype-omlx stack: MLX backend + TurboQuant+ KV cache.
 
 Strategy:
@@ -23,11 +23,19 @@ if VENV.exists():
     os.environ["PATH"] = str(VENV) + ":" + os.environ.get("PATH", "")
 os.environ["MPLBACKEND"] = "Agg"
 
-MODEL_TINY = "/Users/kooshapari/.cache/huggingface/models--mlx-community--Qwen2.5-0.5B-Instruct-4bit/snapshots/a5339a4131f135d0fdc6a5c8b5bbed2753bbe0f3"
-MODEL_4B   = "/Users/kooshapari/.omlx/models/Rishu11277/Qwopus3.5-4B-Coder-mlx-4Bit"
 PROMPT = "def fibonacci(n):\n    "
 MAX_TOKENS = 64
-MODEL = os.environ.get("PHENO_MODEL", MODEL_TINY)
+
+def _resolve_model() -> str:
+    if os.environ.get("PHENO_MODEL") or os.environ.get("OMLX_READY_MODEL"):
+        return os.environ.get("PHENO_MODEL") or os.environ["OMLX_READY_MODEL"]
+    import sys as _sys
+    from pathlib import Path as _Path
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "python"))
+    from omlx_research.smoke_models import default_model_for
+    return default_model_for("turboquant")
+
+MODEL = _resolve_model()
 
 
 def rss_mb() -> float:

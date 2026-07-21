@@ -8,7 +8,7 @@ These tests cover the regressions fixed for phenotype-omlx on 2026-07-15:
 
   test_generate_with_turbo_cache_compresses_layers
       Confirms compact_turbo_cache actually compresses > 0 layers on
-      Qwen2.5-0.5B-Instruct. Previously this returned 0/24 layers because
+      Qwen3.5-0.8B. Previously this returned 0/24 layers because
       the code built a list of TurboKVCache (not TurboKVCacheLite), and
       compact_turbo_cache silently skipped non-Lite entries.
 
@@ -32,7 +32,8 @@ def _model_local_path() -> Optional[str]:
     """Resolve the test model path; skip if not cached and HF is offline."""
     try:
         from huggingface_hub import snapshot_download
-        return snapshot_download("mlx-community/Qwen2.5-0.5B-Instruct-4bit")
+        from omlx_research.smoke_models import default_model_for
+        return snapshot_download(default_model_for("mlx_backend_test"))
     except Exception:
         return None
 
@@ -140,7 +141,7 @@ class TestRequireMlxLmHelper(unittest.TestCase):
 
 
 class TestMlxBackendTurboQuantProduction(unittest.TestCase):
-    """End-to-end tests against Qwen2.5-0.5B-Instruct-4bit on MLX/Metal.
+    """End-to-end tests against Qwen3.5-0.8B-4bit on MLX/Metal.
 
     Skipped when the model isn't available locally (e.g. CI without HF cache).
     """
@@ -155,7 +156,7 @@ class TestMlxBackendTurboQuantProduction(unittest.TestCase):
         cls.model_path = _model_local_path()
         if cls.model_path is None:
             raise unittest.SkipTest(
-                "Qwen2.5-0.5B-Instruct not in HF cache and offline — "
+                "Qwen3.5-0.8B not in HF cache and offline — "
                 "set HF_HUB_OFFLINE=0 and ensure model is available."
             )
 

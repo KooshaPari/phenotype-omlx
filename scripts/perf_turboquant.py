@@ -161,10 +161,17 @@ def bench_mlx_with_turbo(model_path: str, lengths: list[int]):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lengths", type=int, nargs="+", default=[1024, 4096, 16384])
-    parser.add_argument("--model", type=str, default="mlx-community/Qwen2.5-0.5B-Instruct-4bit")
+    parser.add_argument("--model", type=str, default=None,
+                        help="MLX model (default: smoke_models role=turboquant)")
     parser.add_argument("--rust-only", action="store_true",
                         help="Skip the MLX inference benchmark (just Rust vs Python)")
     args = parser.parse_args()
+    if not args.model:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "python"))
+        from omlx_research.smoke_models import default_model_for
+        args.model = default_model_for("turboquant")
 
     if not bench_rust_vs_python():
         return 1

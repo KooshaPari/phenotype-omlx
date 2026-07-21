@@ -32,7 +32,7 @@ Usage:
 
 Options:
     --model MODEL_ID    HuggingFace / local model identifier.
-                        Default: mlx-community/Qwen2.5-0.5B-Instruct-4bit
+                        Default: from config/smoke_models.json (role=dispatch)
     --lengths LEN ...   Context lengths to run (tokens).
                         Default: 1024 4096 16384
     --dry-run           Print the dispatch command instead of executing it.
@@ -50,9 +50,12 @@ Examples:
 USAGE
 }
 
-# Defaults — mirror scripts/perf_turboquant.py so the surfaced
-# command stays consistent across dispatch entrypoints.
-MODEL="mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+# Defaults — model from config/smoke_models.json (role=dispatch).
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+MODEL="${OMLX_READY_MODEL:-}"
+if [[ -z "$MODEL" ]]; then
+  MODEL="$(PYTHONPATH="$REPO_ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m omlx_research.smoke_models dispatch)"
+fi
 LENGTHS="1024 4096 16384"
 DRY_RUN=0
 

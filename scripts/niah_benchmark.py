@@ -572,14 +572,19 @@ def main():
     parser.add_argument("--modes", type=str, nargs="+",
                         default=["baseline_fp16", "turbo_asymmetric", "turbo_symmetric", "mlx_native_kv4"],
                         help="KV cache modes to benchmark")
-    parser.add_argument("--model", type=str,
-                        default="mlx-community/Qwen2.5-0.5B-Instruct-4bit",
-                        help="MLX model to load")
+    parser.add_argument("--model", type=str, default=None,
+                        help="MLX model (default: config/smoke_models.json role=niah)")
     parser.add_argument("--output", type=str, default=None,
                         help="Write results JSON to this file")
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for needle/filler")
     args = parser.parse_args()
+    if not args.model:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "python"))
+        from omlx_research.smoke_models import default_model_for
+        args.model = default_model_for("niah")
     configure_hf_env(args.model)
 
     require_julia()

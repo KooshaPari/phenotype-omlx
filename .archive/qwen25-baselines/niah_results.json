@@ -5,8 +5,8 @@
   "reported": true,
   "synthetic": true,
   "generated_at": "2026-07-19T00:00:00Z",
-  "description": "NIAH target rows for the doctor regression envelope. Anchored on Qwen3.5 SSOT (config/smoke_models.json); prior Qwen2.5 text archived. evidence_label=synthetic_target_rows \u2014 not a live model run.",
-  "model": "Qwen/Qwen3.5-0.8B",
+  "description": "NIAH (needle-in-a-haystack) target rows for the doctor regression envelope. Each row pins the expected pass rate for one (kernel_id, context_length, seed) combination so subsequent real runs can be diffed against this snapshot. Synthetic but realistic: pass rates follow a sigmoid-shaped decay anchored on the published baselines for mlx-community/Qwen2.5-0.5B-Instruct-4bit. evidence_label=synthetic_target_rows \u2014 not a live model run.",
+  "model": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
   "context_lengths": [
     1024,
     2048,
@@ -1784,7 +1784,5 @@
       "seed": 101,
       "kernel_id": "mlx_native_kv4"
     }
-  ],
-  "model_note": "SSOT retarget 2026-07-21: acceptance model is Qwen3.5; prior Qwen2.5 baseline archived under .archive/qwen25-baselines/",
-  "evidence_class": "synthetic"
+  ]
 }

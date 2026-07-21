@@ -20,7 +20,7 @@ pegged a per-context invariant against ``[1024, 4096, 16384, 65536,
     [1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288]
 
 Synthetic-but-realistic pass rates: a sigmoid decay anchored on the
-published baselines for ``mlx-community/Qwen2.5-0.5B-Instruct-4bit``,
+published baselines for Qwen3.5 (see ``config/smoke_models.json``),
 with a small per-seed jitter so the table isn't perfectly monotone.
 Output is deterministic given the same CLI args (no ``random`` /
 clock involvement).
@@ -72,7 +72,7 @@ EXPANDED_CONTEXT_LENGTHS = [
 
 DEFAULT_SEEDS = [7, 19, 42, 73, 101]
 
-DEFAULT_MODEL = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+DEFAULT_MODEL = None  # resolved via smoke_models role=niah
 
 # Per-kernel (anchor_pass_at_1k, decay_per_log4_ctx) — pass_rate follows
 # p(ctx) = anchor + (1 - anchor) * sigmoid(-decay * log4(ctx / 1024)).
@@ -134,10 +134,16 @@ def build_envelope(
     seeds: Iterable[int],
     kernels: Iterable[str],
     *,
-    model: str = DEFAULT_MODEL,
+    model: str | None = None,
     generated_at: str | None = None,
 ) -> dict:
     """Build the niah_results.json envelope dict."""
+    if model is None:
+        import sys as _sys
+        from pathlib import Path as _Path
+        _sys.path.insert(0, str(_Path(__file__).resolve().parents[1] / "python"))
+        from omlx_research.smoke_models import default_model_for
+        model = default_model_for("niah")
     context_lengths = list(context_lengths)
     seeds = list(seeds)
     kernels = list(kernels)
@@ -176,7 +182,7 @@ def build_envelope(
             "against this snapshot. Synthetic but realistic: pass "
             "rates follow a sigmoid-shaped decay anchored on the "
             "published baselines for "
-            "mlx-community/Qwen2.5-0.5B-Instruct-4bit. "
+            "Qwen3.5 SSOT (config/smoke_models.json). "
             "evidence_label=synthetic_target_rows — not a live model run."
         ),
         "model": model,
