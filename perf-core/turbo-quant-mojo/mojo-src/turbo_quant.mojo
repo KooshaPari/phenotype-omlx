@@ -56,7 +56,7 @@ def _read_bits[
 ) -> Int:
     var value: Int = 0
     var bp: Int = bit_pos
-    for b in range(bits):
+    for _ in range(bits):
         var byte_idx: Int = bp // 8
         var bit_idx: Int = bp % 8
         var bit: Int = Int((packed[group_byte_offset + byte_idx] >> UInt8(7 - bit_idx)) & UInt8(1))
@@ -178,7 +178,7 @@ def tq_mojo_encode[
     out_scales_len: UnsafePointer[Int, s5],
     zeros_ptr_out: UnsafePointer[Int, s6],
     out_zeros_len: UnsafePointer[Int, s7],
-) -> Bool:
+) abi("C") -> Bool:
     var data_ptr = UnsafePointer[Float32, d_origin](unsafe_from_address=data_addr)
 
     var gs: Int = 64 if group_size == 0 else group_size
@@ -222,7 +222,7 @@ def tq_mojo_decode[
     group_size: Int,
     bits: UInt8,
     result_ptr: UnsafePointer[Float32, r_origin],
-) -> None:
+) abi("C") -> None:
     decode_uniform(
         packed_ptr, scales_ptr, zeros_ptr, n, group_size, bits, result_ptr,
     )
