@@ -108,6 +108,7 @@ CHECKS: list[Callable[[], Check]] = [
     checks.niah_benchmark_present,
     checks.niah_benchmark_non_legacy_path,
     checks.julia_required_on_eval_path,
+    checks.niah_instrumented_schema_v2_present,
     checks.eval_harness_subcommand_runnable,
     checks.regress_baseline_dispatch_envelope,
     # Added 2026-07-19 (turn-5) — see _doctor_turn5_checks.py.

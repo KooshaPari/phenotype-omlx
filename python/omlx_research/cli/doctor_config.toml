@@ -13,7 +13,8 @@
 # turn accidentally deletes the new check.
 #
 # History: 18 (turn-7) → 21 (turn-9 split) → 23 (turn-10 internal)
-# → 25 (turn-12) → 27 (Salmon FR-5: julia_required + non_legacy NIAH path).
+# → 25 (turn-12) → 27 (Salmon FR-5: julia_required + non_legacy NIAH path)
+# → 28 (Salmon: niah_instrumented_schema_v2_present).
 
 [meta]
-min_check_count = 27
+min_check_count = 28
