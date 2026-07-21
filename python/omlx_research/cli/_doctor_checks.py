@@ -41,6 +41,7 @@ from ._doctor_extra_niah import (  # noqa: E402,F401  (re-export)
     julia_required_on_eval_path,
     niah_benchmark_non_legacy_path,
     niah_benchmark_present,
+    niah_instrumented_schema_v2_present,
 )
 from ._doctor_extra_eval import (  # noqa: E402,F401  (re-export)
     eval_harness_subcommand_runnable,

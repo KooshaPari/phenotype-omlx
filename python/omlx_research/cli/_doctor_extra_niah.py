@@ -40,9 +40,12 @@ __all__ = [
     "niah_benchmark_present",
     "niah_benchmark_non_legacy_path",
     "julia_required_on_eval_path",
+    "niah_instrumented_schema_v2_present",
     "_load_niah_results",
     "_find_niah_benchmark",
 ]
+
+_INSTRUMENTED_NIAH_REL = "research/fr5_niah_qwen35_0_8b_instrumented.json"
 
 _LEGACY_NIAH_PATH_MARKERS = (
     'REPO / "phenotype-omlx/python"',
@@ -343,4 +346,75 @@ def julia_required_on_eval_path() -> Check:
         description=desc,
         status=PASS,
         details=details,
+    )
+
+
+# ---------------------------------------------------------------------------
+# FR-5 / E3 — schema v2 instrumented compression envelope on disk
+# ---------------------------------------------------------------------------
+
+
+def niah_instrumented_schema_v2_present() -> Check:
+    """FAIL if the schema-v2 instrumented NIAH envelope is missing or weak.
+
+    Compression proof for FR-5 ship requires
+    ``research/fr5_niah_qwen35_0_8b_instrumented.json`` with
+    ``schema_version == 2`` plus ``packed_state_any`` and
+    ``byte_reduction_any`` both true. Answer128 packs are exact-retrieval
+    only and do not satisfy this check.
+    """
+    desc = (
+        "Instrumented NIAH envelope is schema v2 with packed_state + "
+        "byte_reduction (FR-5 compression proof)"
+    )
+    path = os.path.join(project_root(), _INSTRUMENTED_NIAH_REL)
+    if not os.path.isfile(path):
+        return Check(
+            id="niah_instrumented_schema_v2_present",
+            description=desc,
+            status=FAIL,
+            details=f"missing {_INSTRUMENTED_NIAH_REL}",
+        )
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError) as e:
+        return Check(
+            id="niah_instrumented_schema_v2_present",
+            description=desc,
+            status=FAIL,
+            details=(
+                f"could not load {_INSTRUMENTED_NIAH_REL}: "
+                f"{type(e).__name__}: {e}"
+            ),
+        )
+    if not isinstance(data, dict):
+        return Check(
+            id="niah_instrumented_schema_v2_present",
+            description=desc,
+            status=FAIL,
+            details=f"{_INSTRUMENTED_NIAH_REL} root is not an object",
+        )
+    problems: list[str] = []
+    if data.get("schema_version") != 2:
+        problems.append(f"schema_version={data.get('schema_version')!r} (want 2)")
+    if data.get("packed_state_any") is not True:
+        problems.append(f"packed_state_any={data.get('packed_state_any')!r}")
+    if data.get("byte_reduction_any") is not True:
+        problems.append(f"byte_reduction_any={data.get('byte_reduction_any')!r}")
+    if problems:
+        return Check(
+            id="niah_instrumented_schema_v2_present",
+            description=desc,
+            status=FAIL,
+            details="; ".join(problems),
+        )
+    return Check(
+        id="niah_instrumented_schema_v2_present",
+        description=desc,
+        status=PASS,
+        details=(
+            f"{_INSTRUMENTED_NIAH_REL} schema_version=2 "
+            "packed_state_any=true byte_reduction_any=true"
+        ),
     )

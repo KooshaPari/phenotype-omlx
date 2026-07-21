@@ -302,7 +302,7 @@ def test_both_turn12_checks_are_registered_in_doctor_checks():
 
 # ---------------------------------------------------------------------------
 # Live doctor subprocess: both new checks appear in the real report and the
-# drift-detector threshold (27) accepts the new live count (27).
+# drift-detector threshold (28) accepts the new live count (28).
 # ---------------------------------------------------------------------------
 
 
@@ -345,16 +345,16 @@ def test_live_doctor_includes_both_new_checks():
 
 
 def test_live_doctor_meta_check_accepts_new_count():
-    """The drift detector must see 27 checks and PASS.
+    """The drift detector must see 28 checks and PASS.
 
     Spawns ``doctor --json`` and parses the JSON envelope to count
-    rows + introspect the meta-check row's status. After Salmon FR-5
-    (julia + non-legacy NIAH path) the meta-check must:
+    rows + introspect the meta-check row's status. After schema-v2
+    instrumented envelope gate the meta-check must:
 
-    - observe ``len(envelope["checks"]) == 27`` (every registered
-      check, including turn-12 and FR-5 adds);
+    - observe ``len(envelope["checks"]) == 28`` (every registered
+      check, including turn-12, FR-5, and schema-v2 adds);
     - report PASS with the threshold loaded from ``doctor_config.toml``
-      as 27.
+      as 28.
     """
     project_root = _doctor_project_root()
     python_dir = os.path.join(project_root, "python")
@@ -374,8 +374,8 @@ def test_live_doctor_meta_check_accepts_new_count():
             f"stdout[:200]={result.stdout[:200]!r}"
         ) from e
     assert isinstance(envelope, dict) and "checks" in envelope
-    assert len(envelope["checks"]) == 27, (
-        f"expected 27 live doctor checks after Salmon FR-5, got "
+    assert len(envelope["checks"]) == 28, (
+        f"expected 28 live doctor checks after schema-v2 envelope gate, got "
         f"{len(envelope['checks'])}"
     )
     ids = {c["id"] for c in envelope["checks"]}
@@ -383,22 +383,23 @@ def test_live_doctor_meta_check_accepts_new_count():
     assert "ddm_continuous_schedule_variants_at_least_4" in ids
     assert "julia_required_on_eval_path" in ids
     assert "niah_benchmark_non_legacy_path" in ids
+    assert "niah_instrumented_schema_v2_present" in ids
     meta = next(
         (c for c in envelope["checks"] if c["id"] == "doctor_check_count_at_least_18"),
         None,
     )
     assert meta is not None, "meta-check missing from live envelope"
     assert meta["status"] == PASS, (
-        f"meta-check did not PASS against the new threshold of 27: "
+        f"meta-check did not PASS against the new threshold of 28: "
         f"{meta['details']!r}"
     )
-    # The bumped threshold (27) must show up in the meta-check's
+    # The bumped threshold (28) must show up in the meta-check's
     # description/details. We check both the description and details
     # since either may carry the number depending on the path that
     # produced the line.
     meta_text = (meta.get("description", "") + " " + meta.get("details", ""))
-    assert "27" in meta_text, (
-        f"threshold '27' not surfaced in meta-check output: "
+    assert "28" in meta_text, (
+        f"threshold '28' not surfaced in meta-check output: "
         f"{meta_text!r}"
     )
 
@@ -430,9 +431,8 @@ def test_doctor_config_has_threshold_lockstep_doc_comment():
     assert "lockstep" in text.lower(), (
         f"doctor_config.toml has no `LOCKSTEP` doc comment:\n{text}"
     )
-    # And the threshold itself must currently be at 27 (Salmon FR-5 live
-    # count):
-    assert "min_check_count = 27" in text, (
+    # And the threshold itself must currently be at 28 (schema-v2 gate):
+    assert "min_check_count = 28" in text, (
         f"doctor_config.toml::min_check_count has not been bumped "
-        f"to 27 (live count); got:\n{text}"
+        f"to 28 (live count); got:\n{text}"
     )

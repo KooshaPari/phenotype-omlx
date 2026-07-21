@@ -257,6 +257,37 @@ def test_niah_benchmark_present_real_repo():
     assert c.id == "niah_benchmark_present"
 
 
+def test_niah_instrumented_schema_v2_present_real_repo():
+    """FR-5: committed instrumented envelope must pass schema-v2 doctor gate."""
+    c = checks_mod.niah_instrumented_schema_v2_present()
+    assert c.status == PASS
+    assert c.id == "niah_instrumented_schema_v2_present"
+    assert "schema_version=2" in c.details
+
+
+def test_niah_instrumented_schema_v2_fails_when_missing(tmp_path, monkeypatch):
+    """Missing instrumented JSON ⇒ FAIL (loud)."""
+    monkeypatch.setattr(niah_extra, "project_root", lambda: str(tmp_path))
+    c = niah_extra.niah_instrumented_schema_v2_present()
+    assert c.status == FAIL
+    assert "missing" in c.details
+
+
+def test_niah_instrumented_schema_v2_fails_when_weak(tmp_path, monkeypatch):
+    """schema_version!=2 or missing byte_reduction_any ⇒ FAIL."""
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "fr5_niah_qwen35_0_8b_instrumented.json").write_text(
+        '{"schema_version": 1, "packed_state_any": true, "byte_reduction_any": false}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(niah_extra, "project_root", lambda: str(tmp_path))
+    c = niah_extra.niah_instrumented_schema_v2_present()
+    assert c.status == FAIL
+    assert "schema_version" in c.details
+    assert "byte_reduction_any" in c.details
+
+
 def test_eval_harness_subcommand_real_repo():
     """Real repo: with the `eval` subcommand registered, the check PASSES."""
     c = checks_mod.eval_harness_subcommand_runnable()
