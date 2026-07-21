@@ -33,7 +33,6 @@ fn verifier_accepts_canonical_minimal_report() {
                 "task_id": "task-1",
                 "status": "ok",
                 "judge": "deterministic",
-                "evidence_label": "live verified"
             }]
         }],
         "totals": {

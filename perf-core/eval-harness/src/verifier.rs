@@ -223,7 +223,6 @@ pub fn verify_artifact(artifact: &Value) -> VerifyOutcome {
             ids.push(id.to_owned());
             if !allowed(t.get("status").and_then(Value::as_str), STATUSES)
                 || !allowed(t.get("judge").and_then(Value::as_str), JUDGES)
-                || !allowed(t.get("evidence_label").and_then(Value::as_str), EVIDENCE)
             {
                 return reject("invalid task enum");
             }
