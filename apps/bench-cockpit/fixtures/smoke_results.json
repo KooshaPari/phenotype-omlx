@@ -1,0 +1,996 @@
+{
+  "summary": {
+    "meta": {
+      "model": "smoke",
+      "mlx_url": "",
+      "n_suites": 3,
+      "n_tasks_per_suite": 3,
+      "variants": [
+        "stock",
+        "ours"
+      ],
+      "n_cells": 18,
+      "difficulty_mix": {
+        "medium": 18
+      }
+    },
+    "by_variant": {
+      "stock": {
+        "n_cells": 9,
+        "pass_at_1": 0.42,
+        "mean_wall_clock_s": 2.5,
+        "mean_partial_credit": 0.38,
+        "mean_format_compliance": 0.95,
+        "mean_intent_preservation": 0.8,
+        "n_hallucinations": 1,
+        "ok_count": 9
+      },
+      "ours": {
+        "n_cells": 9,
+        "pass_at_1": 0.55,
+        "mean_wall_clock_s": 4.1,
+        "mean_partial_credit": 0.5,
+        "mean_format_compliance": 0.95,
+        "mean_intent_preservation": 0.8,
+        "n_hallucinations": 0,
+        "ok_count": 9
+      }
+    }
+  },
+  "cells": [
+    {
+      "suite": "mmlu",
+      "task_id": "mmlu-000",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 0",
+      "prompt": "q 0",
+      "expected_answer": "answer 0",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "mmlu",
+      "task_id": "mmlu-000",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 0",
+      "prompt": "q 0",
+      "expected_answer": "answer 0",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "mmlu",
+      "task_id": "mmlu-001",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 1",
+      "prompt": "q 1",
+      "expected_answer": "answer 1",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "mmlu",
+      "task_id": "mmlu-001",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 1",
+      "prompt": "q 1",
+      "expected_answer": "answer 1",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "mmlu",
+      "task_id": "mmlu-002",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 2",
+      "prompt": "q 2",
+      "expected_answer": "answer 2",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "mmlu",
+      "task_id": "mmlu-002",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 2",
+      "prompt": "q 2",
+      "expected_answer": "answer 2",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "gsm8k",
+      "task_id": "gsm8k-000",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 0",
+      "prompt": "q 0",
+      "expected_answer": "answer 0",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "gsm8k",
+      "task_id": "gsm8k-000",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 0",
+      "prompt": "q 0",
+      "expected_answer": "answer 0",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "gsm8k",
+      "task_id": "gsm8k-001",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 1",
+      "prompt": "q 1",
+      "expected_answer": "answer 1",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "gsm8k",
+      "task_id": "gsm8k-001",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 1",
+      "prompt": "q 1",
+      "expected_answer": "answer 1",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "gsm8k",
+      "task_id": "gsm8k-002",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 2",
+      "prompt": "q 2",
+      "expected_answer": "answer 2",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "gsm8k",
+      "task_id": "gsm8k-002",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 2",
+      "prompt": "q 2",
+      "expected_answer": "answer 2",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "ifeval",
+      "task_id": "ifeval-000",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 0",
+      "prompt": "q 0",
+      "expected_answer": "answer 0",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "ifeval",
+      "task_id": "ifeval-000",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 0",
+      "prompt": "q 0",
+      "expected_answer": "answer 0",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "ifeval",
+      "task_id": "ifeval-001",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 1",
+      "prompt": "q 1",
+      "expected_answer": "answer 1",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "ifeval",
+      "task_id": "ifeval-001",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 1",
+      "prompt": "q 1",
+      "expected_answer": "answer 1",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    },
+    {
+      "suite": "ifeval",
+      "task_id": "ifeval-002",
+      "difficulty": "medium",
+      "variant": "stock",
+      "ok": true,
+      "wall_clock_s": 2.5,
+      "tokens_per_second": 13.4,
+      "first_token_latency_ms": 120,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.42,
+      "partial_credit": 0.378,
+      "judge_score": 0.42,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 1,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 2",
+      "prompt": "q 2",
+      "expected_answer": "answer 2",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "low-pc"
+      }
+    },
+    {
+      "suite": "ifeval",
+      "task_id": "ifeval-002",
+      "difficulty": "medium",
+      "variant": "ours",
+      "ok": true,
+      "wall_clock_s": 4.1,
+      "tokens_per_second": 6.2,
+      "first_token_latency_ms": 180,
+      "peak_rss_mb": 4200,
+      "peak_gpu_mem_mb": 8000,
+      "energy_proxy_joules": 12,
+      "pass_at_1": 0.55,
+      "partial_credit": 0.49500000000000005,
+      "judge_score": 0.55,
+      "intent_preservation_rate": 0.8,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 0.95,
+      "reply": "answer 2",
+      "prompt": "q 2",
+      "expected_answer": "answer 2",
+      "scoring_method": "substring",
+      "total_tokens_in": 512,
+      "total_tokens_out": 64,
+      "cost_usd": 0.0,
+      "progress_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      }
+    }
+  ]
+}
