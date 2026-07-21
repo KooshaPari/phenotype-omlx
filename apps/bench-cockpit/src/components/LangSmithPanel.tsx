@@ -75,7 +75,7 @@ export default function LangSmithPanel() {
     void refreshEvaluators();
   }, [refresh, refreshEvaluators]);
 
-  const runEvals = async (action: 'sync' | 'run' | 'all') => {
+  const runEvals = async (action: 'sync' | 'run' | 'all' | 'hosted') => {
     setEvalBusy(true);
     setErr(null);
     try {
