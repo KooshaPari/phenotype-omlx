@@ -55,12 +55,25 @@ Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
 Put `LANGSMITH_API_KEY` in gitignored `.env`. Minimax coding-plan key comes from
 `MINIMAX_API_KEY` or macOS keychain service `minimax-coding-plan`.
 
+### Hosted Minimax (OpenAI-compat)
+
+1. **UI once:** Settings → Provider secrets (`MINIMAX_API_KEY`) → Model configurations
+   (OpenAI Compatible Endpoint, base `https://api.minimax.io/v1`, model `MiniMax-M3`,
+   temperature 0). Enable under Feature Access → Evaluators.
+2. **API:** push Hub StructuredPrompts + register LLM evaluators + attach project run rules:
+
+```bash
+uv venv --python python3.12 .venv-evals
+uv pip install --python .venv-evals/bin/python langsmith langchain-core
+.venv-evals/bin/python scripts/evals/setup_hosted_judges.py
+# or Smith view → "Sync hosted Minimax judges"
+```
+
+Hub handles: `bench-correctness`, `bench-hallucination`, `bench-code-checker`.
+
+### Offline (always available)
+
 - **Smith** view: register code evaluators + run code/Minimax judges.
 - CLI: `python3 scripts/evals/run_evaluators.py sync|run|all --limit 20`
-- Workspace code evaluators appear under LangSmith → Evaluators.
-- Offline Minimax judges post feedback keys: `correctness`, `hallucination`,
-  `code_checker`, plus code keys (`pass_trust`, `not_echo`, …).
-- Hosted UI LLM-as-judge needs a Prompt Hub handle (`prompt_repo_handle`);
-  use LangSmith UI for online/automation rules; use our runner for Minimax.
-- Harbor plugin smoke: `bash scripts/evals/harbor_langsmith_smoke.sh`
-  (blocked until portage + `harbor-langsmith` import cleanly).
+- Feedback keys: `correctness`, `hallucination`, `code_checker`, plus code keys.
+- Harbor plugin smoke: `bash scripts/evals/harbor_langsmith_smoke.sh` (`-e apple-container`).

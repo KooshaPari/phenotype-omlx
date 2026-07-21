@@ -169,6 +169,14 @@ export default function LangSmithPanel() {
           >
             {evalBusy ? 'Judging…' : 'Run code + Minimax judges'}
           </button>
+          <button
+            type="button"
+            className="gt-btn"
+            onClick={() => void runEvals('hosted')}
+            disabled={evalBusy || !status?.enabled}
+          >
+            Sync hosted Minimax judges
+          </button>
           <a className="gt-btn" href={projectURL} target="_blank" rel="noreferrer">
             Open dashboard
           </a>
@@ -183,10 +191,11 @@ export default function LangSmithPanel() {
         </div>
 
         <div className="warn-banner" style={{ marginBottom: 12 }}>
-          Hosted LangSmith LLM-as-judge templates need a Prompt Hub handle; we register{' '}
-          <b>code evaluators</b> in the workspace and run <b>Minimax-M3 coding-plan</b> offline
-          judges (correctness / hallucination / code_checker), posting feedback onto traces.
-          Harbor sandboxes: <code>bash scripts/evals/harbor_langsmith_smoke.sh</code>.
+          Hosted path: Model config (UI) + Hub prompts <code>bench-correctness</code> /
+          <code>bench-hallucination</code> / <code>bench-code-checker</code> + LLM evaluators /
+          run rules via <b>Sync hosted Minimax judges</b>. Offline Minimax still posts feedback
+          onto traces. Harbor: <code>bash scripts/evals/harbor_langsmith_smoke.sh</code> (Apple
+          Container).
         </div>
 
         {evaluators.length > 0 && (
