@@ -1,10 +1,13 @@
 """MLX backend — primary path on Apple Silicon."""
 
 from __future__ import annotations
+import logging
 import time
 import os
 
 from .base import BackendBase, BackendCapabilities, GenerateRequest, GenerateResponse
+
+logger = logging.getLogger(__name__)
 
 
 class MlxBackend(BackendBase):
@@ -30,13 +33,14 @@ class MlxBackend(BackendBase):
         # Default to Rust path for the encode side; flip to True via env
         # var PHENOTYPE_OMLX_USE_PYTHON_TQ=1 to A/B the Python `turboquant`
         # package's TurboQuant on the same call sites.
-        self._use_python_turboquant = os.environ.get(
-            "PHENOTYPE_OMLX_USE_PYTHON_TQ", "0"
-        ) == "1"
+        self._use_python_turboquant = (
+            os.environ.get("PHENOTYPE_OMLX_USE_PYTHON_TQ", "0") == "1"
+        )
 
     def is_available(self) -> bool:
         try:
             import mlx.core  # noqa
+
             return True
         except ImportError:
             return False
@@ -53,6 +57,7 @@ class MlxBackend(BackendBase):
             return cached if cached is not False else None
         try:
             import _perf  # maturin develop installs this top-level
+
             self._perf_module = _perf
             return _perf
         except ImportError:
@@ -60,7 +65,10 @@ class MlxBackend(BackendBase):
             return None
 
     def turbo_quant_encode_array(
-        self, data, group_size: int = 64, bits: int = 4,
+        self,
+        data,
+        group_size: int = 64,
+        bits: int = 4,
     ) -> dict | None:
         """Encode `data` (array-like of f32) into a TurboQuant 4-bit packing.
 
@@ -87,13 +95,15 @@ class MlxBackend(BackendBase):
             buf = [0] * max(1, (len(flat) * bits + 7) // 8)
             cursor = 0
             for chunk_start in range(0, len(flat), gs):
-                chunk = flat[chunk_start:chunk_start + gs]
+                chunk = flat[chunk_start : chunk_start + gs]
                 if len(chunk) < gs:
                     chunk = chunk + [0.0] * (gs - len(chunk))
                 cv = py.quantize(chunk)
                 # cv.codebook/zeros/scales + indices (Python TurboQuant returns
                 # a struct; we normalize to the Rust return shape).
-                indices = getattr(cv, "indices", None) or list(getattr(cv, "packed", []))
+                indices = getattr(cv, "indices", None) or list(
+                    getattr(cv, "packed", [])
+                )
                 if not indices:
                     continue
                 for idx in indices:
@@ -102,7 +112,7 @@ class MlxBackend(BackendBase):
                         if val & (1 << b):
                             byte_idx = cursor // 8
                             bit_idx = cursor % 8
-                            buf[byte_idx] |= (1 << bit_idx)
+                            buf[byte_idx] |= 1 << bit_idx
                         cursor += 1
                 scale = float(getattr(cv, "scale", 1.0))
                 zero = float(getattr(cv, "zero", 0.0))
@@ -110,7 +120,9 @@ class MlxBackend(BackendBase):
                 zeros.append(zero)
             return {
                 "shape": [len(flat)],
-                "packed": bytes(buf[:cursor // 8 if cursor % 8 == 0 else cursor // 8 + 1]),
+                "packed": bytes(
+                    buf[: cursor // 8 if cursor % 8 == 0 else cursor // 8 + 1]
+                ),
                 "scales": scales,
                 "zeros": zeros,
             }
@@ -120,7 +132,13 @@ class MlxBackend(BackendBase):
         return perf.turbo_quant_encode(list(map(float, data)), group_size, bits)
 
     def turbo_quant_decode_array(
-        self, packed, scales, zeros, n: int, group_size: int = 64, bits: int = 4,
+        self,
+        packed,
+        scales,
+        zeros,
+        n: int,
+        group_size: int = 64,
+        bits: int = 4,
     ) -> list | None:
         """Inverse of turbo_quant_encode_array.
 
@@ -143,8 +161,14 @@ class MlxBackend(BackendBase):
                 if not (scales and zeros):
                     out.extend([0.0] * gs)
                     continue
-                scale = scales[gi // group_size] if (gi // group_size) < len(scales) else 1.0
-                zero = zeros[gi // group_size] if (gi // group_size) < len(zeros) else 0.0
+                scale = (
+                    scales[gi // group_size]
+                    if (gi // group_size) < len(scales)
+                    else 1.0
+                )
+                zero = (
+                    zeros[gi // group_size] if (gi // group_size) < len(zeros) else 0.0
+                )
                 out.extend([(float(zero) + 1.0) * float(scale)] * gs)
             return out
         perf = self._rust_perf()
@@ -155,14 +179,21 @@ class MlxBackend(BackendBase):
     def _load(self) -> None:
         if self._model is None and self.model_path:
             import mlx_lm
+
             self._model, self._tokenizer = mlx_lm.load(self.model_path)
 
     def generate(self, req: GenerateRequest) -> GenerateResponse:
         self._load()
         if self._model is None:
-            return GenerateResponse(text="", tokens=0, elapsed_ms=0, backend="mlx",
-                                    metadata={"error": "no model"})
+            return GenerateResponse(
+                text="",
+                tokens=0,
+                elapsed_ms=0,
+                backend="mlx",
+                metadata={"error": "no model"},
+            )
         import mlx_lm
+
         t0 = time.time()
         text = mlx_lm.generate(
             self._model,
@@ -172,7 +203,9 @@ class MlxBackend(BackendBase):
             verbose=False,
         )
         elapsed_ms = int((time.time() - t0) * 1000)
-        return GenerateResponse(text=text, tokens=len(text.split()), elapsed_ms=elapsed_ms, backend="mlx")
+        return GenerateResponse(
+            text=text, tokens=len(text.split()), elapsed_ms=elapsed_ms, backend="mlx"
+        )
 
     def generate_with_turbo_cache(
         self,
@@ -213,8 +246,13 @@ class MlxBackend(BackendBase):
         """
         self._load()
         if self._model is None:
-            return GenerateResponse(text="", tokens=0, elapsed_ms=0, backend="mlx",
-                                    metadata={"error": "no model"})
+            return GenerateResponse(
+                text="",
+                tokens=0,
+                elapsed_ms=0,
+                backend="mlx",
+                metadata={"error": "no model"},
+            )
 
         try:
             from mlx.nn.layers.turbo_kv_cache import (
@@ -224,7 +262,10 @@ class MlxBackend(BackendBase):
             )
         except ImportError as e:
             return GenerateResponse(
-                text="", tokens=0, elapsed_ms=0, backend="mlx",
+                text="",
+                tokens=0,
+                elapsed_ms=0,
+                backend="mlx",
                 metadata={"error": f"TurboKVCache not available: {e}"},
             )
 
@@ -241,12 +282,11 @@ class MlxBackend(BackendBase):
             key_bits=key_bits,
             boundary=boundary,
         )
-        n_lite_layers = sum(
-            1 for c in turbo_cache if isinstance(c, TurboKVCacheLite)
-        )
+        n_lite_layers = sum(1 for c in turbo_cache if isinstance(c, TurboKVCacheLite))
         n_baseline = len(turbo_cache) - n_lite_layers
 
         import mlx_lm
+
         t0 = time.time()
         text = mlx_lm.generate(
             self._model,
@@ -266,10 +306,13 @@ class MlxBackend(BackendBase):
                 # calling Lite.compact() on each TurboKVCacheLite layer.
                 bytes_freed = compact_turbo_cache(turbo_cache)
                 n_compressed = sum(
-                    1 for c in turbo_cache
-                    if isinstance(c, TurboKVCacheLite) and getattr(c, "_compacted", False)
+                    1
+                    for c in turbo_cache
+                    if isinstance(c, TurboKVCacheLite)
+                    and getattr(c, "_compacted", False)
                 )
-            except Exception:
+            except Exception as exc:
+                logger.warning("compact_turbo_cache failed: %s", exc)
                 n_compressed = -1
                 bytes_freed = 0
 
@@ -285,23 +328,33 @@ class MlxBackend(BackendBase):
             perf = self._rust_perf()
             if perf is not None and not self._use_python_turboquant:
                 q = self.turbo_quant_encode_array(
-                    [0.0] * 64, group_size=64, bits=turbo_bits,
+                    [0.0] * 64,
+                    group_size=64,
+                    bits=turbo_bits,
                 )
                 rust_encode_shape = (
-                    len(q["packed"]), len(q["scales"]), len(q["zeros"]),
+                    len(q["packed"]),
+                    len(q["scales"]),
+                    len(q["zeros"]),
                 )
             elif self._use_python_turboquant:
                 q = self.turbo_quant_encode_array(
-                    [0.0] * 64, group_size=64, bits=turbo_bits,
+                    [0.0] * 64,
+                    group_size=64,
+                    bits=turbo_bits,
                 )
                 python_encode_shape = (
-                    len(q["packed"]), len(q["scales"]), len(q["zeros"]),
+                    len(q["packed"]),
+                    len(q["scales"]),
+                    len(q["zeros"]),
                 )
         except Exception:
             pass
 
         return GenerateResponse(
-            text=text, tokens=len(text.split()), elapsed_ms=elapsed_ms,
+            text=text,
+            tokens=len(text.split()),
+            elapsed_ms=elapsed_ms,
             backend="mlx+turboquant",
             metadata={
                 "turbo": {
@@ -317,7 +370,8 @@ class MlxBackend(BackendBase):
                     "rust_encode_shape": rust_encode_shape,
                     "python_encode_shape": python_encode_shape,
                     "encode_path": (
-                        "python" if self._use_python_turboquant
+                        "python"
+                        if self._use_python_turboquant
                         else ("rust" if rust_encode_shape else "unavailable")
                     ),
                 },

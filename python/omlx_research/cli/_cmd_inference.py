@@ -32,13 +32,31 @@ import argparse
 
 def cmd_status(_: argparse.Namespace) -> int:
     from ..backends import (
-        MlxBackend, MetalKernelBackend, VllmBackend,
-        TensorrtBackend, SglangBackend, LlamaCppBackend,
+        MlxBackend,
+        MetalKernelBackend,
+        VllmBackend,
+        TensorrtBackend,
+        SglangBackend,
+        LlamaCppBackend,
     )
+
     rows = []
-    for cls in (MlxBackend, MetalKernelBackend, VllmBackend, TensorrtBackend, SglangBackend, LlamaCppBackend):
+    for cls in (
+        MlxBackend,
+        MetalKernelBackend,
+        VllmBackend,
+        TensorrtBackend,
+        SglangBackend,
+        LlamaCppBackend,
+    ):
         b = cls()
-        rows.append((b.capabilities.name, b.capabilities.primary, "ok" if b.is_available() else "—"))
+        rows.append(
+            (
+                b.capabilities.name,
+                b.capabilities.primary,
+                "ok" if b.is_available() else "—",
+            )
+        )
     print(f"{'name':10s} {'primary':12s} status")
     for n, p, s in rows:
         print(f"{n:10s} {p:12s} {s}")
@@ -48,13 +66,17 @@ def cmd_status(_: argparse.Namespace) -> int:
 def cmd_inference(args: argparse.Namespace) -> int:
     from ..backends import GenerateRequest, MlxBackend, MetalKernelBackend
     from ..engines import HybridDispatch, DispatchPolicy
-    req = GenerateRequest(prompt=args.prompt, max_tokens=args.max_tokens, temperature=args.temperature)
+
+    req = GenerateRequest(
+        prompt=args.prompt, max_tokens=args.max_tokens, temperature=args.temperature
+    )
     pol = DispatchPolicy(args.policy) if args.policy else DispatchPolicy.AUTO
     if pol == DispatchPolicy.MLX:
         # Fail loudly with a structured install hint instead of a bare
         # ImportError when mlx_lm is missing — this is the production
         # decode path on Apple Silicon and the most common DX paper cut.
         from ._missing_dep import require_mlx_lm
+
         require_mlx_lm("omlx-research inference --policy mlx")
         b = MlxBackend(model_path=args.model)
         out = b.generate(req)
@@ -68,6 +90,7 @@ def cmd_inference(args: argparse.Namespace) -> int:
         # hybrid dispatcher picks; require it up front so the user sees
         # the structured install message before any partial work runs.
         from ._missing_dep import require_mlx_lm
+
         require_mlx_lm("omlx-research inference")
         d = HybridDispatch()
         outs = d.generate(req, policy=pol)
@@ -101,6 +124,7 @@ def cmd_spec_decode(args: argparse.Namespace) -> int:
         # Draft model (toy): constant argmax
         def draft_fn(prefix):
             return np.array([0.0] * 31 + [1.0], dtype=np.float32)
+
         engine = SpeculativeEngine(
             target=tok_fn,
             draft=draft_fn,
@@ -113,7 +137,9 @@ def cmd_spec_decode(args: argparse.Namespace) -> int:
         width = 4
         depth = args.depth
         mask_size = width**depth + 1
-        print(f"Medusa: heads={width} depth={depth} → tree shape ({mask_size}, {mask_size})")
+        print(
+            f"Medusa: heads={width} depth={depth} → tree shape ({mask_size}, {mask_size})"
+        )
     return 0
 
 
@@ -126,9 +152,16 @@ def cmd_latentmas(args: argparse.Namespace) -> int:
         return f"[agent-{idx} answer]"
 
     async def main():
-        fns = [lambda p, s, i=i: one_agent(p, s, i) for i in range(args.n_agents)]
+        def _make_agent(idx):
+            async def agent(p, s):
+                return await one_agent(p, s, idx)
+
+            return agent
+
+        fns = [_make_agent(i) for i in range(args.n_agents)]
         results = await latentmas_fanout(fns, args.prompt, {})
         for r in results:
             print(r)
+
     asyncio.run(main())
     return 0

@@ -138,7 +138,7 @@ fn engine_reset_state_clears_counters_and_history() {
     s.accepted_total = 73;
     s.last_step_accepted = 5;
     s.last_step_drafted = 6;
-    s.history.extend_from_slice(&[1, 2, 3, 4]);
+    s.history.extend([1, 2, 3, 4]);
     s.reset();
     assert_eq!(s.kv_len, 0);
     assert_eq!(s.drafted_total, 0);
@@ -154,7 +154,7 @@ fn engine_snapshot_returns_independent_copy() {
     let s2 = s1.snapshot();
     let mut s1 = s1;
     s1.kv_len = 99;
-    s1.history.push(1);
+    s1.history.push_back(1);
     assert_eq!(s2.kv_len, 0);
     assert!(s2.history.is_empty());
 }
@@ -166,7 +166,7 @@ fn engine_history_caps_at_1024_tokens() {
         s.push_accepted(i);
     }
     assert_eq!(s.history.len(), 1024);
-    assert_eq!(s.history.last().copied(), Some(1999));
+    assert_eq!(s.history.back().copied(), Some(1999));
 }
 
 // -----------------------------------------------------------------------------

@@ -32,13 +32,13 @@
 
 set -euo pipefail
 
-PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx}"
+PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-$(cd "$(dirname "$0")/../.." && pwd)}"
 OMLX_APP="${OMLX_APP:-/Applications/oMLX.app}"
 OMLX_FRAMEWORK="${OMLX_APP}/Contents/Resources/Python/framework-mlx-base/lib/python3.11/site-packages"
 OMLX_FRAMEWORK_PY="${OMLX_APP}/Contents/Resources/Python/cpython-3.11/bin/python3"
 OMLX_CLI_BIN="${OMLX_APP}/Contents/MacOS/omlx-cli"
 GUI_ADMIN_EXT="${PHENOTYPE_OMLX_HOME}/gui/admin-extensions"
-REPOS_ROOT="${REPOS_ROOT:-/Users/kooshapari/CodeProjects/Phenotype/repos}"
+REPOS_ROOT="${REPOS_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 
 # 1) Source the env so TurboQuant+, perf-core, research repos, and the venv
 #    are activated. This sets PYTHONPATH, PATH, and the alias helpers.
