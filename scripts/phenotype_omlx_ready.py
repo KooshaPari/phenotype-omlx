@@ -152,6 +152,43 @@ def c_perf():
     return f"packed={len(packed)}B, scales={len(q.get('scales') or [])}"
 
 
+# Acceptance smoke model — Qwen3.5 only (FR-5 / org directive).
+# Legacy Qwen2.5 is quarantined: set OMLX_ALLOW_LEGACY_QWEN25=1 to opt in.
+DEFAULT_READY_MODEL = "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
+_LEGACY_QWEN25 = "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+
+
+def _resolve_ready_model() -> str:
+    """Return HF/MLX model id for readiness check 12.
+
+    Defaults to Qwen3.5. Rejects Qwen2.5 / non-3.5 ids unless
+    ``OMLX_ALLOW_LEGACY_QWEN25=1`` (quarantine escape for local debug only —
+    never for FR acceptance).
+    """
+    model = os.environ.get("OMLX_READY_MODEL", DEFAULT_READY_MODEL).strip()
+    lower = model.lower()
+    allow_legacy = os.environ.get("OMLX_ALLOW_LEGACY_QWEN25", "").strip() in (
+        "1",
+        "true",
+        "yes",
+    )
+    is_qwen25 = "qwen2.5" in lower
+    is_qwen35 = "qwen3.5" in lower
+    if is_qwen25 or (not is_qwen35 and "qwen3" in lower and "qwen3.5" not in lower):
+        if not allow_legacy:
+            raise RuntimeError(
+                f"readiness check refuses non-Qwen3.5 model {model!r}; "
+                f"default is {DEFAULT_READY_MODEL!r}. "
+                f"Quarantined legacy id was {_LEGACY_QWEN25!r} — set "
+                f"OMLX_ALLOW_LEGACY_QWEN25=1 only for local debug (not FR)."
+            )
+    if not is_qwen35 and not allow_legacy:
+        raise RuntimeError(
+            f"readiness check requires Qwen3.5 in model id (got {model!r})"
+        )
+    return model
+
+
 # ── Check 12: turboquant_plus_production_path ─────────────────────────────
 # Catches the regression where compact_turbo_cache returned 0/N compressed
 # because the cache list held TurboKVCache (not Lite) instances and the
@@ -173,9 +210,10 @@ def c_turboquant_plus_production_path():
     # Trigger lazy load — must not throw.
     _ = be._rust_perf()
 
-    # 2. Resolve Qwen2.5-0.5B-Instruct (cached locally on dev machines)
+    # 2. Resolve Qwen3.5 readiness model (Qwen2.5 quarantined — see helper)
     from huggingface_hub import snapshot_download
-    model_path = snapshot_download("mlx-community/Qwen2.5-0.5B-Instruct-4bit")
+    model_id = _resolve_ready_model()
+    model_path = snapshot_download(model_id)
 
     # 3. End-to-end: 2048-token prompt + force_compact=True to bypass
     #    compact_threshold gating (which would otherwise require >= 8K
@@ -205,7 +243,7 @@ def c_turboquant_plus_production_path():
             f"boundary={turbo.get('boundary')}, force_compact={turbo.get('force_compact')})",
         )
     return (
-        f"{n_compressed}/{n_lite} lite compressed, "
+        f"model={model_id}, {n_compressed}/{n_lite} lite compressed, "
         f"bytes_freed={bytes_freed}, encode_path={turbo.get('encode_path')}, "
         f"backend={resp.backend}"
     )
