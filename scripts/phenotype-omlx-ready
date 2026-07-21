@@ -6,7 +6,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VENV="/Users/kooshapari/CodeProjects/Phenotype/repos/turboquant_plus/.venv"
+VENV="${VENV:-$(cd "$(dirname "$0")/../../turboquant_plus" && pwd)/.venv}"
 
 if [ -f "$VENV/bin/activate" ]; then
     source "$VENV/bin/activate"

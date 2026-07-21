@@ -6,6 +6,8 @@
 //! arranged into a candidate tree and verified in a single tree-attention
 //! forward pass.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 /// Tree topology constraints shared by the proposal builder and the verifier.
@@ -167,13 +169,14 @@ fn per_head_budget(total: usize, tree: &TreeTopology, n_heads: usize) -> Vec<usi
 
 /// Dedup a slice preserving first-seen order.
 fn dedup_preserve(xs: Vec<u32>) -> Vec<u32> {
-    let mut seen = Vec::new();
+    let mut seen = HashSet::new();
+    let mut out = Vec::with_capacity(xs.len());
     for x in xs {
-        if !seen.contains(&x) {
-            seen.push(x);
+        if seen.insert(x) {
+            out.push(x);
         }
     }
-    seen
+    out
 }
 
 #[cfg(test)]

@@ -1,11 +1,13 @@
 import React from 'react';
-import { Cell, Summary } from '../types';
+import { Cell, Summary, SuiteCoverageRow } from '../types';
 import { meanQualityPass, summaryQualityLabel, summaryQualityPass } from '../lib/metrics';
+import { SuiteCoverage } from './SuiteCoverage';
 
 interface Props {
   cells: Cell[];
   summary: Summary;
   onJumpToSuite: (suite: string) => void;
+  suiteCoverage?: SuiteCoverageRow[];
 }
 
 function mean(a: number[]): number {
@@ -30,9 +32,28 @@ function perDiff(cells: Cell[]): Map<string, { stock: Cell[]; ours: Cell[] }> {
   return m;
 }
 
-export default function Overview({ cells, summary, onJumpToSuite }: Props) {
-  const s = summary.by_variant.stock;
-  const o = summary.by_variant.ours;
+const emptyVariant = {
+  pass_at_1: 0,
+  gen_ok: 0,
+  verified_pass_at_1: 0,
+  mean_wall_clock_s: 0,
+  mean_partial_credit: 0,
+  mean_format_compliance: 0,
+  n_hallucinations: 0,
+  mean_tokens_read: 0,
+  mean_cost_usd: 0,
+  mean_peak_rss_mb: 0,
+  mean_energy_joules: 0,
+  mean_first_token_ms: 0,
+  mean_retry_count: 0,
+  success_rate: 0,
+  timeout_rate: 0,
+};
+
+export default function Overview({ cells, summary, onJumpToSuite, suiteCoverage }: Props) {
+  const s = summary.by_variant.stock ?? emptyVariant;
+  const o = summary.by_variant.ours ?? emptyVariant;
+  const extraArms = Object.keys(summary.by_variant || {}).filter((v) => v !== 'stock' && v !== 'ours');
   const suites = perSuite(cells);
   const dims = perDiff(cells);
   const DIFFS = ['easy', 'medium', 'hard', 'ultra'];
@@ -83,6 +104,14 @@ export default function Overview({ cells, summary, onJumpToSuite }: Props) {
         })}
       </div>
 
+      {extraArms.length > 0 && (
+        <p className="muted" style={{ marginBottom: 12 }}>
+          Extra experiment arms in load: <code className="mono">{extraArms.join(', ')}</code>
+        </p>
+      )}
+
+      <SuiteCoverage rows={suiteCoverage ?? []} onJumpToSuite={onJumpToSuite} />
+
       <h3 className="section-title">Per Suite</h3>
       <div className="suite-grid" id="suiteGrid">
         {[...suites.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([suite, grp]) => {
@@ -92,12 +121,36 @@ export default function Overview({ cells, summary, onJumpToSuite }: Props) {
           const oP = meanQualityPass(grp.ours);
           const dWall = oW - sW;
           const cls = dWall < 0 ? 'positive' : dWall > 0 ? 'negative' : 'neutral';
+          const suiteExtras = cells.filter(
+            (c) => c.suite === suite && c.variant !== 'stock' && c.variant !== 'ours',
+          );
+          const byArm = new Map<string, Cell[]>();
+          for (const c of suiteExtras) {
+            const arr = byArm.get(c.variant) || [];
+            arr.push(c);
+            byArm.set(c.variant, arr);
+          }
           return (
             <div key={suite} className="suite-card" onClick={() => onJumpToSuite(suite)}>
-              <div className="suite-name">{suite} <span className="n">{grp.stock.length + grp.ours.length}</span></div>
-              <div className="suite-card-row"><span className="swatch stock" />stock <span className="suite-val">{sW.toFixed(2)}s</span></div>
-              <div className="suite-card-row"><span className="swatch ours" />ours <span className="suite-val">{oW.toFixed(2)}s</span><span className={`suite-delta ${cls}`}>{dWall >= 0 ? '+' : ''}{dWall.toFixed(2)}s</span></div>
-              <div className="suite-card-row"><span className="swatch" style={{ background: 'var(--green)' }} />pass <span className="suite-val">{(sP * 100).toFixed(0)}% / {(oP * 100).toFixed(0)}%</span></div>
+              <div className="suite-name">{suite} <span className="n">{grp.stock.length + grp.ours.length + suiteExtras.length}</span></div>
+              {grp.stock.length > 0 && (
+                <div className="suite-card-row"><span className="swatch stock" />stock <span className="suite-val">{sW.toFixed(2)}s · {(sP * 100).toFixed(0)}%</span></div>
+              )}
+              {grp.ours.length > 0 && (
+                <div className="suite-card-row"><span className="swatch ours" />ours <span className="suite-val">{oW.toFixed(2)}s · {(oP * 100).toFixed(0)}%</span><span className={`suite-delta ${cls}`}>{dWall >= 0 ? '+' : ''}{dWall.toFixed(2)}s</span></div>
+              )}
+              {[...byArm.entries()].map(([arm, armCells]) => (
+                <div key={arm} className="suite-card-row">
+                  <span className="swatch" style={{ background: 'var(--accent, #6cf)' }} />
+                  {arm}{' '}
+                  <span className="suite-val">
+                    {mean(armCells.map((c) => c.wall_clock_s)).toFixed(2)}s · {(meanQualityPass(armCells) * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+              {!grp.stock.length && !grp.ours.length && suiteExtras.length === 0 && (
+                <div className="suite-card-row faint">no cells</div>
+              )}
             </div>
           );
         })}

@@ -50,6 +50,24 @@ second → `ours`. All-synthetic reports raise a `synthetic_100pct` lint error.
 
 Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
 
+## Suite coverage (stock + experiment arms)
+
+Default load: V5 `stock`/`ours` (10 suites) **plus** `minimax-m3-full/matrix.json`
+as experiment arm `minimax-m3` (HLE, PinchBench, vending-bench, …).
+
+```bash
+# optional overrides
+BENCH_DATA=/path/to/run-v5.json
+BENCH_EXTRA_DATA=/path/to/minimax-m3-full/matrix.json
+bash scripts/start-dev.sh
+```
+
+Overview → **Suite coverage** table shows paired stock/ours vs partial/missing
+(catalog includes `ycbench` as unimplemented gap). Full stock+ours for every suite
+still requires extending `pheno-harness` `stock_vs_ours.SUITES` and re-running.
+
+Agents / MCP / self-host: `docs/guides/LANGFUSE_AGENTS_AND_SELFHOST.md`.
+
 ## Observability (Langfuse primary)
 
 **Recommendation:** use **Langfuse** for tracing, playground, and hosted LLM-as-judge —

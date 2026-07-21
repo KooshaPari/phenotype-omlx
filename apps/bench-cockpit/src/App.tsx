@@ -295,7 +295,14 @@ export default function App() {
     }
     switch (state.view) {
       case 'overview':
-        return <Overview cells={allCells} summary={summary!} onJumpToSuite={onJumpToSuite} />;
+        return (
+          <Overview
+            cells={allCells}
+            summary={summary!}
+            onJumpToSuite={onJumpToSuite}
+            suiteCoverage={state.payload?.suite_coverage}
+          />
+        );
       case 'suites': {
         const untrusted = (state.payload?.warnings ?? []).some(
           (w) => w.code === 'synthetic_100pct' || w.code === 'all_variants_pass',

@@ -5,6 +5,8 @@
 //! debugger tooling all interact with this struct directly, without any
 //! lock overhead.
 
+use std::collections::VecDeque;
+
 use serde::{Deserialize, Serialize};
 
 /// Maximum number of accepted tokens retained in the rolling history.
@@ -25,7 +27,7 @@ pub struct EngineState {
     pub last_step_drafted: usize,
     /// Rolling history of the last [`HISTORY_CAP`] accepted tokens.
     /// Most recent is at the back.
-    pub history: Vec<u32>,
+    pub history: VecDeque<u32>,
 }
 
 impl Default for EngineState {
@@ -43,7 +45,7 @@ impl EngineState {
             accepted_total: 0,
             last_step_accepted: 0,
             last_step_drafted: 0,
-            history: Vec::new(),
+            history: VecDeque::new(),
         }
     }
 
@@ -78,9 +80,9 @@ impl EngineState {
     /// oldest entry if we exceed the cap.
     pub fn push_accepted(&mut self, token: u32) {
         if self.history.len() >= HISTORY_CAP {
-            self.history.remove(0);
+            self.history.pop_front();
         }
-        self.history.push(token);
+        self.history.push_back(token);
     }
 
     /// Update both per-step and cumulative counters in one call.
@@ -111,10 +113,10 @@ mod tests {
     fn snapshot_is_independent() {
         let mut a = EngineState::new();
         a.kv_len = 8;
-        a.history.push(1);
+        a.history.push_back(1);
         let b = a.snapshot();
-        a.history.push(2);
-        assert_eq!(b.history, vec![1]);
+        a.history.push_back(2);
+        assert_eq!(b.history, VecDeque::from([1]));
     }
 
     #[test]
