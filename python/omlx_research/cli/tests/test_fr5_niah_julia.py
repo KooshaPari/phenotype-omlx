@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 from omlx_research.cli import _doctor_checks as checks_mod
@@ -247,3 +248,92 @@ def test_measure_turbo_cache_metrics_full_attn_only():
     empty = mod.measure_turbo_cache_metrics([KVCache(), KVCache()], fp16_baseline_bytes=100)
     assert empty["turbo_layers"] == 0
     assert empty["byte_reduction_effective"] is False
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_committed_instrumented_envelope_is_schema_v2_byte_reduction():
+    """On-disk compression proof must stay schema v2 with byte_reduction_any."""
+
+    root = Path(project_root())
+    path = root / "research" / "fr5_niah_qwen35_0_8b_instrumented.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["schema_version"] == 2
+    assert data["packed_state_any"] is True
+    assert data["byte_reduction_any"] is True
+    assert data["evidence_label"] == "live_verified"
+    assert _sha256(path) == (
+        "862bc610c16a3e4b4b637e85670bf493e24a82a31adfc88c7efd7a5a7d6407d3"
+    )
+
+
+def test_committed_answer128_exact_retrieval_not_compression_proof():
+    """Argis answer128 packs prove exact retrieval only — no compression metrics."""
+
+    root = Path(project_root())
+    cases = [
+        (
+            "fr5_niah_qwen35_4b_coder_authorized_answer128.json",
+            "170b1bef2b200b80a90ad9ad2f96826bec304f0b9d28a1510e4d1341cf35b2b9",
+            1,
+        ),
+        (
+            "fr5_niah_qwen35_4b_coder_authorized_answer128_2048.json",
+            "4ee9f73573c30cb0d8763ceb39e35736967f2af856b3722aa96c25faec2154bc",
+            4,
+        ),
+    ]
+    compression_keys = {
+        "byte_reduction_any",
+        "packed_state_any",
+        "kv_turbo_resident_bytes",
+        "byte_reduction_effective",
+    }
+    for name, digest, exact_count in cases:
+        path = root / "research" / name
+        data = json.loads(path.read_text(encoding="utf-8"))
+        assert data["schema_version"] == 1
+        assert data["evidence_label"] == "live_verified"
+        assert compression_keys.isdisjoint(data.keys())
+        assert sum(1 for r in data["results"] if r.get("exact_match")) == exact_count
+        assert _sha256(path) == digest
+
+
+def test_evidence_index_roles_match_committed_artifacts():
+    """Index maps compression vs exact-retrieval roles without rewriting packs."""
+
+    root = Path(project_root())
+    index = json.loads(
+        (root / "research" / "fr5_qwen35_evidence_index.json").read_text(encoding="utf-8")
+    )
+    by_path = {a["path"]: a for a in index["artifacts"]}
+    instr = by_path["research/fr5_niah_qwen35_0_8b_instrumented.json"]
+    assert instr["compression_proof"] is True
+    a512 = by_path["research/fr5_niah_qwen35_4b_coder_authorized_answer128.json"]
+    assert a512["compression_proof"] is False
+    assert a512["role"] == "exact_retrieval"
+
+
+def test_configure_hf_env_keeps_offline_for_local_model_path(monkeypatch):
+    """Local absolute --model must not force HF_HUB_OFFLINE=0."""
+
+    script = Path(project_root()) / "scripts" / "niah_benchmark.py"
+    spec = importlib.util.spec_from_file_location("niah_benchmark_hf", script)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setenv("TRANSFORMERS_OFFLINE", "1")
+    local = "/Users/kooshapari/.omlx/models/example-local"
+    mod.configure_hf_env(local)
+    assert os.environ["HF_HUB_OFFLINE"] == "1"
+    assert os.environ["TRANSFORMERS_OFFLINE"] == "1"
+
+    mod.configure_hf_env("mlx-community/Some-Hub-Model")
+    assert os.environ["HF_HUB_OFFLINE"] == "0"
+    assert os.environ["TRANSFORMERS_OFFLINE"] == "0"

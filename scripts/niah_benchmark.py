@@ -33,11 +33,24 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-# Force online mode for HuggingFace (the user env exports HF_HUB_OFFLINE=1,
-# which would block model downloads even though the model is cached locally).
-os.environ["HF_HUB_OFFLINE"] = "0"
-os.environ["HF_HOME"] = "/Users/kooshapari/.cache/huggingface"
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "0")
+# HF home stays stable; online/offline is decided after --model is known
+# (see configure_hf_env). Do not force HF_HUB_OFFLINE=0 at import time —
+# absolute/local model paths must stay offline-capable.
+os.environ.setdefault("HF_HOME", "/Users/kooshapari/.cache/huggingface")
+
+
+def configure_hf_env(model: str) -> None:
+    """Prefer offline Hub access when --model is a local filesystem path.
+
+    Hub repo ids still clear offline flags so a missing local cache can fetch.
+    """
+    path = Path(model).expanduser()
+    if path.is_absolute() or path.exists():
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
+        os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+        return
+    os.environ["HF_HUB_OFFLINE"] = "0"
+    os.environ["TRANSFORMERS_OFFLINE"] = "0"
 
 # Absorbed-crate / worktree layout: always import from this repo's python/.
 # Never use a hard-coded absolute repos/.../python sys.path (FR-5 E2).
@@ -567,6 +580,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42,
                         help="Random seed for needle/filler")
     args = parser.parse_args()
+    configure_hf_env(args.model)
 
     require_julia()
     random.seed(args.seed)

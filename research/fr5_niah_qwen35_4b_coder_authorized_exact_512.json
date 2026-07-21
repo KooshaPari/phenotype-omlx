@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "kind": "niah_live_run",
+  "evidence_label": "live_verified",
+  "reported": true,
+  "synthetic": false,
+  "model": "/Users/kooshapari/.omlx/models/Rishu11277/Qwopus3.5-4B-Coder-mlx-4Bit",
+  "backend": "mlx_lm_inprocess",
+  "architecture_caveat": null,
+  "seed": 42,
+  "lengths": [
+    512
+  ],
+  "modes": [
+    "baseline_fp16",
+    "turbo_asymmetric",
+    "turbo_symmetric",
+    "mlx_native_kv4"
+  ],
+  "results": [
+    {
+      "mode": "baseline_fp16",
+      "target_len": 512,
+      "actual_len": 512,
+      "prefill_ms": 12376.019332994474,
+      "decode_ms": 12556.059082999127,
+      "decode_tok_per_sec": 0.07964282370684266,
+      "rss_mb_before": 145.828125,
+      "rss_mb_after": 46.265625,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A passage consisting of a long string of",
+      "exact_match": false,
+      "partial_match": false,
+      "contains_secret": false,
+      "error": ""
+    },
+    {
+      "mode": "turbo_asymmetric",
+      "target_len": 512,
+      "actual_len": 512,
+      "prefill_ms": 12915.37995802355,
+      "decode_ms": 17639.32016599574,
+      "decode_tok_per_sec": 0.05669152725782218,
+      "rss_mb_before": 97.421875,
+      "rss_mb_after": 45.390625,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A long, repetitive passage containing the phrase",
+      "exact_match": false,
+      "partial_match": false,
+      "contains_secret": false,
+      "error": ""
+    },
+    {
+      "mode": "turbo_symmetric",
+      "target_len": 512,
+      "actual_len": 512,
+      "prefill_ms": 14931.088292010827,
+      "decode_ms": 13669.566708995262,
+      "decode_tok_per_sec": 0.07315520830239262,
+      "rss_mb_before": 84.96875,
+      "rss_mb_after": 48.34375,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A long, repetitive passage containing the phrase",
+      "exact_match": false,
+      "partial_match": false,
+      "contains_secret": false,
+      "error": ""
+    },
+    {
+      "mode": "mlx_native_kv4",
+      "target_len": 512,
+      "actual_len": 512,
+      "prefill_ms": 9601.994875003584,
+      "decode_ms": 6288.828041986562,
+      "decode_tok_per_sec": 0.15901213919726012,
+      "rss_mb_before": 99.453125,
+      "rss_mb_after": 89.984375,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A passage consisting of a long string of",
+      "exact_match": false,
+      "partial_match": false,
+      "contains_secret": false,
+      "error": ""
+    }
+  ]
+}
