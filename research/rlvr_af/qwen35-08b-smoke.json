@@ -1,0 +1,48 @@
+{
+  "experiment": "L6-rlvr-af-smoke",
+  "ts": "2026-07-21T10:54:16.557309+00:00",
+  "model": "fixture-hard-verifier",
+  "pheno_harness": "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness",
+  "n_tasks": 5,
+  "n_passed": 2,
+  "mean_reward": 0.5,
+  "rows": [
+    {
+      "task_id": "schema-json-ok",
+      "passed": true,
+      "reward": 1.0,
+      "reason": "expected string found"
+    },
+    {
+      "task_id": "needle-exact",
+      "passed": true,
+      "reward": 1.0,
+      "reason": "expected string found"
+    },
+    {
+      "task_id": "empty-fail",
+      "passed": false,
+      "reward": 0.0,
+      "reason": "empty or error completion"
+    },
+    {
+      "task_id": "error-prefix-fail",
+      "passed": false,
+      "reward": 0.0,
+      "reason": "empty or error completion"
+    },
+    {
+      "task_id": "partial-credit",
+      "passed": false,
+      "reward": 0.5,
+      "reason": "expected 'green' not found in 'Red and blue are important colors in the palette.'"
+    }
+  ],
+  "contract_ok": true,
+  "verdict": "PASS",
+  "notes": [
+    "Phase-1 eval-first: hard verifier only (no LoRA / soft judge).",
+    "Soft-judge calibration blocked until live non-synthetic L1/L4.",
+    "Operator path remains Portage/Harbor + LangSmith for agent trials."
+  ]
+}

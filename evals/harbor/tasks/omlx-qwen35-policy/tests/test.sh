@@ -1,4 +1,10 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# Harbor verifier: Qwen3.5 policy marker + reward.txt.
 set -euo pipefail
-test -f /app/policy_ok.txt
-grep -qx 'qwen35-ssot-ok' /app/policy_ok.txt
+mkdir -p /logs/verifier
+reward=0
+if grep -qx 'qwen35-ssot-ok' /app/policy_ok.txt 2>/dev/null; then
+  reward=1
+fi
+echo "$reward" > /logs/verifier/reward.txt
+exit $((1 - reward))

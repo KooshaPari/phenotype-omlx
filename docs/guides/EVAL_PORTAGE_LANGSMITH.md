@@ -59,6 +59,10 @@ JobConfig templates (documentation / future `harbor run -c`):
 python3 scripts/evals/contamination_scan.py
 # → research/contamination/qwen35-08b-report.{json,md}
 # → mirrors to pheno-harness/bench/results/contamination/qwen35-08b/
+
+# L6 RLVR-AF Phase-1 hard-verifier smoke (wraps pheno-harness bench.rlvr_af):
+python3 scripts/evals/rlvr_af_smoke.py
+# → research/rlvr_af/qwen35-08b-smoke.{json,md}
 ```
 
 UNTRUSTED_SYNTHETIC means stock-vs-ours V5 cannot ground quality or RLVR soft rewards.
