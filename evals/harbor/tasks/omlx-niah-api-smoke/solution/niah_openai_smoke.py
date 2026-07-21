@@ -5,7 +5,8 @@ Calls ``OPENAI_BASE_URL`` /v1/chat/completions with a fixed needle prompt.
 Model defaults from ``omlx_research.smoke_models`` (Qwen3.5 SSOT).
 
 Env:
-  OPENAI_BASE_URL   required (e.g. http://127.0.0.1:8765/v1) — no silent skip
+  OPENAI_BASE_URL   required OpenAI-compatible base (…/v1). Self-host OK; pick a free port.
+                    Example: http://127.0.0.1:8766/v1 — no silent skip
   OPENAI_API_KEY    optional (default ``omlx``)
   OMLX_READY_MODEL / smoke_models role=niah for model id
   OMLX_NIAH_OUT     optional path to write JSON result (default stdout)
@@ -22,11 +23,30 @@ from pathlib import Path
 
 NEEDLE = "42-alpha"
 PROMPT = (
-    "Read the passage and reply with ONLY the secret code.\n\n"
+    "Read the passage and reply with ONLY the secret code (no thinking, no quotes).\n\n"
     f"Passage: Notes about weather and tea. The secret code is {NEEDLE}. "
     "More filler about cats.\n\n"
     "Secret code:"
 )
+
+
+def _extract_reply(payload: dict) -> str:
+    """Pull assistant text from OpenAI-compat payloads (incl. reasoning-only)."""
+    try:
+        msg = payload["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError):
+        return ""
+    if not isinstance(msg, dict):
+        return str(msg or "")
+    content = msg.get("content")
+    if isinstance(content, str) and content.strip():
+        return content
+    # Qwen3.5 / thinking models may put text in reasoning / reasoning_content
+    for key in ("reasoning_content", "reasoning", "text"):
+        val = msg.get(key)
+        if isinstance(val, str) and val.strip():
+            return val
+    return ""
 
 
 def _model_id() -> str:
@@ -57,13 +77,12 @@ def run_niah() -> dict:
             "error: OPENAI_BASE_URL required (OpenAI-compatible omlx / vLLM). "
             "Do not fall back — mature evals fail loud."
         )
-    if not base.endswith("/v1"):
-        # Accept either .../v1 or host root
-        url = base + "/v1/chat/completions" if not base.endswith("/completions") else base
-        if "/chat/completions" not in url:
-            url = base.rstrip("/") + "/v1/chat/completions"
-    else:
+    if base.endswith("/chat/completions"):
+        url = base
+    elif base.endswith("/v1"):
         url = base + "/chat/completions"
+    else:
+        url = base + "/v1/chat/completions"
 
     model = _model_id()
     lower = model.lower()
@@ -75,9 +94,15 @@ def run_niah() -> dict:
     key = os.environ.get("OPENAI_API_KEY", "omlx")
     body = {
         "model": model,
-        "messages": [{"role": "user", "content": PROMPT}],
+        "messages": [
+            {
+                "role": "system",
+                "content": "Reply with only the secret code. No analysis.",
+            },
+            {"role": "user", "content": PROMPT},
+        ],
         "temperature": 0,
-        "max_tokens": 32,
+        "max_tokens": 128,
     }
     req = urllib.request.Request(
         url,
@@ -95,10 +120,8 @@ def run_niah() -> dict:
     except urllib.error.URLError as e:
         raise SystemExit(f"error: NIAH request failed: {e}") from e
 
-    text = ""
-    try:
-        text = payload["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
+    text = _extract_reply(payload)
+    if not text:
         text = json.dumps(payload)[:500]
 
     hit = NEEDLE in (text or "")

@@ -56,7 +56,11 @@ case "$MODE" in
   niah)
     TASK="$ROOT/evals/harbor/tasks/omlx-niah-api-smoke"
     if [[ -z "${OPENAI_BASE_URL:-}" ]]; then
-      echo "ERROR: OPENAI_BASE_URL required for --niah (e.g. http://127.0.0.1:8765/v1)" >&2
+      echo "ERROR: OPENAI_BASE_URL required for --niah" >&2
+      echo "  Self-host any OpenAI-compatible server and point here, e.g.:" >&2
+      echo "    mlx_lm.server --model \$OMLX_READY_MODEL --host 127.0.0.1 --port 8766" >&2
+      echo "    export OPENAI_BASE_URL=http://127.0.0.1:8766/v1   # host dry-run" >&2
+      echo "    export OPENAI_BASE_URL=http://host.containers.internal:8766/v1  # Harbor→host" >&2
       exit 2
     fi
     ;;
