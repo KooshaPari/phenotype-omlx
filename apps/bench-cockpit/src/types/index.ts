@@ -13,7 +13,8 @@ export type ViewType =
   | 'throughput'
   | 'rlvr'
   | 'audit'
-  | 'langsmith';
+  | 'langsmith'
+  | 'langfuse';
 
 export type FailMode = 'all' | 'timeout' | 'low-pc' | 'hallucination';
 

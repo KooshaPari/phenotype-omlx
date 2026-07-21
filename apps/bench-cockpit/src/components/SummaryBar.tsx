@@ -29,6 +29,7 @@ const VIEWS: { id: ViewType; label: string; icon: string; key: string }[] = [
   { id: 'throughput', label: 'Thru', icon: '↗', key: '8' },
   { id: 'rlvr', label: 'RLVR', icon: '∑', key: '9' },
   { id: 'audit', label: 'Audit', icon: '⌕', key: '0' },
+  { id: 'langfuse', label: 'Langfuse', icon: '◈', key: 'F' },
   { id: 'langsmith', label: 'Smith', icon: '◎', key: 'L' },
 ];
 

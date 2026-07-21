@@ -50,10 +50,28 @@ second → `ours`. All-synthetic reports raise a `synthetic_100pct` lint error.
 
 Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
 
-## LangSmith evaluators
+## Observability (Langfuse primary)
 
-Put `LANGSMITH_API_KEY` in gitignored `.env`. Minimax coding-plan key comes from
-`MINIMAX_API_KEY` or macOS keychain service `minimax-coding-plan`.
+**Recommendation:** use **Langfuse** for tracing + scores — MIT OSS, self-hostable with
+full feature control and no SaaS meter. LangSmith remains optional/legacy.
+
+```bash
+# .env (gitignored)
+OBSERVABILITY_BACKEND=langfuse
+LANGFUSE_PUBLIC_KEY=pk-lf-...
+LANGFUSE_SECRET_KEY=sk-lf-...
+LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # or self-host URL
+```
+
+- **Langfuse** view: seed V5 cells as traces + run Minimax judges onto Langfuse scores.
+- CLI: `python3 scripts/evals/run_langfuse_evaluators.py status|seed|judge --limit 40`
+- Self-host later via Podman / Apple Container (never Docker) for unlimited local control.
+
+Minimax coding-plan key: `MINIMAX_API_KEY` or keychain `minimax-coding-plan`.
+
+## LangSmith (optional legacy)
+
+Put `LANGSMITH_API_KEY` in gitignored `.env` only if still needed.
 
 ### Hosted Minimax (OpenAI-compat)
 
@@ -66,14 +84,9 @@ Put `LANGSMITH_API_KEY` in gitignored `.env`. Minimax coding-plan key comes from
 uv venv --python python3.12 .venv-evals
 uv pip install --python .venv-evals/bin/python langsmith langchain-core
 .venv-evals/bin/python scripts/evals/setup_hosted_judges.py
-# or Smith view → "Sync hosted Minimax judges"
 ```
 
-Hub handles: `bench-correctness`, `bench-hallucination`, `bench-code-checker`.
+### Offline
 
-### Offline (always available)
-
-- **Smith** view: register code evaluators + run code/Minimax judges.
 - CLI: `python3 scripts/evals/run_evaluators.py sync|run|all --limit 20`
-- Feedback keys: `correctness`, `hallucination`, `code_checker`, plus code keys.
-- Harbor plugin smoke: `bash scripts/evals/harbor_langsmith_smoke.sh` (`-e apple-container`).
+- Harbor smoke: `bash scripts/evals/harbor_langsmith_smoke.sh` (`-e apple-container`).
