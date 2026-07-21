@@ -838,6 +838,14 @@ name = "turbo-quant-nim"
 version = "0.1.0"
 
 [[package]]
+name = "turbo-quant-zig"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "native-abi",
+]
+
+[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
