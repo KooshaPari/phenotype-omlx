@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
 const SCHEMA_HASH: &str = "533dd0fa0d9b36145ef2e23a5c32aed39a67bc09bd36822b58289b61d5640a2e";
+const SCHEMA_V01: &str = include_str!("schema_v01.json");
 const SUITES: &[&str] = &[
     "mmlu-pro",
     "gpqa-diamond",
@@ -110,15 +111,13 @@ fn remove_hash_chain(value: &Value) -> Option<Value> {
 }
 
 pub fn verify_self() -> VerifyOutcome {
-    // The contract hash is checked against the canonical schema body by the
-    // Python owner; this self-test also guarantees the Rust hash implementation
-    // is wired and the frozen constant is a valid digest.
-    let utf8_vector: Value = serde_json::from_str(r#"{"a":"é"}"#).expect("self-test JSON");
-    let expected = r#"{"a":"é"}"#;
-    let expected_hash = hex(&Sha256::digest(expected.as_bytes()));
+    let schema: Value = match serde_json::from_str(SCHEMA_V01) {
+        Ok(value) => value,
+        Err(error) => return VerifyOutcome::InternalMismatch { message: format!("embedded schema JSON invalid: {error}") },
+    };
     if SCHEMA_HASH.len() == 64
         && SCHEMA_HASH.bytes().all(|b| b.is_ascii_hexdigit())
-        && sha256_hex(&utf8_vector) == expected_hash
+        && sha256_hex(&schema) == SCHEMA_HASH
     {
         VerifyOutcome::Accept
     } else {
