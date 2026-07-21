@@ -38,6 +38,8 @@ type Meta struct {
 type VariantSummary struct {
 	NCells               int     `json:"n_cells"`
 	PassAt1              float64 `json:"pass_at_1"`
+	GenOk                float64 `json:"gen_ok"`
+	VerifiedPassAt1      float64 `json:"verified_pass_at_1"`
 	MeanWallClockS       float64 `json:"mean_wall_clock_s"`
 	MeanPartialCredit    float64 `json:"mean_partial_credit"`
 	MeanFormatCompliance float64 `json:"mean_format_compliance"`
@@ -66,6 +68,8 @@ type Cell struct {
 	PeakGPUMemMB        float64                `json:"peak_gpu_mem_mb"`
 	EnergyProxyJoules   float64                `json:"energy_proxy_joules"`
 	PassAt1             float64                `json:"pass_at_1"`
+	GenOk               float64                `json:"gen_ok"`
+	VerifiedPassAt1     float64                `json:"verified_pass_at_1"`
 	PartialCredit       float64                `json:"partial_credit"`
 	JudgeScore          float64                `json:"judge_score"`
 	IntentPreservation  float64                `json:"intent_preservation_rate"`
@@ -96,6 +100,8 @@ type Cell struct {
 	ErrorMessage        string                 `json:"error_message"`
 	ErrorCode           string                 `json:"error_code"`
 	Metadata            map[string]string      `json:"metadata"`
+	dualReadGenOkSet      bool                   `json:"-"`
+	dualReadVerifiedSet   bool                   `json:"-"`
 }
 
 type ResultsData struct {
@@ -185,6 +191,7 @@ func loadData() (*ResultsData, error) {
 		if err != nil {
 			return nil, err
 		}
+		normalizeDualRead(data)
 		return data, nil
 	}
 	var data ResultsData
@@ -196,6 +203,7 @@ func loadData() (*ResultsData, error) {
 	}
 	// Enrich summary Tok/s from cells when harness used mean_tokens_read only.
 	enrichVariantThroughput(&data)
+	normalizeDualRead(&data)
 	return &data, nil
 }
 
@@ -779,6 +787,9 @@ func main() {
 	mux.HandleFunc("/api/langsmith/datasets/", langsmithDatasetHandler)
 	mux.HandleFunc("/api/langsmith/runs", langsmithRunsHandler)
 	mux.HandleFunc("/api/langsmith/feedback", langsmithFeedbackHandler)
+	mux.HandleFunc("/api/langsmith/status", langsmithStatusHandler)
+	mux.HandleFunc("/api/langsmith/setup", langsmithSetupHandler)
+	mux.HandleFunc("/api/langsmith/evaluators", langsmithEvaluatorsHandler)
 	mux.HandleFunc("/api/eval/run", portageRunHandler)
 	mux.HandleFunc("/api/eval/runs/", portageRunStatusHandler)
 	mux.HandleFunc("/api/ws", wsHandler(hub))

@@ -12,7 +12,8 @@ export type ViewType =
   | 'viz'
   | 'throughput'
   | 'rlvr'
-  | 'audit';
+  | 'audit'
+  | 'langsmith';
 
 export type FailMode = 'all' | 'timeout' | 'low-pc' | 'hallucination';
 
@@ -24,6 +25,8 @@ export type GroupBy = 'none' | 'suite' | 'difficulty' | 'variant' | 'status';
 
 export interface VariantSummary {
   pass_at_1: number;
+  gen_ok: number;
+  verified_pass_at_1: number;
   mean_wall_clock_s: number;
   mean_partial_credit: number;
   mean_format_compliance: number;
@@ -66,6 +69,8 @@ export interface Cell {
   tokens_per_second: number;
   first_token_latency_ms: number;
   pass_at_1: number;
+  gen_ok?: number;
+  verified_pass_at_1?: number;
   partial_credit: number;
   format_compliance_rate: number;
   judge_score: number;

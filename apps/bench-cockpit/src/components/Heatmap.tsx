@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { EChart } from '../lib/echart';
 import { Cell } from '../types';
+import { effectiveGenOk, effectiveVerifiedPass } from '../lib/metrics';
 
 interface Props {
   cells: Cell[];
@@ -8,7 +9,9 @@ interface Props {
 }
 
 type Metric =
+  | 'partial_credit'
   | 'pass_at_1'
+  | 'verified_pass_at_1'
   | 'judge_score'
   | 'intent_preservation_rate'
   | 'hallucination_count'
@@ -18,8 +21,14 @@ type Metric =
 
 function cellMetric(c: Cell, m: Metric): number {
   switch (m) {
+    case 'partial_credit':
+      return c.partial_credit;
     case 'pass_at_1':
-      return c.pass_at_1;
+      return effectiveGenOk(c);
+    case 'verified_pass_at_1': {
+      const v = effectiveVerifiedPass(c);
+      return v != null ? v : 0;
+    }
     case 'judge_score':
       return c.judge_score;
     case 'intent_preservation_rate':
@@ -35,9 +44,20 @@ function cellMetric(c: Cell, m: Metric): number {
   }
 }
 
+function metricLabel(m: Metric): string {
+  switch (m) {
+    case 'pass_at_1':
+      return 'gen_ok (pass@1)';
+    case 'verified_pass_at_1':
+      return 'verified_pass@1';
+    default:
+      return m;
+  }
+}
+
 /** HELM-style variant × task heatmap (echarts). Caps rows for readability. */
 export default function Heatmap({ cells, onSelect }: Props) {
-  const [metric, setMetric] = useState<Metric>('pass_at_1');
+  const [metric, setMetric] = useState<Metric>('partial_credit');
   const MAX_TASKS = 60;
 
   const { option, lookup } = useMemo(() => {
@@ -70,7 +90,7 @@ export default function Heatmap({ cells, onSelect }: Props) {
           const [xi, yi, v] = p.value ?? [0, 0, 0];
           const task = tasks[yi] ?? '?';
           const variant = variants[xi] ?? '?';
-          return `${variant} · ${task}<br/>${metric}: ${Number(v).toFixed(3)}`;
+          return `${variant} · ${task}<br/>${metricLabel(metric)}: ${Number(v).toFixed(3)}`;
         },
       },
       grid: { left: 160, right: 24, top: 16, bottom: 48 },
@@ -130,7 +150,9 @@ export default function Heatmap({ cells, onSelect }: Props) {
       <div className="viz-toolbar">
         <span className="viz-title">HELM heatmap</span>
         <select value={metric} onChange={(e) => setMetric(e.target.value as Metric)}>
-          <option value="pass_at_1">pass@1</option>
+          <option value="partial_credit">partial_credit</option>
+          <option value="pass_at_1">gen_ok (pass@1)</option>
+          <option value="verified_pass_at_1">verified_pass@1</option>
           <option value="judge_score">judge_score</option>
           <option value="intent_preservation_rate">intent</option>
           <option value="hallucination_count">hallucinations</option>

@@ -49,3 +49,18 @@ Combined V5 contracts with duplicated suite blocks map first pass → `stock`,
 second → `ours`. All-synthetic reports raise a `synthetic_100pct` lint error.
 
 Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
+
+## LangSmith evaluators
+
+Put `LANGSMITH_API_KEY` in gitignored `.env`. Minimax coding-plan key comes from
+`MINIMAX_API_KEY` or macOS keychain service `minimax-coding-plan`.
+
+- **Smith** view: register code evaluators + run code/Minimax judges.
+- CLI: `python3 scripts/evals/run_evaluators.py sync|run|all --limit 20`
+- Workspace code evaluators appear under LangSmith → Evaluators.
+- Offline Minimax judges post feedback keys: `correctness`, `hallucination`,
+  `code_checker`, plus code keys (`pass_trust`, `not_echo`, …).
+- Hosted UI LLM-as-judge needs a Prompt Hub handle (`prompt_repo_handle`);
+  use LangSmith UI for online/automation rules; use our runner for Minimax.
+- Harbor plugin smoke: `bash scripts/evals/harbor_langsmith_smoke.sh`
+  (blocked until portage + `harbor-langsmith` import cleanly).

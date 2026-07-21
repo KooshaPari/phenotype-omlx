@@ -1,5 +1,6 @@
 import React from 'react';
 import { Cell, Summary } from '../types';
+import { meanQualityPass, summaryQualityLabel, summaryQualityPass } from '../lib/metrics';
 
 interface Props {
   cells: Cell[];
@@ -35,25 +36,32 @@ export default function Overview({ cells, summary, onJumpToSuite }: Props) {
   const suites = perSuite(cells);
   const dims = perDiff(cells);
   const DIFFS = ['easy', 'medium', 'hard', 'ultra'];
+  const passLabel = summaryQualityLabel(s, true);
 
   const metrics = [
-    { key: 'pass_at_1', label: 'Pass@1', fmt: (v: number) => (v * 100).toFixed(1) + '%', better: 'up' },
-    { key: 'mean_wall_clock_s', label: 'Wall', fmt: (v: number) => v.toFixed(2) + 's', better: 'down' },
-    { key: 'mean_partial_credit', label: 'PC', fmt: (v: number) => v.toFixed(3), better: 'up' },
-    { key: 'mean_format_compliance', label: 'Format', fmt: (v: number) => (v * 100).toFixed(0) + '%', better: 'up' },
+    { key: 'mean_partial_credit', label: 'PC', fmt: (v: number) => v.toFixed(3), better: 'up' as const, stock: s.mean_partial_credit, ours: o.mean_partial_credit },
+    { key: 'mean_wall_clock_s', label: 'Wall', fmt: (v: number) => v.toFixed(2) + 's', better: 'down' as const, stock: s.mean_wall_clock_s, ours: o.mean_wall_clock_s },
+    { key: 'mean_format_compliance', label: 'Format', fmt: (v: number) => (v * 100).toFixed(0) + '%', better: 'up' as const, stock: s.mean_format_compliance, ours: o.mean_format_compliance },
+    {
+      key: 'quality_pass',
+      label: passLabel,
+      fmt: (v: number) => (v * 100).toFixed(1) + '%',
+      better: 'up' as const,
+      stock: summaryQualityPass(s),
+      ours: summaryQualityPass(o),
+    },
   ];
 
   return (
     <div className="view-content">
-      {/* Metric Cards */}
       <div className="ov-grid" id="ovGrid">
-        {metrics.map(m => {
-          const sv = s[m.key] ?? 0;
-          const ov = o[m.key] ?? 0;
+        {metrics.map((m) => {
+          const sv = m.stock ?? 0;
+          const ov = m.ours ?? 0;
           const delta = ov - sv;
-          const isBetter = (m.better === 'up' ? delta > 0 : delta < 0);
+          const isBetter = m.better === 'up' ? delta > 0 : delta < 0;
           const cls = Math.abs(delta) > 0.0001 ? (isBetter ? 'positive' : 'negative') : 'neutral';
-          const arrow = Math.abs(delta) < 0.0001 ? '—' : (isBetter ? '▲ better' : '▼ worse');
+          const arrow = Math.abs(delta) < 0.0001 ? '—' : isBetter ? '▲ better' : '▼ worse';
           return (
             <div key={m.key} className="ov-card">
               <div className="ov-title">{m.label}</div>
@@ -75,44 +83,42 @@ export default function Overview({ cells, summary, onJumpToSuite }: Props) {
         })}
       </div>
 
-      {/* Suite Grid */}
       <h3 className="section-title">Per Suite</h3>
       <div className="suite-grid" id="suiteGrid">
         {[...suites.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([suite, grp]) => {
-          const sW = mean(grp.stock.map(c => c.wall_clock_s));
-          const oW = mean(grp.ours.map(c => c.wall_clock_s));
-          const sP = mean(grp.stock.map(c => c.pass_at_1));
-          const oP = mean(grp.ours.map(c => c.pass_at_1));
+          const sW = mean(grp.stock.map((c) => c.wall_clock_s));
+          const oW = mean(grp.ours.map((c) => c.wall_clock_s));
+          const sP = meanQualityPass(grp.stock);
+          const oP = meanQualityPass(grp.ours);
           const dWall = oW - sW;
-          const cls = dWall < 0 ? 'positive' : (dWall > 0 ? 'negative' : 'neutral');
+          const cls = dWall < 0 ? 'positive' : dWall > 0 ? 'negative' : 'neutral';
           return (
             <div key={suite} className="suite-card" onClick={() => onJumpToSuite(suite)}>
               <div className="suite-name">{suite} <span className="n">{grp.stock.length + grp.ours.length}</span></div>
               <div className="suite-card-row"><span className="swatch stock" />stock <span className="suite-val">{sW.toFixed(2)}s</span></div>
               <div className="suite-card-row"><span className="swatch ours" />ours <span className="suite-val">{oW.toFixed(2)}s</span><span className={`suite-delta ${cls}`}>{dWall >= 0 ? '+' : ''}{dWall.toFixed(2)}s</span></div>
-              <div className="suite-card-row"><span className="swatch" style={{ background: 'var(--green)' }} />p@1 <span className="suite-val">{(sP * 100).toFixed(0)}% / {(oP * 100).toFixed(0)}%</span></div>
+              <div className="suite-card-row"><span className="swatch" style={{ background: 'var(--green)' }} />pass <span className="suite-val">{(sP * 100).toFixed(0)}% / {(oP * 100).toFixed(0)}%</span></div>
             </div>
           );
         })}
       </div>
 
-      {/* Per Difficulty */}
       <h3 className="section-title">Per Difficulty</h3>
       <div className="dim-grid" id="dimGrid">
         <div className="dim-card">
-          {DIFFS.map(d => {
+          {DIFFS.map((d) => {
             const grp = dims.get(d);
             if (!grp || (!grp.stock.length && !grp.ours.length)) return null;
-            const sW = mean(grp.stock.map(c => c.wall_clock_s));
-            const oW = mean(grp.ours.map(c => c.wall_clock_s));
-            const sP = mean(grp.stock.map(c => c.pass_at_1));
-            const oP = mean(grp.ours.map(c => c.pass_at_1));
+            const sW = mean(grp.stock.map((c) => c.wall_clock_s));
+            const oW = mean(grp.ours.map((c) => c.wall_clock_s));
+            const sP = meanQualityPass(grp.stock);
+            const oP = meanQualityPass(grp.ours);
             const maxW = Math.max(sW, oW, 1);
             return (
               <div key={d}>
                 <div className="dim-title">{d}</div>
                 <div className="dim-row"><span className="label">Wall</span><div className="bar-wrap"><div className="bar stock" style={{ left: 0, width: `${(sW / maxW) * 100}%` }} /><div className="bar ours" style={{ left: 0, width: `${(oW / maxW) * 100}%` }} /></div><span className="val">{sW.toFixed(1)} / {oW.toFixed(1)}s</span></div>
-                <div className="dim-row"><span className="label">P@1</span><div className="bar-wrap"><div className="bar stock" style={{ left: 0, width: `${sP * 100}%` }} /><div className="bar ours" style={{ left: 0, width: `${oP * 100}%` }} /></div><span className="val">{(sP * 100).toFixed(0)} / {(oP * 100).toFixed(0)}%</span></div>
+                <div className="dim-row"><span className="label">Pass</span><div className="bar-wrap"><div className="bar stock" style={{ left: 0, width: `${sP * 100}%` }} /><div className="bar ours" style={{ left: 0, width: `${oP * 100}%` }} /></div><span className="val">{(sP * 100).toFixed(0)} / {(oP * 100).toFixed(0)}%</span></div>
               </div>
             );
           })}

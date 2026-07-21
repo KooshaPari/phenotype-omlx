@@ -11,6 +11,7 @@ import Calibration from './components/Calibration';
 import Throughput from './components/Throughput';
 import RLVRPanel from './components/RLVRPanel';
 import Audit from './components/Audit';
+import LangSmithPanel from './components/LangSmithPanel';
 import SuitePage from './components/SuitePage';
 import TaskPage from './components/TaskPage';
 import Drawer from './components/Drawer';
@@ -371,6 +372,8 @@ export default function App() {
         return <RLVRPanel cells={allCells} />;
       case 'audit':
         return <Audit cells={allCells} seed={selected} />;
+      case 'langsmith':
+        return <LangSmithPanel />;
     }
   };
 
@@ -412,10 +415,17 @@ export default function App() {
 
       <main className="main-panel">
         <div className="top-fixed">
-          <VerdictStrip 
-            summary={summary ? { stock: summary.by_variant.stock, ours: summary.by_variant.ours } : { stock: {}, ours: {} }} 
-            statusText={statusText} 
-            statusLevel={statusLevel} 
+          <VerdictStrip
+            summary={summary ? { stock: summary.by_variant.stock, ours: summary.by_variant.ours } : { stock: {}, ours: {} }}
+            statusText={statusText}
+            statusLevel={statusLevel}
+            passAt1Untrusted={(state.payload?.warnings ?? []).some(
+              (w) =>
+                w.code === 'synthetic_100pct' ||
+                w.code === 'all_variants_pass' ||
+                w.code === 'missing_judge_score' ||
+                w.code === 'vacuous_pass',
+            )}
           />
           
           {(insights.length > 0 || (state.payload?.warnings?.length ?? 0) > 0) && (
@@ -469,7 +479,7 @@ export default function App() {
       
       <CommandPalette 
         isOpen={paletteOpen}
-        views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit']}
+        views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit', 'langsmith']}
         actions={paletteActions}
         cells={cells}
         onSelect={(item) => {

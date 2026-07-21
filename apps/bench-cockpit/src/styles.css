@@ -177,6 +177,15 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); line
   padding: 4px 10px; border-radius: 999px;
   border: 1px solid var(--border); color: var(--text-dim);
 }
+.vs-banner {
+  flex-basis: 100%;
+  font-size: 11px;
+  margin: 0 0 6px;
+  color: var(--text-dim);
+}
+.verdict-strip.p1-untrusted .vc-pair.p1-reported {
+  opacity: 0.72;
+}
 .vs-status.connected { color: var(--green); border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.08); }
 .vs-status.error { color: var(--red); border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }
 

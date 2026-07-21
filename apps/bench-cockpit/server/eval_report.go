@@ -170,6 +170,8 @@ func resolveSuiteVariant(runVariant, suite string, priorCount int) string {
 
 func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap map[string]interface{}) Cell {
 	passAt1 := floatOr(ap, "pass_at_1", tr.RawScore)
+	genOk := floatOr(ap, "gen_ok", passAt1)
+	verifiedPass := floatOr(ap, "verified_pass_at_1", 0)
 	ok := tr.Status == "ok" || passAt1 >= 0.999
 	meta := map[string]string{
 		"evidence_label": coalesce(rep.Run.EvidenceLabel, "reported"),
@@ -216,6 +218,8 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 		PeakGPUMemMB:        floatOr(ap, "peak_gpu_mem_mb", 0),
 		EnergyProxyJoules:   tr.EnergyJoules,
 		PassAt1:             passAt1,
+		GenOk:               genOk,
+		VerifiedPassAt1:     verifiedPass,
 		PartialCredit:       floatOr(ap, "partial_credit", passAt1),
 		JudgeScore:          floatOr(ap, "judge_score", passAt1),
 		IntentPreservation:  floatOr(ap, "intent_preservation_rate", 0),
@@ -241,8 +245,8 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 
 func summarizeByVariant(cells []Cell) map[string]VariantSummary {
 	type acc struct {
-		n, ok, hall int
-		pass, wall, partial, format, intent, tps float64
+		n, ok, hall, verifiedN int
+		pass, genOk, verified, wall, partial, format, intent, tps float64
 	}
 	m := map[string]*acc{}
 	for _, c := range cells {
@@ -256,6 +260,11 @@ func summarizeByVariant(cells []Cell) map[string]VariantSummary {
 			a.ok++
 		}
 		a.pass += c.PassAt1
+		a.genOk += cellGenOk(c)
+		if v, ok := cellVerifiedPass(c); ok {
+			a.verified += v
+			a.verifiedN++
+		}
 		a.wall += c.WallClockS
 		a.partial += c.PartialCredit
 		a.format += c.FormatCompliance
@@ -270,9 +279,15 @@ func summarizeByVariant(cells []Cell) map[string]VariantSummary {
 			continue
 		}
 		tps := a.tps / n
+		verifiedMean := 0.0
+		if a.verifiedN > 0 {
+			verifiedMean = a.verified / float64(a.verifiedN)
+		}
 		out[v] = VariantSummary{
 			NCells:               a.n,
 			PassAt1:              a.pass / n,
+			GenOk:                a.genOk / n,
+			VerifiedPassAt1:      verifiedMean,
 			MeanWallClockS:       a.wall / n,
 			MeanPartialCredit:    a.partial / n,
 			MeanFormatCompliance: a.format / n,

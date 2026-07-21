@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Cell } from '../types';
 import { stubIRT, wilsonCI } from '../lib/irt';
+import {
+  effectiveGenOk,
+  effectiveVerifiedPass,
+  hasVerifiedPass,
+  qualityPass,
+} from '../lib/metrics';
 
 interface Props {
   cells: Cell[];
@@ -16,6 +22,8 @@ interface RawPayload {
   expected_answer?: string;
   scoring_method?: string;
   pass_at_1?: number;
+  gen_ok?: number;
+  verified_pass_at_1?: number;
   judge_score?: number;
   failure_analysis?: Record<string, unknown>;
   progress_trace?: unknown[];
@@ -46,13 +54,14 @@ export default function Audit({ cells, seed }: Props) {
 
   const suspicious = useMemo(() => {
     return cells.filter((c) => {
-      if (c.pass_at_1 < 0.999) return false;
+      const genOk = effectiveGenOk(c);
+      if (genOk < 0.999) return false;
       const reported =
         c.metadata?.evidence_label === 'reported' ||
         c.metadata?.synthetic === 'true' ||
         c.scoring_method === 'reported' ||
         c.scoring_method === 'deterministic';
-      if (reported) return false; // shown separately as reported evidence
+      if (reported) return false;
       const noIO = !c.prompt && !c.reply;
       const noTokens = (c.total_tokens_in || 0) + (c.total_tokens_out || 0) === 0;
       const fast = c.wall_clock_s < 0.05;
@@ -67,14 +76,14 @@ export default function Audit({ cells, seed }: Props) {
         (c) =>
           c.metadata?.synthetic === 'true' ||
           c.metadata?.evidence_label === 'reported' ||
-          (c.pass_at_1 >= 0.999 && c.scoring_method === 'deterministic' && !c.expected_answer)
+          (effectiveGenOk(c) >= 0.999 && c.scoring_method === 'deterministic' && !c.expected_answer)
       ).length,
     [cells]
   );
 
   const ci = useMemo(() => {
     const n = cells.length;
-    const ok = cells.filter((c) => c.pass_at_1 >= 0.5).length;
+    const ok = cells.filter((c) => qualityPass(c) >= 0.5).length;
     return wilsonCI(ok, n);
   }, [cells]);
 
@@ -82,7 +91,7 @@ export default function Audit({ cells, seed }: Props) {
     if (!selected) return null;
     const rates = cells
       .filter((c) => c.task_id === selected.task_id)
-      .map((c) => c.pass_at_1);
+      .map((c) => qualityPass(c));
     return stubIRT(selected.task_id, rates);
   }, [cells, selected]);
 
@@ -109,17 +118,22 @@ export default function Audit({ cells, seed }: Props) {
         )}
         <div className="audit-grid">
           <div className="audit-list">
-            {cells.slice(0, 200).map((c) => (
-              <button
-                key={`${c.suite}-${c.task_id}-${c.variant}`}
-                className={`audit-item ${selected === c ? 'active' : ''} ${
-                  suspicious.includes(c) ? 'bad' : ''
-                }`}
-                onClick={() => setSelected(c)}
-              >
-                {c.suite}/{c.task_id} · {c.variant} · {(c.pass_at_1 * 100).toFixed(0)}%
-              </button>
-            ))}
+            {cells.slice(0, 200).map((c) => {
+              const qp = qualityPass(c);
+              const verified = hasVerifiedPass(c);
+              return (
+                <button
+                  key={`${c.suite}-${c.task_id}-${c.variant}`}
+                  className={`audit-item ${selected === c ? 'active' : ''} ${
+                    suspicious.includes(c) ? 'bad' : ''
+                  }`}
+                  onClick={() => setSelected(c)}
+                >
+                  {c.suite}/{c.task_id} · {c.variant} · {(qp * 100).toFixed(0)}%
+                  {verified ? ' ✓' : ''}
+                </button>
+              );
+            })}
           </div>
           <div className="audit-detail">
             {err && <div className="bad">raw fetch: {err}</div>}
@@ -138,12 +152,26 @@ export default function Audit({ cells, seed }: Props) {
                   <h5>Meta</h5>
                   <div className="kv"><span className="k">scoring</span><span className="v">{raw.scoring_method || '—'}</span></div>
                   <div className="kv"><span className="k">expected</span><span className="v">{raw.expected_answer || '—'}</span></div>
-                  <div className="kv"><span className="k">pass@1</span><span className="v">{raw.pass_at_1}</span></div>
+                  <div className="kv"><span className="k">gen ok</span><span className="v">{raw.gen_ok ?? raw.pass_at_1}</span></div>
+                  {raw.verified_pass_at_1 != null && (
+                    <div className="kv"><span className="k">verified</span><span className="v">{raw.verified_pass_at_1}</span></div>
+                  )}
+                  <div className="kv"><span className="k">pass@1 (legacy)</span><span className="v">{raw.pass_at_1}</span></div>
                   <div className="kv"><span className="k">judge</span><span className="v">{raw.judge_score}</span></div>
                 </div>
                 <div className="ds"><h5>Prompt</h5><pre className="reply-box">{raw.prompt || '—'}</pre></div>
                 <div className="ds"><h5>Reply</h5><pre className="reply-box">{raw.reply || '—'}</pre></div>
               </>
+            )}
+            {selected && (
+              <div className="ds">
+                <h5>Derived</h5>
+                <div className="kv"><span className="k">quality</span><span className="v">{qualityPass(selected).toFixed(3)}</span></div>
+                <div className="kv"><span className="k">gen ok</span><span className="v">{effectiveGenOk(selected).toFixed(3)}</span></div>
+                {effectiveVerifiedPass(selected) != null && (
+                  <div className="kv"><span className="k">verified</span><span className="v">{effectiveVerifiedPass(selected)!.toFixed(3)}</span></div>
+                )}
+              </div>
             )}
           </div>
         </div>
