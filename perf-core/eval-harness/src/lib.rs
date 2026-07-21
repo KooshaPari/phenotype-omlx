@@ -29,6 +29,7 @@ pub mod perplexity;
 pub mod provenance;
 pub mod report;
 pub mod terminal_bench;
+pub mod verifier;
 
 use serde::{Deserialize, Serialize};
 
