@@ -20,6 +20,12 @@
     "harbor_env": "apple-container",
     "langsmith_plugin": "langsmith",
     "hello_world_task": "examples/tasks/hello-world",
-    "omlx_policy_task": "evals/harbor/tasks/omlx-qwen35-policy"
+    "omlx_policy_task": "evals/harbor/tasks/omlx-qwen35-policy",
+    "omlx_niah_task": "evals/harbor/tasks/omlx-niah-api-smoke",
+    "omlx_turbo_ssot_task": "evals/harbor/tasks/omlx-turbo-ssot",
+    "jobs": {
+      "niah": "evals/harbor/jobs/niah-qwen35.yaml",
+      "turbo_ssot": "evals/harbor/jobs/turboquant-ssot.yaml"
+    }
   }
 }

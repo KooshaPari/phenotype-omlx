@@ -1,0 +1,23 @@
+# Harbor JobConfig — TurboQuant SSOT gate (Qwen3.5 policy).
+# Full Metal TurboQuant+ stays host-side (phenotype_omlx_ready check 12).
+
+jobs_dir: jobs/omlx-turbo-ssot
+n_attempts: 1
+timeout_multiplier: 1.0
+
+orchestrator:
+  type: local
+  n_concurrent_trials: 1
+  quiet: false
+
+environment:
+  type: apple-container
+  force_build: true
+  delete: true
+
+agents:
+  - name: oracle
+
+datasets:
+  - path: evals/harbor/tasks
+    task_names: ["omlx-turbo-ssot"]

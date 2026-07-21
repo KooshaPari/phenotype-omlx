@@ -1,0 +1,41 @@
+# Harbor JobConfig — OMLX NIAH via OpenAI-compatible endpoint (Qwen3.5 SSOT).
+#
+# Prerequisites:
+#   export PORTAGE_ROOT=.../portage/<worktree>
+#   export OPENAI_BASE_URL=http://127.0.0.1:<omlx-port>/v1   # host MLX server
+#   export OMLX_READY_MODEL=...   # optional; defaults from smoke_models on host wrapper
+#   export HARBOR_ENV=apple-container
+#
+# Run (from phenotype-omlx-tmp):
+#   bash scripts/evals/run_via_harbor.sh --niah
+#   # or:
+#   uv run --directory "$PORTAGE_ROOT" harbor run -c <abs-path>/evals/harbor/jobs/niah-qwen35.yaml
+#
+# Optional LangSmith: add --plugin langsmith (wrapper flag --langsmith).
+
+jobs_dir: jobs/omlx-niah
+n_attempts: 1
+timeout_multiplier: 1.0
+
+orchestrator:
+  type: local
+  n_concurrent_trials: 1
+  quiet: false
+
+environment:
+  type: apple-container
+  force_build: true
+  delete: true
+  env:
+    - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+    - OPENAI_API_KEY=${OPENAI_API_KEY:-omlx}
+    - OPENAI_MODEL=${OPENAI_MODEL}
+    - OMLX_READY_MODEL=${OMLX_READY_MODEL}
+
+agents:
+  - name: oracle
+
+# task path is absolute at run time via wrapper; relative placeholder for docs:
+datasets:
+  - path: evals/harbor/tasks
+    task_names: ["omlx-niah-api-smoke"]
