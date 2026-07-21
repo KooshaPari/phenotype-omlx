@@ -623,14 +623,17 @@ func wsHandler(hub *Hub) http.HandlerFunc {
 		}
 		hub.add(conn)
 
-		// Send current snapshot immediately.
+		// Slim notify only — full envelopes are ~1.5MB and trip browser/WS
+		// frame limits (1009). Clients hydrate via GET /api/state.
 		if env, err := buildEnvelope(); err == nil {
-			if body, err := marshalEnvelope(env); err == nil {
-				if err := conn.WriteMessage(websocket.TextMessage, body); err != nil {
-					log.Printf("ws initial send: %v", err)
-					hub.remove(conn)
-					return
-				}
+			notify, _ := json.Marshal(map[string]any{
+				"type":     "reload",
+				"serverTs": env.ServerTS,
+			})
+			if err := conn.WriteMessage(websocket.TextMessage, notify); err != nil {
+				log.Printf("ws initial notify: %v", err)
+				hub.remove(conn)
+				return
 			}
 		}
 
@@ -727,9 +730,14 @@ func startWatcher(ctx context.Context, hub *Hub, ring *RingBuffer) {
 					log.Printf("marshal envelope: %v", err)
 					return
 				}
-				log.Printf("file changed: %s — pushing update (%d bytes)", event.Name, len(body))
-				ring.Push(env)      // record in ring buffer
-				hub.broadcast(body) // push to WebSocket clients
+				ring.Push(env) // record in ring buffer
+				notify, _ := json.Marshal(map[string]any{
+					"type":     "reload",
+					"serverTs": env.ServerTS,
+					"bytes":    len(body),
+				})
+				log.Printf("file changed: %s — reload notify (%d envelope bytes)", event.Name, len(body))
+				hub.broadcast(notify)
 			})
 			mu.Unlock()
 		case err, ok := <-watcher.Errors:

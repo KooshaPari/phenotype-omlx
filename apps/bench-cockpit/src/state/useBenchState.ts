@@ -345,7 +345,21 @@ export function useBenchState() {
     });
   }, [state]);
 
-  /* ── WebSocket connection with exponential backoff ─────────────── */
+  /** HTTP is the source of truth — V5 envelopes are too large for WS frames. */
+  const fetchState = useCallback(async () => {
+    try {
+      const r = await fetch('/api/state');
+      if (!r.ok) return;
+      const payload = await r.json();
+      if (payload?.data?.cells) {
+        dispatch({ type: 'SET_PAYLOAD', payload });
+      }
+    } catch {
+      /* ignore; next poll / reload notify retries */
+    }
+  }, []);
+
+  /* ── WebSocket: slim reload notify + backoff (no fat envelopes) ─── */
   const connectWS = useCallback(() => {
     if (wsRef.current) {
       wsRef.current.close();
@@ -366,11 +380,16 @@ export function useBenchState() {
 
     ws.onopen = () => {
       attemptsRef.current = 0;
+      void fetchState();
     };
 
     ws.onmessage = (ev) => {
       try {
-        dispatch({ type: 'SET_PAYLOAD', payload: JSON.parse(ev.data) });
+        const msg = JSON.parse(ev.data);
+        // Legacy fat envelope OR slim {type:'reload'} → always hydrate via HTTP.
+        if (msg?.type === 'reload' || msg?.data?.cells) {
+          void fetchState();
+        }
       } catch {
         /* ignore malformed frames */
       }
@@ -385,27 +404,13 @@ export function useBenchState() {
     };
 
     wsRef.current = ws;
-  }, []);
-
-  /** HTTP bootstrap so the UI is usable even if WS proxy flaps. */
-  const fetchState = useCallback(async () => {
-    try {
-      const r = await fetch('/api/state');
-      if (!r.ok) return;
-      const payload = await r.json();
-      dispatch({ type: 'SET_PAYLOAD', payload });
-    } catch {
-      /* ignore; WS / next poll will retry */
-    }
-  }, []);
+  }, [fetchState]);
 
   useEffect(() => {
     void fetchState();
     const id = window.setInterval(() => {
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        void fetchState();
-      }
-    }, 5000);
+      void fetchState();
+    }, 15000);
     return () => window.clearInterval(id);
   }, [fetchState]);
 

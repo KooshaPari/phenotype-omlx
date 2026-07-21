@@ -194,8 +194,31 @@ export default function LangSmithPanel() {
           Hosted path: Model config (UI) + Hub prompts <code>bench-correctness</code> /
           <code>bench-hallucination</code> / <code>bench-code-checker</code> + LLM evaluators /
           run rules via <b>Sync hosted Minimax judges</b>. Offline Minimax still posts feedback
-          onto traces. Harbor: <code>bash scripts/evals/harbor_langsmith_smoke.sh</code> (Apple
-          Container).
+          onto traces. Harbor: <code>bash scripts/evals/harbor_langsmith_smoke.sh</code> or{' '}
+          <code>bash scripts/evals/run_via_harbor.sh --policy --langsmith</code> (Apple Container).
+        </div>
+
+        <div className="ds" style={{ marginBottom: 16 }} data-testid="harbor-kpi-props">
+          <h5>Harbor → LangSmith KPI props (named)</h5>
+          <p className="faint" style={{ marginTop: 0 }}>
+            Dataset <code>omlx-harbor-tasks</code> · experiments{' '}
+            <code>omlx-harbor-{'{hello|policy|niah|turbo}'}</code>. SSOT:{' '}
+            <code>config/langsmith_harbor_kpis.json</code>
+          </p>
+          <ul className="mono" style={{ margin: 0, paddingLeft: 18, fontSize: 12 }}>
+            <li>
+              feedback <b>reward</b> ← verifier <code>/logs/verifier/reward.txt</code> (0|1)
+            </li>
+            <li>
+              feedback <b>harbor_error</b> ← trial exception (when present)
+            </li>
+            <li>
+              outputs <b>rewards</b>, <b>tokens.input/output</b>, <b>task_name</b>, <b>trial_name</b>
+            </li>
+            <li>
+              metadata <b>ls_runner=harbor</b>, <b>harbor_job_id</b>, <b>harbor_job_name</b>
+            </li>
+          </ul>
         </div>
 
         {evaluators.length > 0 && (

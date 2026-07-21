@@ -291,7 +291,7 @@ export default function App() {
 
   const renderContent = () => {
     if (!state.payload) {
-      return <div className="empty-state">● Awaiting WebSocket data stream…</div>;
+      return <div className="empty-state">● Loading bench data via /api/state…</div>;
     }
     switch (state.view) {
       case 'overview':

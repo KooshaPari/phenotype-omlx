@@ -83,7 +83,8 @@ export default function Heatmap({ cells, onSelect }: Props) {
     if (max <= 0) max = 1;
 
     const option = {
-      backgroundColor: 'transparent',
+      // Opaque panel bg — transparent canvas on dark UI reads as "black chart"
+      backgroundColor: '#12161f',
       tooltip: {
         position: 'top',
         formatter: (p: { value?: [number, number, number] }) => {
@@ -99,6 +100,7 @@ export default function Heatmap({ cells, onSelect }: Props) {
         data: variants,
         splitArea: { show: true },
         axisLabel: { color: '#9aa3b2' },
+        axisLine: { lineStyle: { color: '#3a4254' } },
       },
       yAxis: {
         type: 'category',
@@ -108,6 +110,7 @@ export default function Heatmap({ cells, onSelect }: Props) {
           fontSize: 10,
           formatter: (s: string) => (s.length > 28 ? `${s.slice(0, 26)}…` : s),
         },
+        axisLine: { lineStyle: { color: '#3a4254' } },
       },
       visualMap: {
         min: 0,
@@ -117,8 +120,9 @@ export default function Heatmap({ cells, onSelect }: Props) {
         left: 'center',
         bottom: 0,
         textStyle: { color: '#9aa3b2' },
+        // Readable ramp — zero must stay visible on dark panels
         inRange: {
-          color: ['#1a2332', '#2d4a6f', '#3d7a5a', '#c9a227', '#c44'],
+          color: ['#4a5a72', '#3d6ea5', '#3d9a6a', '#e0b84a', '#e85d4c'],
         },
       },
       series: [
@@ -126,6 +130,10 @@ export default function Heatmap({ cells, onSelect }: Props) {
           name: metric,
           type: 'heatmap',
           data,
+          itemStyle: {
+            borderColor: '#0e121a',
+            borderWidth: 1,
+          },
           label: {
             show: variants.length <= 3 && tasks.length <= 24,
             color: '#e8ecf1',
@@ -145,6 +153,8 @@ export default function Heatmap({ cells, onSelect }: Props) {
 
   const height = Math.min(720, Math.max(280, 28 + (option.yAxis as { data: string[] }).data.length * 18));
 
+  const empty = !cells.length;
+
   return (
     <div className="viz-panel" data-testid="heatmap">
       <div className="viz-toolbar">
@@ -161,23 +171,27 @@ export default function Heatmap({ cells, onSelect }: Props) {
           <option value="tokens_per_second">tok/s</option>
         </select>
       </div>
-      <EChart
-        option={option}
-        style={{ height, width: '100%' }}
-        opts={{ renderer: 'canvas' }}
-        onEvents={{
-          click: (p) => {
-            const val = p.value as [number, number, number] | undefined;
-            if (!val || !onSelect) return;
-            const [xi, yi] = val;
-            const task = lookup.tasks[yi];
-            const variant = lookup.variants[xi];
-            if (!task || !variant) return;
-            const c = lookup.cells.get(`${variant}|${task}`);
-            if (c) onSelect(c);
-          },
-        }}
-      />
+      {empty ? (
+        <div className="viz-empty">No cells to plot — wait for /api/state hydrate.</div>
+      ) : (
+        <EChart
+          option={option}
+          style={{ height, width: '100%' }}
+          opts={{ renderer: 'canvas' }}
+          onEvents={{
+            click: (p) => {
+              const val = p.value as [number, number, number] | undefined;
+              if (!val || !onSelect) return;
+              const [xi, yi] = val;
+              const task = lookup.tasks[yi];
+              const variant = lookup.variants[xi];
+              if (!task || !variant) return;
+              const c = lookup.cells.get(`${variant}|${task}`);
+              if (c) onSelect(c);
+            },
+          }}
+        />
+      )}
     </div>
   );
 }

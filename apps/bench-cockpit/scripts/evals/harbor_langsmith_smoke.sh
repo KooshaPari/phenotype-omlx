@@ -36,8 +36,8 @@ if ! container system status >/dev/null 2>&1; then
 fi
 
 export PYTHONPATH="$PORTAGE/packages/harbor-langsmith/src${PYTHONPATH:+:$PYTHONPATH}"
-export HARBOR_LANGSMITH_DATASET="${HARBOR_LANGSMITH_DATASET:-harbor-hello-world}"
-export HARBOR_LANGSMITH_EXPERIMENT="${HARBOR_LANGSMITH_EXPERIMENT:-bench-cockpit-harbor-smoke}"
+export HARBOR_LANGSMITH_DATASET="${HARBOR_LANGSMITH_DATASET:-omlx-harbor-tasks}"
+export HARBOR_LANGSMITH_EXPERIMENT="${HARBOR_LANGSMITH_EXPERIMENT:-omlx-harbor-hello}"
 export HARBOR_LANGSMITH_FAIL_FAST="${HARBOR_LANGSMITH_FAIL_FAST:-true}"
 
 cd "$PORTAGE"

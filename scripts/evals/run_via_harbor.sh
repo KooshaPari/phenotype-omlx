@@ -75,9 +75,12 @@ if [[ "$USE_LS" -eq 1 ]]; then
     exit 2
   fi
   export PYTHONPATH="$PORTAGE_ROOT/packages/harbor-langsmith/src${PYTHONPATH:+:$PYTHONPATH}"
-  export HARBOR_LANGSMITH_DATASET="${HARBOR_LANGSMITH_DATASET:-omlx-harbor}"
-  export HARBOR_LANGSMITH_EXPERIMENT="${HARBOR_LANGSMITH_EXPERIMENT:-omlx-${MODE}}"
+  # Named LangSmith props (SSOT: config/langsmith_harbor_kpis.json)
+  export HARBOR_LANGSMITH_DATASET="${HARBOR_LANGSMITH_DATASET:-omlx-harbor-tasks}"
+  export HARBOR_LANGSMITH_EXPERIMENT="${HARBOR_LANGSMITH_EXPERIMENT:-omlx-harbor-${MODE}}"
+  export HARBOR_LANGSMITH_FAIL_FAST="${HARBOR_LANGSMITH_FAIL_FAST:-true}"
   PLUGIN_ARGS=(--plugin langsmith)
+  echo "langsmith dataset=$HARBOR_LANGSMITH_DATASET experiment=$HARBOR_LANGSMITH_EXPERIMENT"
 fi
 
 # Surface SSOT model for agents / NIAH API smoke

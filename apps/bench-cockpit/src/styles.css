@@ -738,10 +738,18 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); line
 
 /* ── Phase 2–8 viz / throughput / rlvr / audit / trace ─────────────── */
 .view-stack { display: flex; flex-direction: column; gap: 1rem; padding: 0.75rem; }
-.viz-panel { border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem; background: rgba(0,0,0,0.25); }
+.viz-panel { border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 0.75rem; background: #12161f; }
 .viz-toolbar { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.5rem; }
 .viz-title { font-weight: 600; letter-spacing: 0.02em; }
 .viz-hint { opacity: 0.6; font-size: 0.8rem; font-family: ui-monospace, monospace; }
+.viz-empty {
+  min-height: 200px;
+  display: grid;
+  place-items: center;
+  color: #9aa3b2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
 .viz-svg { width: 100%; max-width: 680px; color: #9aa4b2; }
 .viz-legend { display: flex; gap: 1rem; font-size: 0.8rem; }
 .viz-legend .ours { color: #3ddc97; }
