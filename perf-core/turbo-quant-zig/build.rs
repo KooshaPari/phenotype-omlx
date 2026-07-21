@@ -35,19 +35,24 @@ fn main() {
     };
 
     let status = Command::new(&zig)
-        .arg("build-lib")
-        .arg("-O")
-        .arg("ReleaseFast")
-        .arg(format!("--name"))
-        .arg("turbo_quant_zig")
-        .arg(format!("-femit-bin={}", lib_path.display()))
-        .arg(&zig_file)
+        .arg("build")
+        .arg("-Doptimize=ReleaseFast")
+        .current_dir(&manifest_dir)
         .status();
 
     let produced = match status {
         Ok(s) if s.success() => {
-            println!("cargo:info=zig build-lib succeeded -> {}", lib_path.display());
-            lib_path.exists()
+            let built = manifest_dir.join("zig-out/lib/libturbo_quant_zig.a");
+            match std::fs::copy(&built, &lib_path) {
+                Ok(_) => {
+                    println!("cargo:info=zig build succeeded -> {}", lib_path.display());
+                    true
+                }
+                Err(error) => {
+                    println!("cargo:warning=failed to copy Zig archive: {error}");
+                    false
+                }
+            }
         }
         Ok(s) => {
             println!("cargo:warning=zig build-lib failed with exit code: {:?}", s.code());
