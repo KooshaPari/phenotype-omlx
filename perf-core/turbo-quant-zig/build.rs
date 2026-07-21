@@ -6,6 +6,8 @@
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
@@ -48,9 +50,17 @@ fn main() {
             match std::fs::copy(&built, &lib_path) {
                 Ok(_) => {
                     if let Some(ar) = which("llvm-ar").or_else(|| which("ar")) {
-                        let _ = Command::new(&ar).args(["x", lib_path.to_str().unwrap()]).current_dir(&out_dir).status();
                         let object = out_dir.join("libturbo_quant_zig_zcu.o");
-                        if object.exists() {
+                        let extracted = Command::new(&ar)
+                            .args(["p", lib_path.to_str().unwrap(), "libturbo_quant_zig_zcu.o"])
+                            .output();
+                        if let Ok(output) = extracted {
+                            let _ = std::fs::write(&object, output.stdout);
+                            let mut perms = std::fs::metadata(&object).unwrap().permissions();
+                            perms.set_mode(0o644);
+                            let _ = std::fs::set_permissions(&object, perms);
+                        }
+                        if object.is_file() {
                             let _ = std::fs::remove_file(&lib_path);
                             let _ = Command::new(&ar)
                                 .args(["rcs", lib_path.to_str().unwrap(), object.to_str().unwrap()])
