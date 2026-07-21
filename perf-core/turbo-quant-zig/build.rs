@@ -15,6 +15,8 @@ fn main() {
     let lib_path = out_dir.join("libturbo_quant_zig.a");
 
     println!("cargo:rerun-if-changed={}", zig_file.display());
+    println!("cargo:rerun-if-changed={}", manifest_dir.join("build.zig").display());
+    println!("cargo:rerun-if-changed={}", manifest_dir.join("build.rs").display());
     println!("cargo:rerun-if-env-changed=ZIG_PATH");
 
     let zig = env::var("ZIG_PATH").ok()
@@ -45,6 +47,17 @@ fn main() {
             let built = manifest_dir.join("zig-out/lib/libturbo_quant_zig.a");
             match std::fs::copy(&built, &lib_path) {
                 Ok(_) => {
+                    if let Some(ar) = which("llvm-ar").or_else(|| which("ar")) {
+                        let _ = Command::new(&ar).args(["x", lib_path.to_str().unwrap()]).current_dir(&out_dir).status();
+                        let object = out_dir.join("libturbo_quant_zig_zcu.o");
+                        if object.exists() {
+                            let _ = std::fs::remove_file(&lib_path);
+                            let _ = Command::new(&ar)
+                                .args(["rcs", lib_path.to_str().unwrap(), object.to_str().unwrap()])
+                                .current_dir(&out_dir)
+                                .status();
+                        }
+                    }
                     println!("cargo:info=zig build succeeded -> {}", lib_path.display());
                     true
                 }
