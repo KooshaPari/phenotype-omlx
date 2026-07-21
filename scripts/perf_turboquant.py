@@ -1,11 +1,17 @@
 """
 phenotype-omlx — Production TurboQuant+ benchmark.
 
+DEPRECATED for operator acceptance — prefer Harbor SSOT gate + host ready-check:
+
+    bash scripts/evals/run_via_harbor.sh --turbo
+    # Metal encode/decode proof:
+    python3 scripts/phenotype_omlx_ready.py   # check 12 uses Qwen3.5 SSOT
+
 Measures:
   1. Rust SIMD (`_perf.turbo_quant_encode`) vs Python reference (`turboquant.TurboQuant`)
      across shapes (128/512/2048/8192) × bits (2/3/4)
   2. End-to-end MLX inference with TurboQuant+ KV cache vs FP16 baseline
-     on a real Qwen2.5 model
+     on Qwen3.5 (config/smoke_models.json role=turboquant)
 
 Usage:
     python3 scripts/perf_turboquant.py

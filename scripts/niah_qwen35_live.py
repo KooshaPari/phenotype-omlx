@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """FR-5 E3 — Qwen3.5-only NIAH live smoke (in-process mlx_lm).
 
+DEPRECATED for operator runs — prefer Portage/Harbor:
+
+    export PORTAGE_ROOT=.../portage/<topic>
+    export OPENAI_BASE_URL=http://127.0.0.1:<port>/v1
+    bash scripts/evals/run_via_harbor.sh --niah
+
+This script remains for in-process mlx_lm instrumentation / FR-5 doctor
+paths only. Do not add new flags here; extend Harbor tasks instead.
+
 Hard rule: model id MUST contain ``Qwen3.5`` (never Qwen3 without .5,
 never Qwen2.5). Uses plain ``mlx_lm.generate`` without KV-cache mode
 sweeps — Qwen3.5 may use linear attention, so TurboKV / kv_bits metrics

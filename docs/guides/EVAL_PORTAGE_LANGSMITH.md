@@ -51,12 +51,17 @@ JobConfig templates (documentation / future `harbor run -c`):
 | NIAH API smoke | `evals/harbor/tasks/omlx-niah-api-smoke` | `OPENAI_BASE_URL` |
 | Turbo SSOT gate | `evals/harbor/tasks/omlx-turbo-ssot` | — |
 
-Resolve smoke model without running Harbor:
+## Offline quality gates (no MLX)
 
 ```bash
-PYTHONPATH=python python3 -m omlx_research.smoke_models readiness
-PYTHONPATH=python python3 -m omlx_research.smoke_models niah
+# L1 judge vs EM — already under pheno-harness/bench/results/judge-vs-em/
+# L2 contamination / synthetic trust:
+python3 scripts/evals/contamination_scan.py
+# → research/contamination/qwen35-08b-report.{json,md}
+# → mirrors to pheno-harness/bench/results/contamination/qwen35-08b/
 ```
+
+UNTRUSTED_SYNTHETIC means stock-vs-ours V5 cannot ground quality or RLVR soft rewards.
 
 ## Qwen2.5 quarantine
 

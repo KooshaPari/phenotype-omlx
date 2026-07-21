@@ -1,0 +1,21 @@
+{
+  "experiment": "L2-contamination",
+  "ts": "2026-07-21T10:51:19.745229+00:00",
+  "n_cells": 500,
+  "n_replies": 500,
+  "n_pass_replies": 500,
+  "n_fixtures": 5,
+  "ngram": 5,
+  "jaccard_warn": 0.35,
+  "n_hits": 0,
+  "hits_sample": [],
+  "degenerate_all_pass_zero_judge": true,
+  "verdict": "UNTRUSTED_SYNTHETIC",
+  "notes": [
+    "Offline scan only \u2014 does not prove training contamination.",
+    "UNTRUSTED_SYNTHETIC means stock-vs-ours quality claims are invalid until live non-synthetic envelopes exist.",
+    "Prefer Harbor NIAH (`run_via_harbor.sh --niah`) for live retrieval evidence."
+  ],
+  "source_report": "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b.json",
+  "source_fixtures": "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/fixtures/sample_candidates.json"
+}

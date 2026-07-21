@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """FR-5 E3 — read-only NIAH needle smoke against a running mlx_lm.server.
 
+DEPRECATED for operator runs — prefer:
+
+    bash scripts/evals/run_via_harbor.sh --niah
+
+(with ``OPENAI_BASE_URL``). This script may still probe an already-loaded
+server for FR-5 doctor paths; do not steal ``:8765`` without ownership.
+
 Reuses an already-loaded model (default http://127.0.0.1:8765) so we do
 not spawn a second weight load. Writes a labeled live artifact; never
 overwrites the committed synthetic ``niah_results.json`` envelope.
