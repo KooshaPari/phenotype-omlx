@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "kind": "niah_live_run",
+  "evidence_label": "live_verified",
+  "reported": true,
+  "synthetic": false,
+  "model": "/Users/kooshapari/.omlx/models/Rishu11277/Qwopus3.5-4B-Coder-mlx-4Bit",
+  "backend": "mlx_lm_inprocess",
+  "architecture_caveat": null,
+  "seed": 42,
+  "lengths": [
+    2048
+  ],
+  "modes": [
+    "baseline_fp16",
+    "turbo_asymmetric",
+    "turbo_symmetric",
+    "mlx_native_kv4"
+  ],
+  "results": [
+    {
+      "mode": "baseline_fp16",
+      "target_len": 2048,
+      "actual_len": 2048,
+      "prefill_ms": 9750.660334015265,
+      "decode_ms": 12073.35795799736,
+      "decode_tok_per_sec": 0.08282699837766366,
+      "rss_mb_before": 401.90625,
+      "rss_mb_after": 43.75,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThe user wants to identify the critical fact mentioned in the passage.\nThe passage is a long string of repeated words \"the the the the...\".\nHowever, there is a specific sentence embedded in the text: \"Important context: the secret code is 214-125-alpha. This fact is critical.\"\nThe question asks: \"What is the critical fact mentioned in the passage above?\"\nThe critical fact is \"the secret code is 214-125-alpha\".\nI need to output only the exact critical fact and nothing else.\nThe exact critical fact is \"the",
+      "exact_match": true,
+      "partial_match": true,
+      "contains_secret": true,
+      "error": ""
+    },
+    {
+      "mode": "turbo_asymmetric",
+      "target_len": 2048,
+      "actual_len": 2048,
+      "prefill_ms": 11964.049541013082,
+      "decode_ms": 8740.492165990872,
+      "decode_tok_per_sec": 0.1144100333263824,
+      "rss_mb_before": 92.703125,
+      "rss_mb_after": 44.640625,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThe user wants to identify the critical fact mentioned in the passage.\nThe passage is a long string of the word \"the\" followed by a specific sentence: \"Important context: the secret code is 214-125-alpha. This fact is critical.\"\nThe question asks: \"What is the critical fact mentioned in the passage above?\"\nThe critical fact is \"the secret code is 214-125-alpha\".\nI need to respond with only the exact critical fact and nothing else.\n</think>\n\nthe secret code is 214-125-alpha.",
+      "exact_match": true,
+      "partial_match": true,
+      "contains_secret": true,
+      "error": ""
+    },
+    {
+      "mode": "turbo_symmetric",
+      "target_len": 2048,
+      "actual_len": 2048,
+      "prefill_ms": 10293.765917012934,
+      "decode_ms": 7983.136833994649,
+      "decode_tok_per_sec": 0.12526404354510032,
+      "rss_mb_before": 97.09375,
+      "rss_mb_after": 47.921875,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThe user wants to identify the critical fact mentioned in the passage.\nThe passage is a long string of repeated words \"the the the the...\".\nHowever, there is a specific sentence embedded in the text: \"Important context: the secret code is 214-125-alpha. This fact is critical.\"\nThe question asks: \"What is the critical fact mentioned in the passage above?\"\nThe critical fact is \"the secret code is 214-125-alpha\".\nI need to output only the exact critical fact and nothing else.\nThe exact critical fact is \"the",
+      "exact_match": true,
+      "partial_match": true,
+      "contains_secret": true,
+      "error": ""
+    },
+    {
+      "mode": "mlx_native_kv4",
+      "target_len": 2048,
+      "actual_len": 2048,
+      "prefill_ms": 9990.897082985612,
+      "decode_ms": 5897.109500016086,
+      "decode_tok_per_sec": 0.1695746026078153,
+      "rss_mb_before": 98.78125,
+      "rss_mb_after": 71.796875,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThe user wants to identify the critical fact mentioned in the passage.\nThe passage is a long string of repeated words \"the the the the...\".\nHowever, there is a specific sentence embedded in the text: \"Important context: the secret code is 214-125-alpha. This fact is critical.\"\nThe question asks: \"What is the critical fact mentioned in the passage above?\"\nThe critical fact is \"the secret code is 214-125-alpha\".\nI need to output exactly this fact.\n</think>\n\nthe secret code is 214-1",
+      "exact_match": true,
+      "partial_match": true,
+      "contains_secret": true,
+      "error": ""
+    }
+  ]
+}

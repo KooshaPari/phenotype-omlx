@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "kind": "niah_live_run",
+  "evidence_label": "live_verified",
+  "reported": true,
+  "synthetic": false,
+  "model": "/Users/kooshapari/.omlx/models/Rishu11277/Qwopus3.5-4B-Coder-mlx-4Bit",
+  "backend": "mlx_lm_inprocess",
+  "architecture_caveat": null,
+  "seed": 42,
+  "lengths": [
+    512
+  ],
+  "modes": [
+    "baseline_fp16"
+  ],
+  "results": [
+    {
+      "mode": "baseline_fp16",
+      "target_len": 512,
+      "actual_len": 512,
+      "prefill_ms": 5246.058499993524,
+      "decode_ms": 5257.932417007396,
+      "decode_tok_per_sec": 0.19018882722139663,
+      "rss_mb_before": 444.671875,
+      "rss_mb_after": 104.953125,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n\n<think>\nThe user wants to identify the critical fact mentioned in the passage.\nThe passage is a long string of \"the the the...\" followed by a specific context: \"Important context: the secret code is 214-125-alpha. This fact is critical.\"\nThe question asks: \"What is the critical fact mentioned in the passage above?\"\nThe critical fact is explicitly stated in the context: \"the secret code is 214-125-alpha\".\nI need to output only the exact critical fact.\nThe exact critical fact is \"the secret code is 214-",
+      "exact_match": true,
+      "partial_match": true,
+      "contains_secret": true,
+      "error": ""
+    }
+  ]
+}
