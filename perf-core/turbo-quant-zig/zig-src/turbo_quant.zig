@@ -160,13 +160,13 @@ const TqAbiEncodeRequest = extern struct {
     n: usize,
     bits: u8,
     group_size: usize,
-    out_shape: [*]*usize,
+    out_shape: [*]*allowzero usize,
     out_shape_capacity: usize,
-    out_packed: [*]*u8,
+    out_packed: [*]*allowzero u8,
     out_packed_capacity: usize,
-    out_scales: [*]*f32,
+    out_scales: [*]*allowzero f32,
     out_scales_capacity: usize,
-    out_zeros: [*]*f32,
+    out_zeros: [*]*allowzero f32,
     out_zeros_capacity: usize,
 };
 
@@ -202,23 +202,23 @@ fn bits_valid(bits: u8) bool {
 }
 
 fn reset_encode_slots(req: *TqAbiEncodeRequest) void {
-    req.out_shape[0] = null;
-    req.out_packed[0] = null;
-    req.out_scales[0] = null;
-    req.out_zeros[0] = null;
+    req.out_shape[0] = @ptrFromInt(0);
+    req.out_packed[0] = @ptrFromInt(0);
+    req.out_scales[0] = @ptrFromInt(0);
+    req.out_zeros[0] = @ptrFromInt(0);
 }
 
 /// Mirrors the C ABI: validates the request, returns the matching status on
 /// failure, otherwise returns packed_len and n_groups via the out-params.
 fn validate_encode(req: *const TqAbiEncodeRequest, out_packed_len: *usize, out_n_groups: *usize) TqAbiStatus {
     if (req.abi.major != TQ_ABI_VERSION_MAJOR) return .ErrVersionMismatch;
-    if (req.data_ptr == null or req.n == 0) return .ErrNullArg;
+    if (@intFromPtr(req.data_ptr) == 0 or req.n == 0) return .ErrNullArg;
     if (!bits_valid(req.bits)) return .ErrInvalidBits;
     if (req.group_size == 0) return .ErrInvalidGroupSize;
-    if (req.out_shape == null or req.out_shape_capacity == 0 or
-        req.out_packed == null or req.out_packed_capacity == 0 or
-        req.out_scales == null or req.out_scales_capacity == 0 or
-        req.out_zeros == null or req.out_zeros_capacity == 0) {
+    if (@intFromPtr(req.out_shape) == 0 or req.out_shape_capacity == 0 or
+        @intFromPtr(req.out_packed) == 0 or req.out_packed_capacity == 0 or
+        @intFromPtr(req.out_scales) == 0 or req.out_scales_capacity == 0 or
+        @intFromPtr(req.out_zeros) == 0 or req.out_zeros_capacity == 0) {
         return .ErrNullArg;
     }
     if (req.n > std.math.maxInt(usize) - req.group_size) return .ErrOverflow;
@@ -254,11 +254,11 @@ export fn tq_abi_encode(req: *const TqAbiEncodeRequest) TqAbiEncodeResult {
         .written_scales_len = 0,
         .written_zeros_len = 0,
     };
-    if (req == null) return res;
+    if (@intFromPtr(req) == 0) return res;
 
     // The public signature is const but the contract requires us to clear
     // the output slots on failure. Cast away const, same as the C side.
-    var mreq: *TqAbiEncodeRequest = @constCast(req);
+    const mreq: *TqAbiEncodeRequest = @constCast(req);
 
     var packed_len: usize = 0;
     var n_groups: usize = 0;
@@ -270,8 +270,9 @@ export fn tq_abi_encode(req: *const TqAbiEncodeRequest) TqAbiEncodeResult {
     }
 
     const levels_f: f32 = @as(f32, @floatFromInt((@as(u32, 1) << @intCast(req.bits)) - 1));
-    mreq.out_shape[0][0] = req.n;
+    mreq.out_shape[0].* = req.n;
 
+    var bit_off: usize = 0;
     var g: usize = 0;
     while (g < n_groups) : (g += 1) {
         const start = g * req.group_size;
@@ -288,16 +289,17 @@ export fn tq_abi_encode(req: *const TqAbiEncodeRequest) TqAbiEncodeResult {
         var scale: f32 = span / levels_f;
         if (!(scale > 0.0)) scale = 1e-30;
 
-        mreq.out_scales[0][g] = scale;
-        mreq.out_zeros[0][g] = lo;
+        const scales: [*]f32 = @ptrCast(mreq.out_scales[0]);
+        const zeros: [*]f32 = @ptrCast(mreq.out_zeros[0]);
+        scales[g] = scale;
+        zeros[g] = lo;
 
-        var bit_off: usize = 0;
         i = start;
         while (i < end) : (i += 1) {
             const qf = (req.data_ptr[i] - lo) / scale;
             const clamped = @max(0.0, @min(levels_f, @round(qf)));
             const q: u32 = @intFromFloat(clamped);
-            const slot: [*]u8 = mreq.out_packed[0];
+            const slot: [*]u8 = @ptrCast(mreq.out_packed[0]);
             // Pack `req.bits` low bits of q into the buffer at bit_off.
             // Mirrors tq_write_bits in the C ABI.
             write_bits_zig(slot, bit_off, @intCast(q), req.bits);
@@ -319,7 +321,7 @@ fn write_bits_zig(buf: [*]u8, bit_offset: usize, value: u32, bits: u8) void {
     const mask: u8 = @intCast((@as(u32, 1) << @intCast(bits)) - 1);
     const v: u8 = @intCast(value & @as(u32, mask));
     const byte_idx = bit_offset >> 3;
-    const bit_in_byte: u3 = @intCast(@as(u8, @intCast(bit_offset & 7)));
+    const bit_in_byte: u8 = @intCast(bit_offset & 7);
     const room: u8 = 8 - bit_in_byte;
 
     if (room >= bits) {
@@ -337,12 +339,12 @@ fn write_bits_zig(buf: [*]u8, bit_offset: usize, value: u32, bits: u8) void {
 }
 
 export fn tq_abi_decode(req: *const TqAbiDecodeRequest) c_int {
-    if (req == null) return @intFromEnum(TqAbiStatus.ErrNullArg);
+    if (@intFromPtr(req) == 0) return @intFromEnum(TqAbiStatus.ErrNullArg);
     if (req.abi.major != TQ_ABI_VERSION_MAJOR) return @intFromEnum(TqAbiStatus.ErrVersionMismatch);
-    if (req.out_ptr == null or req.n == 0) return @intFromEnum(TqAbiStatus.ErrNullArg);
+    if (@intFromPtr(req.out_ptr) == 0 or req.n == 0) return @intFromEnum(TqAbiStatus.ErrNullArg);
     if (!bits_valid(req.bits)) return @intFromEnum(TqAbiStatus.ErrInvalidBits);
     if (req.group_size == 0) return @intFromEnum(TqAbiStatus.ErrInvalidGroupSize);
-    if (req.packed_ptr == null or req.scales_ptr == null or req.zeros_ptr == null) {
+    if (@intFromPtr(req.packed_ptr) == 0 or @intFromPtr(req.scales_ptr) == 0 or @intFromPtr(req.zeros_ptr) == 0) {
         return @intFromEnum(TqAbiStatus.ErrNullArg);
     }
     if (req.n > std.math.maxInt(usize) - req.group_size) return @intFromEnum(TqAbiStatus.ErrOverflow);
@@ -354,6 +356,7 @@ export fn tq_abi_decode(req: *const TqAbiDecodeRequest) c_int {
     const n_groups: usize = (req.n + req.group_size - 1) / req.group_size;
     const out: [*]f32 = @constCast(req.out_ptr);
 
+    var bit_off: usize = 0;
     var g: usize = 0;
     while (g < n_groups) : (g += 1) {
         const scale = req.scales_ptr[g];
@@ -361,7 +364,6 @@ export fn tq_abi_decode(req: *const TqAbiDecodeRequest) c_int {
         const start = g * req.group_size;
         const end = @min(start + req.group_size, req.n);
 
-        var bit_off: usize = 0;
         var i: usize = start;
         while (i < end) : (i += 1) {
             const q = read_bits_zig(req.packed_ptr, bit_off, req.bits);
@@ -375,7 +377,7 @@ export fn tq_abi_decode(req: *const TqAbiDecodeRequest) c_int {
 fn read_bits_zig(buf: [*]const u8, bit_offset: usize, bits: u8) u32 {
     const mask: u32 = (@as(u32, 1) << @intCast(bits)) - 1;
     const byte_idx = bit_offset >> 3;
-    const bit_in_byte: u3 = @intCast(@as(u8, @intCast(bit_offset & 7)));
+    const bit_in_byte: u8 = @intCast(bit_offset & 7);
     const room: u8 = 8 - bit_in_byte;
 
     if (room >= bits) {

@@ -10,7 +10,7 @@ use std::process::Command;
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zig_src = manifest_dir.join("zig-src");
-    let zig_file = zig_src.join("root.zig");
+    let zig_file = zig_src.join("turbo_quant.zig");
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let lib_path = out_dir.join("libturbo_quant_zig.a");
 

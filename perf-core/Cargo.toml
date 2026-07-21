@@ -11,6 +11,7 @@ members = [
     "concurrent-exec-cuda",
     "turbo-quant",
     "turbo-quant-mojo",
+    "turbo-quant-zig",
     "eval-harness",
     "kernel-registry",
     "native-abi",
