@@ -17,9 +17,10 @@ This is the canonical quality bar for KV cache compression — proves
 TurboQuant+ preserves retrieval at long contexts where mlx_lm's native
 kv_bits=4 produces garbage.
 
-FR-5 E3 instrumentation: TurboKV metrics (compressed_layers, kv_raw_bytes,
-kv_packed_bytes, compression_effective) apply only to full-attention layers
-where TurboKVCache is installed. Linear-attention layers keep native caches.
+FR-5 E3 instrumentation: TurboKV metrics on full-attention layers only —
+packed_state_present, kv_packed_bytes, kv_turbo_resident_bytes vs
+kv_fp16_baseline_bytes, and byte_reduction_effective. Linear-attention
+layers keep native caches and are excluded from compression claims.
 """
 
 import argparse
@@ -134,20 +135,64 @@ def _arr_nbytes(value) -> int:
     return int(getattr(value, "nbytes", 0) or 0)
 
 
+def nested_nbytes(obj) -> int:
+    """Sum nbytes across mlx arrays nested in lists/tuples/cache.state."""
+    if obj is None:
+        return 0
+    if hasattr(obj, "nbytes") and not isinstance(obj, (str, bytes)):
+        try:
+            return int(obj.nbytes)
+        except Exception:
+            return 0
+    if isinstance(obj, (list, tuple)):
+        return sum(nested_nbytes(x) for x in obj)
+    return 0
+
+
 def is_turbo_kv_cache(cache) -> bool:
     """True for full TurboKVCache (not Lite / not mlx_lm KVCache)."""
     return type(cache).__name__ == "TurboKVCache"
 
 
+def full_attention_indices(model) -> list[int]:
+    """Indices of layers that are not linear-attention (TurboKV-applicable)."""
+    return [
+        i
+        for i, layer in enumerate(model.layers)
+        if not getattr(layer, "is_linear", False)
+    ]
+
+
+def cache_entry_nbytes(cache) -> int:
+    """Resident bytes for one cache object (TurboKV.nbytes or state walk)."""
+    if is_turbo_kv_cache(cache) and hasattr(cache, "nbytes"):
+        try:
+            return int(cache.nbytes)
+        except Exception:
+            pass
+    n = nested_nbytes(getattr(cache, "state", None))
+    for attr in ("keys", "values", "_keys", "_values"):
+        n += nested_nbytes(getattr(cache, attr, None))
+    inner = getattr(cache, "_inner_kv", None)
+    if inner is not None and inner is not cache:
+        n += cache_entry_nbytes(inner)
+    return n
+
+
+def measure_fp16_full_attn_bytes(cache_list, model) -> int:
+    """FP16 (or native) resident KV bytes on full-attention layers only."""
+    total = 0
+    for i in full_attention_indices(model):
+        if i < len(cache_list):
+            total += cache_entry_nbytes(cache_list[i])
+    return total
+
+
 def layer_turbo_bytes(cache) -> tuple[int, int]:
-    """Return ``(raw_or_fp16_bytes, packed_bytes)`` for one TurboKVCache."""
+    """Return ``(transient_raw_bytes, packed_bytes)`` for one TurboKVCache."""
     raw = (
         _arr_nbytes(getattr(cache, "_raw_keys", None))
         + _arr_nbytes(getattr(cache, "_raw_values", None))
-        + _arr_nbytes(getattr(cache, "_fp_keys", None))
-        + _arr_nbytes(getattr(cache, "_fp_values", None))
-        + _arr_nbytes(getattr(cache, "_decoded_keys", None))
-        + _arr_nbytes(getattr(cache, "_decoded_values", None))
     )
     for arr in getattr(cache, "_pending_raw_keys", None) or []:
         raw += _arr_nbytes(arr)
@@ -170,39 +215,58 @@ def layer_is_compressed(cache) -> bool:
     return packed > 0
 
 
-def measure_turbo_cache_metrics(cache_list) -> dict:
+def measure_turbo_cache_metrics(
+    cache_list,
+    fp16_baseline_bytes: int = 0,
+) -> dict:
     """Aggregate TurboKV metrics for full-attention (TurboKV-installed) layers only.
 
-    Linear-attention layers keep native caches and are excluded from these counts.
+    Proves packed-state presence and byte-reduction vs an FP16 baseline measured
+    on the same full-attention layer set (not RSS deltas).
     """
     turbo = [c for c in cache_list if is_turbo_kv_cache(c)]
     kv_raw = 0
     kv_packed = 0
+    kv_inner = 0
+    kv_resident = 0
     compressed = 0
     for c in turbo:
         raw, packed = layer_turbo_bytes(c)
         kv_raw += raw
         kv_packed += packed
+        inner = getattr(c, "_inner_kv", None)
+        if inner is not None:
+            kv_inner += cache_entry_nbytes(inner)
+        kv_resident += cache_entry_nbytes(c)
         if layer_is_compressed(c):
             compressed += 1
+    packed_state_present = compressed > 0 and kv_packed > 0
+    ratio = None
+    byte_reduction_effective = False
+    if fp16_baseline_bytes > 0 and kv_resident > 0:
+        ratio = kv_resident / float(fp16_baseline_bytes)
+        byte_reduction_effective = (
+            packed_state_present and kv_resident < fp16_baseline_bytes
+        )
     return {
         "turbo_layers": len(turbo),
         "attention_layers": len(turbo),
         "compressed_layers": compressed,
+        "packed_state_present": packed_state_present,
         "kv_raw_bytes": kv_raw,
         "kv_packed_bytes": kv_packed,
-        "compression_effective": compressed > 0 and kv_packed > 0,
+        "kv_inner_fp16_bytes": kv_inner,
+        "kv_turbo_resident_bytes": kv_resident,
+        "kv_fp16_baseline_bytes": int(fp16_baseline_bytes),
+        "byte_reduction_ratio": ratio,
+        "byte_reduction_effective": byte_reduction_effective,
+        # Alias: only true when byte reduction vs FP16 baseline is proven.
+        "compression_effective": byte_reduction_effective,
     }
 
 
 def maybe_materialize_turbo_compression(cache_list) -> int:
-    """Force first-decode compression on TurboKV layers still raw after prefill.
-
-    TurboKVCache normally compresses on the first decode step via
-    ``_compress_raw_cache``. After a generate that may leave layers raw
-    (threshold / path quirks), call the same private entrypoint so metrics
-    reflect effective compression capability. Returns layers compressed.
-    """
+    """Force first-decode compression on TurboKV layers still raw after prefill."""
     n = 0
     for c in cache_list:
         if not is_turbo_kv_cache(c):
@@ -231,12 +295,25 @@ def _make_turbo_cache(bits: int, key_bits: int | None):
     """Construct TurboKVCache with a low compress threshold for NIAH lengths."""
     from mlx.nn.layers.turbo_kv_cache import TurboKVCache
 
-    # Default min_compress_tokens=256; use 64 so short NIAH contexts still
-    # exercise packed storage on the first decode path.
     return TurboKVCache(bits=bits, key_bits=key_bits, min_compress_tokens=64)
 
 
-# ── Run a single (mode, length) benchmark ────────────────────────────────
+def _empty_metrics() -> dict:
+    return {
+        "turbo_layers": 0,
+        "attention_layers": 0,
+        "compressed_layers": 0,
+        "packed_state_present": False,
+        "kv_raw_bytes": 0,
+        "kv_packed_bytes": 0,
+        "kv_inner_fp16_bytes": 0,
+        "kv_turbo_resident_bytes": 0,
+        "kv_fp16_baseline_bytes": 0,
+        "byte_reduction_ratio": None,
+        "byte_reduction_effective": False,
+        "compression_effective": False,
+    }
+
 
 @dataclass
 class BenchResult:
@@ -257,24 +334,33 @@ class BenchResult:
     turbo_layers: int = 0
     attention_layers: int = 0
     compressed_layers: int = 0
+    packed_state_present: bool = False
     kv_raw_bytes: int = 0
     kv_packed_bytes: int = 0
+    kv_inner_fp16_bytes: int = 0
+    kv_turbo_resident_bytes: int = 0
+    kv_fp16_baseline_bytes: int = 0
+    byte_reduction_ratio: float | None = None
+    byte_reduction_effective: bool = False
     compression_effective: bool = False
 
 
-def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResult:
+def run_one(
+    model,
+    tokenizer,
+    mode: str,
+    length: int,
+    needle: str,
+    fp16_baseline_bytes: int = 0,
+) -> BenchResult:
     """Run one (mode, length) benchmark. Returns a BenchResult."""
     mx, mlx_lm = _ensure_mlx()
     rss_before = rss_mb()
 
-    # ── 1. Build the prompt ──
-    # Construct directly in token space; character-length filler is not a valid
-    # proxy for model context length.
     prompt_ids = build_needle_prompt_ids(tokenizer, length, needle)
     actual_len = len(prompt_ids)
     print(f"  [{mode:18s}] {length:5d} target / {actual_len:5d} actual tokens")
 
-    # ── 2. Build the KV cache list (one per layer) ──
     n_layers = len(model.layers)
     is_qwen35 = "qwen3_5" in type(model).__module__ or "qwen3_5" in str(
         getattr(model, "model_type", "")
@@ -285,7 +371,6 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
     if mode == "baseline_fp16":
         pass
     elif is_qwen35:
-        # Mixed architecture: TurboKV / kv4 only on full-attention layers.
         for i, layer in enumerate(model.layers):
             if getattr(layer, "is_linear", False):
                 continue
@@ -310,13 +395,10 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
     else:
         raise ValueError(f"unknown mode: {mode}")
 
-    # Deterministic decode — nonzero temp produced garbage (e.g. "!!!!") on
-    # turbo_asymmetric @ 2048 even when compression was effective.
     from mlx_lm.sample_utils import make_sampler
 
     sampler = make_sampler(temp=0.0)
 
-    # ── 3. Prefill (single-token decode with prompt_cache) ──
     t0 = time.perf_counter()
     try:
         mlx_lm.generate(
@@ -347,31 +429,33 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
             error=f"prefill: {type(e).__name__}: {e}",
         )
 
-    # ── 4. Materialize + measure TurboKV compression (full-attn layers only) ──
-    metrics = {
-        "turbo_layers": 0,
-        "attention_layers": 0,
-        "compressed_layers": 0,
-        "kv_raw_bytes": 0,
-        "kv_packed_bytes": 0,
-        "compression_effective": False,
-    }
-    if mode in ("turbo_asymmetric", "turbo_symmetric", "turbo4"):
-        # Do not use legacy compact_turbo_cache (TurboKVCacheLite-only) or
-        # the removed TurboKVCacheLite `.compress()` API.
+    metrics = _empty_metrics()
+    if mode == "baseline_fp16":
+        fp16_bytes = measure_fp16_full_attn_bytes(cache_list, model)
+        metrics["kv_fp16_baseline_bytes"] = fp16_bytes
+        metrics["attention_layers"] = len(full_attention_indices(model))
+        print(
+            f"    fp16 full-attn baseline bytes={fp16_bytes} "
+            f"layers={metrics['attention_layers']}/{n_layers}"
+        )
+    elif mode in ("turbo_asymmetric", "turbo_symmetric", "turbo4"):
         forced = maybe_materialize_turbo_compression(cache_list)
-        metrics = measure_turbo_cache_metrics(cache_list)
+        metrics = measure_turbo_cache_metrics(
+            cache_list, fp16_baseline_bytes=fp16_baseline_bytes
+        )
         print(
             f"    turbo metrics: turbo_layers={metrics['turbo_layers']}/{n_layers} "
             f"compressed={metrics['compressed_layers']} "
+            f"packed_state={metrics['packed_state_present']} "
             f"forced_materialize={forced} "
-            f"raw_bytes={metrics['kv_raw_bytes']} "
-            f"packed_bytes={metrics['kv_packed_bytes']} "
-            f"effective={metrics['compression_effective']}"
+            f"packed={metrics['kv_packed_bytes']} "
+            f"resident={metrics['kv_turbo_resident_bytes']} "
+            f"fp16_baseline={metrics['kv_fp16_baseline_bytes']} "
+            f"ratio={metrics['byte_reduction_ratio']} "
+            f"byte_reduction={metrics['byte_reduction_effective']}"
         )
         print("    cache types:", ", ".join(type(c).__name__ for c in cache_list))
 
-    # ── 5. Generate answer tokens ──
     qa_prompt = (
         "\n\nQuestion: What is the critical fact mentioned in the passage above? "
         "Do not explain or think aloud. Respond with only the exact critical fact "
@@ -412,16 +496,20 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
             **metrics,
         )
 
-    # Re-measure after decode (packed may grow; raw should stay low if effective)
-    if mode in ("turbo_asymmetric", "turbo_symmetric", "turbo4"):
-        metrics = measure_turbo_cache_metrics(cache_list)
+    if mode == "baseline_fp16":
+        metrics["kv_fp16_baseline_bytes"] = measure_fp16_full_attn_bytes(
+            cache_list, model
+        )
+    elif mode in ("turbo_asymmetric", "turbo_symmetric", "turbo4"):
+        metrics = measure_turbo_cache_metrics(
+            cache_list, fp16_baseline_bytes=fp16_baseline_bytes
+        )
 
     if isinstance(answer_ids, list):
         answer = tokenizer.decode(answer_ids)
     else:
         answer = str(answer_ids)
 
-    # Quality checks
     secret = (
         needle.split("the secret code is ")[1]
         if "the secret code is " in needle
@@ -431,7 +519,6 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
     partial = secret in answer
     contains_secret = secret in answer
 
-    rss_after = rss_mb()
     return BenchResult(
         mode=mode,
         target_len=length,
@@ -440,7 +527,7 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
         decode_ms=decode_ms,
         decode_tok_per_sec=decode_tps,
         rss_mb_before=rss_before,
-        rss_mb_after=rss_after,
+        rss_mb_after=rss_mb(),
         needle=needle,
         answer=answer,
         exact_match=exact,
@@ -449,8 +536,6 @@ def run_one(model, tokenizer, mode: str, length: int, needle: str) -> BenchResul
         **metrics,
     )
 
-
-# ── Main ─────────────────────────────────────────────────────────────────
 
 def require_julia() -> None:
     """FR-5 E1: Julia is mandatory on the NIAH eval path — fail loud if missing."""
@@ -483,14 +568,11 @@ def main():
                         help="Random seed for needle/filler")
     args = parser.parse_args()
 
-    # After argparse so `--help` still works without Julia; real runs fail loud.
     require_julia()
-
     random.seed(args.seed)
 
-    # ── Load model ──
     print("=" * 70)
-    print(f"  NIAH BENCHMARK — phenotype-omlx TurboQuant+ MLX")
+    print("  NIAH BENCHMARK — phenotype-omlx TurboQuant+ MLX")
     print("=" * 70)
     print(f"  Model:    {args.model}")
     print(f"  Lengths:  {args.lengths}")
@@ -508,19 +590,33 @@ def main():
     print()
 
     results: list[BenchResult] = []
+    fp16_baseline_by_len: dict[int, int] = {}
 
-    # ── Run benchmarks ──
     for length in args.lengths:
         print(f"\n{'─' * 70}")
         print(f"  CONTEXT LENGTH: {length} tokens")
         print(f"{'─' * 70}")
         needle = f"the secret code is {random.randint(100, 999)}-{random.randint(100, 999)}-alpha"
 
-        for mode in args.modes:
+        # Prefer baseline first so turbo rows get a real FP16 baseline.
+        modes = list(args.modes)
+        if "baseline_fp16" in modes:
+            modes = ["baseline_fp16"] + [m for m in modes if m != "baseline_fp16"]
+
+        for mode in modes:
             print(f"\n[{mode}]")
-            gc.collect()  # free any prior caches
+            gc.collect()
             try:
-                r = run_one(model, tokenizer, mode, length, needle)
+                r = run_one(
+                    model,
+                    tokenizer,
+                    mode,
+                    length,
+                    needle,
+                    fp16_baseline_bytes=fp16_baseline_by_len.get(length, 0),
+                )
+                if mode == "baseline_fp16" and not r.error and r.kv_fp16_baseline_bytes:
+                    fp16_baseline_by_len[length] = r.kv_fp16_baseline_bytes
                 results.append(r)
                 if r.error:
                     print(f"  ✗ {r.error}")
@@ -534,7 +630,10 @@ def main():
                     if r.turbo_layers:
                         print(
                             f"  turbo: compressed={r.compressed_layers}/{r.turbo_layers} "
-                            f"packed={r.kv_packed_bytes} effective={r.compression_effective}"
+                            f"packed={r.kv_packed_bytes} resident={r.kv_turbo_resident_bytes} "
+                            f"fp16={r.kv_fp16_baseline_bytes} "
+                            f"ratio={r.byte_reduction_ratio} "
+                            f"byte_reduction={r.byte_reduction_effective}"
                         )
                     print(f"  answer: {r.answer[:80]!r}")
             except Exception as e:
@@ -548,7 +647,6 @@ def main():
                     error=f"unexpected: {e}",
                 ))
 
-    # ── Summary table ──
     print()
     print("=" * 70)
     print("  NIAH BENCHMARK RESULTS")
@@ -556,60 +654,50 @@ def main():
     print()
     print(
         f"  {'Mode':22s} {'Len':>6s} {'Tok/s':>8s} {'RSSΔ(MB)':>10s} "
-        f"{'Cmp':>7s} {'Match':>6s}"
+        f"{'Cmp':>7s} {'Reduc':>6s} {'Match':>6s}"
     )
-    print(f"  {'─' * 22} {'─' * 6} {'─' * 8} {'─' * 10} {'─' * 7} {'─' * 6}")
+    print(f"  {'─' * 22} {'─' * 6} {'─' * 8} {'─' * 10} {'─' * 7} {'─' * 6} {'─' * 6}")
     for r in results:
         marker = "✓" if r.exact_match else ("≈" if r.partial_match else ("✗" if r.error else " "))
         rss_d = r.rss_mb_after - r.rss_mb_before
-        cmp = (
-            f"{r.compressed_layers}/{r.turbo_layers}"
-            if r.turbo_layers
-            else "-"
-        )
+        cmp = f"{r.compressed_layers}/{r.turbo_layers}" if r.turbo_layers else "-"
+        reduc = "yes" if r.byte_reduction_effective else ("-" if not r.turbo_layers else "no")
         print(
             f"  {r.mode:22s} {r.target_len:>6d} {r.decode_tok_per_sec:>8.1f} "
-            f"{rss_d:>+10.0f} {cmp:>7s} {marker:>6s}"
+            f"{rss_d:>+10.0f} {cmp:>7s} {reduc:>6s} {marker:>6s}"
         )
 
-    # Quality per mode (across all lengths)
     print()
     print("  Quality summary:")
-    modes_tested = sorted(set(r.mode for r in results))
-    for m in modes_tested:
+    for m in sorted(set(r.mode for r in results)):
         mr = [r for r in results if r.mode == m and not r.error]
         exact = sum(1 for r in mr if r.exact_match)
         partial = sum(1 for r in mr if r.partial_match and not r.exact_match)
         miss = sum(1 for r in mr if not r.exact_match and not r.partial_match)
         print(f"    {m:22s}: exact={exact}/{len(mr)} partial={partial} miss={miss}")
 
-    # Compression summary for turbo modes
     turbo_rows = [r for r in results if r.turbo_layers and not r.error]
     if turbo_rows:
-        any_effective = any(r.compression_effective for r in turbo_rows)
-        max_cmp = max(r.compressed_layers for r in turbo_rows)
         print()
         print(
-            f"  Compression summary: any_effective={any_effective} "
-            f"max_compressed_layers={max_cmp}"
+            f"  Compression summary: packed_state_any="
+            f"{any(r.packed_state_present for r in turbo_rows)} "
+            f"byte_reduction_any={any(r.byte_reduction_effective for r in turbo_rows)} "
+            f"max_compressed_layers={max(r.compressed_layers for r in turbo_rows)}"
         )
 
     if args.output:
-        # FR-5 E4: never write raw rows without an evidence class.
-        # In-process MLX runs are live_verified; do not overwrite
-        # the committed synthetic niah_results.json envelope.
         out_path = Path(args.output)
         if "qwen3.5" in args.model.lower() or "qwen3_5" in args.model.lower():
             caveat = (
                 "Qwen3.5 may mix linear + full attention. TurboKV metrics "
-                "(compressed_layers, kv_*_bytes) apply only to full-attention "
-                "layers where TurboKVCache is installed; linear layers keep "
-                "native caches."
+                "(packed_state, resident vs fp16 baseline) apply only to "
+                "full-attention layers where TurboKVCache is installed."
             )
         else:
             caveat = None
         envelope = {
-            "schema_version": 1,
+            "schema_version": 2,
             "kind": "niah_live_run",
             "evidence_label": "live_verified",
             "reported": True,
@@ -618,6 +706,12 @@ def main():
             "backend": "mlx_lm_inprocess",
             "architecture_caveat": caveat,
             "kv_modes_applicable": bool(turbo_rows),
+            "packed_state_any": (
+                any(r.packed_state_present for r in turbo_rows) if turbo_rows else False
+            ),
+            "byte_reduction_any": (
+                any(r.byte_reduction_effective for r in turbo_rows) if turbo_rows else False
+            ),
             "compression_any_effective": (
                 any(r.compression_effective for r in turbo_rows) if turbo_rows else False
             ),

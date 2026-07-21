@@ -180,11 +180,13 @@ def test_niah_does_not_call_removed_turbo_cache_compress_api():
     assert "c.compress()" not in text
     assert "measure_turbo_cache_metrics" in text
     assert "compressed_layers" in text
+    assert "byte_reduction_effective" in text
+    assert "kv_fp16_baseline_bytes" in text
     assert "make_sampler(temp=0.0)" in text
 
 
 def test_measure_turbo_cache_metrics_full_attn_only():
-    """FR-5 E3: metrics count TurboKV layers only; packed bytes ⇒ effective."""
+    """FR-5 E3: packed state alone is not enough — need resident < FP16 baseline."""
 
     import importlib.util
 
@@ -198,8 +200,8 @@ def test_measure_turbo_cache_metrics_full_attn_only():
         def __init__(self, nbytes: int):
             self.nbytes = nbytes
 
-    class TurboKVCache:  # noqa: N801 — mirror runtime type name for isinstance-free check
-        def __init__(self, *, compressed: bool, packed: int = 0, raw: int = 0):
+    class TurboKVCache:  # noqa: N801 — mirror runtime type name
+        def __init__(self, *, compressed: bool, packed: int = 0, raw: int = 0, resident: int = 0):
             self._is_compressed = compressed
             self._packed_keys = _Arr(packed) if packed else None
             self._packed_values = None
@@ -207,30 +209,41 @@ def test_measure_turbo_cache_metrics_full_attn_only():
             self._value_norms = None
             self._raw_keys = _Arr(raw) if raw else None
             self._raw_values = None
-            self._fp_keys = None
-            self._fp_values = None
-            self._decoded_keys = None
-            self._decoded_values = None
             self._pending_raw_keys = []
             self._pending_raw_values = []
+            self._inner_kv = None
+            self._resident = resident
+
+        @property
+        def nbytes(self) -> int:
+            return self._resident
 
     class KVCache:
         pass
 
     caches = [
         KVCache(),
-        TurboKVCache(compressed=False, raw=1000),
-        TurboKVCache(compressed=True, packed=200, raw=0),
+        TurboKVCache(compressed=False, raw=1000, resident=1000),
+        TurboKVCache(compressed=True, packed=200, raw=0, resident=400),
         KVCache(),
     ]
-    m = mod.measure_turbo_cache_metrics(caches)
-    assert m["turbo_layers"] == 2
-    assert m["attention_layers"] == 2
-    assert m["compressed_layers"] == 1
-    assert m["kv_packed_bytes"] == 200
-    assert m["kv_raw_bytes"] == 1000
-    assert m["compression_effective"] is True
+    # Without baseline: packed state visible but byte reduction unproven
+    m0 = mod.measure_turbo_cache_metrics(caches, fp16_baseline_bytes=0)
+    assert m0["turbo_layers"] == 2
+    assert m0["compressed_layers"] == 1
+    assert m0["kv_packed_bytes"] == 200
+    assert m0["packed_state_present"] is True
+    assert m0["byte_reduction_effective"] is False
+    assert m0["compression_effective"] is False
 
-    empty = mod.measure_turbo_cache_metrics([KVCache(), KVCache()])
+    # With baseline larger than resident: byte reduction proven
+    m1 = mod.measure_turbo_cache_metrics(caches, fp16_baseline_bytes=5000)
+    assert m1["kv_turbo_resident_bytes"] == 1400
+    assert m1["kv_fp16_baseline_bytes"] == 5000
+    assert m1["byte_reduction_effective"] is True
+    assert m1["compression_effective"] is True
+    assert m1["byte_reduction_ratio"] == 1400 / 5000
+
+    empty = mod.measure_turbo_cache_metrics([KVCache(), KVCache()], fp16_baseline_bytes=100)
     assert empty["turbo_layers"] == 0
-    assert empty["compression_effective"] is False
+    assert empty["byte_reduction_effective"] is False
