@@ -102,7 +102,13 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
 
 ## Ops notes
 
-- Disk: ClickHouse + MinIO grow with traces — prune volumes deliberately; never
+- Runtime: Apple Container + `container compose` plugin **or** standalone
+  `~/.local/bin/container-compose` (flaticols/container-compose). Never Docker.
+- Data: bind mounts under `LANGFUSE_DATA_DIR` (default
+  `~/.local/share/phenotype/langfuse`) — never `/tmp`.
+- Smoke: `up` waits for `http://127.0.0.1:3000/api/public/health` (or
+  `bash scripts/langfuse/self-host.sh smoke`).
+- Disk: ClickHouse + MinIO grow with traces — prune data dirs deliberately; never
   recursive `find` from Phenotype root.
 - Secrets: `deploy/langfuse/.env` is gitignored; rotate `NEXTAUTH_SECRET`,
   `ENCRYPTION_KEY`, DB/MinIO passwords after `init`.
