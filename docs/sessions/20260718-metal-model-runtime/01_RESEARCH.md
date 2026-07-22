@@ -67,3 +67,33 @@ The first real Metal kernel is now the MoE top-k router. It uses stable score-de
 expert-id-ascending ties, selected softmax, a scalar model-kernels oracle, and an artifact-only
 production path. `MetallibArtifact` is an unforgeable capability outside the crate: only the
 allowlist/hash-verifying loader can construct one.
+
+## 2026-07-22 Metal Reuse and Model-Family Refresh
+
+Apple's Metal best-practices guidance explicitly recommends creating persistent objects early and
+reusing them, including one command queue per GPU; pipeline-state creation is an expensive GPU
+state evaluation. This directly supports the next optimization: cache verified libraries,
+compute pipeline states, and command queues instead of recreating them per binding call.
+
+- Persistent objects: https://developer.apple.com/library/archive/documentation/3DDrawing/Conceptual/MTLBestPracticesGuide/PersistentObjects.html
+- Command structure: https://developer.apple.com/documentation/Metal/setting-up-a-command-structure
+- Metal 4 command queues and reusable argument tables:
+  https://msc-kobol-public-prod.apple.com/documentation/Metal/understanding-the-metal-4-core-api
+
+The current model-family map should include Qwen3.5/3.6 MoE and Qwen3.5-Omni hybrid
+attention+MoE, DeepSeek MLA+MoE, Kimi Linear/KDA, LFM2 recurrent-convolution hybrids, ZAYA
+compressed-context/top-1 MoE, BitNet/Bonsai ternary, and diffusion families such as Flux,
+Wan, Qwen-Image, and masked diffusion decoders. Qwen3.5/3.6 share the same Transformers model
+type, while Qwen3.5-Omni uses a hybrid attention MoE for its Thinker/Talker paths.
+
+- Qwen3.5 MoE docs: https://huggingface.co/docs/transformers/main/model_doc/qwen3_5_moe
+- Qwen3.5-Omni report: https://arxiv.org/abs/2604.15804
+- BitNet official repository: https://github.com/microsoft/BitNet
+- BitNet.cpp paper: https://arxiv.org/abs/2502.11880
+- MLX Swift model registry (including Qwen MoE and BitNet entries):
+  https://github.com/ml-explore/mlx-swift-lm/blob/main/skills/mlx-swift-lm/references/supported-models.md
+
+Decision: benchmark and optimize shared Metal execution infrastructure before adding another
+family-specific shader. The six-kernel artifact-backed baseline now records median/p95 and exact
+artifact hashes, allowing setup-reuse changes to be measured without conflating model-family
+correctness with compiler variance.
