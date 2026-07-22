@@ -3,7 +3,7 @@
 LLM evals dashboard (Quality / Performance / RLVR / throughput) for MLX /
 TurboQuant model runs. Listens on `:8090`.
 
-**Active home:** `KooshaPari/phenotype-omlx-tmp` → `apps/bench-cockpit`
+**Active home:** `KooshaPari/phenotype-omlx` → `apps/bench-cockpit`
 (the working stand-in while the deleted `phenotype-omlx` GitHub name stays
 open for GH Support restore).
 
