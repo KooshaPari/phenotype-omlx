@@ -27,6 +27,7 @@ import os
 import subprocess
 from typing import Optional
 
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     FAIL,
     PASS,
@@ -69,6 +70,7 @@ def _load_niah_baseline() -> tuple[bool, str]:
     return True, f"{_NIAH_BASELINE_REL_PATH} ({len(json.dumps(payload))} chars JSON)"
 
 
+@register_check
 def niah_regression_baseline_exists() -> Check:
     """Probe the seeded NIAH regression baseline.
 
@@ -114,8 +116,7 @@ def niah_regression_baseline_exists() -> Check:
             description=desc,
             status=FAIL,
             details=(
-                f"baseline read failed after first-pass OK: "
-                f"{type(e).__name__}: {e}"
+                f"baseline read failed after first-pass OK: {type(e).__name__}: {e}"
             ),
         )
     if not isinstance(payload, dict):
@@ -218,16 +219,19 @@ def _check_dispatch_script(backend: str, rel_path: str) -> Check:
     )
 
 
+@register_check
 def dispatch_script_metal_exists() -> Check:
     """Dispatch script for the Metal (Apple Silicon) backend."""
     return _check_dispatch_script("metal", "scripts/dispatch/metal.sh")
 
 
+@register_check
 def dispatch_script_sglang_exists() -> Check:
     """Dispatch script for the SGLang backend."""
     return _check_dispatch_script("sglang", "scripts/dispatch/sglang.sh")
 
 
+@register_check
 def dispatch_script_vllm_exists() -> Check:
     """Dispatch script for the vLLM backend."""
     return _check_dispatch_script("vllm", "scripts/dispatch/vllm.sh")

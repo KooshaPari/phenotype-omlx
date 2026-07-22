@@ -27,6 +27,7 @@ import subprocess
 import sys
 from typing import Optional
 
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     FAIL,
     PASS,
@@ -93,8 +94,7 @@ def _load_niah_results() -> tuple[bool, str, int]:
     if not isinstance(payload, dict):
         return (
             False,
-            f"{_NIAH_RESULTS_REL_PATH} root is {type(payload).__name__}, "
-            "expected dict",
+            f"{_NIAH_RESULTS_REL_PATH} root is {type(payload).__name__}, expected dict",
             0,
         )
     targets = payload.get("targets")
@@ -139,6 +139,7 @@ def _find_niah_benchmark() -> Optional[str]:
     return None
 
 
+@register_check
 def niah_benchmark_present() -> Check:
     """Confirm ``scripts/niah_benchmark.py`` is on disk and runs.
 
@@ -211,8 +212,7 @@ def niah_benchmark_present() -> Check:
             status=PASS,
             details=(
                 f"{rel} — NIAH benchmark executable, --help exits 0; "
-                f"{results_label} (≥ {_NIAH_TARGET_ROW_FLOOR} floor)"
-                + envelope_note
+                f"{results_label} (≥ {_NIAH_TARGET_ROW_FLOOR} floor)" + envelope_note
             ),
         )
 
@@ -228,9 +228,11 @@ def niah_benchmark_present() -> Check:
             ),
         )
 
-    err_tail = (proc.stderr or proc.stdout).strip().splitlines()[-1] if (
-        proc.stderr or proc.stdout
-    ) else ""
+    err_tail = (
+        (proc.stderr or proc.stdout).strip().splitlines()[-1]
+        if (proc.stderr or proc.stdout)
+        else ""
+    )
     return Check(
         id="niah_benchmark_present",
         description=desc,
@@ -247,6 +249,7 @@ def niah_benchmark_present() -> Check:
 # ---------------------------------------------------------------------------
 
 
+@register_check
 def niah_benchmark_non_legacy_path() -> Check:
     """FAIL if ``scripts/niah_benchmark.py`` still embeds the legacy path.
 
@@ -254,8 +257,7 @@ def niah_benchmark_non_legacy_path() -> Check:
     never a hard-coded absolute ``…/repos`` + ``phenotype-omlx/python`` join.
     """
     desc = (
-        "NIAH benchmark uses repo-relative python/ "
-        "(no legacy absolute repos path join)"
+        "NIAH benchmark uses repo-relative python/ (no legacy absolute repos path join)"
     )
     script_path = _find_niah_benchmark()
     if script_path is None:
@@ -300,6 +302,7 @@ def niah_benchmark_non_legacy_path() -> Check:
 # ---------------------------------------------------------------------------
 
 
+@register_check
 def julia_required_on_eval_path() -> Check:
     """FAIL if ``julia`` is not on PATH (FR-5 / toolchain policy).
 
@@ -354,6 +357,7 @@ def julia_required_on_eval_path() -> Check:
 # ---------------------------------------------------------------------------
 
 
+@register_check
 def niah_instrumented_schema_v2_present() -> Check:
     """FAIL if the schema-v2 instrumented NIAH envelope is missing or weak.
 
@@ -384,8 +388,7 @@ def niah_instrumented_schema_v2_present() -> Check:
             description=desc,
             status=FAIL,
             details=(
-                f"could not load {_INSTRUMENTED_NIAH_REL}: "
-                f"{type(e).__name__}: {e}"
+                f"could not load {_INSTRUMENTED_NIAH_REL}: {type(e).__name__}: {e}"
             ),
         )
     if not isinstance(data, dict):
