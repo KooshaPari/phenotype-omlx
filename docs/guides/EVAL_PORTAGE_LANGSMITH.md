@@ -32,15 +32,13 @@ bash scripts/evals/run_via_harbor.sh --policy
 
 # NIAH via OpenAI-compatible omlx/MLX server (Qwen3.5 SSOT)
 # OPENAI_BASE_URL = self-hosted chat-completions base (…/v1). Pick any free port.
-# Example (does not require asking — self-host ownership):
-#   mlx_lm.server --model mlx-community/Qwen3.5-0.8B-OptiQ-4bit --host 127.0.0.1 --port 8766
-#   export OPENAI_BASE_URL=http://127.0.0.1:8766/v1          # host dry-run
-#   # Harbor apple-container → host:
-#   export OPENAI_BASE_URL=http://host.containers.internal:8766/v1
+# Example (self-host ownership — do not steal a port already serving another app):
+#   mlx_lm server --model mlx-community/Qwen3.5-0.8B-OptiQ-4bit --host 0.0.0.0 --port 8766
+#   export OPENAI_BASE_URL=http://127.0.0.1:8766/v1                    # host dry-run
+#   export OPENAI_BASE_URL=http://$(ipconfig getifaddr en0):8766/v1    # Harbor→host (LAN)
+# Env is injected via task [environment.env]/[solution.env] and run_via_harbor --ae.
 export OPENAI_BASE_URL=http://127.0.0.1:8766/v1
 bash scripts/evals/run_via_harbor.sh --niah
-# Host dry-run (no Harbor):
-#   OPENAI_BASE_URL=... PYTHONPATH=python python3 scripts/evals/niah_openai_smoke.py
 
 # TurboQuant SSOT gate (Metal TurboQuant+ stays host-side ready check 12)
 bash scripts/evals/run_via_harbor.sh --turbo

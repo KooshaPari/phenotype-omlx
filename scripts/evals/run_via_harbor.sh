@@ -86,6 +86,18 @@ fi
 # Surface SSOT model for agents / NIAH API smoke
 export OMLX_READY_MODEL="${OMLX_READY_MODEL:-$(PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m omlx_research.smoke_models readiness)}"
 export OPENAI_MODEL="${OPENAI_MODEL:-$OMLX_READY_MODEL}"
+export OPENAI_API_KEY="${OPENAI_API_KEY:-omlx}"
+
+AGENT_ENV_ARGS=()
+if [[ "$MODE" == "niah" ]]; then
+  # Oracle uses solution.env; also pass --ae so JobConfig overlays cannot drop URLs.
+  AGENT_ENV_ARGS+=(
+    --ae "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
+    --ae "OPENAI_API_KEY=${OPENAI_API_KEY}"
+    --ae "OPENAI_MODEL=${OPENAI_MODEL}"
+    --ae "OMLX_READY_MODEL=${OMLX_READY_MODEL}"
+  )
+fi
 
 cd "$PORTAGE_ROOT"
 echo "harbor env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL out=$OUT"
@@ -96,6 +108,7 @@ uv run harbor run \
   -n 1 \
   -y \
   -o "$OUT" \
+  "${AGENT_ENV_ARGS[@]}" \
   "${PLUGIN_ARGS[@]}"
 
 echo "done. artifacts: $OUT"

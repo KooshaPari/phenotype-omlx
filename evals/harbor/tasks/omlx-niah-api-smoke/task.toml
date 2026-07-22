@@ -25,10 +25,23 @@ storage_mb = 10240
 gpus = 0
 mcp_servers = []
 
+# Host templates → container persistent env (Harbor resolve_env_vars).
+[environment.env]
+OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
+OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
+OPENAI_MODEL = "${OPENAI_MODEL}"
+OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
+
+# Oracle solve.sh only inherits solution.env (not agent.env) — keep in sync.
+[solution.env]
+OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
+OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
+OPENAI_MODEL = "${OPENAI_MODEL}"
+OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
+
 [verifier.env]
 
 [agent.env]
-# Host MLX / omlx OpenAI-compatible server — required at run time
 OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
 OPENAI_MODEL = "${OPENAI_MODEL}"
