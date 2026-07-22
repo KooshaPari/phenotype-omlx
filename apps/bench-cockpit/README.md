@@ -68,10 +68,12 @@ still requires extending `pheno-harness` `stock_vs_ours.SUITES` and re-running.
 
 Agents / MCP / self-host: `docs/guides/LANGFUSE_AGENTS_AND_SELFHOST.md`.
 
-## Observability (Langfuse primary)
+## Observability (Langfuse — required)
 
-**Recommendation:** use **Langfuse** for tracing, playground, and hosted LLM-as-judge —
-MIT OSS, self-hostable, full feature control. LangSmith is optional/legacy only.
+**Langfuse** is the canonical observability backend for tracing, playground, and
+hosted LLM-as-judge — MIT OSS, self-hostable, full feature control. LangSmith
+has been removed from the operator path; if Portage or Langfuse ingest is buggy,
+fix Portage — there is no LangSmith fallback.
 
 ```bash
 # .env (gitignored)
@@ -142,15 +144,3 @@ Guide: `../../docs/guides/LANGFUSE_MCP_CLI.md`.
 
 Decision record: `../../docs/research/LANGFUSE_ALTERNATIVES.md` — Langfuse stays
 primary; Phoenix/Braintrust only as optional side tools.
-
-## LangSmith (optional legacy)
-
-Put `LANGSMITH_API_KEY` in gitignored `.env` only if still needed for old Harbor
-experiments. Prefer Langfuse for new eval work.
-
-```bash
-# legacy only
-.venv-evals/bin/python scripts/evals/setup_hosted_judges.py
-python3 scripts/evals/run_evaluators.py sync|run|all --limit 20
-bash scripts/evals/harbor_langsmith_smoke.sh   # -e apple-container
-```

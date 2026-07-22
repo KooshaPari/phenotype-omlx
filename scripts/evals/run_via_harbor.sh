@@ -1,37 +1,52 @@
 #!/usr/bin/env bash
-# Thin operator entry: Portage/Harbor (+ optional LangSmith plugin).
-# Do not invent new ad-hoc eval runners — extend Harbor tasks / JobConfig.
+# Thin operator entry: Portage/Harbor + **required** Langfuse plugin.
+# Langfuse is the canonical observability backend (non-optional).
+# LangSmith is removed from this path — do not reintroduce.
 #
 # Requires:
-#   PORTAGE_ROOT  — path to portage-TEMP checkout (worktree OK)
-#   LANGSMITH_API_KEY — when --langsmith is passed
-#   OPENAI_BASE_URL — when --niah is passed (OpenAI-compatible omlx/MLX server)
+#   PORTAGE_ROOT              — path to portage-TEMP checkout (worktree OK)
+#   LANGFUSE_PUBLIC_KEY       — always required
+#   LANGFUSE_SECRET_KEY       — always required
+#   OPENAI_BASE_URL           — when --niah is passed (OpenAI-compatible omlx/MLX)
 #
 # Usage:
 #   export PORTAGE_ROOT=.../worktrees/portage/<topic>
-#   bash scripts/evals/run_via_harbor.sh              # hello-world oracle
-#   bash scripts/evals/run_via_harbor.sh --langsmith  # + harbor-langsmith plugin
-#   bash scripts/evals/run_via_harbor.sh --policy     # omlx Qwen3.5 policy task
-#   bash scripts/evals/run_via_harbor.sh --niah       # NIAH via OPENAI_BASE_URL
-#   bash scripts/evals/run_via_harbor.sh --turbo      # TurboQuant SSOT gate
+#   export LANGFUSE_PUBLIC_KEY=pk-lf-...
+#   export LANGFUSE_SECRET_KEY=sk-lf-...
+#   export LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # optional
+#   bash scripts/evals/run_via_harbor.sh              # hello-world oracle + Langfuse
+#   bash scripts/evals/run_via_harbor.sh --policy
+#   bash scripts/evals/run_via_harbor.sh --niah
+#   bash scripts/evals/run_via_harbor.sh --turbo
 set -euo pipefail
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:${PATH:-}"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${HARBOR_OUT:-$ROOT/.runs/harbor-eval}"
 HARBOR_ENV="${HARBOR_ENV:-apple-container}"
-USE_LS=0
 MODE="hello"
 
 for arg in "$@"; do
   case "$arg" in
-    --langsmith) USE_LS=1 ;;
+    --langsmith|--plugin-langsmith)
+      echo "ERROR: LangSmith is removed from the operator path." >&2
+      echo "  Canonical observability is Langfuse (harbor-langfuse)." >&2
+      echo "  If Portage/Langfuse is buggy: fix Portage — do not fall back to LangSmith." >&2
+      exit 2
+      ;;
+    --langfuse)
+      # Accepted for back-compat; Langfuse is always on.
+      ;;
     --policy) MODE="policy" ;;
     --niah) MODE="niah" ;;
     --turbo) MODE="turbo" ;;
     --help|-h)
-      sed -n '2,20p' "$0"
+      sed -n '2,22p' "$0"
       exit 0
+      ;;
+    *)
+      echo "ERROR: unknown arg: $arg" >&2
+      exit 2
       ;;
   esac
 done
@@ -48,6 +63,15 @@ if [[ "$HARBOR_ENV" != "apple-container" ]]; then
   echo "ERROR: HARBOR_ENV=$HARBOR_ENV forbidden; use apple-container" >&2
   exit 2
 fi
+if [[ -z "${LANGFUSE_PUBLIC_KEY:-}" || -z "${LANGFUSE_SECRET_KEY:-}" ]]; then
+  echo "ERROR: LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY are required (Langfuse is canonical)." >&2
+  exit 2
+fi
+if [[ ! -d "$PORTAGE_ROOT/packages/harbor-langfuse/src" ]]; then
+  echo "ERROR: harbor-langfuse missing under PORTAGE_ROOT (expected packages/harbor-langfuse)." >&2
+  echo "  Fix Portage — LangSmith is not an allowed fallback." >&2
+  exit 2
+fi
 
 mkdir -p "$OUT"
 case "$MODE" in
@@ -58,7 +82,7 @@ case "$MODE" in
     if [[ -z "${OPENAI_BASE_URL:-}" ]]; then
       echo "ERROR: OPENAI_BASE_URL required for --niah" >&2
       echo "  Self-host any OpenAI-compatible server and point here, e.g.:" >&2
-      echo "    mlx_lm.server --model \$OMLX_READY_MODEL --host 127.0.0.1 --port 8766" >&2
+      echo "    mlx_lm server --model \$OMLX_READY_MODEL --host 127.0.0.1 --port 8766" >&2
       echo "    export OPENAI_BASE_URL=http://127.0.0.1:8766/v1   # host dry-run" >&2
       echo "    export OPENAI_BASE_URL=http://host.containers.internal:8766/v1  # Harbor→host" >&2
       exit 2
@@ -68,20 +92,12 @@ case "$MODE" in
   *) echo "ERROR: unknown mode $MODE" >&2; exit 2 ;;
 esac
 
-PLUGIN_ARGS=()
-if [[ "$USE_LS" -eq 1 ]]; then
-  if [[ -z "${LANGSMITH_API_KEY:-}" ]]; then
-    echo "ERROR: LANGSMITH_API_KEY required with --langsmith" >&2
-    exit 2
-  fi
-  export PYTHONPATH="$PORTAGE_ROOT/packages/harbor-langsmith/src${PYTHONPATH:+:$PYTHONPATH}"
-  # Named LangSmith props (SSOT: config/langsmith_harbor_kpis.json)
-  export HARBOR_LANGSMITH_DATASET="${HARBOR_LANGSMITH_DATASET:-omlx-harbor-tasks}"
-  export HARBOR_LANGSMITH_EXPERIMENT="${HARBOR_LANGSMITH_EXPERIMENT:-omlx-harbor-${MODE}}"
-  export HARBOR_LANGSMITH_FAIL_FAST="${HARBOR_LANGSMITH_FAIL_FAST:-true}"
-  PLUGIN_ARGS=(--plugin langsmith)
-  echo "langsmith dataset=$HARBOR_LANGSMITH_DATASET experiment=$HARBOR_LANGSMITH_EXPERIMENT"
-fi
+export LANGFUSE_BASE_URL="${LANGFUSE_BASE_URL:-${LANGFUSE_HOST:-https://us.cloud.langfuse.com}}"
+export OBSERVABILITY_BACKEND=langfuse
+export PYTHONPATH="$PORTAGE_ROOT/packages/harbor-langfuse/src${PYTHONPATH:+:$PYTHONPATH}"
+# Prefer short name when entry-point installed; fall back to import path (PYTHONPATH).
+PLUGIN_ARGS=(--plugin harbor_langfuse:LangfusePlugin)
+echo "langfuse base=$LANGFUSE_BASE_URL session=harbor_job_id (canonical)"
 
 # Surface SSOT model for agents / NIAH API smoke
 export OMLX_READY_MODEL="${OMLX_READY_MODEL:-$(PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m omlx_research.smoke_models readiness)}"
@@ -90,7 +106,6 @@ export OPENAI_API_KEY="${OPENAI_API_KEY:-omlx}"
 
 AGENT_ENV_ARGS=()
 if [[ "$MODE" == "niah" ]]; then
-  # Oracle uses solution.env; also pass --ae so JobConfig overlays cannot drop URLs.
   AGENT_ENV_ARGS+=(
     --ae "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
     --ae "OPENAI_API_KEY=${OPENAI_API_KEY}"
@@ -101,6 +116,7 @@ fi
 
 cd "$PORTAGE_ROOT"
 echo "harbor env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL out=$OUT"
+# Empty-array expand is unsafe under `set -u` on some bash builds.
 uv run harbor run \
   -e "$HARBOR_ENV" \
   -p "$TASK" \
@@ -108,7 +124,7 @@ uv run harbor run \
   -n 1 \
   -y \
   -o "$OUT" \
-  "${AGENT_ENV_ARGS[@]}" \
+  ${AGENT_ENV_ARGS[@]+"${AGENT_ENV_ARGS[@]}"} \
   "${PLUGIN_ARGS[@]}"
 
 echo "done. artifacts: $OUT"

@@ -35,9 +35,6 @@ func observabilityBackend() string {
 		if langfuseEnabled() {
 			return "langfuse"
 		}
-		if langsmithEnabled() {
-			return "langsmith"
-		}
 		return "none"
 	}
 	return v

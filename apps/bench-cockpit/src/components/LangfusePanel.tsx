@@ -104,9 +104,10 @@ export function LangfusePanel() {
       <div className="ds" style={{ marginBottom: 16 }}>
         <h3>Langfuse (primary)</h3>
         <p className="muted" style={{ marginTop: 4 }}>
-          OSS observability — traces, playground, hosted LLM-as-judge. Prefer self-host (Apple
+          OSS observability — traces, sessions, hosted LLM-as-judge (`bench-*` + Minimax).
+          Canonical Harbor backend via <code>harbor-langfuse</code>. Prefer self-host (Apple
           Container / Podman; never Docker) for unlimited data vs Cloud Hobby. Agents: MCP / CLI /
-          Skill. LangSmith is optional legacy only.
+          Skill. LangSmith is removed from the operator path.
         </p>
         <div className="kv-grid" style={{ marginTop: 12 }}>
           <div className="kv">

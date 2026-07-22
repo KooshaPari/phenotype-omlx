@@ -2,7 +2,7 @@
 """L6 — RLVR-AF Phase-1 smoke: hard verifier on micro fixtures (no LoRA, no MLX).
 
 Wraps pheno-harness ``bench.rlvr_af`` HeuristicVerifier over a tiny exact-match
-corpus. Produces a Harbor/LangSmith-friendly envelope under
+corpus. Produces a Harbor/Langfuse-friendly envelope under
 ``research/rlvr_af/``.
 
 Requires pheno-harness on disk (default path below) — fail loud if missing.
@@ -110,7 +110,7 @@ def run_smoke(pheno: Path = PHENO_DEFAULT) -> dict:
         "notes": [
             "Phase-1 eval-first: hard verifier only (no LoRA / soft judge).",
             "Soft-judge calibration blocked until live non-synthetic L1/L4.",
-            "Operator path remains Portage/Harbor + LangSmith for agent trials.",
+            "Operator path remains Portage/Harbor + Langfuse for agent trials.",
         ],
     }
 
