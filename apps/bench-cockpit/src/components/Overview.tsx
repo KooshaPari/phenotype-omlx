@@ -2,6 +2,7 @@ import React from 'react';
 import { Cell, Summary, SuiteCoverageRow } from '../types';
 import { meanQualityPass, summaryQualityLabel, summaryQualityPass } from '../lib/metrics';
 import { SuiteCoverage } from './SuiteCoverage';
+import { EMPTY_VARIANT_SUMMARY } from './VerdictStrip';
 
 interface Props {
   cells: Cell[];
@@ -32,27 +33,9 @@ function perDiff(cells: Cell[]): Map<string, { stock: Cell[]; ours: Cell[] }> {
   return m;
 }
 
-const emptyVariant = {
-  pass_at_1: 0,
-  gen_ok: 0,
-  verified_pass_at_1: 0,
-  mean_wall_clock_s: 0,
-  mean_partial_credit: 0,
-  mean_format_compliance: 0,
-  n_hallucinations: 0,
-  mean_tokens_read: 0,
-  mean_cost_usd: 0,
-  mean_peak_rss_mb: 0,
-  mean_energy_joules: 0,
-  mean_first_token_ms: 0,
-  mean_retry_count: 0,
-  success_rate: 0,
-  timeout_rate: 0,
-};
-
 export default function Overview({ cells, summary, onJumpToSuite, suiteCoverage }: Props) {
-  const s = summary.by_variant.stock ?? emptyVariant;
-  const o = summary.by_variant.ours ?? emptyVariant;
+  const s = summary.by_variant.stock ?? EMPTY_VARIANT_SUMMARY;
+  const o = summary.by_variant.ours ?? EMPTY_VARIANT_SUMMARY;
   const extraArms = Object.keys(summary.by_variant || {}).filter((v) => v !== 'stock' && v !== 'ours');
   const suites = perSuite(cells);
   const dims = perDiff(cells);

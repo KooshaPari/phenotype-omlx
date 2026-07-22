@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { useBenchState } from './state/useBenchState';
 import SummaryBar from './components/SummaryBar';
-import VerdictStrip from './components/VerdictStrip';
+import VerdictStrip, { EMPTY_VARIANT_SUMMARY } from './components/VerdictStrip';
 import Overview from './components/Overview';
 import Suites from './components/Suites';
 import CellsTable from './components/CellsTable';
@@ -426,7 +426,14 @@ export default function App() {
       <main className="main-panel">
         <div className="top-fixed">
           <VerdictStrip
-            summary={summary ? { stock: summary.by_variant.stock, ours: summary.by_variant.ours } : { stock: {}, ours: {} }}
+            summary={
+              summary
+                ? {
+                    stock: summary.by_variant.stock ?? EMPTY_VARIANT_SUMMARY,
+                    ours: summary.by_variant.ours ?? EMPTY_VARIANT_SUMMARY,
+                  }
+                : { stock: EMPTY_VARIANT_SUMMARY, ours: EMPTY_VARIANT_SUMMARY }
+            }
             statusText={statusText}
             statusLevel={statusLevel}
             passAt1Untrusted={(state.payload?.warnings ?? []).some(

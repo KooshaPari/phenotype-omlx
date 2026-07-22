@@ -6,8 +6,27 @@ import {
 } from '../lib/metrics';
 import { VariantSummary } from '../types';
 
+/** Zeroed stock/ours when a run has only one arm (or none yet). */
+export const EMPTY_VARIANT_SUMMARY: VariantSummary = {
+  pass_at_1: 0,
+  gen_ok: 0,
+  verified_pass_at_1: 0,
+  mean_wall_clock_s: 0,
+  mean_partial_credit: 0,
+  mean_format_compliance: 0,
+  n_hallucinations: 0,
+  mean_tokens_read: 0,
+  mean_cost_usd: 0,
+  mean_peak_rss_mb: 0,
+  mean_energy_joules: 0,
+  mean_first_token_ms: 0,
+  mean_retry_count: 0,
+  success_rate: 0,
+  timeout_rate: 0,
+};
+
 interface VerdictStripProps {
-  summary: { stock: Record<string, number>; ours: Record<string, number> };
+  summary: { stock: VariantSummary; ours: VariantSummary };
   statusText?: string;
   statusLevel?: string;
   /** When true, Pass@1 is generation-ok / reported — demote label and order. */
@@ -19,18 +38,31 @@ type MetricDef = {
   label: string;
   fmt: (v: number) => string;
   better: 'up' | 'down';
-  value: (side: Record<string, number>) => number;
+  value: (side: VariantSummary) => number;
 };
 
 const BASE_METRICS: MetricDef[] = [
-  { key: 'mean_partial_credit', label: 'PC', fmt: (v) => v.toFixed(3), better: 'up', value: (s) => s.mean_partial_credit ?? 0 },
-  { key: 'mean_wall_clock_s', label: 'Wall', fmt: (v) => v.toFixed(2) + 's', better: 'down', value: (s) => s.mean_wall_clock_s ?? 0 },
+  {
+    key: 'mean_partial_credit',
+    label: 'PC',
+    fmt: (v) => v.toFixed(3),
+    better: 'up',
+    value: (s) => s.mean_partial_credit ?? 0,
+  },
+  {
+    key: 'mean_wall_clock_s',
+    label: 'Wall',
+    fmt: (v) => v.toFixed(2) + 's',
+    better: 'down',
+    value: (s) => s.mean_wall_clock_s ?? 0,
+  },
   {
     key: 'mean_tokens_per_second',
     label: 'Tok/s',
     fmt: (v) => (v ? v.toFixed(1) : '—'),
     better: 'up',
-    value: (s) => s.mean_tokens_per_second || s.mean_decode_speed_tps || s.mean_tokens_read || 0,
+    value: (s) =>
+      s.mean_tokens_per_second || s.mean_decode_speed_tps || s.mean_tokens_read || 0,
   },
   {
     key: 'mean_format_compliance',
@@ -39,20 +71,28 @@ const BASE_METRICS: MetricDef[] = [
     better: 'up',
     value: (s) => s.mean_format_compliance ?? 0,
   },
-  { key: 'n_hallucinations', label: 'Halluc', fmt: (v) => String(v), better: 'down', value: (s) => s.n_hallucinations ?? 0 },
+  {
+    key: 'n_hallucinations',
+    label: 'Halluc',
+    fmt: (v) => String(v),
+    better: 'down',
+    value: (s) => s.n_hallucinations ?? 0,
+  },
 ];
 
-function passMetric(untrusted: boolean, stock: Record<string, number>, ours: Record<string, number>): MetricDef {
-  const stockV = stock as VariantSummary;
-  const oursV = ours as VariantSummary;
-  const hasVerified = summaryHasVerified(stockV) || summaryHasVerified(oursV);
-  const label = hasVerified ? 'Verified' : summaryQualityLabel(stockV, untrusted);
+function passMetric(
+  untrusted: boolean,
+  stock: VariantSummary,
+  ours: VariantSummary,
+): MetricDef {
+  const hasVerified = summaryHasVerified(stock) || summaryHasVerified(ours);
+  const label = hasVerified ? 'Verified' : summaryQualityLabel(stock, untrusted);
   return {
     key: hasVerified ? 'verified_pass_at_1' : 'pass_at_1',
     label,
     fmt: (v) => (v * 100).toFixed(1) + '%',
     better: 'up',
-    value: (s) => summaryQualityPass(s as VariantSummary),
+    value: (s) => summaryQualityPass(s),
   };
 }
 
@@ -80,7 +120,10 @@ export default function VerdictStrip({
         const isBetter = m.better === 'up' ? delta > 0 : delta < 0;
         const cls = Math.abs(delta) > 0.0001 ? (isBetter ? 'positive' : 'negative') : 'neutral';
         const denom = Math.max(sv, ov, 1);
-        const pctKeys = m.key === 'pass_at_1' || m.key === 'verified_pass_at_1' || m.key === 'mean_format_compliance';
+        const pctKeys =
+          m.key === 'pass_at_1' ||
+          m.key === 'verified_pass_at_1' ||
+          m.key === 'mean_format_compliance';
         return (
           <div
             key={m.key}
