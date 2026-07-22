@@ -31,6 +31,15 @@ func TestResultsFromEvaluationReport_MiniCombined(t *testing.T) {
 	if data.Cells[0].TokensPerSecond != 40 || data.Cells[1].TokensPerSecond != 70 {
 		t.Fatalf("tps %v %v", data.Cells[0].TokensPerSecond, data.Cells[1].TokensPerSecond)
 	}
+	if data.Cells[0].TaskTitle != "mmlu-easy-00" || data.Cells[0].Acceptance == "" {
+		t.Fatalf("assignment title=%q acceptance=%q", data.Cells[0].TaskTitle, data.Cells[0].Acceptance)
+	}
+	if data.Cells[0].Prompt == "" || data.Cells[0].Reply == "" {
+		t.Fatalf("prompt/reply empty")
+	}
+	if len(data.Cells[1].ProgressTrace) == 0 {
+		t.Fatal("ours cell should dual-read chat_trace into progress_trace")
+	}
 	warns := lintCells(data.Cells)
 	found := false
 	for _, w := range warns {

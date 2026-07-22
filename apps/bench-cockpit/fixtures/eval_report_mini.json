@@ -42,7 +42,24 @@
             "pass_at_1": 1.0,
             "partial_credit": 1.0,
             "judge_score": 0.0,
-            "format_compliance_rate": 1.0
+            "format_compliance_rate": 1.0,
+            "task_title": "mmlu-easy-00",
+            "task_description": "mmlu-pro multiple-choice knowledge item.",
+            "acceptance": "Reply with the correct letter only.",
+            "rubric": "Reply with the correct letter only.",
+            "prompt": "Which option is correct? A B C D",
+            "reply": "B",
+            "reply_full": "B",
+            "progress_trace": [
+              {"kind": "turn", "turn": 0, "role": "user", "content": "Which option is correct? A B C D"},
+              {"kind": "llm", "model": "qwen35-08b", "tokens_in": 10, "tokens_out": 20},
+              {"kind": "turn", "turn": 1, "role": "assistant", "content": "B"}
+            ],
+            "chat_trace": [
+              {"kind": "turn", "turn": 0, "role": "user", "content": "Which option is correct? A B C D"},
+              {"kind": "llm", "model": "qwen35-08b", "tokens_in": 10, "tokens_out": 20},
+              {"kind": "turn", "turn": 1, "role": "assistant", "content": "B"}
+            ]
           }
         }
       ]
@@ -72,7 +89,19 @@
             "pass_at_1": 1.0,
             "partial_credit": 1.0,
             "judge_score": 0.0,
-            "format_compliance_rate": 1.0
+            "format_compliance_rate": 1.0,
+            "task_title": "mmlu-easy-00",
+            "task_description": "mmlu-pro multiple-choice knowledge item.",
+            "acceptance": "Reply with the correct letter only.",
+            "rubric": "Reply with the correct letter only.",
+            "prompt": "Which option is correct? A B C D",
+            "reply": "B",
+            "reply_full": "B",
+            "chat_trace": [
+              {"kind": "turn", "turn": 0, "role": "user", "content": "Which option is correct? A B C D"},
+              {"kind": "tool", "tool_name": "lookup", "ok": true},
+              {"kind": "turn", "turn": 1, "role": "assistant", "content": "B"}
+            ]
           }
         }
       ]

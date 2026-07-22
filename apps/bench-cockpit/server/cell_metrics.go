@@ -42,7 +42,8 @@ func cellQualityPass(c Cell) float64 {
 	return cellGenOk(c)
 }
 
-// UnmarshalJSON dual-reads gen_ok from pass_at_1 when the new field is absent.
+// UnmarshalJSON dual-reads gen_ok from pass_at_1 when the new field is absent,
+// and assignment/transcript aliases (nested assignment, chat_trace, reply_full, rubric).
 func (c *Cell) UnmarshalJSON(data []byte) error {
 	type cellWire Cell
 	var raw map[string]json.RawMessage
@@ -62,6 +63,7 @@ func (c *Cell) UnmarshalJSON(data []byte) error {
 	if _, ok := raw["verified_pass_at_1"]; ok {
 		c.dualReadVerifiedSet = true
 	}
+	ensureAssignmentFromRaw(c, raw)
 	return nil
 }
 
@@ -92,6 +94,7 @@ func normalizeDualRead(data *ResultsData) {
 		if !c.dualReadGenOkSet {
 			c.GenOk = c.PassAt1
 		}
+		normalizeAssignmentDualRead(c)
 	}
 	enriched := summarizeByVariant(data.Cells)
 	if data.Summary.ByVariant == nil {

@@ -104,7 +104,23 @@ export interface Cell {
     [k: string]: any;
   };
   reply?: string;
+  reply_full?: string;
   prompt?: string;
+  /** Canvas-style assignment fields (dual-read with nested assignment / aliases). */
+  task_title?: string;
+  title?: string;
+  description?: string;
+  task_description?: string;
+  acceptance?: string;
+  acceptance_criteria?: string;
+  rubric?: string;
+  assignment?: {
+    title?: string;
+    description?: string;
+    acceptance?: string;
+    rubric?: string;
+    [k: string]: any;
+  };
   error_message?: string;
   error_code?: string;
   model_name?: string;
@@ -116,17 +132,9 @@ export interface Cell {
   scoring_method?: string;
   system_prompt_hash?: string;
   progress_trace?: any[];
-  /** Dual-read alternate transcript (chat/tool turns). */
+  /** Dual-read alias of progress_trace (SpanKind chat/tool turns). */
   chat_trace?: any[];
   expected_answer?: string;
-  /** Canvas-style assignment fields (dual-read with metadata.*). */
-  task_title?: string;
-  title?: string;
-  description?: string;
-  task_description?: string;
-  acceptance?: string;
-  acceptance_criteria?: string;
-  rubric?: string;
   metadata?: Record<string, string>;
   [k: string]: any;
 }

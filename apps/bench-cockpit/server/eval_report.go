@@ -205,7 +205,7 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 	failAnalysis, _ := ap["failure_analysis"].(map[string]interface{})
 	progress, _ := ap["progress_trace"].([]interface{})
 
-	return Cell{
+	cell := Cell{
 		Suite:               suite,
 		TaskID:              tr.TaskID,
 		Difficulty:          strOr(ap, "difficulty", "unknown"),
@@ -241,6 +241,8 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 		ScoringMethod:       firstNonEmpty(strOr(ap, "scoring_method", ""), tr.Judge, "reported"),
 		Metadata:            meta,
 	}
+	applyAssignmentFromAP(&cell, ap)
+	return cell
 }
 
 func summarizeByVariant(cells []Cell) map[string]VariantSummary {
