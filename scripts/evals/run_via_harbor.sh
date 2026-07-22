@@ -80,12 +80,19 @@ case "$MODE" in
   niah)
     TASK="$ROOT/evals/harbor/tasks/omlx-niah-api-smoke"
     if [[ -z "${OPENAI_BASE_URL:-}" ]]; then
-      echo "ERROR: OPENAI_BASE_URL required for --niah" >&2
-      echo "  Self-host any OpenAI-compatible server and point here, e.g.:" >&2
-      echo "    mlx_lm server --model \$OMLX_READY_MODEL --host 127.0.0.1 --port 8766" >&2
-      echo "    export OPENAI_BASE_URL=http://127.0.0.1:8766/v1   # host dry-run" >&2
-      echo "    export OPENAI_BASE_URL=http://host.containers.internal:8766/v1  # Harbor→host" >&2
-      exit 2
+      # Apple Container often cannot resolve host.containers.internal.
+      # Prefer a routable host LAN IP (MLX must listen on 0.0.0.0).
+      HOST_IP="$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true)"
+      if [[ -n "$HOST_IP" ]]; then
+        export OPENAI_BASE_URL="http://${HOST_IP}:8766/v1"
+        echo "OPENAI_BASE_URL defaulted to $OPENAI_BASE_URL (host LAN)"
+      else
+        echo "ERROR: OPENAI_BASE_URL required for --niah" >&2
+        echo "  Self-host any OpenAI-compatible server and point here, e.g.:" >&2
+        echo "    mlx_lm server --model \$OMLX_READY_MODEL --host 0.0.0.0 --port 8766" >&2
+        echo "    export OPENAI_BASE_URL=http://\$(ipconfig getifaddr en0):8766/v1" >&2
+        exit 2
+      fi
     fi
     ;;
   turbo) TASK="$ROOT/evals/harbor/tasks/omlx-turbo-ssot" ;;
