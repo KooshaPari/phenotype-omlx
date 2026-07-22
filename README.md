@@ -2,6 +2,12 @@
 
 **MLX-native, multi-backend, multi-platform OMLX research stack.**
 
+This is the **canonical** Phenotype oMLX repository
+([`KooshaPari/phenotype-omlx`](https://github.com/KooshaPari/phenotype-omlx)).
+Archived supersets `phenotype-omlx-tmp` and `phenotype-omlx-temp` are historical
+only — see [`docs/guides/CANONICAL_REPO_CUTOVER.md`](docs/guides/CANONICAL_REPO_CUTOVER.md).
+Feature work lives under `repos/worktrees/phenotype-omlx/<topic>`.
+
 phenotype-omlx is a fork of OMLX (`/Applications/oMLX.app`) that adds
 performance cores, concurrent research agents, multi-backend support
 (MLX / Metal / vLLM / TensorRT / SGLang / llama.cpp), and multi-platform
