@@ -10,6 +10,8 @@ export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:${HO
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 DEPLOY="$ROOT/deploy/langfuse"
 COMPOSE_FILE="$DEPLOY/compose.yml"
+# App-only compose (no depends_on) so Apple `up` does not recreate deps.
+APPLE_APPS_FILE="$DEPLOY/compose.apple-apps.yml"
 ENV_FILE="$DEPLOY/.env"
 # Durable Phenotype path — never /tmp (agent-infra durability).
 # Prefer ~/.local/share (no spaces) so compose bind mounts stay reliable.
@@ -55,9 +57,13 @@ ensure_data_dirs() {
     "$DATA_DIR/clickhouse-logs" \
     "$DATA_DIR/minio" \
     "$DATA_DIR/redis"
-  # ClickHouse image runs as uid 101; Apple Container cannot chown host binds to
-  # 101 without interactive sudo. World-writable dirs let the container write.
-  chmod a+rwx "$DATA_DIR/clickhouse" "$DATA_DIR/clickhouse-logs" || true
+  # Apple Container virtiofs binds: entrypoint `chown` → EPERM. World-writable
+  # dirs for services that still bind-mount (ClickHouse / MinIO). Postgres + Redis
+  # use compose named volumes instead (see compose.yml) for the same reason.
+  chmod a+rwx \
+    "$DATA_DIR/clickhouse" \
+    "$DATA_DIR/clickhouse-logs" \
+    "$DATA_DIR/minio" || true
   export LANGFUSE_DATA_DIR="$DATA_DIR"
   echo "data_dir=$DATA_DIR"
 }
@@ -169,9 +175,56 @@ Docker is not allowed as a fallback."
   die "Need Apple Container (container compose / container-compose) or Podman. Docker is not allowed."
 }
 
+apple_container_ip() {
+  # Parse `container ls` IP for a container name (strip CIDR). Loud-fail if missing.
+  local name="$1" line ip
+  line="$(container ls -a 2>/dev/null | /usr/bin/awk -v n="$name" '$1 == n { print; exit }')"
+  [[ -n "$line" ]] || die "apple DNS: container $name not listed"
+  ip="$(printf '%s\n' "$line" | /usr/bin/awk '{print $6}' | /usr/bin/sed 's|/.*||')"
+  [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "apple DNS: no IPv4 for $name (got '$ip')"
+  printf '%s\n' "$ip"
+}
+
+apple_inject_service_endpoints() {
+  # Apple Container has no compose DNS aliases for short names (redis/clickhouse).
+  # Container hostnames also fail from langfuse-web (resolver = VM gateway).
+  # Pin endpoints to current container IPs in .env before starting app services.
+  local ch_ip redis_ip minio_ip
+  ch_ip="$(apple_container_ip "${PROJECT_NAME}-clickhouse")"
+  redis_ip="$(apple_container_ip "${PROJECT_NAME}-redis")"
+  minio_ip="$(apple_container_ip "${PROJECT_NAME}-minio")"
+  echo "apple-dns: clickhouse=$ch_ip redis=$redis_ip minio=$minio_ip"
+  local -a pairs=(
+    "REDIS_HOST=$redis_ip"
+    "CLICKHOUSE_URL=http://${ch_ip}:8123"
+    "CLICKHOUSE_MIGRATION_URL=clickhouse://${ch_ip}:9000"
+    "LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT=http://${minio_ip}:9000"
+    "LANGFUSE_S3_BATCH_EXPORT_ENDPOINT=http://${minio_ip}:9000"
+  )
+  local kv k
+  for kv in "${pairs[@]}"; do
+    k="${kv%%=*}"
+    if /usr/bin/grep -q "^${k}=" "$ENV_FILE"; then
+      /usr/bin/sed -i '' "s|^${k}=.*|${kv}|" "$ENV_FILE"
+    else
+      printf '%s\n' "$kv" >>"$ENV_FILE"
+    fi
+    export "$kv"
+  done
+}
+
 compose() {
   local rt="$1"
   shift
+  # Optional: --apple-apps → compose.apple-apps.yml only (no depends_on).
+  # Apple container-compose force-recreates depends_on services on every app up,
+  # which invalidates IP endpoints from apple_inject_service_endpoints.
+  local compose_file="compose.yml"
+  if [[ "${1:-}" == "--apple-apps" ]]; then
+    [[ -f "$APPLE_APPS_FILE" ]] || die "missing $APPLE_APPS_FILE"
+    compose_file="compose.apple-apps.yml"
+    shift
+  fi
   # container-compose wants: <subcommand> [flags ...] (not docker-style global flags first).
   # Drop docker-style -d; Apple container-compose detaches by default.
   local -a raw=("$@")
@@ -212,9 +265,9 @@ compose() {
     export LANGFUSE_DATA_DIR="$DATA_DIR"
     # Subcommand first for apple-container-standalone; docker/podman accept either.
     if [[ "$rt" == "apple-container-standalone" || "$rt" == "apple-container" ]]; then
-      "${inv[@]}" "$sub" -p "$PROJECT_NAME" -f compose.yml --env-file .env "${filtered[@]:rest_start}"
+      "${inv[@]}" "$sub" -p "$PROJECT_NAME" -f "$compose_file" --env-file .env "${filtered[@]:rest_start}"
     else
-      "${inv[@]}" -p "$PROJECT_NAME" -f compose.yml --env-file .env "$sub" "${filtered[@]:rest_start}"
+      "${inv[@]}" -p "$PROJECT_NAME" -f "$compose_file" --env-file .env "$sub" "${filtered[@]:rest_start}"
     fi
   )
 }
@@ -238,8 +291,12 @@ NEXTAUTH_SECRET=${next}
 SALT=${salt}
 ENCRYPTION_KEY=${enc}
 TELEMETRY_ENABLED=false
-DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
+DATABASE_URL=postgresql://langfuse:langfuse@192.168.65.1:5432/langfuse
+# Host Homebrew PG via Apple Container VM gateway (default). For embedded:
+#   COMPOSE_PROFILES=embedded-postgres
+#   DATABASE_URL=postgresql://postgres:postgres@postgres:5432/postgres
 POSTGRES_PASSWORD=postgres
+LANGFUSE_USE_HOST_POSTGRES=1
 CLICKHOUSE_PASSWORD=clickhouse
 REDIS_AUTH=myredissecret
 MINIO_ROOT_PASSWORD=miniosecret
@@ -307,24 +364,35 @@ cmd_up() {
       # Start deps one-by-one with settle delays, then app containers.
       local svc settle="${LANGFUSE_SERIAL_SETTLE_SEC:-8}"
       echo "apple-serial: starting deps one-by-one (settle=${settle}s)"
-      for svc in clickhouse redis postgres minio; do
+      # Default: skip compose postgres — use host Homebrew via DATABASE_URL
+      # (192.168.65.1). Set COMPOSE_PROFILES=embedded-postgres to start it.
+      local deps=(clickhouse redis minio)
+      if [[ "${COMPOSE_PROFILES:-}" == *embedded-postgres* ]] || [[ "${LANGFUSE_EMBEDDED_POSTGRES:-0}" == "1" ]]; then
+        deps=(clickhouse redis postgres minio)
+      else
+        echo "apple-serial: using host Postgres (skip compose postgres service)"
+      fi
+      for svc in "${deps[@]}"; do
         echo "apple-serial: up $svc"
         if ! compose "$rt" up "$svc"; then
           die "BLOCKER: failed starting $svc under Apple Container.
 If HTTPClientError.remoteConnectionClosed / XPC timeout:
   printf 'Y\\n' | container system stop; sleep 2; printf 'Y\\n' | container system start
   then re-run: $0 up
-If registry 429 Too Many Requests (common on postgres:17 after retries):
-  wait for Docker Hub anonymous rate-limit reset, or:
-    container registry login docker.io
-    container image pull docker.io/postgres:17
-  then: $0 up
-  Never Docker. Pinned ClickHouse: clickhouse/clickhouse-server:24.8 (not :latest)."
+Host Postgres path: DATABASE_URL=postgresql://langfuse:langfuse@192.168.65.1:5432/langfuse
+  (Homebrew postgresql@17 must listen_addresses='*' and allow 192.168.0.0/16).
+Embedded: COMPOSE_PROFILES=embedded-postgres with a real library postgres image
+  (not a CNPG retag of docker.io/postgres:17). Never Docker.
+Pinned ClickHouse: clickhouse/clickhouse-server:24.8 (not :latest)."
         fi
         sleep "$settle"
       done
-      echo "apple-serial: up langfuse-web langfuse-worker"
-      compose "$rt" up langfuse-web langfuse-worker
+      apple_inject_service_endpoints
+      # Drop stale app containers so recreate picks fresh .env IPs; deps stay up.
+      container delete --force "${PROJECT_NAME}-langfuse-web" 2>/dev/null || true
+      container delete --force "${PROJECT_NAME}-langfuse-worker" 2>/dev/null || true
+      echo "apple-serial: up langfuse-web langfuse-worker (apps-only compose)"
+      compose "$rt" --apple-apps up langfuse-web langfuse-worker
       ;;
     *)
       compose "$rt" up

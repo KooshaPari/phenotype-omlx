@@ -81,19 +81,27 @@ Fine for smoke; switch to A before agent fleets hit Hobby caps.
 Vendored file: `apps/bench-cockpit/deploy/langfuse/compose.yml`
 (from upstream `langfuse/langfuse` `docker-compose.yml`).
 
-Stack: langfuse-web (:3000), langfuse-worker (:3030), postgres (host
-**15432** → avoid Homebrew :5432), clickhouse (HTTP :8123, native host
-**18123** → avoid sharecli :9000), redis (host **16379**), minio (:9090).
+Stack: langfuse-web (:3000), langfuse-worker (:3030), clickhouse (HTTP
+:8123, native host **18123**), redis (host **16379**), minio (:9090).
 
-Inter-service DNS still uses compose service names on internal ports
-(`postgres:5432`, `redis:6379`, `minio:9000`, `clickhouse:8123`).
+**Postgres (default):** host Homebrew `postgresql@17` via Apple VM gateway
+`192.168.65.1:5432` (`DATABASE_URL=…@192.168.65.1:5432/langfuse`). Compose
+`postgres` is profile-gated (`COMPOSE_PROFILES=embedded-postgres`) — library
+`postgres:17` pulls are often Hub-429 / unpack-broken on Apple Container.
+
+**Apple DNS gap:** short names (`redis`, `clickhouse`) and even
+`langfuse-clickhouse` fail from app containers (resolver = gateway).
+`self-host.sh` injects live container IPs into `.env`, then starts apps via
+`compose.apple-apps.yml` (no `depends_on`) so `up` does not recreate deps and
+invalidate those IPs. Memory: web `mem_limit: 4g`, worker `2g` (1 GiB default
+OOMs Next.js init).
 
 Update:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/langfuse/langfuse/main/docker-compose.yml \
   -o apps/bench-cockpit/deploy/langfuse/compose.yml
-# re-apply vendored header comment if needed
+# re-apply Phenotype header, host-PG defaults, mem_limit, named redis vol
 ```
 
 ## MCP on self-host
@@ -119,22 +127,27 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
   other `container run` in flight; restart (`container system stop` then
   `printf Y | container system start`) if the apiserver wedges.
 - Apple Container bring-up: `self-host.sh up` starts deps **serially**
-  (clickhouse → redis → postgres → minio, settle delay) then web/worker.
-  Parallel `compose up` often kills the apiserver mid-create.
+  (clickhouse → redis → minio, settle delay), IP-injects endpoints, then
+  web/worker via `compose.apple-apps.yml`. Parallel `compose up` often kills
+  the apiserver mid-create; app `up` with `depends_on` recreates deps and
+  breaks IP inject.
+- Host Postgres: Homebrew role/db `langfuse`/`langfuse`,
+  `listen_addresses='*'`, `pg_hba` allow `192.168.0.0/16` (and `10.0.0.0/8` if
+  needed). Embedded compose postgres only with
+  `COMPOSE_PROFILES=embedded-postgres` and a real library image (not a CNPG
+  retag). Never Docker.
 - Registry: anonymous Docker Hub pulls hit `429 Too Many Requests` after
-  several large images (blocks `postgres:17` and often langfuse images).
-  Workarounds: wait for the rate-limit window, or
-  `container registry login docker.io` with a Hub account, then:
-  `container image pull docker.io/postgres:17` (and langfuse images) before
-  `self-host.sh up`. Never Docker as a fallback.
+  several large images. Prefer already-cached langfuse/redis/clickhouse
+  images + host PG; or `container registry login docker.io` then pull.
 - ClickHouse perms: compose omits `user: "101:101"` (cannot host-chown to uid
   101 without interactive sudo) and sets `CLICKHOUSE_DO_NOT_CHOWN=1` so the
   entrypoint does not fail on virtiofs binds. `self-host.sh` chmod `a+rwx` on
   data/log dirs. Host native port is `18123` (avoids `:9000` conflicts).
-- Postgres host port remaps to `15432` when local Homebrew postgres holds
-  `:5432`.
+- Redis: named volume `langfuse-redis-data` (virtiofs bind + entrypoint
+  `chown` → EPERM). Healthcheck uses `REDISCLI_AUTH`.
 - Smoke: `up` waits for `http://127.0.0.1:3000/api/public/health` (or
-  `bash scripts/langfuse/self-host.sh smoke`).
+  `bash scripts/langfuse/self-host.sh smoke`). Verified on Apple Container
+  with host PG + IP inject + 4 GiB web.
 - Disk: ClickHouse + MinIO grow with traces — prune data dirs deliberately; never
   recursive `find` from Phenotype root.
 - Secrets: `deploy/langfuse/.env` is gitignored; rotate `NEXTAUTH_SECRET`,
