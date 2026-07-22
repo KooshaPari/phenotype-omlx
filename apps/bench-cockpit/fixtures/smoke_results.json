@@ -99,6 +99,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "mmlu-000",
+      "task_description": "mmlu task `mmlu-000` (medium).\n\nq 0",
+      "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 0",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "mmlu-000",
+        "description": "mmlu task `mmlu-000` (medium).\n\nq 0",
+        "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -156,6 +189,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "mmlu-000",
+      "task_description": "mmlu task `mmlu-000` (medium).\n\nq 0",
+      "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 0",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "mmlu-000",
+        "description": "mmlu task `mmlu-000` (medium).\n\nq 0",
+        "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -209,6 +275,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "mmlu-001",
+      "task_description": "mmlu task `mmlu-001` (medium).\n\nq 1",
+      "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 1",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "mmlu-001",
+        "description": "mmlu task `mmlu-001` (medium).\n\nq 1",
+        "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -262,6 +361,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "mmlu-001",
+      "task_description": "mmlu task `mmlu-001` (medium).\n\nq 1",
+      "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 1",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "mmlu-001",
+        "description": "mmlu task `mmlu-001` (medium).\n\nq 1",
+        "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -315,6 +447,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "mmlu-002",
+      "task_description": "mmlu task `mmlu-002` (medium).\n\nq 2",
+      "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 2",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "mmlu-002",
+        "description": "mmlu task `mmlu-002` (medium).\n\nq 2",
+        "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -368,6 +533,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "mmlu-002",
+      "task_description": "mmlu task `mmlu-002` (medium).\n\nq 2",
+      "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 2",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "mmlu-002",
+        "description": "mmlu task `mmlu-002` (medium).\n\nq 2",
+        "acceptance": "Suite `mmlu` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `mmlu` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -421,6 +619,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "gsm8k-000",
+      "task_description": "gsm8k task `gsm8k-000` (medium).\n\nq 0",
+      "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 0",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "gsm8k-000",
+        "description": "gsm8k task `gsm8k-000` (medium).\n\nq 0",
+        "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -474,6 +705,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "gsm8k-000",
+      "task_description": "gsm8k task `gsm8k-000` (medium).\n\nq 0",
+      "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 0",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "gsm8k-000",
+        "description": "gsm8k task `gsm8k-000` (medium).\n\nq 0",
+        "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -527,6 +791,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "gsm8k-001",
+      "task_description": "gsm8k task `gsm8k-001` (medium).\n\nq 1",
+      "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 1",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "gsm8k-001",
+        "description": "gsm8k task `gsm8k-001` (medium).\n\nq 1",
+        "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -580,6 +877,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "gsm8k-001",
+      "task_description": "gsm8k task `gsm8k-001` (medium).\n\nq 1",
+      "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 1",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "gsm8k-001",
+        "description": "gsm8k task `gsm8k-001` (medium).\n\nq 1",
+        "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -633,6 +963,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "gsm8k-002",
+      "task_description": "gsm8k task `gsm8k-002` (medium).\n\nq 2",
+      "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 2",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "gsm8k-002",
+        "description": "gsm8k task `gsm8k-002` (medium).\n\nq 2",
+        "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -686,6 +1049,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "gsm8k-002",
+      "task_description": "gsm8k task `gsm8k-002` (medium).\n\nq 2",
+      "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 2",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "gsm8k-002",
+        "description": "gsm8k task `gsm8k-002` (medium).\n\nq 2",
+        "acceptance": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `gsm8k` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -739,6 +1135,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "ifeval-000",
+      "task_description": "ifeval task `ifeval-000` (medium).\n\nq 0",
+      "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 0",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "ifeval-000",
+        "description": "ifeval task `ifeval-000` (medium).\n\nq 0",
+        "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -792,6 +1221,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "ifeval-000",
+      "task_description": "ifeval task `ifeval-000` (medium).\n\nq 0",
+      "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 0",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 0"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "ifeval-000",
+        "description": "ifeval task `ifeval-000` (medium).\n\nq 0",
+        "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -845,6 +1307,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "ifeval-001",
+      "task_description": "ifeval task `ifeval-001` (medium).\n\nq 1",
+      "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 1",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "ifeval-001",
+        "description": "ifeval task `ifeval-001` (medium).\n\nq 1",
+        "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -898,6 +1393,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "ifeval-001",
+      "task_description": "ifeval task `ifeval-001` (medium).\n\nq 1",
+      "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 1",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 1"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "ifeval-001",
+        "description": "ifeval task `ifeval-001` (medium).\n\nq 1",
+        "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -951,6 +1479,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "low-pc"
+      },
+      "task_title": "ifeval-002",
+      "task_description": "ifeval task `ifeval-002` (medium).\n\nq 2",
+      "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 2",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.42,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "ifeval-002",
+        "description": "ifeval task `ifeval-002` (medium).\n\nq 2",
+        "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring."
       }
     },
     {
@@ -1004,6 +1565,39 @@
       ],
       "failure_analysis": {
         "primary_factor": "ok"
+      },
+      "task_title": "ifeval-002",
+      "task_description": "ifeval task `ifeval-002` (medium).\n\nq 2",
+      "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+      "reply_full": "answer 2",
+      "chat_trace": [
+        {
+          "kind": "turn",
+          "turn": 0,
+          "role": "user",
+          "content": "q 2"
+        },
+        {
+          "kind": "llm",
+          "model": "smoke",
+          "tokens_in": 512,
+          "tokens_out": 64
+        },
+        {
+          "kind": "reward",
+          "composite": 0.55,
+          "l0": 0.1,
+          "l1": 0.2,
+          "l2": 0.3,
+          "l3": 0.4
+        }
+      ],
+      "assignment": {
+        "title": "ifeval-002",
+        "description": "ifeval task `ifeval-002` (medium).\n\nq 2",
+        "acceptance": "Suite `ifeval` (medium): output must match expected_answer via substring scoring.",
+        "rubric": "Suite `ifeval` (medium): output must match expected_answer via substring scoring."
       }
     }
   ]

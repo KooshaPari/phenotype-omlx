@@ -78,10 +78,17 @@ type Cell struct {
 	RetryCount          int                    `json:"retry_count"`
 	FormatCompliance    float64                `json:"format_compliance_rate"`
 	Reply               string                 `json:"reply"`
+	ReplyFull           string                 `json:"reply_full,omitempty"`
 	Prompt              string                 `json:"prompt"`
 	Semantic            map[string]float64     `json:"semantic"`
 	FailureAnalysis     map[string]interface{} `json:"failure_analysis"`
 	ProgressTrace       []interface{}          `json:"progress_trace"`
+	ChatTrace           []interface{}          `json:"chat_trace,omitempty"`
+	TaskTitle           string                 `json:"task_title,omitempty"`
+	TaskDescription     string                 `json:"task_description,omitempty"`
+	Acceptance          string                 `json:"acceptance,omitempty"`
+	Rubric              string                 `json:"rubric,omitempty"`
+	Assignment          map[string]interface{} `json:"assignment,omitempty"`
 	CreatedAt           string                 `json:"created_at"`
 	CompletedAt         string                 `json:"completed_at"`
 	ModelName           string                 `json:"model_name"`
