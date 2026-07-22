@@ -1,5 +1,10 @@
 # phenotype-omlx agent contract
 
+- **Canonical repo:** `KooshaPari/phenotype-omlx` only. Do not use archived
+  `phenotype-omlx-tmp` / `phenotype-omlx-temp` for new work. Cutover details:
+  `docs/guides/CANONICAL_REPO_CUTOVER.md`.
+- Author features in `repos/worktrees/phenotype-omlx/<topic>`, not the
+  canonical `main` checkout.
 - This directory is an independent Git repository. Never rely on a parent Git worktree.
 - Treat `perf-core/` as the Rust workspace and `python/` as its Python integration surface.
 
