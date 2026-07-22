@@ -35,50 +35,88 @@
 
 #![cfg_attr(not(all(feature = "metal", target_os = "macos")), deny(unsafe_code))]
 
-pub mod artifact;
 pub mod adaln;
+pub mod artifact;
 pub mod cache;
+pub mod cca;
 pub mod compile;
+pub mod deltanet;
+pub mod diffusion_confidence;
 pub mod dispatch;
 pub mod error;
 pub mod fingerprint;
 pub mod flow_step;
 pub mod joint_attention;
+pub mod mamba;
+pub mod mamba_scan;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+mod metal_cache;
+pub mod mla_cache;
 pub mod moe;
 pub mod pipeline;
+pub mod retnet;
 pub mod rope3d;
-pub mod ternary;
+pub mod rwkv;
+pub mod short_conv;
 pub mod temporal_attention;
+pub mod ternary;
 
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use adaln::adaln_rms_metal;
+pub use adaln::AdaLnError;
 pub use artifact::{
     ArtifactAllowlist, ArtifactError, MetallibArtifact, MetallibLoader, RuntimeMode,
 };
-pub use adaln::AdaLnError;
-#[cfg(all(feature = "metal", target_os = "macos"))]
-pub use adaln::adaln_rms_metal;
 pub use cache::{CacheKey, CacheStats, CompiledPipeline, EvictionPolicy, PipelineCache};
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use cca::cca_block_attend_metal;
+pub use cca::CcaError;
 pub use compile::{BoundedCompiler, CompileBudget};
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use deltanet::deltanet_step_metal;
+pub use deltanet::DeltaNetError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use diffusion_confidence::diffusion_argmax_confidence_metal;
+pub use diffusion_confidence::DiffusionConfidenceError;
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};
-pub use flow_step::FlowStepError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use flow_step::flow_cfg_step_metal;
-pub use joint_attention::JointAttentionError;
+pub use flow_step::FlowStepError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use joint_attention::joint_attention_metal;
-pub use moe::{MoeRouter, MoeRouterError, MoeRouterOutput, MoeShape};
+pub use joint_attention::JointAttentionError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use mamba::mamba_selective_step_metal;
+pub use mamba::MambaError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use mamba_scan::mamba_selective_scan_metal;
+pub use mamba_scan::{validate_scan_shapes, MambaScanError};
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use mla_cache::mla_cache_attend_metal;
+pub use mla_cache::MlaCacheError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use moe::grouped_gemm_metal;
+pub use moe::{MoeRouter, MoeRouterError, MoeRouterOutput, MoeShape};
 pub use pipeline::{Pipeline, StepOutput};
-pub use rope3d::Rope3dError;
-pub use ternary::TernaryGemmError;
-pub use temporal_attention::TemporalAttentionError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use retnet::retnet_retention_step_metal;
+pub use retnet::RetNetError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use rope3d::rope_3d_metal;
+pub use rope3d::Rope3dError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
-pub use ternary::ternary_gemm_metal;
+pub use rwkv::rwkv7_time_mix_metal;
+pub use rwkv::RwkvError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use short_conv::short_conv1d_step_metal;
+pub use short_conv::ShortConvError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use temporal_attention::temporal_window_attention_metal;
+pub use temporal_attention::TemporalAttentionError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use ternary::ternary_gemm_metal;
+pub use ternary::TernaryGemmError;
 
 // ---------------------------------------------------------------------------
 // Internal notes. `compile::plan_revision` is `pub(crate)` and is consumed
