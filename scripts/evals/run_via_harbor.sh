@@ -95,7 +95,8 @@ esac
 export LANGFUSE_BASE_URL="${LANGFUSE_BASE_URL:-${LANGFUSE_HOST:-https://us.cloud.langfuse.com}}"
 export OBSERVABILITY_BACKEND=langfuse
 export PYTHONPATH="$PORTAGE_ROOT/packages/harbor-langfuse/src${PYTHONPATH:+:$PYTHONPATH}"
-PLUGIN_ARGS=(--plugin langfuse)
+# Prefer short name when entry-point installed; fall back to import path (PYTHONPATH).
+PLUGIN_ARGS=(--plugin harbor_langfuse:LangfusePlugin)
 echo "langfuse base=$LANGFUSE_BASE_URL session=harbor_job_id (canonical)"
 
 # Surface SSOT model for agents / NIAH API smoke
@@ -115,6 +116,7 @@ fi
 
 cd "$PORTAGE_ROOT"
 echo "harbor env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL out=$OUT"
+# Empty-array expand is unsafe under `set -u` on some bash builds.
 uv run harbor run \
   -e "$HARBOR_ENV" \
   -p "$TASK" \
@@ -122,7 +124,7 @@ uv run harbor run \
   -n 1 \
   -y \
   -o "$OUT" \
-  "${AGENT_ENV_ARGS[@]}" \
+  ${AGENT_ENV_ARGS[@]+"${AGENT_ENV_ARGS[@]}"} \
   "${PLUGIN_ARGS[@]}"
 
 echo "done. artifacts: $OUT"
