@@ -50,6 +50,24 @@ second → `ours`. All-synthetic reports raise a `synthetic_100pct` lint error.
 
 Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
 
+## Suite coverage (stock + experiment arms)
+
+Default load: V5 `stock`/`ours` (10 suites) **plus** `minimax-m3-full/matrix.json`
+as experiment arm `minimax-m3` (HLE, PinchBench, vending-bench, …).
+
+```bash
+# optional overrides
+BENCH_DATA=/path/to/run-v5.json
+BENCH_EXTRA_DATA=/path/to/minimax-m3-full/matrix.json
+bash scripts/start-dev.sh
+```
+
+Overview → **Suite coverage** table shows paired stock/ours vs partial/missing
+(catalog includes `ycbench` as unimplemented gap). Full stock+ours for every suite
+still requires extending `pheno-harness` `stock_vs_ours.SUITES` and re-running.
+
+Agents / MCP / self-host: `docs/guides/LANGFUSE_AGENTS_AND_SELFHOST.md`.
+
 ## Observability (Langfuse primary)
 
 **Recommendation:** use **Langfuse** for tracing, playground, and hosted LLM-as-judge —
@@ -96,7 +114,34 @@ python3 scripts/evals/run_langfuse_evaluators.py judge --limit 20
 ```
 
 - **Langfuse** view: Sync hosted judges · Seed traces+generations · Offline scores.
-- Self-host later via Podman / Apple Container (never Docker).
+
+### Self-host (preferred over freemium Cloud Hobby)
+
+Unlimited units/retention vs Hobby (50k / 30d / 2 users). Same product images.
+
+```bash
+bash scripts/langfuse/self-host.sh init
+bash scripts/langfuse/self-host.sh up     # Apple Container or Podman — never Docker
+# then LANGFUSE_BASE_URL=http://127.0.0.1:3000 in .env
+```
+
+Guide: `../../docs/guides/LANGFUSE_SELF_HOST.md` (dual-write / migrate strategies).
+
+### MCP · CLI · Agent Skill
+
+```bash
+npx skills add langfuse/skills --skill "langfuse"          # preferred for agents
+bash scripts/langfuse/mcp-auth-header.sh                   # Basic token + MCP URL
+bash scripts/langfuse/print-cursor-mcp-snippet.sh          # Cursor MCP JSON
+npx langfuse-cli api <resource> <action>                   # full API from shell
+```
+
+Guide: `../../docs/guides/LANGFUSE_MCP_CLI.md`.
+
+### Why Langfuse (not Phoenix / Braintrust / …)
+
+Decision record: `../../docs/research/LANGFUSE_ALTERNATIVES.md` — Langfuse stays
+primary; Phoenix/Braintrust only as optional side tools.
 
 ## LangSmith (optional legacy)
 

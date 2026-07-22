@@ -104,8 +104,9 @@ export function LangfusePanel() {
       <div className="ds" style={{ marginBottom: 16 }}>
         <h3>Langfuse (primary)</h3>
         <p className="muted" style={{ marginTop: 4 }}>
-          OSS observability — traces, playground, hosted LLM-as-judge. Prefer self-host (Podman /
-          Apple Container). LangSmith is optional legacy only.
+          OSS observability — traces, playground, hosted LLM-as-judge. Prefer self-host (Apple
+          Container / Podman; never Docker) for unlimited data vs Cloud Hobby. Agents: MCP / CLI /
+          Skill. LangSmith is optional legacy only.
         </p>
         <div className="kv-grid" style={{ marginTop: 12 }}>
           <div className="kv">
@@ -173,6 +174,10 @@ export function LangfusePanel() {
             Open Langfuse
           </a>
         </div>
+        <p className="faint mono" style={{ marginTop: 10 }}>
+          MCP/CLI: scripts/langfuse/mcp-auth-header.sh · self-host:
+          scripts/langfuse/self-host.sh · skill: npx skills add langfuse/skills --skill langfuse
+        </p>
 
         {conns.length > 0 && (
           <div style={{ marginTop: 16 }}>

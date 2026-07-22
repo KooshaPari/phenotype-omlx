@@ -47,11 +47,21 @@ export interface VariantSummary {
 /* ── Summary data ─────────────────────────────────────────────────── */
 
 export interface SummaryData {
-  meta: { model: string; n_cells: number; n_suites: number };
-  by_variant: {
-    stock: VariantSummary;
-    ours: VariantSummary;
+  meta: { model: string; n_cells: number; n_suites: number; variants?: string[] };
+  by_variant: Record<string, VariantSummary> & {
+    stock?: VariantSummary;
+    ours?: VariantSummary;
   };
+}
+
+export interface SuiteCoverageRow {
+  suite: string;
+  present: boolean;
+  variants: Record<string, number>;
+  n_cells: number;
+  has_stock: boolean;
+  has_ours: boolean;
+  experiment_arms: string[];
 }
 
 /* Keep the old name around so existing imports don't break. */
@@ -61,7 +71,7 @@ export type Summary = SummaryData;
 
 export interface Cell {
   task_id: string;
-  variant: 'stock' | 'ours';
+  variant: string;
   suite: string;
   difficulty: string;
   task_type: string;
@@ -124,6 +134,9 @@ export interface BenchPayload {
   serverTs: string;
   lintRunTs?: string;
   warnings?: LintWarning[];
+  jsonPath?: string;
+  extraPaths?: string[];
+  suite_coverage?: SuiteCoverageRow[];
   data: { summary: SummaryData; cells: Cell[] };
 }
 

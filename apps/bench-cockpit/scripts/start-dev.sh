@@ -19,6 +19,7 @@ if [[ -f .env ]]; then set -a; source .env; set +a; fi
 # Native JSON keeps richer per-cell fields (tok/s, traces); contract is thinner.
 DEFAULT_V5_NATIVE="/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b.json"
 DEFAULT_V5_CONTRACT="/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json"
+DEFAULT_MINIMAX_MATRIX="/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/minimax-m3-full/matrix.json"
 DATA_PATH="${BENCH_DATA:-}"
 if [[ -z "$DATA_PATH" ]]; then
   if [[ -f "$DEFAULT_V5_NATIVE" ]]; then
@@ -30,6 +31,12 @@ if [[ -z "$DATA_PATH" ]]; then
   fi
 elif [[ "$DATA_PATH" != /* ]]; then
   DATA_PATH="$ROOT/$DATA_PATH"
+fi
+
+# Merge extended single-arm matrices (HLE, PinchBench, VendBench, …) as experiment arms.
+EXTRA_PATH="${BENCH_EXTRA_DATA:-}"
+if [[ -z "$EXTRA_PATH" && -f "$DEFAULT_MINIMAX_MATRIX" ]]; then
+  EXTRA_PATH="$DEFAULT_MINIMAX_MATRIX"
 fi
 
 (cd server && go build -o "$RUN_DIR/bench-cockpit-server" .)
@@ -45,12 +52,15 @@ fi
 sleep 0.3
 
 # Prefer a new session so the Go process survives shell exit (macOS).
-python3 - "$RUN_DIR/bench-cockpit-server" "$DATA_PATH" "$ROOT/dist" "${BENCH_PORT:-8090}" "$RUN_DIR" <<'PY'
+python3 - "$RUN_DIR/bench-cockpit-server" "$DATA_PATH" "$ROOT/dist" "${BENCH_PORT:-8090}" "$RUN_DIR" "${EXTRA_PATH:-}" <<'PY'
 import os, subprocess, sys
-bin, data, dist, port, run_dir = sys.argv[1:6]
+bin, data, dist, port, run_dir, extra = sys.argv[1:7]
 log = open(os.path.join(run_dir, "server.log"), "a")
+cmd = [bin, "-data", data, "-dist", dist, "-port", port]
+if extra:
+    cmd.extend(["-extra", extra])
 p = subprocess.Popen(
-    [bin, "-data", data, "-dist", dist, "-port", port],
+    cmd,
     stdout=log, stderr=log, start_new_session=True,
 )
 open(os.path.join(run_dir, "server.pid"), "w").write(str(p.pid))
@@ -65,8 +75,9 @@ fi
 
 sleep 1
 PORT="${BENCH_PORT:-8090}"
-echo "data: $DATA_PATH"
-echo "Go:   http://127.0.0.1:${PORT}/"
+echo "data:  $DATA_PATH"
+echo "extra: ${EXTRA_PATH:-'(none)'}"
+echo "Go:    http://127.0.0.1:${PORT}/"
 echo "Vite: http://127.0.0.1:${VITE_PORT:-5173}/"
 for _ in 1 2 3 4 5 6 7 8; do
   if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null 2>&1; then break; fi

@@ -107,8 +107,18 @@ const initialState: BenchState = {
 
 function reducer(state: BenchState, action: Action): BenchState {
   switch (action.type) {
-    case 'SET_PAYLOAD':
-      return { ...state, payload: action.payload };
+    case 'SET_PAYLOAD': {
+      const cells = action.payload?.data?.cells ?? [];
+      const variants = new Set(state.filters.variant);
+      for (const c of cells) {
+        if (c.variant) variants.add(c.variant);
+      }
+      return {
+        ...state,
+        payload: action.payload,
+        filters: { ...state.filters, variant: variants },
+      };
+    }
 
     case 'SET_VIEW':
       return { ...state, view: action.view };

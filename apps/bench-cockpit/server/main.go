@@ -110,11 +110,13 @@ type ResultsData struct {
 }
 
 type Envelope struct {
-	JSONPath  string        `json:"jsonPath"`
-	ServerTS  string        `json:"serverTs"`
-	Data      *ResultsData  `json:"data"`
-	Warnings  []LintWarning `json:"warnings,omitempty"`
-	LintRunTS string        `json:"lintRunTs,omitempty"`
+	JSONPath       string             `json:"jsonPath"`
+	ExtraPaths     []string           `json:"extraPaths,omitempty"`
+	ServerTS       string             `json:"serverTs"`
+	Data           *ResultsData       `json:"data"`
+	Warnings       []LintWarning      `json:"warnings,omitempty"`
+	LintRunTS      string             `json:"lintRunTs,omitempty"`
+	SuiteCoverage  []suiteCoverageRow `json:"suite_coverage,omitempty"`
 }
 
 type LintWarning struct {
@@ -173,8 +175,9 @@ func (rb *RingBuffer) Latest() (Envelope, bool) {
 // ---------------------------------------------------------------------------
 
 var (
-	distDir  string
-	dataPath string
+	distDir    string
+	dataPath   string
+	extraPaths []string
 )
 
 // ---------------------------------------------------------------------------
@@ -182,29 +185,23 @@ var (
 // ---------------------------------------------------------------------------
 
 func loadData() (*ResultsData, error) {
-	raw, err := os.ReadFile(dataPath)
+	base, err := loadResultsFile(dataPath)
 	if err != nil {
-		return nil, fmt.Errorf("read data: %w", err)
+		return nil, err
 	}
-	if looksLikeEvaluationReport(raw) {
-		data, err := resultsFromEvaluationReport(raw)
+	extras := make([]*ResultsData, 0, len(extraPaths))
+	for _, p := range extraPaths {
+		ex, err := loadResultsFile(p)
 		if err != nil {
-			return nil, err
+			log.Printf("warn: skip extra data %s: %v", p, err)
+			continue
 		}
-		normalizeDualRead(data)
-		return data, nil
+		extras = append(extras, ex)
 	}
-	var data ResultsData
-	if err := json.Unmarshal(raw, &data); err != nil {
-		return nil, fmt.Errorf("unmarshal data: %w", err)
+	if len(extras) > 0 {
+		base = mergeResults(base, extras...)
 	}
-	if len(data.Cells) == 0 {
-		return nil, fmt.Errorf("results JSON has 0 cells (not an EvaluationReport either)")
-	}
-	// Enrich summary Tok/s from cells when harness used mean_tokens_read only.
-	enrichVariantThroughput(&data)
-	normalizeDualRead(&data)
-	return &data, nil
+	return base, nil
 }
 
 func enrichVariantThroughput(data *ResultsData) {
@@ -383,11 +380,13 @@ func buildEnvelope() (Envelope, error) {
 	}
 	warnings := lintCells(data.Cells)
 	return Envelope{
-		JSONPath:  dataPath,
-		ServerTS:  time.Now().UTC().Format(time.RFC3339Nano),
-		Data:      data,
-		Warnings:  warnings,
-		LintRunTS: time.Now().UTC().Format(time.RFC3339Nano),
+		JSONPath:      dataPath,
+		ExtraPaths:    append([]string{}, extraPaths...),
+		ServerTS:      time.Now().UTC().Format(time.RFC3339Nano),
+		Data:          data,
+		Warnings:      warnings,
+		LintRunTS:     time.Now().UTC().Format(time.RFC3339Nano),
+		SuiteCoverage: buildSuiteCoverage(data.Cells),
 	}, nil
 }
 
@@ -756,6 +755,7 @@ func startWatcher(ctx context.Context, hub *Hub, ring *RingBuffer) {
 func main() {
 	distPath := flag.String("dist", "../dist", "path to SPA build output directory")
 	flag.StringVar(&dataPath, "data", "", "path to results JSON file (required)")
+	extraFlag := flag.String("extra", "", "comma-separated extra result/matrix JSON paths (or BENCH_EXTRA_DATA)")
 	port := flag.Int("port", 8090, "listen port")
 	flag.Parse()
 
@@ -765,6 +765,7 @@ func main() {
 	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
 		log.Fatalf("data file not found: %s", dataPath)
 	}
+	extraPaths = parseExtraPaths(*extraFlag)
 
 	if *distPath != "" {
 		distDir = *distPath
@@ -773,6 +774,9 @@ func main() {
 	}
 	log.Printf("dist dir  : %s", distDir)
 	log.Printf("data path : %s", dataPath)
+	if len(extraPaths) > 0 {
+		log.Printf("extra data: %s", strings.Join(extraPaths, ", "))
+	}
 	log.Printf("port      : %d", *port)
 
 	hub := newHub()
