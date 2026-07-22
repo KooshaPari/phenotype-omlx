@@ -2,8 +2,17 @@
 name        = "tensorrt-llm"
 kind        = "backend"
 module      = "omlx_research.backends.tensorrt_backend"
-entrypoint  = "TensorrtBackend"
-platforms   = ["linux"]
-gpus        = ["cuda"]
-priority    = 85
-requires    = ["tensorrt-llm"]
+description = "TensorRT-LLM — NVIDIA-optimized inference engine.  Maximum throughput, AOT compilation."
+version     = "0.10"
+runtime     = "tensorrt"
+priority    = 5
+requires    = ["tensorrt>=10", "torch>=2", "cuda"]
+
+# Backend (not strategy) — leaf plugin that serves models.
+# Use this for: maximum-throughput NVIDIA inference, AOT-compiled engine,
+# production serving on H100/A100/L40S.
+accelerator = "cuda"
+precision   = "fp16,bf16,int4,int8"
+kv_cache    = "fp16,q8,paged"
+inplace     = true
+best_for    = ["nvidia_peak", "aot_compile", "production_serving", "h100_optimized"]

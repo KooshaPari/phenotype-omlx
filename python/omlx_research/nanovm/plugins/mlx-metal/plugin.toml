@@ -1,10 +1,18 @@
-# NanoVM plugin manifest — bundled default
 [plugin]
 name        = "mlx-metal"
 kind        = "backend"
 module      = "omlx_research.backends.mlx_backend"
-entrypoint  = "MlxBackend"
-platforms   = ["darwin"]
-gpus        = ["metal", "cpu"]
-priority    = 100
-requires    = []
+description = "Apple MLX + Metal GPU — native to Apple Silicon.  Primary backend for M1/M2/M3/M4."
+version     = "0.31.2"
+runtime     = "mlx"
+priority    = 10
+requires    = ["mlx>=0.31", "mlx-lm>=0.30"]
+
+# Backends don't have phases — they serve models.
+# Use this for: Apple Silicon inference, KV cache via TurboQuant+,
+# low-latency prefill, single-user research workloads.
+accelerator = "metal"
+precision   = "fp16,bf16,4bit,8bit"
+kv_cache    = "turboquant-plus"
+memory_efficient = true
+best_for    = ["prefill", "single_user", "research", "kv_compression"]

@@ -5,12 +5,13 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeCapabilities {
-    pub backends: Vec<String>,        // ["mlx", "vllm", "sglang", "tensorrt", "llamacpp", "metal"]
-    pub models: Vec<String>,          // ["Qwen2.5-7B-Instruct", ...]
-    pub device: String,               // "Apple M1 Pro"
+    pub backends: Vec<String>, // ["mlx", "vllm", "sglang", "tensorrt", "llamacpp", "metal"]
+    pub models: Vec<String>,   // ["Qwen2.5-7B-Instruct", ...]
+    pub device: String,        // "Apple M1 Pro"
     pub memory_gb: f32,
     pub cuda: bool,
     pub metal: bool,
@@ -41,7 +42,10 @@ pub struct InMemoryFleet {
 
 impl InMemoryFleet {
     pub fn new(ttl_ms: u64) -> Self {
-        Self { nodes: parking_lot::RwLock::new(BTreeMap::new()), ttl_ms }
+        Self {
+            nodes: parking_lot::RwLock::new(BTreeMap::new()),
+            ttl_ms,
+        }
     }
 }
 
@@ -51,7 +55,17 @@ impl Fleet for InMemoryFleet {
         Ok(())
     }
     fn peers(&self) -> Vec<Heartbeat> {
-        self.nodes.read().values().cloned().collect()
+        let now_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64;
+        let ttl = self.ttl_ms;
+        self.nodes
+            .read()
+            .values()
+            .filter(|hb| now_ms.saturating_sub(hb.ts_ms) <= ttl)
+            .cloned()
+            .collect()
     }
     fn remove(&self, node_id: &str) -> Result<(), String> {
         self.nodes.write().remove(node_id);

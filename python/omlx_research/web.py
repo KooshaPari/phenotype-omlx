@@ -11,6 +11,7 @@ runs `omlx-research web`, this module binds to a port and serves:
   POST /api/v1/inference        — single-shot inference
   POST /api/v1/spec-decode      — speculative decoding invocation
 """
+
 from __future__ import annotations
 import argparse
 import http.server
@@ -26,20 +27,35 @@ PANEL_DIR = Path(__file__).resolve().parents[3] / "gui" / "admin-extensions"
 
 class _Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format, *args):  # noqa: A002 — silence default access log
-        sys.stderr.write("[omlx-research-web] %s - %s\n" % (self.address_string(), format % args))
+        sys.stderr.write(
+            "[omlx-research-web] %s - %s\n" % (self.address_string(), format % args)
+        )
 
     def do_GET(self):  # noqa: N802
         if self.path == "/" or self.path.startswith("/index.html"):
-            self._serve_file(PANEL_DIR / "templates" / "research_panel.html", "text/html")
+            self._serve_file(
+                PANEL_DIR / "templates" / "research_panel.html", "text/html"
+            )
         elif self.path.startswith("/static/"):
-            rel = self.path[len("/static/"):]
+            rel = self.path[len("/static/") :]
             full = PANEL_DIR / "static" / rel
-            ct = "text/css" if rel.endswith(".css") else "application/javascript" if rel.endswith(".js") else "text/plain"
+            ct = (
+                "text/css"
+                if rel.endswith(".css")
+                else "application/javascript"
+                if rel.endswith(".js")
+                else "text/plain"
+            )
             self._serve_file(full, ct)
         elif self.path.startswith("/api/v1/status"):
             self._json(self._status())
         elif self.path.startswith("/api/v1/fleet"):
-            self._json({"peers": [], "self": os.uname().nodename if hasattr(os, "uname") else "node"})
+            self._json(
+                {
+                    "peers": [],
+                    "self": os.uname().nodename if hasattr(os, "uname") else "node",
+                }
+            )
         else:
             self.send_error(404)
 
@@ -52,7 +68,17 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             except json.JSONDecodeError:
                 self._json({"error": "invalid json"}, 400)
                 return
-            self._json({"backend": "stub", "text": f"[echo] {req.get('prompt', '')}", "tokens": 1})
+            self._json(
+                {
+                    "error": "not_implemented",
+                    "detail": (
+                        "POST /api/v1/inference is a stub. "
+                        "Wire to HybridDispatch or implement a backend-specific "
+                        "handler to enable real inference."
+                    ),
+                },
+                501,
+            )
         elif self.path.startswith("/api/v1/spec-decode"):
             self._json({"mode": "stub", "accepted": [], "acceptance_rate": 0.0})
         else:
@@ -81,10 +107,22 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
         out: dict = {"backends": {}}
         try:
             from omlx_research.backends import (
-                MlxBackend, MetalKernelBackend, VllmBackend,
-                TensorrtBackend, SglangBackend, LlamaCppBackend,
+                MlxBackend,
+                MetalKernelBackend,
+                VllmBackend,
+                TensorrtBackend,
+                SglangBackend,
+                LlamaCppBackend,
             )
-            for cls in (MlxBackend, MetalKernelBackend, VllmBackend, TensorrtBackend, SglangBackend, LlamaCppBackend):
+
+            for cls in (
+                MlxBackend,
+                MetalKernelBackend,
+                VllmBackend,
+                TensorrtBackend,
+                SglangBackend,
+                LlamaCppBackend,
+            ):
                 b = cls()
                 out["backends"][b.capabilities.name] = {
                     "primary": b.capabilities.primary,

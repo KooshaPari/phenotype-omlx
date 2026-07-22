@@ -199,11 +199,9 @@ def _build_preferences(profile: HardwareProfile) -> dict[BackendKind, list[Backe
     # llama.cpp: universal fallback
     prefs[BackendKind.LLAMACPP] = [BackendKind.LLAMACPP]
 
-    # Agents always default to their native backend
-    prefs[BackendKind.LATENTMAS] = [BackendKind.LATENTMAS, BackendKind.MLX_METAL, cpu]
-    prefs[BackendKind.TIDAR] = [BackendKind.TIDAR, BackendKind.MLX_METAL, cpu]
-    prefs[BackendKind.JETSPEC] = [BackendKind.JETSPEC, BackendKind.MLX_METAL, cpu]
-    prefs[BackendKind.SSD] = [BackendKind.SSD, BackendKind.JETSPEC, cpu]
+    # Strategies don't live in BackendKind — they're StrategyKind.
+    # When a strategy asks "which backend for me?" the orchestrator delegates
+    # to the plugin's `compatible_backends` and picks the first one available.
 
     return prefs
 

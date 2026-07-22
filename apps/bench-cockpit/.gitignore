@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+.run/
+.runs/
+
+node_modules/
+dist/
+*.tsbuildinfo
+.venv-evals/

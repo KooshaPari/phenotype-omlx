@@ -23,10 +23,17 @@ mod metal;
 
 pub mod backend;
 pub mod engine;
+pub mod proposal;
+pub mod proposal_state;
+pub mod state;
 pub mod verify;
 
-pub use backend::{DraftBackend, TargetBackend, TargetOutput};
-pub use engine::{SpecDecodeEngine, SpecStats};
+pub use backend::{BackendInfo, DraftBackend, NullDraftBackend, TargetBackend, TargetOutput};
+pub use engine::{DraftCandidate, SpecDecodeEngine, SpecStats};
+pub use proposal::{MedusaHead, MedusaProposal, MockMedusaHead, TreeTopology};
+pub use proposal_state::ProposalState;
+pub use state::{EngineState, HISTORY_CAP};
+pub use verify::{verify as verify_draft, VerifyResult};
 
 /// Draft strategy selection — mirrors `turbo_mlx.ssd.DraftMode`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -114,17 +121,19 @@ pub enum SpecError {
     AllRejected { n: usize },
     #[error("configuration error: {0}")]
     Config(String),
+    #[error("cancelled by caller")]
+    Cancelled,
 }
 
 /// One accepted token plus optional debug metadata.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcceptedToken {
     pub token_id: u32,
     pub was_drafted: bool,
 }
 
 /// Result of a single speculative step.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StepResult {
     pub accepted: Vec<AcceptedToken>,
     pub drafted: usize,

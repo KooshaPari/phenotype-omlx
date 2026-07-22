@@ -1,62 +1,52 @@
-"""Hybrid multi-backend orchestrator.
+"""Pipeline executor — runs STRATEGY pipelines using compatible BACKENDS.
 
-Composes ANY combination of available backends (MLX/Metal + SGLang + vLLM +
-TensorRT + llama.cpp) into a single fused inference call. Each backend has
-its own strengths — the orchestrator routes sub-tasks to whichever is best:
+Domain decomposition (matches nanovm.PluginSpec schema):
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │  BACKEND    (kind=backend)   model-serving runtime, native to one GPU │
+  │  STRATEGY   (kind=strategy)  multi-agent / decoding wrapper that       │
+  │                              declares PHASES + COMPATIBLE_BACKENDS      │
+  │  PIPELINE   (this module)    ordered or parallel execution of phases,  │
+  │                              each phase picking a backend from the     │
+  │                              shared pool that is:                       │
+  │                                (a) compatible (in strategy.compatible) │
+  │                                (b) registered and loadable              │
+  │                                (c) preferred per phase.default_pool     │
+  └─────────────────────────────────────────────────────────────────────────┘
 
-    ┌─────────────────────────────── HybridOrchestrator ───────────────────────────────┐
-    │                                                                                    │
-    │  dispatch(prompt)                                                                   │
-    │    │                                                                                │
-    │    ├── mlx-metal     ◀── prefill on Apple Silicon (fast for prompts ≤ 4k)            │
-    │    ├── sglang        ◀── continuous batching / large ctx / PD-disagg                  │
-    │    ├── vllm          ◀── PagedAttention / high-throughput serving                    │
-    │    ├── tensorrt      ◀── single-GPU latency-optimized (Hopper/Ada/Blackwell)         │
-    │    ├── llamacpp      ◀── CPU / quantized GGUF, offload model                        │
-    │    │                                                                                │
-    │    ▼                                                                                │
-    │  fan-out policy: parallel (race all, first wins) | majority vote |                  │
-    │                   weighted | speculative-draft | mirror-and-verify                   │
-    │    ▼                                                                                │
-    │  cross-backend verify ─── verify on a different backend (cheap = Metal draft,        │
-    │                            expensive = CUDA target — like SSD but cross-vendor)     │
-    │    ▼                                                                                │
-    │  result                                                                            │
-    └────────────────────────────────────────────────────────────────────────────────────┘
+Usage:
+    from omlx_research.nanovm import discover_plugins, get_registry
+    from omlx_research.hybrid.orchestrator import PipelineExecutor
 
-Why this matters: in production you usually have ONE best backend per model,
-but you ALSO have multiple compute substrates (e.g., M1 Pro + RTX 4090 + CPU
-farm). Hybrid lets you use ALL of them in one call, with policy on how to
-combine results.
+    discover_plugins()
+    executor = PipelineExecutor()
+    result = await executor.run("latentmas", "What is the capital of France?")
+
+    # Multi-strategy concurrent:
+    results = await executor.run_all(
+        strategies=["latentmas", "tidar", "jetspec"],
+        prompt="...",
+    )
 """
-
 from __future__ import annotations
 
 import asyncio
 import logging
-import platform as _plat
 import time
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
-from .nanovm import PluginRegistry, PluginSpec
+from ..nanovm import PluginRegistry, PluginSpec, PluginKind, get_registry
 
 logger = logging.getLogger(__name__)
 
 
-class FusionPolicy(str, Enum):
-    PARALLEL_RACE = "parallel_race"          # all backends, first to finish wins
-    MAJORITY_VOTE = "majority_vote"          # each backend votes per token
-    WEIGHTED = "weighted"                    # backends have weights, weighted average
-    SPECULATIVE_DRAFT = "speculative_draft"  # cheap backend drafts, expensive verifies
-    MIRROR_VERIFY = "mirror_verify"          # primary runs, secondary verifies
-
+# ── Data classes ────────────────────────────────────────────────────────────
 
 @dataclass
 class BackendRequest:
+    """A single request sent to a backend for one pipeline phase."""
     prompt: str
-    max_tokens: int = 64
+    max_tokens: int = 50
     temperature: float = 0.0
     stop: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -64,256 +54,341 @@ class BackendRequest:
 
 @dataclass
 class BackendResult:
-    backend: str
-    text: str
+    """Result of one backend invocation."""
+    backend_name: str
+    backend_kind: str
+    text: str = ""
     tokens: int = 0
     elapsed_ms: float = 0.0
+    ok: bool = True
     error: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
 
-    @property
-    def ok(self) -> bool:
-        return self.error is None
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "backend": self.backend_name,
+            "kind": self.backend_kind,
+            "text": self.text,
+            "tokens": self.tokens,
+            "elapsed_ms": self.elapsed_ms,
+            "ok": self.ok,
+            "error": self.error,
+        }
 
 
 @dataclass
-class HybridResult:
-    text: str
-    backend_results: dict[str, BackendResult]
-    fusion_policy: str
-    winner: str
-    total_elapsed_ms: float
-    metadata: dict = field(default_factory=dict)
+class PipelineResult:
+    """Result of running one strategy's pipeline."""
+    strategy: str
+    prompt: str
+    phase_results: dict[str, BackendResult] = field(default_factory=dict)
+    text: str = ""
+    elapsed_ms: float = 0.0
+    parallel: bool = False
+    backends_used: dict[str, str] = field(default_factory=dict)
+    fallback_used: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "strategy": self.strategy,
+            "text": self.text,
+            "elapsed_ms": self.elapsed_ms,
+            "parallel": self.parallel,
+            "phases": {
+                phase: br.to_dict()
+                for phase, br in self.phase_results.items()
+            },
+            "backends_used": self.backends_used,
+            "fallback_used": self.fallback_used,
+        }
 
 
-class HybridOrchestrator:
-    """Composes multiple backend plugins into one fused call.
+# ── Backend execution surface ──────────────────────────────────────────────
 
-    Usage:
-        orch = HybridOrchestrator.auto()
-        result = await orch.dispatch(
-            BackendRequest(prompt="hi", max_tokens=32),
-            policy=FusionPolicy.PARALLEL_RACE,
-            backends=["mlx-metal", "sglang", "llamacpp"],
-        )
-        print(result.winner, "→", result.text)
+def _stub_backend_execute(
+    backend: PluginSpec, phase: str, request: BackendRequest
+) -> BackendResult:
+    """Default backend executor — returns a stub result for any backend.
+    Real backends would be invoked here; we keep the surface pluggable so
+    each `module` attribute in plugin.toml can register its own handler.
+    """
+    t0 = time.perf_counter()
+    text = (
+        f"[{backend.name}:{phase}] {request.prompt[:40]} "
+        f"({request.max_tokens} tok, T={request.temperature})"
+    )
+    elapsed = (time.perf_counter() - t0) * 1000
+    return BackendResult(
+        backend_name=backend.name,
+        backend_kind=backend.runtime,
+        text=text,
+        tokens=request.max_tokens,
+        elapsed_ms=elapsed,
+        ok=True,
+        metadata={"phase": phase, "stub": True},
+    )
+
+
+_EXECUTOR_REGISTRY: dict[str, Any] = {}
+
+
+def register_executor(plugin_name: str, fn: Any) -> None:
+    """Register a custom executor function for a backend/strategy plugin."""
+    _EXECUTOR_REGISTRY[plugin_name] = fn
+
+
+def _run_backend(backend: PluginSpec, phase: str, request: BackendRequest) -> BackendResult:
+    fn = _EXECUTOR_REGISTRY.get(backend.name)
+    if fn is not None:
+        try:
+            return fn(backend, phase, request)
+        except Exception as e:
+            return BackendResult(
+                backend_name=backend.name,
+                backend_kind=backend.runtime,
+                ok=False,
+                error=f"{type(e).__name__}: {e}",
+            )
+    return _stub_backend_execute(backend, phase, request)
+
+
+# ── Pipeline executor ──────────────────────────────────────────────────────
+
+class PipelineExecutor:
+    """Run strategy pipelines using compatible backends from the shared pool.
+
+    Picks the best available backend per phase based on:
+      1. strategy.compatible_backends (must be in this list)
+      2. phase.default_pool[i] preferred (if specified)
+      3. backend.priority (higher wins)
+      4. backend.can_load() (must succeed)
+
+    If strategy.parallel:  asyncio.gather all phases
+    Else:                  sequential, feeding previous phase text as context
     """
 
-    def __init__(self, registry: PluginRegistry):
-        self.registry = registry
+    def __init__(self, registry: PluginRegistry | None = None):
+        self.registry = registry or get_registry()
 
-    @classmethod
-    def auto(cls, platform: str | None = None) -> "HybridOrchestrator":
-        return cls(PluginRegistry(discover=True))
+    # ── Backend picking ──────────────────────────────────────────────────
 
-    # ── discovery helpers ──────────────────────────────────────────────
+    def available_backends(self) -> list[PluginSpec]:
+        """Return registered + loadable BACKEND plugins."""
+        return [b for b in self.registry.backends() if b.can_load()[0]]
 
-    def available_backends(self, platform: str | None = None) -> list[PluginSpec]:
-        plat = platform or _plat.system().lower()
-        return self.registry.backends_for(plat)
-
-    def has(self, name: str) -> bool:
-        return self.registry.get(name) is not None
-
-    def devices(self, platform: str | None = None) -> set[str]:
-        dev: set[str] = set()
-        for s in self.available_backends(platform):
-            dev.update(s.devices)
-        return dev
-
-    # ── main dispatch ──────────────────────────────────────────────────
-
-    async def dispatch(
+    def pick_backend(
         self,
-        request: BackendRequest,
-        *,
-        policy: FusionPolicy | str = FusionPolicy.PARALLEL_RACE,
-        backends: list[str] | None = None,
-    ) -> HybridResult:
-        if isinstance(policy, str):
-            policy = FusionPolicy(policy)
+        strategy: PluginSpec,
+        phase_idx: int,
+    ) -> tuple[PluginSpec | None, list[str]]:
+        """Pick best backend for `strategy.phases[phase_idx]`.
 
-        # Resolve which backend specs to use
-        avail = self.available_backends()
-        if backends:
-            specs = [self.registry.get(n) for n in backends]
-            specs = [s for s in specs if s is not None]
-        else:
-            specs = avail[:3]  # top 3 by priority
-        if not specs:
-            return HybridResult(
-                text="",
-                backend_results={},
-                fusion_policy=policy.value,
-                winner="(none)",
-                total_elapsed_ms=0.0,
-            )
-
-        # Fan out to all selected backends concurrently
-        tasks = {s.name: self._run_one(s, request) for s in specs}
-        results: dict[str, BackendResult] = {}
-        t0 = time.perf_counter()
-        for name, coro in tasks.items():
-            try:
-                results[name] = await coro
-            except Exception as e:  # noqa: BLE001
-                results[name] = BackendResult(
-                    backend=name, text="", elapsed_ms=0.0,
-                    error=f"{type(e).__name__}: {str(e)[:120]}",
-                )
-        total_ms = (time.perf_counter() - t0) * 1000
-
-        # Fuse
-        return self._fuse(results, policy, total_ms)
-
-    # ── per-backend execution ──────────────────────────────────────────
-
-    async def _run_one(self, spec: PluginSpec, req: BackendRequest) -> BackendResult:
-        """Execute one backend. Tries (in order):
-            1. `backend.execute(req) → BackendResult`
-            2. `backend.generate(req.prompt, req.max_tokens) → str`
-            3. echo (test stub)
+        Returns (backend, fallback_chain_used). The fallback chain is the list
+        of backend names we tried before settling on (or failing).
         """
-        t0 = time.perf_counter()
-        try:
-            instance = self.registry.instantiate(spec)
-        except Exception as e:  # noqa: BLE001
-            return BackendResult(
-                backend=spec.name, text="", elapsed_ms=0.0,
-                error=f"instantiate: {type(e).__name__}: {e}",
-            )
+        if strategy.kind != PluginKind.STRATEGY:
+            return None, []
+        if not strategy.compatible_backends:
+            return None, []
 
-        # method 1: typed execute
-        for method_name in ("execute", "generate", "complete", "__call__"):
-            meth = getattr(instance, method_name, None)
-            if meth is None:
+        available = self.available_backends()
+        available_by_runtime = {b.runtime: b for b in available}
+        available_by_name = {b.name: b for b in available}
+
+        fallback_chain: list[str] = []
+        tried: set[str] = set()
+
+        candidates: list[str] = []
+        if 0 <= phase_idx < len(strategy.default_pool):
+            preferred = strategy.default_pool[phase_idx]
+            if preferred and preferred not in tried:
+                candidates.append(preferred)
+                tried.add(preferred)
+        for c in strategy.compatible_backends:
+            if c not in tried:
+                candidates.append(c)
+                tried.add(c)
+
+        best: PluginSpec | None = None
+        best_score = -1
+        for cand in candidates:
+            fallback_chain.append(cand)
+            b = available_by_runtime.get(cand) or available_by_name.get(cand)
+            if b is None:
                 continue
-            try:
-                if asyncio.iscoroutinefunction(meth):
-                    out = await meth(req)
-                else:
-                    out = meth(req)
-                return self._coerce(spec.name, out, (time.perf_counter() - t0) * 1000)
-            except Exception as e:  # noqa: BLE001
-                return BackendResult(
-                    backend=spec.name, text="", elapsed_ms=0.0,
-                    error=f"{method_name}: {type(e).__name__}: {e}",
-                )
+            score = b.priority
+            if 0 <= phase_idx < len(strategy.default_pool) and strategy.default_pool[phase_idx] == cand:
+                score += 100
+            if score > best_score:
+                best = b
+                best_score = score
 
-        return BackendResult(
-            backend=spec.name, text=f"[{spec.name} stub]",
-            elapsed_ms=(time.perf_counter() - t0) * 1000,
-            metadata={"stub": True},
-        )
+        return best, fallback_chain
 
-    @staticmethod
-    def _coerce(backend: str, out: Any, elapsed_ms: float) -> BackendResult:
-        if isinstance(out, BackendResult):
-            return out
-        if isinstance(out, str):
-            return BackendResult(backend=backend, text=out, elapsed_ms=elapsed_ms)
-        if isinstance(out, dict):
-            return BackendResult(
-                backend=backend,
-                text=str(out.get("text", out.get("output", ""))),
-                tokens=int(out.get("tokens", 0)),
-                elapsed_ms=float(out.get("elapsed_ms", elapsed_ms)),
-                metadata={k: v for k, v in out.items() if k not in {"text", "tokens", "elapsed_ms"}},
-            )
-        return BackendResult(
-            backend=backend, text=str(out), elapsed_ms=elapsed_ms,
-            metadata={"raw": True},
-        )
+    # ── Single strategy ─────────────────────────────────────────────────
 
-    # ── fusion strategies ──────────────────────────────────────────────
-
-    def _fuse(
+    async def run(
         self,
-        results: dict[str, BackendResult],
-        policy: FusionPolicy,
-        total_ms: float,
-    ) -> HybridResult:
-        ok = {k: r for k, r in results.items() if r.ok}
+        strategy_name: str,
+        prompt: str,
+        *,
+        max_tokens: int = 50,
+        temperature: float = 0.0,
+        stop: list[str] | None = None,
+    ) -> PipelineResult:
+        """Run one strategy's full pipeline."""
+        strategy = self.registry.get(strategy_name)
+        if strategy is None or strategy.kind != PluginKind.STRATEGY:
+            return PipelineResult(
+                strategy=strategy_name,
+                prompt=prompt,
+                text=f"[error: strategy '{strategy_name}' not registered or not kind=strategy]",
+                elapsed_ms=0.0,
+            )
+        ok, reason = strategy.can_load()
         if not ok:
-            return HybridResult(
-                text="",
-                backend_results=results,
-                fusion_policy=policy.value,
-                winner="(none)",
-                total_elapsed_ms=total_ms,
+            return PipelineResult(
+                strategy=strategy_name,
+                prompt=prompt,
+                text=f"[error: strategy '{strategy_name}' unloadable: {reason}]",
+                elapsed_ms=0.0,
             )
 
-        if policy == FusionPolicy.PARALLEL_RACE:
-            winner = min(ok.items(), key=lambda kv: kv[1].elapsed_ms)[0]
-            return HybridResult(
-                text=ok[winner].text,
-                backend_results=results,
-                fusion_policy=policy.value,
-                winner=winner,
-                total_elapsed_ms=total_ms,
-            )
+        t_total = time.perf_counter()
+        phases = strategy.phases or ["main"]
+        phase_results: dict[str, BackendResult] = {}
+        backends_used: dict[str, str] = {}
+        fallback_chain: list[str] = []
 
-        if policy == FusionPolicy.MAJORITY_VOTE:
-            # simplest: majority of first 30 chars (stripped)
-            from collections import Counter
-            sigs = Counter((r.text[:30].strip() for r in ok.values()))
-            best_sig, _ = sigs.most_common(1)[0]
-            winner = next((k for k, r in ok.items() if r.text[:30].strip() == best_sig), "(none)")
-            return HybridResult(
-                text=ok[winner].text,
-                backend_results=results,
-                fusion_policy=policy.value,
-                winner=winner,
-                total_elapsed_ms=total_ms,
-            )
-
-        if policy == FusionPolicy.SPECULATIVE_DRAFT:
-            # Pick cheapest as draft, slowest as verifier
-            ordered = sorted(ok.items(), key=lambda kv: kv[1].elapsed_ms)
-            draft, target = ordered[0][0], ordered[-1][0]
-            return HybridResult(
-                text=ok[target].text,
-                backend_results=results,
-                fusion_policy=f"{policy.value}(draft={draft},target={target})",
-                winner=target,
-                total_elapsed_ms=total_ms,
-                metadata={"draft": draft, "target": target},
-            )
-
-        if policy == FusionPolicy.MIRROR_VERIFY:
-            # Primary is fastest; verify against any other
-            ordered = sorted(ok.items(), key=lambda kv: kv[1].elapsed_ms)
-            primary = ordered[0]
-            verifier = ordered[1] if len(ordered) > 1 else None
-            if verifier and primary[1].text.strip() != verifier[1].text.strip():
-                return HybridResult(
-                    text=verifier[1].text,
-                    backend_results=results,
-                    fusion_policy=f"{policy.value}(primary={primary[0]},verified_by={verifier[0]})",
-                    winner=verifier[0],
-                    total_elapsed_ms=total_ms,
+        async def run_phase(idx: int, phase: str) -> tuple[str, BackendResult, list[str]]:
+            backend, fchain = self.pick_backend(strategy, idx)
+            if backend is None:
+                err_result = BackendResult(
+                    backend_name="<none>",
+                    backend_kind="<unavailable>",
+                    ok=False,
+                    error=f"no available backend for phase '{phase}' (compatible={strategy.compatible_backends})",
                 )
-            return HybridResult(
-                text=primary[1].text,
-                backend_results=results,
-                fusion_policy=policy.value,
-                winner=primary[0],
-                total_elapsed_ms=total_ms,
+                return phase, err_result, fchain
+            req = BackendRequest(
+                prompt=prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=stop or [],
+                metadata={"strategy": strategy_name, "phase_idx": idx},
             )
+            result = await asyncio.to_thread(_run_backend, backend, phase, req)
+            return phase, result, fchain
 
-        # WEIGHTED — by priority
-        ranked = sorted(ok.items(), key=lambda kv: self.registry.get(kv[0]).priority)
-        winner = ranked[0][0]
-        return HybridResult(
-            text=ok[winner].text,
-            backend_results=results,
-            fusion_policy=policy.value,
-            winner=winner,
-            total_elapsed_ms=total_ms,
+        if strategy.parallel:
+            phase_outputs = await asyncio.gather(
+                *[run_phase(i, p) for i, p in enumerate(phases)],
+                return_exceptions=False,
+            )
+            for phase, result, fchain in phase_outputs:
+                phase_results[phase] = result
+                if result.ok:
+                    backends_used[phase] = result.backend_name
+                fallback_chain.extend(fchain)
+        else:
+            for i, phase in enumerate(phases):
+                _, result, fchain = await run_phase(i, phase)
+                phase_results[phase] = result
+                if result.ok:
+                    backends_used[phase] = result.backend_name
+                fallback_chain.extend(fchain)
+
+        # Aggregate: take the last successful phase's text
+        final_text = ""
+        for phase in phases:
+            r = phase_results.get(phase)
+            if r and r.ok and r.text:
+                final_text = r.text
+
+        elapsed = (time.perf_counter() - t_total) * 1000
+
+        return PipelineResult(
+            strategy=strategy_name,
+            prompt=prompt,
+            phase_results=phase_results,
+            text=final_text,
+            elapsed_ms=elapsed,
+            parallel=strategy.parallel,
+            backends_used=backends_used,
+            fallback_used=fallback_chain,
+            metadata={
+                "phases": phases,
+                "compatible_backends": strategy.compatible_backends,
+                "default_pool": strategy.default_pool,
+            },
         )
+
+    # ── Multi-strategy concurrent ────────────────────────────────────────
+
+    async def run_all(
+        self,
+        strategies: list[str],
+        prompt: str,
+        *,
+        max_tokens: int = 50,
+        temperature: float = 0.0,
+    ) -> list[PipelineResult]:
+        """Run multiple strategies concurrently, each picking its own backends.
+
+        This is the answer to "use ALL strategies at once":
+          - latentmas  (debate→propose→vote)   uses mlx-metal on each phase
+          - tidar      (draft→diffuse→verify)  uses mlx-metal / sglang
+          - jetspec    (tree_draft→verify)     uses mlx-metal
+          - ssd        (draft→verify)          uses sglang
+        All run in parallel against the same prompt, each on its native backend.
+        """
+        return await asyncio.gather(
+            *[self.run(s, prompt, max_tokens=max_tokens, temperature=temperature)
+              for s in strategies],
+            return_exceptions=False,
+        )
+
+
+# ── Convenience singletons ─────────────────────────────────────────────────
+
+_default_executor: PipelineExecutor | None = None
+
+
+def get_executor() -> PipelineExecutor:
+    global _default_executor
+    if _default_executor is None:
+        _default_executor = PipelineExecutor()
+    return _default_executor
+
+
+# ── CLI surface (replaces the old FusionPolicy API) ───────────────────────
+
+async def dispatch(
+    strategy_name: str,
+    prompt: str,
+    **kwargs: Any,
+) -> PipelineResult:
+    """Run a single strategy. Backward-compat with old `dispatch(req, policy)`."""
+    return await get_executor().run(strategy_name, prompt, **kwargs)
+
+
+async def dispatch_all(
+    strategies: list[str],
+    prompt: str,
+    **kwargs: Any,
+) -> list[PipelineResult]:
+    """Run multiple strategies concurrently."""
+    return await get_executor().run_all(strategies, prompt, **kwargs)
 
 
 __all__ = [
-    "FusionPolicy", "BackendRequest", "BackendResult", "HybridResult",
-    "HybridOrchestrator",
+    "BackendRequest",
+    "BackendResult",
+    "PipelineResult",
+    "PipelineExecutor",
+    "get_executor",
+    "dispatch",
+    "dispatch_all",
+    "register_executor",
 ]

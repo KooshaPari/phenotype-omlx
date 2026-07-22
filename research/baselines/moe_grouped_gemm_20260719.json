@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "kind": "moe_grouped_gemm_bench",
+  "generated_at": "2026-07-19T00:00:00Z",
+  "description": "Microbenchmark envelope for grouped_gemm (scalar) vs grouped_gemm_tiled (tile/blocked scalar) at the canonical Qwen-MoE shape and the production-stress shape. Median over ITERS=20 timed runs after WARMUP=3 warmup calls, measured with std::time::Instant. This file is the seed baseline; the bench harness will rewrite it whenever OMLX_BENCH_DUMP=1 is set.",
+  "iters": 20,
+  "warmup": 3,
+  "shapes": ["qwen_moe_canonical", "moe_stress"],
+  "paths": ["scalar", "tiled"],
+  "rows": [
+    {"shape": "qwen_moe_canonical", "path": "scalar", "median_ns": 298042, "bytes": 32768},
+    {"shape": "qwen_moe_canonical", "path": "tiled", "median_ns": 302875, "bytes": 32768},
+    {"shape": "moe_stress", "path": "scalar", "median_ns": 5307333, "bytes": 262144},
+    {"shape": "moe_stress", "path": "tiled", "median_ns": 4866458, "bytes": 262144}
+  ]
+}

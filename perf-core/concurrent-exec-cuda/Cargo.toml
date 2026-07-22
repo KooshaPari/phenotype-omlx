@@ -1,0 +1,22 @@
+[package]
+name = "concurrent-exec-cuda"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "CUDA-native sibling of concurrent-exec. Linux/Windows + NVIDIA only."
+
+[features]
+# Enables the libloading-based CUDA runtime loader. Off by default so the
+# crate compiles cleanly on macOS and any non-NV platforms.
+cuda = ["dep:libloading"]
+
+[dependencies]
+concurrent-exec = { path = "../concurrent-exec" }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+libloading = { version = "0.8", optional = true }
+
+[[example]]
+name = "load_cuda_runtime"
+required-features = ["cuda"]

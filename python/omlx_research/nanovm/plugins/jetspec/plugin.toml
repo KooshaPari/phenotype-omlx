@@ -1,9 +1,20 @@
 [plugin]
 name        = "jetspec"
-kind        = "agent"
+kind        = "strategy"
 module      = "omlx_research.agents.jetspec_runner"
-entrypoint  = "JetSpecRunner"
-platforms   = ["darwin", "linux"]
-gpus        = ["metal", "cuda", "cpu"]
-priority    = 65
-requires    = []
+description = "JetSpec — tree-structured speculative decoding. Drafts a tree of token candidates; verifies the longest matching path with the target model. Cross-backend: tree draft on any fast backend, verify on the strongest AR backend."
+version     = "0.4"
+runtime     = "pytorch"
+priority    = 100
+requires    = ["torch"]
+
+# STRATEGY (not backend) — flippable option, dual-phase pipeline.
+# Use this when: you have a fast draft model and want to maximize per-step accept rate
+# via tree-structured candidates. Draft → verify phase.
+phases = ["tree_draft", "ar_verify"]
+compatible_backends = ["mlx_metal", "sglang", "vllm", "tensorrt", "llamacpp"]
+default_pool        = ["llamacpp", "sglang"]  # llama.cpp draft (CPU, fast), sglang verify
+parallel            = true                       # draft and verify can overlap
+tree_width          = 4
+tree_depth          = 2
+gamma               = 4

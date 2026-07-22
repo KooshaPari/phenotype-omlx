@@ -1,0 +1,6 @@
+# Local/generated under vpu/ — track only dashboard + agents crates.
+vpu/*
+!vpu/dashboard/
+!vpu/dashboard/**
+!vpu/agents/
+!vpu/agents/**

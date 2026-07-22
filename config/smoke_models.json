@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "defaults": {
+    "mlx_hf": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+    "mlx_upstream": "Qwen/Qwen3.5-0.8B",
+    "openai_compat": "openai/Qwen3.5-0.8B"
+  },
+  "roles": {
+    "readiness": "mlx_hf",
+    "niah": "mlx_upstream",
+    "turboquant": "mlx_hf",
+    "dispatch": "mlx_hf",
+    "mlx_backend_test": "mlx_hf"
+  },
+  "legacy_quarantine": {
+    "qwen25_mlx": "mlx-community/Qwen2.5-0.5B-Instruct-4bit"
+  },
+  "portage": {
+    "require_portage_root": true,
+    "harbor_env": "apple-container",
+    "langsmith_plugin": "langsmith",
+    "hello_world_task": "examples/tasks/hello-world",
+    "omlx_policy_task": "evals/harbor/tasks/omlx-qwen35-policy",
+    "omlx_niah_task": "evals/harbor/tasks/omlx-niah-api-smoke",
+    "omlx_turbo_ssot_task": "evals/harbor/tasks/omlx-turbo-ssot",
+    "jobs": {
+      "niah": "evals/harbor/jobs/niah-qwen35.yaml",
+      "turbo_ssot": "evals/harbor/jobs/turboquant-ssot.yaml"
+    }
+  }
+}

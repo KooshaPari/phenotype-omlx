@@ -1,0 +1,23 @@
+[package]
+name = "turbo-quant-mojo"
+version = "0.1.0"
+edition = "2021"
+description = "phenotype-omlx turbo-quant in Mojo (cross-language FFI polyglot crate)"
+
+[lib]
+name = "turbo_quant_mojo"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+libc = "0.2"
+
+[features]
+# The candidate ships the Mojo shared library and the hardened Rust wrapper
+# references its ABI unconditionally, so the native path is the workspace
+# default. Disable it only when intentionally building a Rust-only fixture.
+default = ["mojo"]
+# Compile + link the Mojo kernel. Requires `mojo` in PATH and the generated
+# `libturbo_quant_mojo.dylib` beside this manifest.
+mojo = []
+
+[build-dependencies]

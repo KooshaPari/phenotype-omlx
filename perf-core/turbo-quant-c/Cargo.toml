@@ -1,0 +1,15 @@
+[package]
+name = "turbo-quant-c"
+version = "0.1.0"
+edition = "2021"
+description = "C ABI base for TurboQuant — universal FFI layer"
+
+[lib]
+name = "turbo_quant_c"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+native-abi = { path = "../native-abi" }
+
+[build-dependencies]
+cc = "1"

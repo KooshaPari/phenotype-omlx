@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "kind": "niah_regression_baseline",
+  "created_at": "2026-07-19T00:00:00Z",
+  "created_by": "scripts/niah_benchmark.py (initial seed; no runs yet)",
+  "description": "Seed baseline for the NIAH (needle-in-haystack) regression detector. Contains the empty-results snapshot that all future runs will be compared against. Pass rates are 0.0 because no NIAH run has been recorded in this checkout yet; the seed exists so the doctor can load a well-formed baseline envelope from day one and so the regression comparator has a reference point when the first real run lands. Do not delete \u2014 only supersede with a dated snapshot under research/baselines/niah_baseline.<YYYYMMDD>.json.",
+  "model": "Qwen/Qwen3.5-0.8B",
+  "seed": 42,
+  "context_lengths": [
+    512,
+    2048,
+    8192
+  ],
+  "modes": [
+    "baseline_fp16",
+    "turbo_asymmetric",
+    "turbo_symmetric",
+    "mlx_native_kv4"
+  ],
+  "summary": {
+    "overall_pass_rate": 0.0,
+    "by_mode": {
+      "baseline_fp16": {
+        "pass_rate": 0.0,
+        "exact_match": 0,
+        "partial_match": 0,
+        "miss": 0,
+        "total": 0,
+        "context_lengths_tested": []
+      },
+      "turbo_asymmetric": {
+        "pass_rate": 0.0,
+        "exact_match": 0,
+        "partial_match": 0,
+        "miss": 0,
+        "total": 0,
+        "context_lengths_tested": []
+      },
+      "turbo_symmetric": {
+        "pass_rate": 0.0,
+        "exact_match": 0,
+        "partial_match": 0,
+        "miss": 0,
+        "total": 0,
+        "context_lengths_tested": []
+      },
+      "mlx_native_kv4": {
+        "pass_rate": 0.0,
+        "exact_match": 0,
+        "partial_match": 0,
+        "miss": 0,
+        "total": 0,
+        "context_lengths_tested": []
+      }
+    },
+    "by_length": {
+      "512": {
+        "pass_rate": 0.0,
+        "total": 0
+      },
+      "2048": {
+        "pass_rate": 0.0,
+        "total": 0
+      },
+      "8192": {
+        "pass_rate": 0.0,
+        "total": 0
+      }
+    }
+  },
+  "results": [],
+  "regress_rules": {
+    "pass_rate_drop_threshold": 0.1,
+    "decode_tok_per_sec_drop_pct": 0.2,
+    "rss_growth_mb_threshold": 500.0,
+    "notes": "Thresholds match the policy in scripts/niah_benchmark.py: a regression is flagged when (a) any mode's overall pass_rate drops by >=0.10 vs baseline, OR (b) decode throughput drops by >=20%, OR (c) RSS growth exceeds the absolute ceiling. All thresholds are intentionally conservative for the seed; tighten once we have >=3 real runs to calibrate from."
+  },
+  "model_note": "Retargeted from archived Qwen2.5 baseline; regenerate with live Qwen3.5 runs.",
+  "supersedes": ".archive/qwen25-baselines/niah_baseline.json"
+}

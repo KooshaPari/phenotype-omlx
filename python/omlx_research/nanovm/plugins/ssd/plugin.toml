@@ -1,0 +1,18 @@
+[plugin]
+name        = "ssd"
+kind        = "strategy"
+module      = "omlx_research.agents.ssd_runner"
+description = "SSD — single-model speculative decoding. Drafts K tokens from the same model using shallow layers, then verifies in parallel with the full model on the strongest backend. (CUDA reference; Metal fallback via turbo_mlx.ssd.)"
+version     = "0.4"
+runtime     = "pytorch"
+priority    = 70
+requires    = ["torch"]
+
+# STRATEGY (not backend) — flippable option, dual-phase pipeline.
+# Use this when: you have a single model and want speculative gain without a separate draft.
+phases = ["shallow_draft", "full_verify"]
+compatible_backends = ["mlx_metal", "sglang", "tensorrt", "llamacpp"]
+default_pool        = ["mlx_metal", "llamacpp"]  # MLX for shallow draft, llama.cpp for full verify (CPU) or MLX for both
+parallel            = true                       # draft and verify can overlap
+gamma               = 5
+draft_layers        = 2

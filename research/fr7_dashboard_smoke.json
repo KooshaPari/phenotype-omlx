@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "kind": "fr7_dashboard_smoke",
+  "evidence_label": "live_verified",
+  "reported": true,
+  "synthetic": false,
+  "run_at": "2026-07-20T10:25:24Z",
+  "owner": "Salmon",
+  "status_example": {
+    "schema_version": 1,
+    "build_head": "2a6d1cd",
+    "polyglot_tiers": {
+      "rust": {
+        "status": "ok",
+        "detail": "kernel-registry / perf-core"
+      },
+      "python": {
+        "status": "ok",
+        "detail": "omlx_research CLI + dashboard"
+      },
+      "mojo": {
+        "status": "ok",
+        "detail": "ABI lane reported elsewhere"
+      },
+      "julia": {
+        "status": "ok",
+        "detail": "FR-5 eval path"
+      }
+    },
+    "eval_snapshot_id": "research/fr5_niah_qwen35_live.json",
+    "promotion_snapshot_id": null,
+    "errors": [],
+    "owner": "Salmon"
+  },
+  "results": {
+    "ok": true,
+    "base": "http://127.0.0.1:54344",
+    "checks": [
+      {
+        "path": "/vpu/health",
+        "http_status": 200,
+        "ok": true
+      },
+      {
+        "path": "/health",
+        "http_status": 200,
+        "ok": true
+      },
+      {
+        "path": "/vpu/api/v1/status",
+        "http_status": 200,
+        "ok": true
+      },
+      {
+        "path": "/vpu/",
+        "http_status": 200,
+        "ok": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "kind": "qwen35_evidence_index",
+  "note": "Maps committed FR-5 artifacts to roles. Do not treat answer128 packs as compression proof.",
+  "artifacts": [
+    {
+      "path": "research/fr5_niah_qwen35_0_8b_instrumented.json",
+      "role": "compression_and_quality",
+      "compression_proof": true,
+      "schema_version": 2,
+      "sha256": "862bc610c16a3e4b4b637e85670bf493e24a82a31adfc88c7efd7a5a7d6407d3"
+    },
+    {
+      "path": "research/fr5_niah_qwen35_4b_coder_authorized_answer128.json",
+      "role": "exact_retrieval",
+      "compression_proof": false,
+      "lengths": [512],
+      "sha256": "170b1bef2b200b80a90ad9ad2f96826bec304f0b9d28a1510e4d1341cf35b2b9"
+    },
+    {
+      "path": "research/fr5_niah_qwen35_4b_coder_authorized_answer128_2048.json",
+      "role": "exact_retrieval",
+      "compression_proof": false,
+      "lengths": [2048],
+      "sha256": "4ee9f73573c30cb0d8763ceb39e35736967f2af856b3722aa96c25faec2154bc"
+    },
+    {
+      "path": "research/fr5_niah_qwen35_4b_coder_authorized_exact_512.json",
+      "role": "exact_retrieval_twin",
+      "compression_proof": false,
+      "lengths": [512],
+      "sha256": "471b91f6add44d05cbbec902ad1e1986e6487949c5f7cc3f3450a5c5434c08ec"
+    },
+    {
+      "path": "research/fr5_niah_qwen35_4b_coder_authorized_exact_2048.json",
+      "role": "exact_retrieval_twin",
+      "compression_proof": false,
+      "lengths": [2048],
+      "sha256": "04a9e5447d100080c3e8c3c872e623981dca50c2e85f6f764a97e2e5ab1f2e7d"
+    },
+    {
+      "path": "research/fr5_niah_qwen35_live.json",
+      "role": "architecture_caveat",
+      "compression_proof": false,
+      "note": "kv_modes_applicable=false — not TurboKV proof"
+    }
+  ],
+  "out_of_matrix": {
+    "8192": "BOUNDED_TIMEOUT — do not commit as live_verified pass/fail"
+  }
+}
