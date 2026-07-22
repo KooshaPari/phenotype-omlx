@@ -223,8 +223,7 @@ export function useBenchState() {
   /* ── Insights: auto-detect from current data ───────────────────── */
   const insights: Insight[] = useMemo(() => {
     if (!state.payload) return [];
-    const { summary, cells } = state.payload.data;
-    const { stock, ours } = summary.by_variant;
+    const { cells } = state.payload.data;
     const results: Insight[] = [];
 
     // --- wins-on-hard: ours beats stock on hard+ difficulty
@@ -312,6 +311,7 @@ export function useBenchState() {
       const ts = entry.receivedAt;
       const s = entry.summary.by_variant.stock;
       const o = entry.summary.by_variant.ours;
+      if (!s || !o) continue;
       pushPoint('pass_at_1', s.pass_at_1, o.pass_at_1, ts);
       pushPoint('wall_clock', s.mean_wall_clock_s, o.mean_wall_clock_s, ts);
       pushPoint('partial_credit', s.mean_partial_credit, o.mean_partial_credit, ts);
