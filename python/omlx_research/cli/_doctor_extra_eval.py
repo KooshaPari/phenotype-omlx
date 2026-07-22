@@ -25,6 +25,7 @@ import os
 import subprocess
 import sys
 
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     PASS,
     WARN,
@@ -57,7 +58,10 @@ def _eval_harness_rust_crate() -> tuple[bool, str]:
     path under the project root (or a short diagnostic string).
     """
     cargo_toml = os.path.join(
-        project_root(), "perf-core", "eval-harness", "Cargo.toml",
+        project_root(),
+        "perf-core",
+        "eval-harness",
+        "Cargo.toml",
     )
     if os.path.isfile(cargo_toml):
         return True, "perf-core/eval-harness/"
@@ -127,6 +131,7 @@ def _cli_has_eval_subcommand() -> bool:
 # ---------------------------------------------------------------------------
 
 
+@register_check
 def eval_harness_subcommand_runnable() -> Check:
     """Verify the eval-harness is reachable from the CLI.
 

@@ -72,3 +72,94 @@ impl Fleet for InMemoryFleet {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn caps() -> NodeCapabilities {
+        NodeCapabilities {
+            backends: vec!["mlx".into()],
+            models: vec!["test".into()],
+            device: "test-device".into(),
+            memory_gb: 16.0,
+            cuda: false,
+            metal: true,
+        }
+    }
+
+    fn hb(node_id: &str, ts_ms: u64) -> Heartbeat {
+        Heartbeat {
+            node_id: node_id.into(),
+            addr: "127.0.0.1".into(),
+            port: 8080,
+            ts_ms,
+            caps: caps(),
+            inflight: 0,
+        }
+    }
+
+    fn now_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64
+    }
+
+    #[test]
+    fn new_creates_empty_fleet() {
+        let fleet = InMemoryFleet::new(5000);
+        assert!(fleet.peers().is_empty());
+    }
+
+    #[test]
+    fn add_peer_then_peers_returns_it() {
+        let fleet = InMemoryFleet::new(5_000);
+        fleet.announce(hb("node-a", now_ms())).unwrap();
+        let peers = fleet.peers();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].node_id, "node-a");
+    }
+
+    #[test]
+    fn peers_filters_stale_entries() {
+        let fleet = InMemoryFleet::new(1000);
+        let stale_ts = now_ms().saturating_sub(5000); // 5s ago, TTL=1s
+        let fresh_ts = now_ms();
+
+        fleet.announce(hb("stale-node", stale_ts)).unwrap();
+        fleet.announce(hb("fresh-node", fresh_ts)).unwrap();
+
+        let peers = fleet.peers();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].node_id, "fresh-node");
+    }
+
+    #[test]
+    fn remove_peer_removes_it() {
+        let fleet = InMemoryFleet::new(5_000);
+        fleet.announce(hb("node-a", now_ms())).unwrap();
+        fleet.announce(hb("node-b", now_ms())).unwrap();
+        fleet.remove("node-a").unwrap();
+
+        let peers = fleet.peers();
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].node_id, "node-b");
+    }
+
+    #[test]
+    fn peers_returns_empty_when_all_peers_stale() {
+        let fleet = InMemoryFleet::new(500);
+        let stale_ts = now_ms().saturating_sub(10_000);
+
+        fleet.announce(hb("node-1", stale_ts)).unwrap();
+        fleet.announce(hb("node-2", stale_ts)).unwrap();
+        fleet.announce(hb("node-3", stale_ts)).unwrap();
+
+        let peers = fleet.peers();
+        assert!(
+            peers.is_empty(),
+            "all peers are stale, fleet should be empty"
+        );
+    }
+}

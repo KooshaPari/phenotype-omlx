@@ -42,6 +42,7 @@ pub mod compile;
 pub mod dispatch;
 pub mod error;
 pub mod fingerprint;
+pub mod flow_step;
 pub mod joint_attention;
 pub mod moe;
 pub mod pipeline;
@@ -59,6 +60,9 @@ pub use cache::{CacheKey, CacheStats, CompiledPipeline, EvictionPolicy, Pipeline
 pub use compile::{BoundedCompiler, CompileBudget};
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};
+pub use flow_step::FlowStepError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use flow_step::flow_cfg_step_metal;
 pub use joint_attention::JointAttentionError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use joint_attention::joint_attention_metal;

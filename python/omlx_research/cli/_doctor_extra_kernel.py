@@ -30,6 +30,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ._doctor_extra_niah import _load_niah_results  # shared niah_results.json helper
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     FAIL,
     PASS,
@@ -50,6 +51,7 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
+@register_check
 def omlx_research_version() -> Check:
     """Report the installed ``omlx_research.__version__`` (always pass)."""
     desc = "omlx_research package version (omlx_research.__version__)"
@@ -90,6 +92,7 @@ def omlx_research_version() -> Check:
 _NIAH_TARGET_ROW_FLOOR = 25  # 5 context lengths × 5 seeds
 
 
+@register_check
 def regress_baseline_dispatch_envelope() -> Check:
     """Probe the regression-baseline dispatch envelope.
 
@@ -132,9 +135,7 @@ def regress_baseline_dispatch_envelope() -> Check:
         # `dispatch_budget(m, n, k)` callable, or `dispatch_budget(ShapeKey)`.
         budget_fn = getattr(regress_baseline, "dispatch_budget", None)
         if budget_fn is None:
-            rb_status = (
-                "regress_baseline imports but exposes no `dispatch_budget`"
-            )
+            rb_status = "regress_baseline imports but exposes no `dispatch_budget`"
         else:
             try:
                 shape_key = getattr(regress_baseline, "ShapeKey", None)
@@ -143,9 +144,7 @@ def regress_baseline_dispatch_envelope() -> Check:
                 else:
                     budget_value = int(budget_fn(shape_key(64, 64, 64)))
             except Exception as e:
-                rb_status = (
-                    f"dispatch_budget raised: {type(e).__name__}: {e}"
-                )
+                rb_status = f"dispatch_budget raised: {type(e).__name__}: {e}"
             else:
                 if budget_value <= 0:
                     rb_status = (
@@ -162,14 +161,9 @@ def regress_baseline_dispatch_envelope() -> Check:
                 f"dispatch_budget((m=64, n=64, k=64)) = {rb_budget}"
             )
         elif rb_status is not None:
-            details = (
-                f"{results_label} (≥ {_NIAH_TARGET_ROW_FLOOR} floor); "
-                f"{rb_status}"
-            )
+            details = f"{results_label} (≥ {_NIAH_TARGET_ROW_FLOOR} floor); {rb_status}"
         else:
-            details = (
-                f"{results_label} (≥ {_NIAH_TARGET_ROW_FLOOR} floor)"
-            )
+            details = f"{results_label} (≥ {_NIAH_TARGET_ROW_FLOOR} floor)"
         return Check(
             id="regress_baseline_dispatch_envelope",
             description=desc,
@@ -185,10 +179,7 @@ def regress_baseline_dispatch_envelope() -> Check:
             f"{rb_budget}"
         )
     elif rb_status is not None:
-        details = (
-            f"niah_results.json not populated yet ({results_label}); "
-            f"{rb_status}"
-        )
+        details = f"niah_results.json not populated yet ({results_label}); {rb_status}"
     else:
         details = (
             f"niah_results.json not populated yet ({results_label}); "

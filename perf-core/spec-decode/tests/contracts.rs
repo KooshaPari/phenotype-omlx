@@ -8,9 +8,9 @@
 
 use async_trait::async_trait;
 use spec_decode::{
-    verify_draft, AcceptedToken, BackendInfo, DraftMode, EngineState, MedusaHead, MedusaProposal,
-    MockMedusaHead, SharedEngine, SpecDecodeConfig, SpecDecodeEngine, SpecError, StepResult,
-    TargetBackend, TargetOutput, TreeTopology, VerifyResult, build_engine,
+    dedup_preserve, verify_draft, AcceptedToken, BackendInfo, DraftMode, EngineState, HISTORY_CAP,
+    MedusaHead, MedusaProposal, MockMedusaHead, SharedEngine, SpecDecodeConfig, SpecDecodeEngine,
+    SpecError, StepResult, TargetBackend, TargetOutput, TreeTopology, VerifyResult, build_engine,
 };
 
 // -----------------------------------------------------------------------------
@@ -474,4 +474,175 @@ fn spec_error_display_strings_are_stable() {
     let _ = format!("{}", SpecError::DraftNotLoaded);
     let _ = format!("{}", SpecError::AllRejected { n: 4 });
     let _ = format!("{}", SpecError::Config("bad".into()));
+}
+
+// ---------------------------------------------------------------------------
+// Edge-case tests — Task 2
+// ---------------------------------------------------------------------------
+
+#[test]
+fn engine_state_push_accepted_evicts_oldest_at_exact_capacity_boundary() {
+    let mut s = EngineState::new();
+    // Fill to exactly HISTORY_CAP
+    for i in 0..HISTORY_CAP as u32 {
+        s.push_accepted(i);
+    }
+    assert_eq!(s.history.len(), HISTORY_CAP);
+    assert_eq!(s.history.front(), Some(&0));
+    assert_eq!(s.history.back(), Some(&(HISTORY_CAP as u32 - 1)));
+
+    // Push one more — oldest (0) must be evicted
+    s.push_accepted(9999);
+    assert_eq!(s.history.len(), HISTORY_CAP);
+    assert_eq!(s.history.front(), Some(&1), "oldest entry must be evicted");
+    assert_eq!(s.history.back(), Some(&9999));
+}
+
+#[test]
+fn engine_state_push_accepted_evicts_correctly_over_multiple_overflows() {
+    let mut s = EngineState::new();
+    // Push HISTORY_CAP + 50 entries; first 50 should be gone
+    for i in 0..(HISTORY_CAP + 50) as u32 {
+        s.push_accepted(i);
+    }
+    assert_eq!(s.history.len(), HISTORY_CAP);
+    // The oldest surviving entry should be index 50
+    assert_eq!(
+        s.history.front(),
+        Some(&50),
+        "first 50 entries must have been evicted"
+    );
+    assert_eq!(s.history.back(), Some(&((HISTORY_CAP + 49) as u32)));
+}
+
+#[test]
+fn medusa_proposal_from_heads_with_empty_heads_returns_empty() {
+    let heads: Vec<Box<dyn MedusaHead>> = vec![];
+    let prop = MedusaProposal::from_heads(
+        &heads,
+        &[1, 2, 3],
+        &TreeTopology {
+            width: 4,
+            depth: 2,
+        },
+        8,
+    );
+    assert!(prop.heads.is_empty(), "empty heads input must yield empty proposal");
+    assert_eq!(prop.total(), 0);
+    assert!(prop.flat_tokens().is_empty());
+}
+
+#[test]
+fn medusa_proposal_from_heads_single_head_proposes_in_order() {
+    let heads: Vec<Box<dyn MedusaHead>> =
+        vec![Box::new(MockMedusaHead::new(vec![10, 20, 30]))];
+    let prop = MedusaProposal::from_heads(
+        &heads,
+        &[],
+        &TreeTopology {
+            width: 4,
+            depth: 3,
+        },
+        3,
+    );
+    assert_eq!(prop.heads.len(), 1);
+    assert_eq!(prop.heads[0], vec![10, 20, 30]);
+}
+
+#[test]
+fn medusa_proposal_from_heads_deduplicates_across_heads_preserving_first_seen() {
+    let heads: Vec<Box<dyn MedusaHead>> = vec![
+        Box::new(MockMedusaHead::new(vec![5, 6])),
+        Box::new(MockMedusaHead::new(vec![5, 7])),
+    ];
+    let prop = MedusaProposal::from_heads(
+        &heads,
+        &[],
+        &TreeTopology {
+            width: 4,
+            depth: 2,
+        },
+        10,
+    );
+    // Token 5 appears in both heads; first head keeps it, second head deduplicates.
+    let flat = prop.flat_tokens();
+    assert_eq!(flat, vec![5, 6, 7]);
+}
+
+// ---------------------------------------------------------------------------
+// Edge-case tests — capacity=0 / capacity=1 push_accepted
+// ---------------------------------------------------------------------------
+
+#[test]
+fn push_accepted_capacity_one_evicts_old_entry() {
+    let mut s = EngineState::new();
+    // HISTORY_CAP is the hard ceiling. Push exactly HISTORY_CAP entries,
+    // then one more — oldest must be evicted.
+    for i in 0..HISTORY_CAP as u32 {
+        s.push_accepted(i);
+    }
+    assert_eq!(s.history.len(), HISTORY_CAP);
+
+    s.push_accepted(9999);
+    assert_eq!(s.history.len(), HISTORY_CAP, "queue must stay at cap after eviction");
+    assert_eq!(s.history[0], 1, "oldest entry (0) must be evicted");
+    assert_eq!(s.history[HISTORY_CAP - 1], 9999, "newest entry must be at back");
+}
+
+#[test]
+fn push_accepted_capacity_zero_does_not_crash() {
+    let mut s = EngineState::new();
+    // Push HISTORY_CAP entries, then verify pushing one more doesn't panic.
+    // This tests the eviction path at the exact capacity boundary.
+    for i in 0..HISTORY_CAP as u32 {
+        s.push_accepted(i);
+    }
+    // Now at capacity — this exercises the pop_front + push_back branch.
+    s.push_accepted(0);
+    assert_eq!(s.history.len(), HISTORY_CAP);
+}
+
+// ---------------------------------------------------------------------------
+// MedusaProposal::from_heads with empty heads vector
+// ---------------------------------------------------------------------------
+
+#[test]
+fn medusa_proposal_from_heads_empty_heads_returns_empty() {
+    let heads: Vec<Box<dyn MedusaHead>> = vec![];
+    let prop = MedusaProposal::from_heads(
+        &heads,
+        &[],
+        &TreeTopology {
+            width: 4,
+            depth: 2,
+        },
+        16,
+    );
+    assert!(prop.heads.is_empty());
+    assert_eq!(prop.total(), 0);
+    assert!(prop.flat_tokens().is_empty());
+    assert_eq!(prop.tree, TreeTopology { width: 4, depth: 2 });
+}
+
+// ---------------------------------------------------------------------------
+// dedup_preserve edge cases — all-duplicates and no-duplicates
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dedup_preserve_all_duplicates_returns_single_element() {
+    let result = dedup_preserve(vec![7, 7, 7, 7, 7]);
+    assert_eq!(result, vec![7], "all-duplicate input must collapse to one element");
+}
+
+#[test]
+fn dedup_preserve_no_duplicates_preserves_all() {
+    let input = vec![10, 20, 30, 40, 50];
+    let result = dedup_preserve(input.clone());
+    assert_eq!(result, input, "all-unique input must be preserved unchanged");
+}
+
+#[test]
+fn dedup_preserve_mixed_returns_first_seen_order() {
+    let result = dedup_preserve(vec![1, 2, 1, 3, 2, 4]);
+    assert_eq!(result, vec![1, 2, 3, 4]);
 }

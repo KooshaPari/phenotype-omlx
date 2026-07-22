@@ -21,10 +21,7 @@ pub struct TreeTopology {
 
 impl Default for TreeTopology {
     fn default() -> Self {
-        Self {
-            width: 4,
-            depth: 1,
-        }
+        Self { width: 4, depth: 1 }
     }
 }
 
@@ -137,7 +134,9 @@ impl MedusaHead for MockMedusaHead {
         if k == 0 {
             return Vec::new();
         }
-        let n = k.min(self.table.len()).max(if self.table.is_empty() { 0 } else { 1 });
+        let n = k
+            .min(self.table.len())
+            .max(if self.table.is_empty() { 0 } else { 1 });
         let take = n.min(self.table.len());
         self.table[..take].to_vec()
     }
@@ -168,7 +167,7 @@ fn per_head_budget(total: usize, tree: &TreeTopology, n_heads: usize) -> Vec<usi
 }
 
 /// Dedup a slice preserving first-seen order.
-fn dedup_preserve(xs: Vec<u32>) -> Vec<u32> {
+pub fn dedup_preserve(xs: Vec<u32>) -> Vec<u32> {
     let mut seen = HashSet::new();
     let mut out = Vec::with_capacity(xs.len());
     for x in xs {
@@ -191,10 +190,7 @@ mod tests {
 
     #[test]
     fn per_head_budget_respects_width_and_depth() {
-        let tree = TreeTopology {
-            width: 2,
-            depth: 1,
-        };
+        let tree = TreeTopology { width: 2, depth: 1 };
         let budget = per_head_budget(10, &tree, 4);
         assert_eq!(budget, vec![1, 1, 1, 1]);
     }
@@ -211,15 +207,7 @@ mod tests {
             Box::new(MockMedusaHead::new(vec![1, 2, 3, 4, 5])),
             Box::new(MockMedusaHead::new(vec![6, 7, 8, 9, 10])),
         ];
-        let p = MedusaProposal::from_heads(
-            &heads,
-            &[0],
-            &TreeTopology {
-                width: 4,
-                depth: 2,
-            },
-            3,
-        );
+        let p = MedusaProposal::from_heads(&heads, &[0], &TreeTopology { width: 4, depth: 2 }, 3);
         assert!(p.total() <= 3, "got {}", p.total());
     }
 
@@ -236,16 +224,47 @@ mod tests {
             Box::new(MockMedusaHead::new(vec![1, 2])),
             Box::new(MockMedusaHead::new(vec![2, 3])),
         ];
-        let p = MedusaProposal::from_heads(
-            &heads,
-            &[0],
-            &TreeTopology {
-                width: 4,
-                depth: 2,
-            },
-            8,
-        );
+        let p = MedusaProposal::from_heads(&heads, &[0], &TreeTopology { width: 4, depth: 2 }, 8);
         let flat = p.flat_tokens();
         assert_eq!(flat, vec![1, 2, 3]);
+    }
+
+    // -- dedup_preserve edge cases ----------------------------------------------------
+
+    #[test]
+    fn dedup_preserve_insertion_order_first_seen_wins() {
+        let input = vec![10, 20, 10, 30, 20, 40, 30];
+        let result = dedup_preserve(input);
+        assert_eq!(result, vec![10, 20, 30, 40]);
+    }
+
+    #[test]
+    fn dedup_preserve_empty_input_returns_empty() {
+        let result = dedup_preserve(vec![]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn dedup_preserve_all_duplicates_returns_single_element() {
+        let result = dedup_preserve(vec![7, 7, 7, 7]);
+        assert_eq!(result, vec![7]);
+    }
+
+    #[test]
+    fn dedup_preserve_no_duplicates_preserves_all() {
+        let input = vec![1, 2, 3, 4, 5];
+        let result = dedup_preserve(input.clone());
+        assert_eq!(result, input);
+    }
+
+    #[test]
+    fn dedup_preserve_single_element_returns_same() {
+        assert_eq!(dedup_preserve(vec![42]), vec![42]);
+    }
+
+    #[test]
+    fn dedup_preserve_adjacent_duplicates() {
+        let result = dedup_preserve(vec![1, 1, 2, 2, 3, 3]);
+        assert_eq!(result, vec![1, 2, 3]);
     }
 }

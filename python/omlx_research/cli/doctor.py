@@ -37,6 +37,7 @@ from typing import Callable, Optional
 
 from . import _doctor_checks as checks
 from . import _doctor_meta_checks as meta_checks  # drift detector (turn-7)
+from ._doctor_registry import get_all_checks, run_all_checks
 from ._doctor_shared import (
     EXPECTED_KERNEL_OP_COUNT,
     FAIL,
@@ -67,6 +68,7 @@ __all__ = [
 # Records
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class DoctorReport:
     """Aggregate report — what ``run_doctor`` builds and ``cmd_doctor`` renders."""
@@ -91,77 +93,20 @@ class DoctorReport:
 # Check registry + runner
 # ---------------------------------------------------------------------------
 
-CHECKS: list[Callable[[], Check]] = [
-    checks.python_version,
-    checks.mlx_core,
-    checks.mlx_lm,
-    checks.turboquant_rust_extension,
-    checks.kernel_registry_version,
-    checks.regress_baseline_version,
-    checks.model_kernels_operator_coverage,
-    checks.native_abi_v1,
-    checks.airlock_v2,
-    checks.tests_runnable,
-    # Added 2026-07-19 — split per-topic in turn-9 into three sibling
-    # modules (see _doctor_extra_{niah,eval,kernel}.py).
-    checks.omlx_research_version,
-    checks.niah_benchmark_present,
-    checks.niah_benchmark_non_legacy_path,
-    checks.julia_required_on_eval_path,
-    checks.niah_instrumented_schema_v2_present,
-    checks.eval_harness_subcommand_runnable,
-    checks.regress_baseline_dispatch_envelope,
-    # Added 2026-07-19 (turn-5) — see _doctor_turn5_checks.py.
-    checks.niah_regression_baseline_exists,
-    checks.dispatch_script_metal_exists,
-    checks.dispatch_script_sglang_exists,
-    checks.dispatch_script_vllm_exists,
-    # Added 2026-07-19 (turn-10) — internal structural invariants
-    # (coverage tag count, eval-suite variant count, metal-runtime lib
-    # test count, CLI subcommand count). See
-    # _doctor_internal_checks.py. All four are entirely INTERNAL
-    # (no external dependencies) and degrade to WARN — never
-    # FAIL — when their target file is missing.
-    checks.coverage_tag_count_at_least_25,
-    checks.eval_harness_suite_count_at_least_4,
-    checks.metal_runtime_lib_test_count_at_least_25,
-    checks.python_cli_subcommand_count_at_least_6,
-    # Added 2026-07-19 (turn-12) — two more internal structural
-    # invariants (Cargo workspace crate count, DDM
-    # ContinuousScheduleKind variant count). See
-    # _doctor_internal_checks_turn12.py — kept in a sibling
-    # module to keep each doctor's per-topic file within the
-    # 500-line cap. Both also degrade to WARN when their
-    # target file is missing.
-    checks.cargo_workspace_crate_count_at_least_15,
-    checks.ddm_continuous_schedule_variants_at_least_4,
-    # Meta-check (drift detector) — MUST be last so the count it
-    # observes reflects the complete registry. See
-    # _doctor_meta_checks.py for the recursion guard that prevents
-    # the spawned `doctor --json` subprocess from spawning another.
-    meta_checks.doctor_check_count_at_least_18,
-]
+CHECKS: list[Callable[[], Check]] = get_all_checks()
 
 
 def run_doctor(_args: Optional[argparse.Namespace] = None) -> DoctorReport:
     """Run every check in order, returning a populated DoctorReport.
 
-    Each check is wrapped in a broad ``Exception`` guard so a single
-    broken check cannot abort the whole report — failures degrade to
-    ``fail`` with the exception class name in the details.
+    Uses the registry pattern: each check self-registers via
+    ``@register_check`` and :func:`run_all_checks` executes them all
+    in priority order.  A single broken check cannot abort the whole
+    report — failures degrade to ``fail`` with the exception class
+    name in the details.
     """
     report = DoctorReport()
-    for check_fn in CHECKS:
-        try:
-            check = check_fn()
-        except Exception as e:  # defensive only
-            check = Check(
-                id=getattr(check_fn, "__name__", "unknown"),
-                description="(description unavailable — check raised)",
-                status=FAIL,
-                details=f"{type(e).__name__}: {e}",
-            )
-        report.checks.append(check)
+    report.checks = run_all_checks()
     return report
 
 
@@ -200,9 +145,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     """CLI entry point: ``doctor [--json]``."""
     report = run_doctor(args)
     if getattr(args, "json", False):
-        sys.stdout.write(
-            json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n"
-        )
+        sys.stdout.write(json.dumps(report.to_dict(), indent=2, sort_keys=True) + "\n")
     else:
         sys.stdout.write(_render_human(report))
     return report.exit_code()

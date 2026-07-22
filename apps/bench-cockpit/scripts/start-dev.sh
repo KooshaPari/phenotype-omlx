@@ -17,9 +17,9 @@ if [[ -f .env ]]; then set -a; source .env; set +a; fi
 
 # Prefer V5 EvaluationReport when present; override with BENCH_DATA.
 # Native JSON keeps richer per-cell fields (tok/s, traces); contract is thinner.
-DEFAULT_V5_NATIVE="/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b.json"
-DEFAULT_V5_CONTRACT="/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json"
-DEFAULT_MINIMAX_MATRIX="/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/minimax-m3-full/matrix.json"
+DEFAULT_V5_NATIVE="/Users/kooshapari/CodeProjects/Phenotype/repos/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b.json"
+DEFAULT_V5_CONTRACT="/Users/kooshapari/CodeProjects/Phenotype/repos/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json"
+DEFAULT_MINIMAX_MATRIX="/Users/kooshapari/CodeProjects/Phenotype/repos/pheno-harness/bench/results/minimax-m3-full/matrix.json"
 DATA_PATH="${BENCH_DATA:-}"
 if [[ -z "$DATA_PATH" ]]; then
   if [[ -f "$DEFAULT_V5_NATIVE" ]]; then

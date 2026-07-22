@@ -3,12 +3,18 @@
 from __future__ import annotations
 import logging
 import time
-from .base import BackendBase, BackendCapabilities, GenerateRequest, GenerateResponse
+from .base import (
+    BackendBase,
+    BackendCapabilities,
+    GenerateRequest,
+    GenerateResponse,
+    LazyBackendMixin,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class SglangBackend(BackendBase):
+class SglangBackend(LazyBackendMixin, BackendBase):
     capabilities = BackendCapabilities(
         name="sglang",
         primary="sglang",
@@ -36,7 +42,7 @@ class SglangBackend(BackendBase):
         except ImportError:
             return False
 
-    def _load(self) -> None:
+    def _load_backend(self) -> None:
         if self._runtime is None:
             try:
                 import sglang
@@ -52,15 +58,9 @@ class SglangBackend(BackendBase):
                 self._load_error = str(e)
 
     def generate(self, req: GenerateRequest) -> GenerateResponse:
-        self._load()
+        self._ensure_loaded()
         if self._runtime is None:
-            return GenerateResponse(
-                text="",
-                tokens=0,
-                elapsed_ms=0,
-                backend="sglang",
-                metadata={"error": "runtime not loaded"},
-            )
+            return self._error_response(req, "runtime not loaded", "sglang")
         t0 = time.time()
         out = self._runtime.generate(req.prompt, max_new_tokens=req.max_tokens)
         text = out if isinstance(out, str) else str(out)
