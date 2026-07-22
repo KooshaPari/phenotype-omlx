@@ -95,8 +95,36 @@ ensure_apple_runtime() {
   command -v container >/dev/null 2>&1 || die "Apple Container CLI (container) not found on PATH"
   if ! container system status >/dev/null 2>&1; then
     echo "starting Apple Container system services..."
-    container system start >/dev/null || die "container system start failed"
+    # Non-interactive: confirm default kata kernel if prompted.
+    if ! printf 'Y\n' | container system start >/dev/null; then
+      die "container system start failed"
+    fi
   fi
+}
+
+# Prefetch ClickHouse before compose up. Apple Container drops XPC /
+# HTTPClientError.remoteConnectionClosed when unpacking large CH images under
+# concurrent load; :latest (~820MB) hangs — compose pins :24.8.
+preflight_clickhouse_image() {
+  local ref="docker.io/clickhouse/clickhouse-server:24.8"
+  if container image list 2>/dev/null | grep -qE 'clickhouse/clickhouse-server[[:space:]]+24\.8'; then
+    echo "clickhouse_image=cached ($ref)"
+    return 0
+  fi
+  echo "preflight: pulling $ref (no concurrent container runs — Apple Container XPC)"
+  local attempt
+  for attempt in 1 2 3; do
+    if container image pull "$ref"; then
+      echo "clickhouse_image=pulled ($ref)"
+      return 0
+    fi
+    echo "preflight: pull attempt $attempt failed (remoteConnectionClosed/XPC?) — retrying after system settle"
+    sleep $((attempt * 5))
+  done
+  die "BLOCKER: failed to pull $ref after 3 attempts.
+Workaround: printf 'Y\\n' | container system stop; sleep 2; printf 'Y\\n' | container system start
+then: container image pull $ref
+Do not use clickhouse-server:latest on Apple Container (unpack hang)."
 }
 
 resolve_runtime() {
@@ -270,6 +298,13 @@ cmd_up() {
   local rt
   rt="$(resolve_runtime)"
   echo "runtime=$rt"
+  case "$rt" in
+    apple-container|apple-container-standalone)
+      preflight_clickhouse_image
+      # Ensure compose project network exists before multi-service up.
+      container network create "${PROJECT_NAME}-default" >/dev/null 2>&1 || true
+      ;;
+  esac
   compose "$rt" up
   echo "Langfuse UI: http://127.0.0.1:3000"
   echo "Point cockpit: LANGFUSE_BASE_URL=http://127.0.0.1:3000"
