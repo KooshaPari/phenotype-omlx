@@ -81,7 +81,12 @@ Fine for smoke; switch to A before agent fleets hit Hobby caps.
 Vendored file: `apps/bench-cockpit/deploy/langfuse/compose.yml`
 (from upstream `langfuse/langfuse` `docker-compose.yml`).
 
-Stack: langfuse-web, langfuse-worker, postgres, clickhouse, redis, minio.
+Stack: langfuse-web (:3000), langfuse-worker (:3030), postgres (host
+**15432** → avoid Homebrew :5432), clickhouse (HTTP :8123, native host
+**18123** → avoid sharecli :9000), redis (host **16379**), minio (:9090).
+
+Inter-service DNS still uses compose service names on internal ports
+(`postgres:5432`, `redis:6379`, `minio:9000`, `clickhouse:8123`).
 
 Update:
 
@@ -106,6 +111,15 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
   `~/.local/bin/container-compose` (flaticols/container-compose). Never Docker.
 - Data: bind mounts under `LANGFUSE_DATA_DIR` (default
   `~/.local/share/phenotype/langfuse`) — never `/tmp`.
+- ClickHouse: compose omits `user: "101:101"` because Apple Container cannot
+  `chown` host binds to uid 101 (sudo hangs / unsupported). `self-host.sh`
+  makes `clickhouse` / `clickhouse-logs` world-writable instead.
+- **Known Apple Container blocker (2026-07):** alpine/redis probes succeed after
+  `container system start`, but `clickhouse/clickhouse-server` unpack often
+  stalls ~10% of an ~820MB layer (0 KB/s) then dies (SIGTERM / XPC). Prefer a
+  quiet machine, one compose up at a time, and
+  `printf Y | container system start` so kernel prompts are non-interactive.
+  Until CH starts, keep using cloud Hobby as satellite; do not fall back to Docker.
 - Smoke: `up` waits for `http://127.0.0.1:3000/api/public/health` (or
   `bash scripts/langfuse/self-host.sh smoke`).
 - Disk: ClickHouse + MinIO grow with traces — prune data dirs deliberately; never

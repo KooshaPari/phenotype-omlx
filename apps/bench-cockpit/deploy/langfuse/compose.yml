@@ -111,7 +111,8 @@ services:
       - ${LANGFUSE_DATA_DIR}/clickhouse-logs:/var/log/clickhouse-server
     ports:
       - 127.0.0.1:8123:8123
-      - 127.0.0.1:9000:9000
+      # Avoid host :9000 (often sharecli / other local tools)
+      - 127.0.0.1:18123:9000
     healthcheck:
       test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
       interval: 5s
@@ -152,7 +153,8 @@ services:
       - --maxmemory-policy
       - noeviction
     ports:
-      - 127.0.0.1:6379:6379
+      # Avoid host Homebrew redis if present; keep internal 6379 for stack DNS
+      - 127.0.0.1:16379:6379
     volumes:
       - ${LANGFUSE_DATA_DIR}/redis:/data
     healthcheck:
@@ -176,7 +178,8 @@ services:
       TZ: UTC
       PGTZ: UTC
     ports:
-      - 127.0.0.1:5432:5432
+      # Avoid host Homebrew postgres@17 on :5432
+      - 127.0.0.1:15432:5432
     volumes:
       - ${LANGFUSE_DATA_DIR}/postgres:/var/lib/postgresql/data
 
