@@ -16,7 +16,7 @@ When a repo is superseded:
 ## Forbidden
 
 - `gh repo delete`
-- UI “Delete this repository”
+- UI "Delete this repository"
 - Any action that destroys the only copy of history
 
 ## oMLX stand-ins (2026-07-22)
@@ -26,17 +26,3 @@ When a repo is superseded:
 | Active | `KooshaPari/phenotype-omlx` |
 | Archive | `KooshaPari/zz-archive-phenotype-omlx-tmp` |
 | Archive | `KooshaPari/zz-archive-phenotype-omlx-temp` |
-EOF
-git add docs/guides/GITHUB_ARCHIVE_POLICY.md
-git -c user.email=kooshapari@local -c user.name=kooshapari commit -m "docs: STRICT no-delete; zz-archive pattern only"
-git push -u origin docs/github-archive-policy
-gh pr create --repo KooshaPari/phenotype-omlx --base main --head docs/github-archive-policy \
-  --title "docs: STRICT GitHub no-delete / zz-archive policy" \
-  --body "## Summary
-- Codifies org rule: never delete repos; use \`zz-archive-*\` + archive only.
-- Documents oMLX tmp/temp stand-ins after restore.
-
-## Note
-A prior desk agent incorrectly deleted stand-ins; they were restored by Support and re-applied as zz-archive.
-
-Made with [Cursor](https://cursor.com)" 2>&1 | tail -20
