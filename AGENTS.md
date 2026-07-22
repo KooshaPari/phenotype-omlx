@@ -1,10 +1,24 @@
 # phenotype-omlx agent contract
 
-- **Canonical repo:** `KooshaPari/phenotype-omlx` only. Do not use archived
-  `phenotype-omlx-tmp` / `phenotype-omlx-temp` for new work. Cutover details:
-  `docs/guides/CANONICAL_REPO_CUTOVER.md`.
-- Author features in `repos/worktrees/phenotype-omlx/<topic>`, not the
-  canonical `main` checkout.
+## Worktree hub (required)
+
+| Path | Role |
+| --- | --- |
+| `repos/phenotype-omlx` | Canonical clone — always on `main`; pull / merge only |
+| `repos/worktrees/phenotype-omlx/<topic>` | Feature work, quality gates, PR prep, analysis |
+
+```bash
+# From the canonical clone (or via scripts/worktree_add.sh <branch>):
+git -C /Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx \
+  worktree add ../worktrees/phenotype-omlx/<topic> -b <topic>
+```
+
+- **Canonical GitHub repo:** `KooshaPari/phenotype-omlx` only.
+- **Do not use** archived remotes/clones `zz-archive-phenotype-omlx-tmp` or
+  `zz-archive-phenotype-omlx-temp` (legacy names `phenotype-omlx-tmp` /
+  `phenotype-omlx-temp`). Cutover: `docs/guides/CANONICAL_REPO_CUTOVER.md`.
+- Never author features in the canonical `main` checkout or under any
+  `worktrees/phenotype-omlx-tmp` hub.
 - This directory is an independent Git repository. Never rely on a parent Git worktree.
 - Treat `perf-core/` as the Rust workspace and `python/` as its Python integration surface.
 
