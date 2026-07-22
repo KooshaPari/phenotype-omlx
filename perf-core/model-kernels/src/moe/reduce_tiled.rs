@@ -57,7 +57,10 @@ pub fn weighted_reduce_tiled(
     out: &mut [f32],
 ) -> Result<()> {
     if hidden == 0 {
-        return Err(KernelError::ZeroDimension { what: "hidden", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "hidden",
+            got: 0,
+        });
     }
     if experts_per_token == 0 {
         return Err(KernelError::ZeroDimension {
@@ -259,11 +262,7 @@ mod tests {
 
     /// Build a deterministic `[num_tokens, experts_per_token]` weight
     /// matrix.
-    fn deterministic_weights(
-        num_tokens: usize,
-        experts_per_token: usize,
-        salt: u64,
-    ) -> Vec<f32> {
+    fn deterministic_weights(num_tokens: usize, experts_per_token: usize, salt: u64) -> Vec<f32> {
         let mut rng = Lcg::new(0xBEEF_DEAD ^ salt);
         (0..num_tokens * experts_per_token)
             .map(|_| rng.next_signed() * 0.5) // smaller magnitude so accumulated sums stay in range
@@ -298,8 +297,7 @@ mod tests {
         let num_tokens = 8;
         let experts_per_token = 3;
         let hidden = 32;
-        let expert_outs =
-            deterministic_expert_outs(num_tokens, experts_per_token, hidden, 0xA1);
+        let expert_outs = deterministic_expert_outs(num_tokens, experts_per_token, hidden, 0xA1);
         let weights = deterministic_weights(num_tokens, experts_per_token, 0xB2);
 
         let mut scalar_out = vec![0.0f32; num_tokens * hidden];
@@ -375,8 +373,7 @@ mod tests {
         let expert_outs = vec![0.0f32; 8]; // 2 * 2 * 2
         let weights = vec![1.0f32, 0.5, 0.3, 0.4, 0.2]; // 5 floats, not divisible by 2
         let mut out = vec![0.0f32; 4];
-        let err =
-            weighted_reduce_tiled(&expert_outs, &weights, 2, 2, &mut out).unwrap_err();
+        let err = weighted_reduce_tiled(&expert_outs, &weights, 2, 2, &mut out).unwrap_err();
         assert!(
             matches!(err, KernelError::BadBufferLength { what, .. } if what == "weights"),
             "expected BadBufferLength for weights, got {err:?}"
@@ -386,8 +383,7 @@ mod tests {
         let expert_outs2 = vec![0.0f32; 6];
         let weights2 = vec![1.0f32, 0.5, 0.3, 0.4]; // 2 tokens * 2 experts
         let mut out2 = vec![0.0f32; 4];
-        let err =
-            weighted_reduce_tiled(&expert_outs2, &weights2, 2, 2, &mut out2).unwrap_err();
+        let err = weighted_reduce_tiled(&expert_outs2, &weights2, 2, 2, &mut out2).unwrap_err();
         assert!(
             matches!(err, KernelError::BadBufferLength { what, .. } if what == "expert_outs"),
             "expected BadBufferLength for expert_outs, got {err:?}"
@@ -397,8 +393,7 @@ mod tests {
         let expert_outs3 = vec![0.0f32; 8];
         let weights3 = vec![1.0f32, 0.5, 0.3, 0.4];
         let mut out3 = vec![0.0f32; 3];
-        let err =
-            weighted_reduce_tiled(&expert_outs3, &weights3, 2, 2, &mut out3).unwrap_err();
+        let err = weighted_reduce_tiled(&expert_outs3, &weights3, 2, 2, &mut out3).unwrap_err();
         assert!(
             matches!(err, KernelError::BadBufferLength { what, .. } if what == "out"),
             "expected BadBufferLength for out, got {err:?}"
@@ -422,5 +417,60 @@ mod tests {
         assert_eq!(tile_size_for(32), 32, "hidden below tile_max");
         assert_eq!(tile_size_for(256), 64, "tile_max caps large hidden");
         assert_eq!(tile_size_for(1), 1, "degenerate 1-wide still selects");
+    }
+
+    #[test]
+    fn weighted_reduce_tiled_zero_inputs_produces_zero_output() {
+        let expert_outs: Vec<f32> = vec![];
+        let weights: Vec<f32> = vec![];
+        let mut out: Vec<f32> = vec![];
+        weighted_reduce_tiled(&expert_outs, &weights, 2, 4, &mut out)
+            .expect("empty weights is a valid no-op");
+        assert!(
+            out.is_empty(),
+            "zero inputs must produce zero-length output"
+        );
+    }
+
+    #[test]
+    fn weighted_reduce_tiled_single_input_returns_identity() {
+        let hidden = 4;
+        let experts_per_token = 1;
+        let expert_outs = vec![1.0, 2.0, 3.0, 4.0];
+        let weights = vec![1.0];
+        let mut out = vec![0.0; hidden];
+        weighted_reduce_tiled(&expert_outs, &weights, experts_per_token, hidden, &mut out).unwrap();
+        let expected = [1.0, 2.0, 3.0, 4.0];
+        for (i, (&got, &want)) in out.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-6,
+                "single-input identity mismatch at {i}: got {got}, want {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn weighted_reduce_tiled_sum_matches_known_values() {
+        let hidden = 3;
+        let experts_per_token = 2;
+        let expert_outs = vec![
+            1.0, 2.0, 3.0, // token 0, expert 0
+            4.0, 5.0, 6.0, // token 0, expert 1
+            7.0, 8.0, 9.0, // token 1, expert 0
+            0.0, 1.0, 2.0, // token 1, expert 1
+        ];
+        let weights = vec![
+            0.5, 0.5, // token 0: 0.5 * [1,2,3] + 0.5 * [4,5,6] = [2.5, 3.5, 4.5]
+            1.0, 0.0, // token 1: 1.0 * [7,8,9] + 0.0 * [0,1,2] = [7.0, 8.0, 9.0]
+        ];
+        let mut out = vec![0.0; 2 * hidden];
+        weighted_reduce_tiled(&expert_outs, &weights, experts_per_token, hidden, &mut out).unwrap();
+        let expected = [2.5, 3.5, 4.5, 7.0, 8.0, 9.0];
+        for (i, (&got, &want)) in out.iter().zip(expected.iter()).enumerate() {
+            assert!(
+                (got - want).abs() < 1e-5,
+                "known-values mismatch at {i}: got {got}, want {want}"
+            );
+        }
     }
 }

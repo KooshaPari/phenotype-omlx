@@ -616,4 +616,66 @@ mod tests {
         assert_eq!(remaining.len(), 1);
         assert_eq!(remaining[0].id, keep_id);
     }
+
+    #[test]
+    fn new_registry_is_empty() {
+        let reg = KernelRegistry::new();
+        assert!(reg.candidates.is_empty());
+        assert!(reg.tuning.is_empty());
+        assert!(reg.list_candidates().is_empty());
+    }
+
+    #[test]
+    fn register_and_get_round_trip() {
+        let mut reg = KernelRegistry::new();
+        let c = make_candidate("round-trip");
+        let id = c.id;
+        reg.register_candidate(c);
+
+        let got = reg
+            .candidates
+            .get(&id)
+            .expect("candidate must be retrievable by id");
+        assert_eq!(got.name, "round-trip");
+        assert_eq!(got.id, id);
+    }
+
+    #[test]
+    fn get_nonexistent_candidate_returns_none() {
+        let reg = KernelRegistry::new();
+        let missing = CandidateId(0xFFFF_FFFF);
+        assert!(reg.candidates.get(&missing).is_none());
+    }
+
+    #[test]
+    fn list_returns_all_registered() {
+        let mut reg = KernelRegistry::new();
+        for name in &["alpha", "bravo", "charlie", "delta"] {
+            reg.register_candidate(make_candidate(name));
+        }
+        let all = reg.list_candidates();
+        assert_eq!(all.len(), 4, "list must return every registered candidate");
+        let names: Vec<&str> = all.iter().map(|c| c.name.as_str()).collect();
+        assert!(
+            names.contains(&"alpha") && names.contains(&"delta"),
+            "all names must be present"
+        );
+    }
+
+    #[test]
+    fn unregister_removes_candidate() {
+        let mut reg = KernelRegistry::new();
+        let c = make_candidate("delete-me");
+        let id = c.id;
+        reg.register_candidate(c);
+        assert_eq!(reg.list_candidates().len(), 1);
+
+        let removed = reg.candidates.remove(&id);
+        assert!(removed.is_some(), "removal must return the candidate");
+        assert_eq!(
+            reg.list_candidates().len(),
+            0,
+            "registry must be empty after removal"
+        );
+    }
 }
