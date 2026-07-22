@@ -315,9 +315,11 @@ If HTTPClientError.remoteConnectionClosed / XPC timeout:
   printf 'Y\\n' | container system stop; sleep 2; printf 'Y\\n' | container system start
   then re-run: $0 up
 If registry 429 Too Many Requests (common on postgres:17 after retries):
-  wait for Docker Hub anonymous rate-limit reset, or docker login / mirror,
-  then: container image pull docker.io/library/postgres:17 && $0 up
-Pinned ClickHouse: clickhouse/clickhouse-server:24.8 (not :latest)."
+  wait for Docker Hub anonymous rate-limit reset, or:
+    container registry login docker.io
+    container image pull docker.io/postgres:17
+  then: $0 up
+  Never Docker. Pinned ClickHouse: clickhouse/clickhouse-server:24.8 (not :latest)."
         fi
         sleep "$settle"
       done

@@ -122,7 +122,8 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
   (clickhouse → redis → postgres → minio, settle delay) then web/worker.
   Parallel `compose up` often kills the apiserver mid-create.
 - Registry: anonymous Docker Hub pulls hit `429 Too Many Requests` after
-  several large images. Workarounds: wait for the rate-limit window, or
+  several large images (blocks `postgres:17` and often langfuse images).
+  Workarounds: wait for the rate-limit window, or
   `container registry login docker.io` with a Hub account, then:
   `container image pull docker.io/postgres:17` (and langfuse images) before
   `self-host.sh up`. Never Docker as a fallback.
@@ -130,12 +131,8 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
   101 without interactive sudo) and sets `CLICKHOUSE_DO_NOT_CHOWN=1` so the
   entrypoint does not fail on virtiofs binds. `self-host.sh` chmod `a+rwx` on
   data/log dirs. Host native port is `18123` (avoids `:9000` conflicts).
-- Apple serial bring-up: `self-host.sh up` starts deps one-by-one under Apple
-  Container to avoid XPC drops from parallel create.
 - Postgres host port remaps to `15432` when local Homebrew postgres holds
-  `:5432`. Image pull can hit Docker Hub anonymous **429** after many retries —
-  wait for rate-limit reset (or auth/mirror), then
-  `container image pull docker.io/library/postgres:17` and re-run `up`.
+  `:5432`.
 - Smoke: `up` waits for `http://127.0.0.1:3000/api/public/health` (or
   `bash scripts/langfuse/self-host.sh smoke`).
 - Disk: ClickHouse + MinIO grow with traces — prune data dirs deliberately; never
