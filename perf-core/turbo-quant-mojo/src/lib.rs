@@ -39,6 +39,59 @@ impl MojoQuantizedTensor {
     }
 }
 
+/// GEMV decode kernel: output = W * input
+///
+/// `weights` is a row-major (rows × cols) matrix.
+/// `input` is a (cols,) vector.
+/// `output` is a (rows,) vector.
+///
+/// NOTE: This is a reference Rust implementation. The actual Mojo FFI bridge
+/// requires the Mojo runtime and `mojo-ffi` crate to be available.
+pub fn gemv_decode(weights: &[f32], input: &[f32], output: &mut [f32], rows: usize, cols: usize) {
+    assert_eq!(weights.len(), rows * cols, "weights shape mismatch");
+    assert_eq!(input.len(), cols, "input length mismatch");
+    assert_eq!(output.len(), rows, "output length mismatch");
+    for r in 0..rows {
+        let mut sum = 0.0f32;
+        for c in 0..cols {
+            sum += weights[r * cols + c] * input[c];
+        }
+        output[r] = sum;
+    }
+}
+
+/// SIMD-style chunked GEMV decode for benchmarking comparison.
+///
+/// Processes 32 elements at a time for better cache utilization.
+pub fn gemv_decode_rust_simd(
+    weights: &[f32],
+    input: &[f32],
+    output: &mut [f32],
+    rows: usize,
+    cols: usize,
+) {
+    assert_eq!(weights.len(), rows * cols, "weights shape mismatch");
+    assert_eq!(input.len(), cols, "input length mismatch");
+    assert_eq!(output.len(), rows, "output length mismatch");
+    const CHUNK: usize = 32;
+    for r in 0..rows {
+        let mut sum = 0.0f32;
+        let mut c = 0;
+        while c + CHUNK <= cols {
+            let chunk_sum: f32 = (0..CHUNK)
+                .map(|i| weights[r * cols + c + i] * input[c + i])
+                .sum();
+            sum += chunk_sum;
+            c += CHUNK;
+        }
+        while c < cols {
+            sum += weights[r * cols + c] * input[c];
+            c += 1;
+        }
+        output[r] = sum;
+    }
+}
+
 mod native;
 mod validation;
 
