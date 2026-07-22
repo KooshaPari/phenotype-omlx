@@ -4,9 +4,20 @@
 
 This is the **canonical** Phenotype oMLX repository
 ([`KooshaPari/phenotype-omlx`](https://github.com/KooshaPari/phenotype-omlx)).
-Archived supersets `phenotype-omlx-tmp` and `phenotype-omlx-temp` are historical
-only — see [`docs/guides/CANONICAL_REPO_CUTOVER.md`](docs/guides/CANONICAL_REPO_CUTOVER.md).
-Feature work lives under `repos/worktrees/phenotype-omlx/<topic>`.
+
+| Local path | Role |
+| --- | --- |
+| `repos/phenotype-omlx` | Canonical clone — stay on `main`; pull / merge only |
+| `repos/worktrees/phenotype-omlx/<topic>` | Feature work, quality gates, PR prep |
+
+```bash
+./scripts/worktree_add.sh <topic>   # → worktrees/phenotype-omlx/<topic>
+```
+
+Archived remotes/clones `zz-archive-phenotype-omlx-tmp` and
+`zz-archive-phenotype-omlx-temp` (legacy `phenotype-omlx-tmp` /
+`phenotype-omlx-temp`) are historical only — do not use. Details:
+[`docs/guides/CANONICAL_REPO_CUTOVER.md`](docs/guides/CANONICAL_REPO_CUTOVER.md).
 
 phenotype-omlx is a fork of OMLX (`/Applications/oMLX.app`) that adds
 performance cores, concurrent research agents, multi-backend support
