@@ -1,8 +1,9 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// One thread routes one token. Fixed-size private arrays keep the kernel
-// bounded for Qwen-style experts <= 64 and top_k <= 8.
+// One thread routes one token. Fixed-size private arrays bound top_k <= 8;
+// the runtime expert count is supported through 256 for current Qwen and
+// DeepSeek-style sparse-MoE contracts.
 kernel void moe_topk_f32(
     device const float* logits [[buffer(0)]],
     device uint* expert_ids [[buffer(1)]],

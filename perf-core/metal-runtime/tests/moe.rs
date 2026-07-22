@@ -48,6 +48,17 @@ fn reference_matches_model_kernels_for_all_supported_top_k_values() {
 }
 
 #[test]
+fn reference_supports_current_sparse_moe_expert_counts() {
+    for experts in [16, 128, 256] {
+        let shape = MoeShape { tokens: 2, experts };
+        let logits: Vec<f32> = (0..shape.tokens * shape.experts)
+            .map(|index| ((index * 17) % 97) as f32 / 13.0)
+            .collect();
+        assert_matches_reference(&logits, shape, 8.min(experts));
+    }
+}
+
+#[test]
 fn stable_ties_choose_lower_expert_ids() {
     let shape = MoeShape {
         tokens: 1,
@@ -79,11 +90,11 @@ fn rejects_bad_shapes_and_unsupported_top_k() {
         MoeRouter::new(
             MoeShape {
                 tokens: 1,
-                experts: 65
+                experts: 257
             },
             2
         ),
-        Err(MoeRouterError::TooManyExperts { experts: 65 })
+        Err(MoeRouterError::TooManyExperts { experts: 257 })
     ));
     assert!(matches!(
         MoeRouter::new(
@@ -153,21 +164,59 @@ fn metal_matches_reference_ids_and_weights() {
     let artifact = MetallibLoader::new(root, ArtifactAllowlist::new([(name.to_owned(), digest)]))
         .load(name)
         .expect("verified precompiled test metallib");
-    let shape = MoeShape {
-        tokens: 4,
-        experts: 64,
-    };
-    let logits: Vec<f32> = (0..shape.tokens * shape.experts)
-        .map(|i| ((i * 29 + 11) % 97) as f32 * 0.125 - 5.0)
-        .collect();
-    for top_k in [1, 2, 4, 8] {
-        let router = MoeRouter::new(shape, top_k).unwrap();
-        let expected = router.route_reference(&logits).unwrap();
-        let actual = router.route_metal(&logits, &artifact).unwrap();
-        assert_eq!(actual.expert_ids, expected.expert_ids);
-        for (got, want) in actual.weights.iter().zip(&expected.weights) {
-            assert!((got - want).abs() <= 2.0e-5, "got {got}, expected {want}");
+    for experts in [16, 64, 128, 256] {
+        let shape = MoeShape { tokens: 4, experts };
+        let logits: Vec<f32> = (0..shape.tokens * shape.experts)
+            .map(|i| ((i * 29 + 11) % 97) as f32 * 0.125 - 5.0)
+            .collect();
+        for top_k in [1, 2, 4, 8] {
+            let router = MoeRouter::new(shape, top_k).unwrap();
+            let expected = router.route_reference(&logits).unwrap();
+            let actual = router.route_metal(&logits, &artifact).unwrap();
+            assert_eq!(actual.expert_ids, expected.expert_ids);
+            for (got, want) in actual.weights.iter().zip(&expected.weights) {
+                assert!((got - want).abs() <= 2.0e-5, "got {got}, expected {want}");
+            }
         }
+    }
+}
+
+#[cfg(all(feature = "metal", target_os = "macos"))]
+#[test]
+fn metal_grouped_gemm_matches_assignment_oracle() {
+    use metal_runtime::{grouped_gemm_metal, ArtifactAllowlist, MetallibLoader};
+    use sha2::{Digest, Sha256};
+
+    let path = std::env::var("MOE_GROUPED_GEMM_METALLIB")
+        .expect("MOE_GROUPED_GEMM_METALLIB test artifact");
+    let path = std::path::PathBuf::from(path);
+    let bytes = std::fs::read(&path).expect("read grouped-gemm metallib");
+    let digest = Sha256::digest(&bytes).into();
+    let root = path.parent().expect("metallib parent");
+    let name = path.file_name().and_then(|value| value.to_str()).unwrap();
+    let artifact = MetallibLoader::new(root, ArtifactAllowlist::new([(name.to_owned(), digest)]))
+        .load(name)
+        .expect("verified grouped-gemm metallib");
+
+    let k = 3;
+    let n = 2;
+    let activations = vec![1.0, 2.0, 3.0, -1.0, 2.0, 0.5, 2.0, 0.0, -2.0];
+    let expert_weights = vec![1.0; 4 * k * n];
+    let assignment_tokens = vec![0, 1, 2];
+    let assignment_experts = vec![0, 2, 3];
+    let actual = grouped_gemm_metal(
+        &activations,
+        &expert_weights,
+        &assignment_tokens,
+        &assignment_experts,
+        k,
+        n,
+        &artifact,
+    )
+    .expect("Metal grouped GEMM");
+    let expected = vec![6.0, 6.0, 1.5, 1.5, 0.0, 0.0];
+    for (got, want) in actual.iter().zip(expected) {
+        assert!((got - want).abs() <= 1.0e-5, "got {got}, expected {want}");
     }
 }
 

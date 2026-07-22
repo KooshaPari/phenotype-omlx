@@ -121,4 +121,25 @@ mod tests {
         assert_eq!(plan.capacity_used[0], 4);
         assert!(plan.dropped.is_empty());
     }
+
+    #[test]
+    fn skewed_routing_reports_capacity_drops_deterministically() {
+        let tokens = (0..8).collect::<Vec<_>>();
+        let assignments = vec![(0, 1.0); tokens.len()];
+        let plan = moe_dispatch(&tokens, &assignments, 4, 1.0).unwrap();
+
+        assert_eq!(plan.capacity_used, vec![2, 0, 0, 0]);
+        assert_eq!(plan.expert_buckets[0], vec![0, 1]);
+        assert_eq!(plan.dropped, vec![2, 3, 4, 5, 6, 7]);
+    }
+
+    #[test]
+    fn balanced_routing_avoids_drops_at_unit_capacity() {
+        let tokens = (0..8).collect::<Vec<_>>();
+        let assignments = (0..8).map(|token| (token % 4, 1.0)).collect::<Vec<_>>();
+        let plan = moe_dispatch(&tokens, &assignments, 4, 1.0).unwrap();
+
+        assert_eq!(plan.capacity_used, vec![2, 2, 2, 2]);
+        assert!(plan.dropped.is_empty());
+    }
 }
