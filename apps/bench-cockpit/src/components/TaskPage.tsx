@@ -1,6 +1,17 @@
 import React, { useMemo, useState } from 'react';
 import { Cell, HistoryEntry } from '../types';
-import { resolveRlvr } from '../lib/rlvr';
+import {
+  effectiveGenOk,
+  effectiveVerifiedPass,
+} from '../lib/metrics';
+import {
+  OUTCOME_EXPLAIN,
+  OutcomeKey,
+  taskAcceptance,
+  taskDescription,
+  taskTitle,
+} from '../lib/assignment';
+import TraceView from './TraceView';
 
 interface Props {
   suite: string;
@@ -10,6 +21,25 @@ interface Props {
   initialVariant?: 'stock' | 'ours';
   onBack: () => void;
   onOpenSuite: () => void;
+}
+
+function outcomeValue(cell: Cell, key: OutcomeKey): number | null {
+  switch (key) {
+    case 'pass_at_1':
+      return cell.pass_at_1;
+    case 'gen_ok':
+      return effectiveGenOk(cell);
+    case 'verified_pass_at_1':
+      return effectiveVerifiedPass(cell);
+    case 'partial_credit':
+      return cell.partial_credit;
+    case 'judge':
+      return cell.judge_score == null || Number.isNaN(cell.judge_score)
+        ? null
+        : cell.judge_score;
+    default:
+      return null;
+  }
 }
 
 export default function TaskPage({
@@ -31,34 +61,61 @@ export default function TaskPage({
   const [variant, setVariant] = useState<'stock' | 'ours'>(
     variants.includes(initialVariant) ? initialVariant : variants[0] || 'ours',
   );
-  const [runIdx, setRunIdx] = useState(0); // 0 = live/current payload (latest history entry)
+  const [runIdx, setRunIdx] = useState(0);
 
   const cell = useMemo(
     () => cells.find((c) => c.suite === suite && c.task_id === taskId && c.variant === variant) || null,
     [cells, suite, taskId, variant],
   );
 
-  const oursTrend = useMemo(() => {
-    // History only stores summary aggregates today — approximate ours PC/pass from summary.
-    return history.map((h, i) => ({
-      run: i + 1,
-      at: h.receivedAt,
-      pass: h.summary?.by_variant?.ours?.pass_at_1 ?? 0,
-      pc: h.summary?.by_variant?.ours?.mean_partial_credit ?? 0,
-      wall: h.summary?.by_variant?.ours?.mean_wall_clock_s ?? 0,
-      n: h.cellCount,
-    }));
-  }, [history]);
+  const title = taskTitle(cell, taskId);
+  const description = taskDescription(cell);
+  const acceptance = taskAcceptance(cell);
+  const hasPrompt = Boolean(cell?.prompt?.trim());
+  const hasReply = Boolean(cell?.reply?.trim());
+  const hasExpected = cell?.expected_answer != null && String(cell.expected_answer).trim() !== '';
 
-  const rlvr = cell ? resolveRlvr(cell) : null;
+  const outcomeKeys = Object.keys(OUTCOME_EXPLAIN) as OutcomeKey[];
 
   return (
-    <div className="view-content task-page">
+    <div className="view-content task-page task-page-canvas" data-testid="task-page-canvas">
       <div className="detail-nav">
         <button type="button" className="gt-btn" onClick={onBack}>← Back</button>
         <button type="button" className="gt-btn" onClick={onOpenSuite}>Suite {suite}</button>
-        <h2 className="detail-title mono">{taskId}</h2>
+        <span className="faint mono">{suite}</span>
       </div>
+
+      <header className="assignment-hero">
+        <h2 className="assignment-title">{title}</h2>
+        {title !== taskId && <div className="assignment-id mono faint">{taskId}</div>}
+        {description ? (
+          <p className="assignment-desc">{description}</p>
+        ) : (
+          <p className="assignment-desc muted">
+            No description on this cell yet — enrich export with{' '}
+            <code>description</code> / <code>task_title</code> (dual-read).
+          </p>
+        )}
+        <div className="assignment-meta faint">
+          {cell ? (
+            <>
+              <span>{cell.difficulty || '—'}</span>
+              <span>·</span>
+              <span>{cell.task_type || 'task'}</span>
+              <span>·</span>
+              <span>{cell.scoring_method || 'scoring?'}</span>
+              {cell.ok != null && (
+                <>
+                  <span>·</span>
+                  <span className={cell.ok ? 'good' : 'bad'}>{cell.ok ? 'ok' : 'fail'}</span>
+                </>
+              )}
+            </>
+          ) : (
+            <span>No cell loaded</span>
+          )}
+        </div>
+      </header>
 
       <div className="task-controls">
         <label>
@@ -88,51 +145,80 @@ export default function TaskPage({
       {!cell ? (
         <div className="empty-state">No cell for {suite}/{taskId} · {variant}</div>
       ) : (
-        <div className="ov-grid">
-          <div className="ov-card">
-            <div className="ov-title">Scores</div>
-            <div className="kv"><span className="k">pass@1</span><span className="v">{(cell.pass_at_1 * 100).toFixed(1)}%</span></div>
-            <div className="kv"><span className="k">PC</span><span className="v">{cell.partial_credit.toFixed(3)}</span></div>
-            <div className="kv"><span className="k">judge</span><span className="v">{cell.judge_score?.toFixed(3) ?? '—'}</span></div>
-            <div className="kv"><span className="k">format</span><span className="v">{((cell.format_compliance_rate || 0) * 100).toFixed(0)}%</span></div>
-          </div>
-          <div className="ov-card">
-            <div className="ov-title">Perf</div>
-            <div className="kv"><span className="k">wall</span><span className="v">{cell.wall_clock_s.toFixed(2)}s</span></div>
-            <div className="kv"><span className="k">tok/s</span><span className="v">{(cell.tokens_per_second || 0).toFixed(1)}</span></div>
-            <div className="kv"><span className="k">ttft</span><span className="v">{cell.first_token_latency_ms ? (cell.first_token_latency_ms / 1000).toFixed(2) + 's' : '—'}</span></div>
-          </div>
-          {rlvr && (
-            <div className="ov-card">
-              <div className="ov-title">RLVR ({rlvr.source})</div>
-              <div className="kv"><span className="k">composite</span><span className="v">{rlvr.composite.toFixed(3)}</span></div>
-              <div className="kv"><span className="k">L0–L3</span><span className="v mono">{rlvr.l0.toFixed(2)} / {rlvr.l1.toFixed(2)} / {rlvr.l2.toFixed(2)} / {rlvr.l3.toFixed(2)}</span></div>
-            </div>
-          )}
-        </div>
-      )}
+        <>
+          <section className="assignment-section" data-testid="assignment-acceptance">
+            <h3 className="section-title">Acceptance / rubric</h3>
+            {acceptance ? (
+              <pre className="assignment-rubric">{acceptance}</pre>
+            ) : (
+              <div className="trace-empty">
+                <p>
+                  No acceptance criteria or rubric on this export. Dual-read keys:{' '}
+                  <code>acceptance</code>, <code>acceptance_criteria</code>, <code>rubric</code>.
+                  {cell.scoring_method && (
+                    <> Scoring method: <code>{cell.scoring_method}</code>.</>
+                  )}
+                  {hasExpected && <> Expected answer is shown below.</>}
+                </p>
+              </div>
+            )}
+          </section>
 
-      <h3 className="section-title">Ours change over runs (summary ring)</h3>
-      {oursTrend.length < 2 ? (
-        <p className="faint">Need ≥2 history snapshots (reconnect / data reload) to show ours trend.</p>
-      ) : (
-        <table className="heat-table">
-          <thead>
-            <tr><th>Run</th><th>When</th><th>Ours P@1</th><th>Ours PC</th><th>Ours Wall</th><th>n</th></tr>
-          </thead>
-          <tbody>
-            {oursTrend.map((r) => (
-              <tr key={r.run}>
-                <td>#{r.run}</td>
-                <td className="faint">{new Date(r.at).toLocaleTimeString()}</td>
-                <td>{(r.pass * 100).toFixed(1)}%</td>
-                <td>{r.pc.toFixed(3)}</td>
-                <td>{r.wall.toFixed(2)}s</td>
-                <td>{r.n}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          <section className="assignment-section" data-testid="assignment-outcomes">
+            <h3 className="section-title">Outcomes</h3>
+            <p className="faint assignment-lead">
+              How this run scored — and what each metric means on V5 vs verified grading.
+            </p>
+            <div className="outcome-grid">
+              {outcomeKeys.map((key) => {
+                const def = OUTCOME_EXPLAIN[key];
+                const raw = outcomeValue(cell, key);
+                return (
+                  <article key={key} className="outcome-card">
+                    <div className="outcome-head">
+                      <span className="outcome-label mono">{def.label}</span>
+                      <span className="outcome-value">{def.fmt(raw)}</span>
+                    </div>
+                    <p className="outcome-blurb">{def.blurb}</p>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          {(hasPrompt || hasReply || hasExpected) && (
+            <section className="assignment-section" data-testid="assignment-io">
+              <h3 className="section-title">Prompt / reply / expected</h3>
+              {hasPrompt && (
+                <div className="ds">
+                  <h5>Prompt</h5>
+                  <pre className="reply-box">{cell.prompt}</pre>
+                </div>
+              )}
+              {hasReply && (
+                <div className="ds">
+                  <h5>Reply</h5>
+                  <pre className="reply-box">{cell.reply}</pre>
+                </div>
+              )}
+              {hasExpected && (
+                <div className="ds">
+                  <h5>Expected</h5>
+                  <pre className="reply-box">{String(cell.expected_answer)}</pre>
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="assignment-section" data-testid="assignment-trace">
+            <h3 className="section-title">Chat / tool trace</h3>
+            <p className="faint assignment-lead">
+              iMessage-style turns and tool calls from <code>progress_trace</code> or{' '}
+              <code>chat_trace</code>.
+            </p>
+            <TraceView cell={cell} chatOnly />
+          </section>
+        </>
       )}
     </div>
   );
