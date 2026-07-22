@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "fibonacci-teacher-forced-v1",
+  "kind": "checked_in_benchmark_workload",
+  "prompt": "def fibonacci(n):\n    ",
+  "teacher_forced_continuation": "if n == 0 or n == 1:\n    return 1\nreturn fibonacci(n - 1) + fibonacci(n - 2)\n"
+}

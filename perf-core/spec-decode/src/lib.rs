@@ -80,9 +80,15 @@ pub struct SpecDecodeConfig {
     pub fallback_on_reject: bool,
 }
 
-fn default_tree_width() -> usize { 4 }
-fn default_tree_depth() -> usize { 1 }
-fn default_true() -> bool { true }
+fn default_tree_width() -> usize {
+    4
+}
+fn default_tree_depth() -> usize {
+    1
+}
+fn default_true() -> bool {
+    true
+}
 
 impl Default for SpecDecodeConfig {
     fn default() -> Self {

@@ -2,11 +2,12 @@
 //
 // Build:
 //   cd /Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/python/ffi
-//   maturin develop --release
+//   maturin develop --release --locked
 //
 // Ground truth (read from perf-core/ crate source):
-//   turbo_quant::QuantizedTensor::encode_uniform(&[f32], bits, group_size) -> Self
-//   turbo_quant::QuantizedTensor::decode_uniform(&self, &mut [f32])
+//   turbo_quant::QuantizedTensor::encode_uniform(...) -> Result<Self, QuantError>
+//   turbo_quant::QuantizedTensor::try_from_parts(...) -> Result<Self, QuantError>
+//   turbo_quant::QuantizedTensor::decode_uniform(...) -> Result<(), QuantError>
 //   turbo_quant::TurboMode::label(&self) -> &'static str
 //   spec_decode::{DraftMode, SpecDecodeConfig, build_engine(cfg, target, draft)}
 //   spec_decode::backend::{TargetBackend (async_trait), DraftBackend,
@@ -18,8 +19,8 @@
 //                     ssd::SsdBackend, tidar::{TidarAgent, TidarRole}}
 
 use async_trait::async_trait;
-use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::{exceptions::{PyMemoryError, PyValueError}, prelude::*};
+use pyo3::types::{PyBytes, PyDict};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
@@ -34,17 +35,34 @@ use spec_decode::{
     SpecDecodeEngine, build_engine,
 };
 use tree_attention::{tree_causal_mask, TreePlan};
-use turbo_quant::{QuantizedTensor, TurboMode};
+use turbo_quant::{QuantError, QuantizedTensor, TurboMode};
 
 // ── TurboQuant ──────────────────────────────────────────────────────────────
 
+const MAX_TURBO_QUANT_ELEMENTS: usize = 1_048_576;
+
+fn quant_error_to_py(error: QuantError) -> PyErr {
+    PyValueError::new_err(error.to_string())
+}
+
+fn validate_turbo_quant_bits(bits: u8) -> PyResult<()> {
+    if (2..=4).contains(&bits) {
+        Ok(())
+    } else {
+        Err(PyValueError::new_err(format!(
+            "unsupported TurboQuant mode: {bits} bits (supported: 2, 3, 4)"
+        )))
+    }
+}
+
 #[pyfunction]
 fn turbo_quant_label_for_bits(bits: u8) -> PyResult<String> {
+    validate_turbo_quant_bits(bits)?;
     let m = match bits {
         4 => TurboMode::Asymmetric4,
         3 => TurboMode::Symmetric3,
         2 => TurboMode::Symmetric2,
-        _ => TurboMode::Symmetric4,
+        _ => unreachable!("validated TurboQuant bit width"),
     };
     Ok(m.label().to_string())
 }
@@ -52,31 +70,66 @@ fn turbo_quant_label_for_bits(bits: u8) -> PyResult<String> {
 #[pyfunction]
 fn turbo_quant_encode(
     py: Python<'_>,
-    data: Vec<f32>,
+    data: &Bound<'_, PyAny>,
     group_size: usize,
     bits: u8,
 ) -> PyResult<PyObject> {
-    let q = QuantizedTensor::encode_uniform(&data, bits, group_size);
+    validate_turbo_quant_bits(bits)?;
+    let element_count = data.len()?;
+    if element_count > MAX_TURBO_QUANT_ELEMENTS {
+        return Err(PyValueError::new_err(format!(
+            "tensor has {element_count} elements; maximum supported by the Python FFI is {MAX_TURBO_QUANT_ELEMENTS}"
+        )));
+    }
+    let data: Vec<f32> = data.extract()?;
+    let q = QuantizedTensor::encode_uniform(&data, bits, group_size)
+        .map_err(quant_error_to_py)?;
     let dict = PyDict::new_bound(py);
     dict.set_item("shape", q.shape)?;
-    dict.set_item("packed", q.packed)?;
+    dict.set_item("bits", q.bits)?;
+    dict.set_item("group_size", q.group_size)?;
+    dict.set_item("packed", PyBytes::new_bound(py, &q.packed))?;
     dict.set_item("scales", q.scales)?;
     dict.set_item("zeros", q.zeros)?;
     Ok(dict.into())
 }
 
 #[pyfunction]
-#[pyo3(signature = (packed, scales, zeros, n))]
+#[pyo3(signature = (shape, bits, group_size, packed, scales, zeros))]
 fn turbo_quant_decode(
     py: Python<'_>,
+    shape: Vec<usize>,
+    bits: u8,
+    group_size: usize,
     packed: Vec<u8>,
     scales: Vec<f32>,
     zeros: Vec<f32>,
-    n: usize,
 ) -> PyResult<PyObject> {
-    let mut buf = vec![0f32; n];
-    let q = QuantizedTensor { shape: vec![n], packed, scales, zeros };
-    q.decode_uniform(&mut buf);
+    validate_turbo_quant_bits(bits)?;
+    let q = QuantizedTensor::try_from_parts(
+        shape,
+        bits,
+        group_size,
+        packed,
+        scales,
+        zeros,
+    )
+    .map_err(quant_error_to_py)?;
+    let n = q.shape.iter().try_fold(1usize, |count, &dimension| {
+        count
+            .checked_mul(dimension)
+            .ok_or_else(|| PyValueError::new_err("shape element count overflowed"))
+    })?;
+    if n > MAX_TURBO_QUANT_ELEMENTS {
+        return Err(PyValueError::new_err(format!(
+            "tensor has {n} elements; maximum supported by the Python FFI is {MAX_TURBO_QUANT_ELEMENTS}"
+        )));
+    }
+    let mut buf = Vec::new();
+    buf.try_reserve_exact(n)
+        .map_err(|_| PyMemoryError::new_err("unable to allocate TurboQuant decode buffer"))?;
+    buf.resize(n, 0.0);
+    q.decode_uniform(&mut buf).map_err(quant_error_to_py)?;
     let lst = pyo3::types::PyList::new_bound(py, buf.iter().copied());
     Ok(lst.into())
 }

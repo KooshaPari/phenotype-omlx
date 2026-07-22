@@ -11,7 +11,11 @@ pub struct TreePlan {
 
 impl TreePlan {
     pub fn new(width: usize, depth: usize) -> Self {
-        Self { width, depth, root: Vec::new() }
+        Self {
+            width,
+            depth,
+            root: Vec::new(),
+        }
     }
 
     /// Total nodes in the explicit tree (full expansion).
@@ -27,7 +31,11 @@ impl TreePlan {
 
     /// Compute the parent index of node `i`. Returns `None` for the root.
     pub fn parent(i: usize, width: usize) -> Option<usize> {
-        if i == 0 { None } else { Some((i - 1) / width) }
+        if i == 0 {
+            None
+        } else {
+            Some((i - 1) / width)
+        }
     }
 }
 
@@ -37,7 +45,12 @@ impl TreePlan {
 /// `tree_width` — branching factor.
 /// `tree_depth` — number of levels below root.
 /// `offset` — start position of the tree in the full sequence.
-pub fn tree_causal_mask(seq_len: usize, tree_width: usize, tree_depth: usize, offset: usize) -> Vec<Vec<u8>> {
+pub fn tree_causal_mask(
+    seq_len: usize,
+    tree_width: usize,
+    tree_depth: usize,
+    offset: usize,
+) -> Vec<Vec<u8>> {
     let mut mask = vec![vec![0u8; seq_len]; seq_len];
     let tree_start = offset;
     let tree_len = tree_width.pow(tree_depth as u32);
@@ -49,20 +62,25 @@ pub fn tree_causal_mask(seq_len: usize, tree_width: usize, tree_depth: usize, of
             if same_tree && r >= tree_start {
                 // 1 if r is ancestor-or-self of c.
                 let mut cur = c;
-                let mut anc = true;
                 while cur > r {
                     cur = match TreePlan::parent(cur, tree_width) {
                         Some(p) => p,
                         None => break,
                     };
-                    if cur <= r { break; }
-                    if cur == r { break; }
+                    if cur <= r {
+                        break;
+                    }
+                    if cur == r {
+                        break;
+                    }
                 }
                 if cur == r || r == c || (c > r && cur < r) {
                     mask[r][c] = 1;
                 }
                 // Prefix attention always allowed
-                if c < tree_start && r >= c { mask[r][c] = 1; }
+                if c < tree_start && r >= c {
+                    mask[r][c] = 1;
+                }
             } else {
                 // Default causal
                 mask[r][c] = if c <= r { 1 } else { 0 };

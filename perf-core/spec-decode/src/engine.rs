@@ -134,7 +134,13 @@ impl SpecDecodeEngine {
 
         let finished = candidates
             .first()
-            .and_then(|c| if c.tokens.is_empty() { Some(true) } else { None })
+            .and_then(|c| {
+                if c.tokens.is_empty() {
+                    Some(true)
+                } else {
+                    None
+                }
+            })
             .unwrap_or(false);
 
         Ok(StepResult {
@@ -147,17 +153,27 @@ impl SpecDecodeEngine {
     /// Produce draft candidates appropriate for the configured mode.
     async fn propose(&mut self, prefix: &[u32]) -> Result<Vec<DraftCandidate>, SpecError> {
         match self.config.mode {
-            DraftMode::SameModel => Ok(prompt_lookup(prefix, &self.seen_tokens, self.config.max_draft_tokens)
-                .into_iter()
-                .map(|tokens| DraftCandidate { tokens, tree_path: None })
-                .collect()),
+            DraftMode::SameModel => {
+                Ok(
+                    prompt_lookup(prefix, &self.seen_tokens, self.config.max_draft_tokens)
+                        .into_iter()
+                        .map(|tokens| DraftCandidate {
+                            tokens,
+                            tree_path: None,
+                        })
+                        .collect(),
+                )
+            }
             DraftMode::DraftModel => {
                 let draft = self.draft.as_ref().ok_or(SpecError::DraftNotLoaded)?;
                 let tokens = draft
                     .draft(prefix, self.config.max_draft_tokens)
                     .await
                     .map_err(SpecError::Backend)?;
-                Ok(vec![DraftCandidate { tokens, tree_path: None }])
+                Ok(vec![DraftCandidate {
+                    tokens,
+                    tree_path: None,
+                }])
             }
             DraftMode::Medusa => {
                 // Tree expansion is performed inside verify_tree; here we just

@@ -15,8 +15,61 @@ Measures:
   - Generation quality (text output)
 """
 from __future__ import annotations
-import os, sys, time, json, gc, subprocess
+import os, time, gc
 from pathlib import Path
+
+try:
+    from e2e_real_model_support import eval_cache as _eval_cache, kv_bytes as _kv_bytes, measure_kv_for_mode, num_layers, peak_rss_mb, rss_mb
+except ModuleNotFoundError:
+    from scripts.e2e_real_model_support import eval_cache as _eval_cache, kv_bytes as _kv_bytes, measure_kv_for_mode, num_layers, peak_rss_mb, rss_mb
+
+try:
+    from e2e_validation import ValidationError
+except ModuleNotFoundError:
+    from scripts.e2e_validation import ValidationError
+
+try:
+    from e2e_real_model_host import (
+        BENCHMARK_WORKLOAD_PATH,
+        DecodeObservation,
+        TeacherForcedCapabilityError,
+        benchmark_repeated_arm,
+        compare_teacher_forced_nll,
+        observe_synchronized_decode,
+        run_teacher_forced_scorer,
+        run_lite_teacher_forced_lifecycle,
+        run_one_token_lite_probe,
+        run_bounded_probe_process,
+        default_teacher_forced_scorer_factory,
+        collect_synchronized_decode_benchmark,
+        publish_host_validation_evidence,
+        run_host_compacted_arm,
+        run_host_validation,
+        load_benchmark_workload,
+        validation_manifest_for_workload,
+        validation_manifest_from_environment,
+    )
+except ModuleNotFoundError:
+    from scripts.e2e_real_model_host import (
+        BENCHMARK_WORKLOAD_PATH,
+        DecodeObservation,
+        TeacherForcedCapabilityError,
+        benchmark_repeated_arm,
+        compare_teacher_forced_nll,
+        observe_synchronized_decode,
+        run_teacher_forced_scorer,
+        run_lite_teacher_forced_lifecycle,
+        run_one_token_lite_probe,
+        run_bounded_probe_process,
+        default_teacher_forced_scorer_factory,
+        collect_synchronized_decode_benchmark,
+        publish_host_validation_evidence,
+        run_host_compacted_arm,
+        run_host_validation,
+        load_benchmark_workload,
+        validation_manifest_for_workload,
+        validation_manifest_from_environment,
+    )
 
 VENV = Path("/Users/kooshapari/CodeProjects/Phenotype/repos/turboquant_plus/.venv/bin")
 if VENV.exists():
@@ -25,33 +78,19 @@ os.environ["MPLBACKEND"] = "Agg"
 
 MODEL_TINY = "/Users/kooshapari/.cache/huggingface/models--mlx-community--Qwen2.5-0.5B-Instruct-4bit/snapshots/a5339a4131f135d0fdc6a5c8b5bbed2753bbe0f3"
 MODEL_4B   = "/Users/kooshapari/.omlx/models/Rishu11277/Qwopus3.5-4B-Coder-mlx-4Bit"
-PROMPT = "def fibonacci(n):\n    "
 MAX_TOKENS = 64
 MODEL = os.environ.get("PHENO_MODEL", MODEL_TINY)
+EVIDENCE_OUTPUT = Path(__file__).resolve().parents[1] / "research" / "e2e_results.json"
 
 
-def rss_mb() -> float:
-    out = subprocess.check_output(["ps", "-o", "rss=", "-p", str(os.getpid())]).decode().strip()
-    return int(out) / 1024
+def _benchmark_config() -> tuple[int, int]:
+    """Read an explicit warmup-plus-measurement benchmark configuration."""
 
-
-_peak = rss_mb()
-
-
-def peak_rss_mb() -> float:
-    global _peak
-    cur = rss_mb()
-    if cur > _peak:
-        _peak = cur
-    return _peak
-
-
-def num_layers(model) -> int:
-    if hasattr(model, "model") and hasattr(model.model, "layers"):
-        return len(model.model.layers)
-    if hasattr(model, "layers"):
-        return len(model.layers)
-    raise RuntimeError("Cannot discover num_layers")
+    repeats = int(os.environ.get("PHENO_BENCHMARK_REPEATS", "3"))
+    warmup_count = int(os.environ.get("PHENO_BENCHMARK_WARMUPS", "1"))
+    if repeats <= 0 or warmup_count < 0 or warmup_count >= repeats:
+        raise ValueError("benchmark requires repeats > warmups >= 0")
+    return repeats, warmup_count
 
 
 def import_stack():
@@ -73,45 +112,6 @@ def load_model(path):
     return model, tok
 
 
-def _eval_cache(cache_list, mx):
-    flat = []
-    for c in cache_list:
-        s = c.state
-        if isinstance(s, (list, tuple)):
-            flat.extend(s)
-        else:
-            flat.append(s)
-    mx.eval(*flat)
-
-
-def _kv_bytes(cache_list) -> int:
-    total = 0
-    for c in cache_list:
-        s = c.state
-        if isinstance(s, (list, tuple)):
-            arrs = s
-        else:
-            arrs = (s,)
-        for a in arrs:
-            if hasattr(a, "nbytes"):
-                total += a.nbytes
-    return total
-
-
-def measure_kv_for_mode(model, tok, prompt, cache_factory, mx):
-    """
-    Build a fresh cache via cache_factory(num_layers), prefill to len(prompt),
-    eval, return bytes.
-    """
-    cache = cache_factory(num_layers(model))
-    ids = tok.encode(prompt)
-    x = mx.array(ids)[None]
-    logits = model(x, cache=cache)[:, -1, :]
-    mx.eval(logits)
-    _eval_cache(cache, mx)
-    return _kv_bytes(cache), cache
-
-
 def gen_baseline(model, tok, prompt, max_tokens, mx):
     """Vanilla mlx_lm.generate — no quantization."""
     import mlx_lm
@@ -119,18 +119,26 @@ def gen_baseline(model, tok, prompt, max_tokens, mx):
     sampler = make_sampler(temp=0.0)
     gc.collect()
     rss_before = rss_mb()
-    t0 = time.time()
-    text = mlx_lm.generate(
-        model, tok, prompt=prompt, max_tokens=max_tokens,
-        verbose=False, sampler=sampler,
+    observation = observe_synchronized_decode(
+        generate=lambda: mlx_lm.generate(
+            model, tok, prompt=prompt, max_tokens=max_tokens,
+            verbose=False, sampler=sampler,
+        ),
+        tokenize=tok.encode,
+        synchronize=mx.synchronize,
+        clock=time.perf_counter,
     )
-    dt = time.time() - t0
     from mlx_lm.models.cache import KVCache
     kv_b, _ = measure_kv_for_mode(model, tok, prompt, lambda n: [KVCache() for _ in range(n)], mx)
     return {
-        "text": text.strip(),
-        "elapsed_s": dt,
-        "tok_per_s": max_tokens / dt if dt > 0 else 0,
+        "text": observation.text.strip(),
+        "actual_tokens": observation.actual_tokens,
+        "elapsed_s": observation.elapsed_seconds,
+        "tok_per_s": (
+            observation.actual_tokens / observation.elapsed_seconds
+            if observation.elapsed_seconds > 0
+            else 0
+        ),
         "rss_delta_mb": rss_mb() - rss_before,
         "peak_rss_mb": peak_rss_mb(),
         "kv_fp16_bytes": kv_b,
@@ -147,12 +155,15 @@ def gen_mlx_native(model, tok, prompt, max_tokens, mx, kv_bits=4):
     sampler = make_sampler(temp=0.0)
     gc.collect()
     rss_before = rss_mb()
-    t0 = time.time()
-    text = mlx_lm.generate(
-        model, tok, prompt=prompt, max_tokens=max_tokens,
-        verbose=False, sampler=sampler, kv_bits=kv_bits,
+    observation = observe_synchronized_decode(
+        generate=lambda: mlx_lm.generate(
+            model, tok, prompt=prompt, max_tokens=max_tokens,
+            verbose=False, sampler=sampler, kv_bits=kv_bits,
+        ),
+        tokenize=tok.encode,
+        synchronize=mx.synchronize,
+        clock=time.perf_counter,
     )
-    dt = time.time() - t0
     # Build a representative quantized cache
     cache = [_QKV(group_size=64, bits=kv_bits) for _ in range(num_layers(model))]
     ids = tok.encode(prompt)
@@ -162,9 +173,14 @@ def gen_mlx_native(model, tok, prompt, max_tokens, mx, kv_bits=4):
     _eval_cache(cache, mx)
     kv_b = _kv_bytes(cache)
     return {
-        "text": text.strip(),
-        "elapsed_s": dt,
-        "tok_per_s": max_tokens / dt if dt > 0 else 0,
+        "text": observation.text.strip(),
+        "actual_tokens": observation.actual_tokens,
+        "elapsed_s": observation.elapsed_seconds,
+        "tok_per_s": (
+            observation.actual_tokens / observation.elapsed_seconds
+            if observation.elapsed_seconds > 0
+            else 0
+        ),
         "rss_delta_mb": rss_mb() - rss_before,
         "peak_rss_mb": peak_rss_mb(),
         "kv_turbo_bytes": kv_b,
@@ -174,7 +190,7 @@ def gen_mlx_native(model, tok, prompt, max_tokens, mx, kv_bits=4):
     }
 
 
-def gen_turboquant(model, tok, prompt, max_tokens, mx, bits=4, key_bits=None):
+def gen_turboquant(model, tok, prompt, max_tokens, mx, *, manifest, bits=4, key_bits=None):
     """
     TurboQuant+ end-to-end:
       1. Build TurboKVCache list
@@ -185,42 +201,75 @@ def gen_turboquant(model, tok, prompt, max_tokens, mx, bits=4, key_bits=None):
     """
     import mlx_lm
     from mlx_lm.sample_utils import make_sampler
-    from mlx_lm.models.cache import KVCache
     from mlx.nn.layers.turbo_kv_cache import TurboKVCache, compact_turbo_cache
     sampler = make_sampler(temp=0.0)
     gc.collect()
     rss_before = rss_mb()
 
     n_layers = num_layers(model)
-    turbo_cache = [TurboKVCache(bits=bits, key_bits=key_bits) for _ in range(n_layers)]
+    text = ""
+    observation: DecodeObservation | None = None
+    fp16_bytes = 0
+    n_compacted = 0
 
-    t0 = time.time()
-    text = mlx_lm.generate(
-        model, tok, prompt=prompt, max_tokens=max_tokens,
-        verbose=False, sampler=sampler, prompt_cache=turbo_cache,
+    def cache_factory():
+        return make_turbo_cache(
+            model,
+            bits=bits,
+            key_bits=bits if key_bits is None else key_bits,
+        )
+
+    def generate(cache):
+        nonlocal text, observation
+        observation = observe_synchronized_decode(
+            generate=lambda: mlx_lm.generate(
+                model, tok, prompt=prompt, max_tokens=max_tokens,
+                verbose=False, sampler=sampler, prompt_cache=cache,
+            ),
+            tokenize=tok.encode,
+            synchronize=mx.synchronize,
+            clock=time.perf_counter,
+        )
+        text = observation.text
+        return tok.encode(text)
+
+    def materialize(cache, _generated_tokens):
+        nonlocal fp16_bytes
+        _eval_cache(cache, mx)
+        fp16_bytes = _kv_bytes(cache)
+
+    def compact(cache):
+        nonlocal n_compacted
+        n_compacted = compact_turbo_cache(cache)
+        return fp16_bytes - _kv_bytes(cache)
+
+    def score(cache, _generated_tokens):
+        _eval_cache(cache, mx)
+
+    run = run_host_compacted_arm(
+        manifest=manifest,
+        cache_factory=cache_factory,
+        generate=generate,
+        materialize=materialize,
+        compact=compact,
+        score=score,
     )
-    dt = time.time() - t0
-
-    # Measure KV: build a fresh TurboKVCache, prefill, measure FP16 portion + compacted
-    cache = [TurboKVCache(bits=bits, key_bits=key_bits) for _ in range(n_layers)]
-    ids = tok.encode(prompt)
-    x = mx.array(ids)[None]
-    logits = model(x, cache=cache)[:, -1, :]
-    mx.eval(logits)
-    _eval_cache(cache, mx)
-    fp16_bytes = _kv_bytes(cache)
-
-    n_compacted = compact_turbo_cache(cache)
-    _eval_cache(cache, mx)
-    turbo_bytes = _kv_bytes(cache)
+    turbo_bytes = _kv_bytes(run.cache)
+    if observation is None:
+        raise RuntimeError("synchronized decode observation was not recorded")
 
     saved_bytes = max(0, fp16_bytes - turbo_bytes)
     saved_pct = saved_bytes / fp16_bytes * 100 if fp16_bytes > 0 else 0
 
     return {
         "text": text.strip(),
-        "elapsed_s": dt,
-        "tok_per_s": max_tokens / dt if dt > 0 else 0,
+        "actual_tokens": observation.actual_tokens,
+        "elapsed_s": observation.elapsed_seconds,
+        "tok_per_s": (
+            observation.actual_tokens / observation.elapsed_seconds
+            if observation.elapsed_seconds > 0
+            else 0
+        ),
         "rss_delta_mb": rss_mb() - rss_before,
         "peak_rss_mb": peak_rss_mb(),
         "kv_fp16_bytes": fp16_bytes,
@@ -234,16 +283,23 @@ def gen_turboquant(model, tok, prompt, max_tokens, mx, bits=4, key_bits=None):
     }
 
 
-def main():
+def main(*, teacher_forced_scorer=None):
+    workload = load_benchmark_workload()
+    manifest = validation_manifest_for_workload(workload=workload)
+    prompt = workload.prompt
+    repeats, warmup_count = _benchmark_config()
     print("=" * 78)
     print(" phenotype-omlx — REAL END-TO-END (4 KV-cache strategies)")
     print(f" Model:  {Path(MODEL).name}")
-    print(f" Prompt: {PROMPT.strip()!r}")
+    print(f" Prompt: {prompt.strip()!r}")
     print(f" Tokens: {MAX_TOKENS}")
     print("=" * 78)
 
     print("\n[1/4] Importing stack…", flush=True)
     mx, TurboKVCache, make_turbo_cache, compact_turbo_cache = import_stack()
+
+    if teacher_forced_scorer is None:
+        teacher_forced_scorer = default_teacher_forced_scorer_factory(TurboKVCache)
 
     print("\n[2/4] Loading model…", flush=True)
     model, tok = load_model(MODEL)
@@ -254,7 +310,11 @@ def main():
 
     # ── Mode 1: Baseline FP16 KVCache ─────────────────────────────────
     print(f"\n[3/4] Mode 1 — Baseline FP16 KVCache…")
-    base = gen_baseline(model, tok, PROMPT, MAX_TOKENS, mx)
+    base = benchmark_repeated_arm(
+        run_once=lambda: gen_baseline(model, tok, prompt, MAX_TOKENS, mx),
+        repeats=repeats,
+        warmup_count=warmup_count,
+    )
     print(f"    text:   {base['text'][:80]}")
     print(f"    speed:  {base['tok_per_s']:.1f} tok/s  peak: {base['peak_rss_mb']:.0f}MB")
     print(f"    KV:     {base['kv_fp16_bytes']/1024:.1f} KB (FP16)")
@@ -262,7 +322,11 @@ def main():
 
     # ── Mode 2: MLX native kv_bits=4 ──────────────────────────────────
     print(f"\n[4/4] Mode 2 — MLX native kv_bits=4…")
-    native4 = gen_mlx_native(model, tok, PROMPT, MAX_TOKENS, mx, kv_bits=4)
+    native4 = benchmark_repeated_arm(
+        run_once=lambda: gen_mlx_native(model, tok, prompt, MAX_TOKENS, mx, kv_bits=4),
+        repeats=repeats,
+        warmup_count=warmup_count,
+    )
     print(f"    text:   {native4['text'][:80]}")
     print(f"    speed:  {native4['tok_per_s']:.1f} tok/s  peak: {native4['peak_rss_mb']:.0f}MB")
     print(f"    KV:     {native4['kv_turbo_bytes']/1024:.1f} KB (after compact internal)")
@@ -270,7 +334,13 @@ def main():
 
     # ── Mode 3: TurboQuant+ asymmetric ────────────────────────────────
     print(f"\n[5/4] Mode 3 — TurboQuant+ ASYMMETRIC (K=FP16, V=4bit)…")
-    asym = gen_turboquant(model, tok, PROMPT, MAX_TOKENS, mx, bits=4, key_bits=None)
+    asym = benchmark_repeated_arm(
+        run_once=lambda: gen_turboquant(
+            model, tok, prompt, MAX_TOKENS, mx, manifest=manifest, bits=4, key_bits=None
+        ),
+        repeats=repeats,
+        warmup_count=warmup_count,
+    )
     print(f"    text:   {asym['text'][:80]}")
     print(f"    speed:  {asym['tok_per_s']:.1f} tok/s  peak: {asym['peak_rss_mb']:.0f}MB")
     print(f"    KV:     {asym['kv_fp16_bytes']/1024:.1f} KB → {asym['kv_turbo_bytes']/1024:.1f} KB")
@@ -279,7 +349,13 @@ def main():
 
     # ── Mode 4: TurboQuant+ symmetric ─────────────────────────────────
     print(f"\n[6/4] Mode 4 — TurboQuant+ SYMMETRIC (K=4bit, V=4bit)…")
-    sym = gen_turboquant(model, tok, PROMPT, MAX_TOKENS, mx, bits=4, key_bits=4)
+    sym = benchmark_repeated_arm(
+        run_once=lambda: gen_turboquant(
+            model, tok, prompt, MAX_TOKENS, mx, manifest=manifest, bits=4, key_bits=4
+        ),
+        repeats=repeats,
+        warmup_count=warmup_count,
+    )
     print(f"    text:   {sym['text'][:80]}")
     print(f"    speed:  {sym['tok_per_s']:.1f} tok/s  peak: {sym['peak_rss_mb']:.0f}MB")
     print(f"    KV:     {sym['kv_fp16_bytes']/1024:.1f} KB → {sym['kv_turbo_bytes']/1024:.1f} KB")
@@ -310,7 +386,7 @@ def main():
 
     # Quality
     print()
-    print(f"  Generation quality (deterministic temp=0):")
+    print(f"  Generation diagnostic (non-gating, deterministic temp=0):")
     base_text = base['text'][:60]
     for name, r, _ in rows[1:]:
         same = r['text'][:60] == base_text
@@ -331,20 +407,50 @@ def main():
         delta = r['tok_per_s'] - base['tok_per_s']
         print(f"    {name:<38} → {pct:.1f}% ({delta:+.1f} tok/s)")
 
+    if teacher_forced_scorer is None:
+        raise ValidationError(
+            "teacher-forced NLL/PPL comparison is required before evidence publication"
+        )
+    teacher_forced_comparison = run_teacher_forced_scorer(
+        scorer=teacher_forced_scorer,
+        model=model,
+        tokenizer=tok,
+        workload=workload,
+        mx=mx,
+    )
+
     # Save
     results = {
+        "model_revision": manifest.model_revision,
+        "corpus_revision": manifest.corpus_revision,
+        "tokenizer_revision": manifest.tokenizer_revision,
+        "benchmark_workload": {
+            "name": workload.name,
+            "kind": workload.kind,
+            "revision": workload.revision,
+        },
         "model": Path(MODEL).name,
         "model_path": MODEL,
         "arch": arch,
-        "prompt": PROMPT,
+        "prompt": prompt,
         "max_tokens": MAX_TOKENS,
         "num_layers": n_layers,
+        "teacher_forced": {
+            "token_count": teacher_forced_comparison.baseline.token_count,
+            "baseline_total_nll": teacher_forced_comparison.baseline.total_nll,
+            "compacted_total_nll": teacher_forced_comparison.compacted.total_nll,
+            "compacted_minus_baseline": teacher_forced_comparison.compacted_minus_baseline,
+            "perplexity_ratio": teacher_forced_comparison.perplexity_ratio,
+            "workload_continuation": workload.teacher_forced_continuation,
+        },
         "modes": {name: r for name, r, _ in rows},
     }
-    out = Path("/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/research/e2e_results.json")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w") as f:
-        json.dump(results, f, indent=2, default=str)
+    EVIDENCE_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    out = publish_host_validation_evidence(
+        destination=EVIDENCE_OUTPUT,
+        candidate=results,
+        approved_output_root=EVIDENCE_OUTPUT.parent,
+    )
     print(f"\n  Results saved: {out}")
     print("=" * 78)
 

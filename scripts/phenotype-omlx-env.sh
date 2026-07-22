@@ -14,15 +14,47 @@
 # framework is *not* injected because its numpy/mlx are compiled for 3.11
 # and would shadow the 3.12 venv's site-packages.
 
-PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx}"
-REPOS_ROOT="${REPOS_ROOT:-/Users/kooshapari/CodeProjects/Phenotype/repos}"
+if [[ -n "${ZSH_VERSION:-}" ]]; then
+    # In zsh, %x resolves the currently sourced file. Keep it inside eval so
+    # Bash never parses zsh's prompt-style parameter expansion.
+    PHENOTYPE_OMLX_ENV_SOURCE="$(eval 'printf "%s" "${(%):-%x}"')"
+else
+    PHENOTYPE_OMLX_ENV_SOURCE="${BASH_SOURCE[0]}"
+fi
+PHENOTYPE_OMLX_ENV_DIR="$(cd -- "$(dirname -- "${PHENOTYPE_OMLX_ENV_SOURCE}")" && pwd -P)"
+PHENOTYPE_OMLX_DEFAULT_HOME="$(cd -- "${PHENOTYPE_OMLX_ENV_DIR}/.." && pwd -P)"
+PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-${PHENOTYPE_OMLX_DEFAULT_HOME}}"
+REPOS_ROOT="${REPOS_ROOT:-$(cd -- "${PHENOTYPE_OMLX_HOME}/.." && pwd -P)}"
 OMLX_APP="${OMLX_APP:-/Applications/oMLX.app}"
 OMLX_FRAMEWORK_DIR="${OMLX_APP}/Contents/Resources/Python/framework-mlx-base/lib/python3.11/site-packages"
 
+# Prefer a native Python 3.14+ interpreter for local MLX work. The historical
+# TurboQuant venv may be absent after recovery, so expose a stable executable
+# instead of sourcing a nonexistent environment. Call it explicitly as
+# `"$PHENOTYPE_OMLX_PYTHON" scripts/e2e_real_model.py`.
+if [[ -z "${PHENOTYPE_OMLX_PYTHON:-}" ]]; then
+    if command -v python3.14 >/dev/null 2>&1; then
+        PHENOTYPE_OMLX_PYTHON="$(command -v python3.14)"
+    elif command -v python3.15 >/dev/null 2>&1; then
+        PHENOTYPE_OMLX_PYTHON="$(command -v python3.15)"
+    else
+        PHENOTYPE_OMLX_PYTHON="$(command -v python3 2>/dev/null || true)"
+    fi
+fi
+export PHENOTYPE_OMLX_PYTHON
+
+# Local benchmark invocations must not silently resolve or download mutable
+# artifacts. Set PHENOTYPE_OMLX_OFFLINE=0 explicitly when network use is
+# intentional and reviewed.
+if [[ "${PHENOTYPE_OMLX_OFFLINE:-1}" == "1" ]]; then
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+fi
+
 # Detect the active Python's major.minor.
 ACTIVE_PY_MINOR=""
-if command -v python3 >/dev/null 2>&1; then
-    ACTIVE_PY_MINOR=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")
+if [[ -n "${PHENOTYPE_OMLX_PYTHON}" && -x "${PHENOTYPE_OMLX_PYTHON}" ]]; then
+    ACTIVE_PY_MINOR=$("${PHENOTYPE_OMLX_PYTHON}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "")
 fi
 
 # 1) OMLX framework: only inject when the active Python matches (3.11).
@@ -38,7 +70,7 @@ fi
 # subtree, not the full turboquant_plus source tree (which would shadow
 # the venv's numpy on Python 3.12).
 OMLX_TURBOQUANT_PERSISTENT="${HOME}/.omlx/turboquant-plus/mlx/nn/layers"
-if [[ -d "${OMLX_TURBOQUANT_PERSISTENT}/turbo_kv_cache.py" ]]; then
+if [[ -f "${OMLX_TURBOQUANT_PERSISTENT}/turbo_kv_cache.py" ]]; then
     # The file lives at .../mlx/nn/layers/turbo_kv_cache.py, so the
     # importable path is the parent of `mlx/`, which is
     # `~/.omlx/turboquant-plus/`.
@@ -88,12 +120,17 @@ esac
 if [[ -f "${REPOS_ROOT}/turboquant_plus/.venv/bin/activate" ]]; then
     # shellcheck disable=SC1091
     source "${REPOS_ROOT}/turboquant_plus/.venv/bin/activate"
+elif [[ -f "${PHENOTYPE_OMLX_HOME}/.venv314/bin/activate" ]]; then
+    # Native fork environment: Python 3.14+ with MLX/mlx-lm wheels.
+    # This is the primary runtime; the historical TurboQuant venv is only
+    # retained as a source-compatible fallback when present.
+    source "${PHENOTYPE_OMLX_HOME}/.venv314/bin/activate"
 fi
 
-export PHENOTYPE_OMLX_HOME
+export PHENOTYPE_OMLX_HOME REPOS_ROOT
 export PHENOTYPE_OMLX_READY="${PHENOTYPE_OMLX_HOME}/scripts/phenotype-omlx-ready"
 
 alias use-latentmas='export PYTHONPATH='"${REPOS_ROOT}"'/LatentMAS:${PYTHONPATH:-}'
 alias use-tidar='export PYTHONPATH='"${REPOS_ROOT}"'/TiDAR:${PYTHONPATH:-}'
 
-echo "phenotype-omlx env ready: ${PHENOTYPE_OMLX_HOME} (python ${ACTIVE_PY_MINOR:-?})"
+echo "phenotype-omlx env ready: ${PHENOTYPE_OMLX_HOME} (python ${ACTIVE_PY_MINOR:-?}, offline=${PHENOTYPE_OMLX_OFFLINE:-1})"

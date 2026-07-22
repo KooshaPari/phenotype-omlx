@@ -32,7 +32,9 @@
 
 set -euo pipefail
 
-PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-/Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+PHENOTYPE_OMLX_DEFAULT_HOME="$(cd -- "${SCRIPT_DIR}/../.." && pwd -P)"
+PHENOTYPE_OMLX_HOME="${PHENOTYPE_OMLX_HOME:-${PHENOTYPE_OMLX_DEFAULT_HOME}}"
 OMLX_APP="${OMLX_APP:-/Applications/oMLX.app}"
 OMLX_FRAMEWORK="${OMLX_APP}/Contents/Resources/Python/framework-mlx-base/lib/python3.11/site-packages"
 OMLX_FRAMEWORK_PY="${OMLX_APP}/Contents/Resources/Python/cpython-3.11/bin/python3"

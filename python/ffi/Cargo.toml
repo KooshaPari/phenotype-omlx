@@ -22,4 +22,8 @@ fleet-proto = { path = "../../perf-core/fleet-proto" }
 opt-level = 3
 lto = true
 codegen-units = 1
-strip = true
+# Cargo 1.95 defaults release profiles to `strip = "debuginfo"`, which invokes
+# rust-objcopy. The supported toolchain lacks rust-objcopy's libLLVM runtime, so
+# explicitly disable Cargo stripping. The locked wheel build is the release gate;
+# no artifact may claim to have been stripped by this toolchain.
+strip = "none"

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 import time
-import os
 
 from .base import BackendBase, BackendCapabilities, GenerateRequest, GenerateResponse
 
@@ -33,39 +32,37 @@ class MlxBackend(BackendBase):
             return False
 
     def _rust_perf(self):
-        """Lazy-import the pyo3 `_perf` extension built from perf-core/.
-        Returns the module or None if not built (caller falls back to Python)."""
+        """Lazy-import the canonical package-qualified Rust extension."""
         if self._perf_module is not None:
             return self._perf_module
-        try:
-            import _perf  # maturin develop installs this top-level
-            self._perf_module = _perf
-            return _perf
-        except ImportError:
-            self._perf_module = False  # sentinel — don't retry
-            return None
+        from omlx_research import _perf
+
+        self._perf_module = _perf
+        return _perf
 
     def turbo_quant_encode_array(
         self, data, group_size: int = 64, bits: int = 4,
-    ) -> dict | None:
+    ) -> dict:
         """Encode `data` (array-like of f32) into a TurboQuant 4-bit packing.
 
-        Uses the Rust SIMD implementation from perf-core/turbo-quant when the
-        pyo3 extension is built; otherwise returns None (caller falls back).
+        Uses the Rust SIMD implementation from perf-core/turbo-quant.
         """
         perf = self._rust_perf()
-        if perf is None:
-            return None
         return perf.turbo_quant_encode(list(map(float, data)), group_size, bits)
 
-    def turbo_quant_decode_array(
-        self, packed, scales, zeros, n: int, group_size: int = 64, bits: int = 4,
-    ) -> list | None:
-        """Inverse of turbo_quant_encode_array (Rust SIMD path)."""
+    def turbo_quant_decode_array(self, payload: dict) -> list:
+        """Decode the self-describing payload returned by ``turbo_quant_encode_array``."""
         perf = self._rust_perf()
-        if perf is None:
-            return None
-        return list(perf.turbo_quant_decode(packed, scales, zeros, n, group_size, bits))
+        return list(
+            perf.turbo_quant_decode(
+                payload["shape"],
+                payload["bits"],
+                payload["group_size"],
+                payload["packed"],
+                payload["scales"],
+                payload["zeros"],
+            )
+        )
 
     def _load(self) -> None:
         if self._model is None and self.model_path:

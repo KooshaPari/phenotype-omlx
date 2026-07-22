@@ -61,11 +61,7 @@ pub trait TargetBackend: Send + Sync {
 #[async_trait]
 pub trait DraftBackend: Send + Sync {
     /// Propose up to `max_tokens` continuation tokens after `prefix`.
-    async fn draft(
-        &self,
-        prefix: &[u32],
-        max_tokens: usize,
-    ) -> Result<Vec<u32>, String>;
+    async fn draft(&self, prefix: &[u32], max_tokens: usize) -> Result<Vec<u32>, String>;
 
     fn info(&self) -> BackendInfo;
 }

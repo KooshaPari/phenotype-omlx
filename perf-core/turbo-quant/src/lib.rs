@@ -7,6 +7,37 @@
 //! optional `metal` feature.
 
 use serde::{Deserialize, Serialize};
+use std::{error::Error, fmt};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QuantError {
+    InvalidBits(u8),
+    InvalidGroupSize,
+    EmptyInput,
+    NonFiniteInput,
+    InvalidMetadata(String),
+    OutputLengthMismatch { expected: usize, actual: usize },
+}
+
+impl fmt::Display for QuantError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidBits(bits) => write!(f, "bits must be in 2..=8, got {bits}"),
+            Self::InvalidGroupSize => write!(f, "group_size must be greater than zero"),
+            Self::EmptyInput => write!(f, "input tensor must not be empty"),
+            Self::NonFiniteInput => write!(f, "tensor data and metadata must be finite"),
+            Self::InvalidMetadata(reason) => write!(f, "invalid quantized tensor: {reason}"),
+            Self::OutputLengthMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "output length mismatch: expected {expected}, got {actual}"
+                )
+            }
+        }
+    }
+}
+
+impl Error for QuantError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TurboMode {
@@ -62,16 +93,112 @@ impl Default for QuantConfig {
 #[derive(Debug, Clone)]
 pub struct QuantizedTensor {
     pub shape: Vec<usize>,
+    pub bits: u8,
+    pub group_size: usize,
     pub packed: Vec<u8>,
     pub scales: Vec<f32>,
     pub zeros: Vec<f32>,
 }
 
 impl QuantizedTensor {
+    pub fn try_from_parts(
+        shape: Vec<usize>,
+        bits: u8,
+        group_size: usize,
+        packed: Vec<u8>,
+        scales: Vec<f32>,
+        zeros: Vec<f32>,
+    ) -> Result<Self, QuantError> {
+        let tensor = Self {
+            shape,
+            bits,
+            group_size,
+            packed,
+            scales,
+            zeros,
+        };
+        tensor.validate()?;
+        Ok(tensor)
+    }
+
+    fn element_count(&self) -> Result<usize, QuantError> {
+        if self.shape.is_empty() {
+            return Err(QuantError::InvalidMetadata(
+                "shape must not be empty".into(),
+            ));
+        }
+        self.shape.iter().try_fold(1usize, |count, &dimension| {
+            count
+                .checked_mul(dimension)
+                .ok_or_else(|| QuantError::InvalidMetadata("shape element count overflowed".into()))
+        })
+    }
+
+    fn validate(&self) -> Result<usize, QuantError> {
+        if !(2..=8).contains(&self.bits) {
+            return Err(QuantError::InvalidBits(self.bits));
+        }
+        if self.group_size == 0 {
+            return Err(QuantError::InvalidGroupSize);
+        }
+        let element_count = self.element_count()?;
+        if element_count == 0 {
+            return Err(QuantError::EmptyInput);
+        }
+        let packed_bits = element_count
+            .checked_mul(self.bits as usize)
+            .ok_or_else(|| QuantError::InvalidMetadata("packed bit count overflowed".into()))?;
+        let expected_packed = packed_bits.div_ceil(8);
+        if self.packed.len() != expected_packed {
+            return Err(QuantError::InvalidMetadata(format!(
+                "packed length must be {expected_packed}, got {}",
+                self.packed.len()
+            )));
+        }
+        let expected_groups = element_count.div_ceil(self.group_size);
+        if self.scales.len() != expected_groups || self.zeros.len() != expected_groups {
+            return Err(QuantError::InvalidMetadata(format!(
+                "scale/zero lengths must both be {expected_groups}, got {}/{}",
+                self.scales.len(),
+                self.zeros.len()
+            )));
+        }
+        if self
+            .scales
+            .iter()
+            .chain(&self.zeros)
+            .any(|value| !value.is_finite())
+        {
+            return Err(QuantError::NonFiniteInput);
+        }
+        if self.scales.iter().any(|&scale| scale <= 0.0) {
+            return Err(QuantError::InvalidMetadata(
+                "scales must be positive".into(),
+            ));
+        }
+        Ok(element_count)
+    }
+
     /// Round-to-nearest uniform quantization — fast, ~1.5% PPL hit vs Lloyd-Max.
-    pub fn encode_uniform(data: &[f32], bits: u8, group_size: usize) -> Self {
+    pub fn encode_uniform(data: &[f32], bits: u8, group_size: usize) -> Result<Self, QuantError> {
+        if !(2..=8).contains(&bits) {
+            return Err(QuantError::InvalidBits(bits));
+        }
+        if group_size == 0 {
+            return Err(QuantError::InvalidGroupSize);
+        }
+        if data.is_empty() {
+            return Err(QuantError::EmptyInput);
+        }
+        if data.iter().any(|value| !value.is_finite()) {
+            return Err(QuantError::NonFiniteInput);
+        }
         let qmax = ((1u32 << bits) - 1) as f32;
-        let n_packed = (data.len() * bits as usize + 7) / 8;
+        let packed_bits = data
+            .len()
+            .checked_mul(bits as usize)
+            .ok_or_else(|| QuantError::InvalidMetadata("packed bit count overflowed".into()))?;
+        let n_packed = packed_bits.div_ceil(8);
         let mut packed = vec![0u8; n_packed];
         let mut scales = Vec::new();
         let mut zeros = Vec::new();
@@ -80,9 +207,9 @@ impl QuantizedTensor {
         for chunk in data.chunks(group_size) {
             let min = chunk.iter().cloned().fold(f32::INFINITY, f32::min);
             let max = chunk.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
-            let scale = (max - min) / qmax;
+            let scale = ((max - min) / qmax).max(1e-12);
             let zero = min;
-            scales.push(scale.max(1e-12));
+            scales.push(scale);
             zeros.push(zero);
 
             for &v in chunk {
@@ -105,24 +232,26 @@ impl QuantizedTensor {
             }
         }
 
-        Self {
-            shape: vec![data.len()],
-            packed,
-            scales,
-            zeros,
-        }
+        Self::try_from_parts(vec![data.len()], bits, group_size, packed, scales, zeros)
     }
 
     /// Decode packed bytes back to f32 — symmetric recovery.
-    pub fn decode_uniform(&self, out: &mut [f32]) {
-        let bits = self.packed_scale_bits();
+    pub fn decode_uniform(&self, out: &mut [f32]) -> Result<(), QuantError> {
+        let element_count = self.validate()?;
+        if out.len() != element_count {
+            return Err(QuantError::OutputLengthMismatch {
+                expected: element_count,
+                actual: out.len(),
+            });
+        }
+        let bits = self.bits;
         let qmax = ((1u32 << bits) - 1) as f32;
         let bp = bits as usize;
 
         for (i, v) in out.iter_mut().enumerate() {
-            let g = i / 64;
-            let s = self.scales.get(g).copied().unwrap_or(1e-12);
-            let z = self.zeros.get(g).copied().unwrap_or(0.0);
+            let g = i / self.group_size;
+            let s = self.scales[g];
+            let z = self.zeros[g];
 
             // Read `bp` bits from packed[], LSB-first within each byte.
             let mut bc = i * bp;
@@ -135,7 +264,7 @@ impl QuantizedTensor {
                 let room = 8 - bit_off;
                 let take = remaining.min(room);
                 let mask = (1u32 << take) - 1;
-                let byte = self.packed.get(byte_idx).copied().unwrap_or(0) as u32;
+                let byte = self.packed[byte_idx] as u32;
                 raw |= ((byte >> bit_off) & mask) << shift;
                 shift += take;
                 bc += take;
@@ -145,25 +274,12 @@ impl QuantizedTensor {
             let q = (raw as f32).min(qmax);
             *v = q * s + z;
         }
-    }
-
-    fn packed_scale_bits(&self) -> u8 {
-        // Derive bits from packed size — heuristic fallback only.
-        if self.scales.is_empty() { 4 } else { 4 }
-    }
-
-    fn byte_at(&self, i: usize, bits: u8) -> u32 {
-        let bp = bits as usize;
-        let bi = i * bp / 8;
-        let bo = (i * bp) % 8;
-        let mask = if bp >= 8 { 0xFF } else { (1u32 << bp) - 1 };
-        let v = (self.packed[bi] as u32) >> bo;
-        v & mask
+        Ok(())
     }
 }
 
 /// Free function — encode the whole model at once.
-pub fn quantize_tensor(data: &[f32], cfg: &QuantConfig) -> QuantizedTensor {
+pub fn quantize_tensor(data: &[f32], cfg: &QuantConfig) -> Result<QuantizedTensor, QuantError> {
     QuantizedTensor::encode_uniform(data, cfg.mode.bits(), cfg.group_size)
 }
 
@@ -174,11 +290,17 @@ mod tests {
     #[test]
     fn roundtrip_uniform() {
         let data: Vec<f32> = (0..512).map(|i| (i as f32) * 0.01).collect();
-        let q = QuantizedTensor::encode_uniform(&data, 4, 64);
+        let q = QuantizedTensor::encode_uniform(&data, 4, 64).unwrap();
         let mut out = vec![0f32; data.len()];
-        q.decode_uniform(&mut out);
+        q.decode_uniform(&mut out).unwrap();
         for (a, b) in data.iter().zip(out.iter()) {
-            assert!((a - b).abs() < 0.1, "{} vs {} (delta={})", a, b, (a - b).abs());
+            assert!(
+                (a - b).abs() < 0.1,
+                "{} vs {} (delta={})",
+                a,
+                b,
+                (a - b).abs()
+            );
         }
     }
 

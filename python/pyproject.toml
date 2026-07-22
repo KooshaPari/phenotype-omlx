@@ -1,12 +1,12 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.12,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "omlx-research"
 version = "0.1.0"
 description = "phenotype-omlx research stack: MLX, TurboQuant+, SSD, JetSpec, LatentMAS, TiDAR"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "mlx>=0.31",
     "mlx-lm>=0.30",
@@ -24,6 +24,12 @@ dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
 [project.scripts]
 omlx-research = "omlx_research.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["python"]
-include = ["omlx_research*"]
+[tool.maturin]
+manifest-path = "ffi/Cargo.toml"
+module-name = "omlx_research._perf"
+python-source = "."
+# Maturin defaults to stripping release libraries. Disable that default until
+# the supported Rust toolchain supplies a working rust-objcopy/libLLVM pair;
+# release verification must stay warning-free rather than silently shipping an
+# artifact whose requested strip step failed.
+strip = false
