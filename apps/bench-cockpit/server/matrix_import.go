@@ -239,7 +239,17 @@ func mergeResults(base *ResultsData, extras ...*ResultsData) *ResultsData {
 		vl = append(vl, v)
 	}
 	base.Summary.Meta.Variants = vl
-	if base.Summary.Meta.Model == "" && len(vl) > 0 {
+	// Model pill = ablation peers only (stock/ours). Aux arms (minimax judge/eval,
+	// distillers, …) must not appear as peer model names joined with '+'.
+	ablation := make([]string, 0, 2)
+	for _, v := range []string{"stock", "ours"} {
+		if _, ok := variants[v]; ok {
+			ablation = append(ablation, v)
+		}
+	}
+	if len(ablation) > 0 {
+		base.Summary.Meta.Model = strings.Join(ablation, "+")
+	} else if base.Summary.Meta.Model == "" && len(vl) > 0 {
 		base.Summary.Meta.Model = strings.Join(vl, "+")
 	}
 	enrichVariantThroughput(base)

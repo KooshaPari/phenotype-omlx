@@ -108,15 +108,11 @@ const initialState: BenchState = {
 function reducer(state: BenchState, action: Action): BenchState {
   switch (action.type) {
     case 'SET_PAYLOAD': {
-      const cells = action.payload?.data?.cells ?? [];
-      const variants = new Set(state.filters.variant);
-      for (const c of cells) {
-        if (c.variant) variants.add(c.variant);
-      }
+      // Keep filter on ablation peers (stock/ours). Aux arms (judge/eval) stay
+      // loaded in the payload but off the default peer comparison filter.
       return {
         ...state,
         payload: action.payload,
-        filters: { ...state.filters, variant: variants },
       };
     }
 

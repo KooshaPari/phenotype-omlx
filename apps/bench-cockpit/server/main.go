@@ -278,15 +278,21 @@ func lintCells(cells []Cell) []LintWarning {
 		})
 	}
 
-	// Rule 2: same (suite, task_id) is 100% across ALL variants → likely
-	// an unscored placeholder fixture.
+	// Rule 2: same (suite, task_id) is 100% across stock+ours ablation peers
+	// → likely an unscored placeholder. Ignore aux arms (judge/eval matrices).
 	var allPass []string
 	for k, group := range byKey {
-		if len(group) < 2 {
+		var peers []Cell
+		for _, c := range group {
+			if c.Variant == "stock" || c.Variant == "ours" {
+				peers = append(peers, c)
+			}
+		}
+		if len(peers) < 2 {
 			continue
 		}
 		all := true
-		for _, c := range group {
+		for _, c := range peers {
 			if c.PassAt1 < 0.999 {
 				all = false
 				break
@@ -300,7 +306,7 @@ func lintCells(cells []Cell) []LintWarning {
 		warnings = append(warnings, LintWarning{
 			Code:     "all_variants_pass",
 			Severity: "warning",
-			Message:  fmt.Sprintf("%d task(s) scored 100%% across all variants — likely unscored placeholder fixture.", len(allPass)),
+			Message:  fmt.Sprintf("%d task(s) scored 100%% across stock+ours — likely unscored placeholder fixture.", len(allPass)),
 			Cells:    allPass,
 		})
 	}
@@ -802,13 +808,6 @@ func main() {
 	mux.HandleFunc("/api/history", apiHistoryHandler(ring))
 	mux.HandleFunc("/api/export", apiExportHandler(ring))
 	mux.HandleFunc("/api/cells/", apiCellRawHandler(ring))
-	mux.HandleFunc("/api/langsmith/projects", langsmithProjectsHandler)
-	mux.HandleFunc("/api/langsmith/datasets/", langsmithDatasetHandler)
-	mux.HandleFunc("/api/langsmith/runs", langsmithRunsHandler)
-	mux.HandleFunc("/api/langsmith/feedback", langsmithFeedbackHandler)
-	mux.HandleFunc("/api/langsmith/status", langsmithStatusHandler)
-	mux.HandleFunc("/api/langsmith/setup", langsmithSetupHandler)
-	mux.HandleFunc("/api/langsmith/evaluators", langsmithEvaluatorsHandler)
 	mux.HandleFunc("/api/langfuse/status", langfuseStatusHandler)
 	mux.HandleFunc("/api/langfuse/setup", langfuseSetupHandler)
 	mux.HandleFunc("/api/langfuse/traces", langfuseTracesHandler)

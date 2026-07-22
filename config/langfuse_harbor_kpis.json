@@ -1,0 +1,35 @@
+{
+  "dataset_note": "Harbor tasks sync as Langfuse traces under sessionId=harbor_job_id (not a LangSmith dataset).",
+  "session": {
+    "id_source": "harbor_job_id",
+    "meaning": "One Langfuse session per Harbor job; trials are traces in that session"
+  },
+  "score_keys": {
+    "reward": {
+      "source": "/logs/verifier/reward.txt",
+      "meaning": "Primary Harbor trial score (0|1) posted as Langfuse score name `reward`"
+    },
+    "harbor_error": {
+      "source": "trial.exception_info",
+      "meaning": "Optional future score when trial raised; prefer fix Portage over soft-fail"
+    }
+  },
+  "trace_metadata": {
+    "lf_runner": "harbor",
+    "harbor_job_id": "Job UUID",
+    "harbor_job_name": "Job name",
+    "harbor_trial_id": "Trial id",
+    "harbor_task": "Task name"
+  },
+  "cockpit_cell_kpis": [
+    "pass_at_1",
+    "gen_ok",
+    "verified_pass_at_1",
+    "partial_credit",
+    "judge_score",
+    "format_compliance_rate",
+    "intent_preservation_rate"
+  ],
+  "canonical_backend": "langfuse",
+  "langsmith": "removed_from_operator_path"
+}

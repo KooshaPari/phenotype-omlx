@@ -52,6 +52,11 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); line
   background: rgba(124,92,255,.12); border: 1px solid rgba(124,92,255,.28);
   color: var(--accent);
 }
+.sb-aux {
+  font-size: 10px;
+  line-height: 1.35;
+  word-break: break-word;
+}
 .sb-stats { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .sb-data-hint { font-size: 9px; letter-spacing: .02em; }
 .sb-connection {

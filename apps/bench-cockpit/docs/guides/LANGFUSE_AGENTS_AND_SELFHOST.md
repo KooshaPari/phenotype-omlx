@@ -11,7 +11,7 @@ cloud Hobby is optional for demos/collab only.
 | Phoenix (Arize, ELv2) | Strong #2 if you want OTel-native and accept ELv2 |
 | Promptfoo | Add for CI/red-team gates — not a trace hub |
 | Braintrust | Excellent eval UX; closed / enterprise hybrid — not OSS-control fit |
-| LangSmith | Leaving for cost + closed self-host |
+| LangSmith | **Removed** (archived under `.archive/langsmith-20260722/`) |
 | Helicone / Weave / Evidently / Ragas | Gateway, W&B, metrics sidecar, RAG metrics — complements only |
 
 **Verdict:** Stay on Langfuse. Add Promptfoo for agent CI if needed. Do not run two full UIs.

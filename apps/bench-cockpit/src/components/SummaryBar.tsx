@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ViewType } from '../types';
 import { BenchState } from '../state/useBenchState';
+import { displayModelLabel } from '../lib/arms';
 
 interface SummaryBarProps {
   state: BenchState;
@@ -30,7 +31,6 @@ const VIEWS: { id: ViewType; label: string; icon: string; key: string }[] = [
   { id: 'rlvr', label: 'RLVR', icon: '∑', key: '9' },
   { id: 'audit', label: 'Audit', icon: '⌕', key: '0' },
   { id: 'langfuse', label: 'Langfuse', icon: '◈', key: 'F' },
-  { id: 'langsmith', label: 'Smith', icon: '◎', key: 'L' },
 ];
 
 export default function SummaryBar({ 
@@ -48,7 +48,8 @@ export default function SummaryBar({
   statusText,
   statusLevel
 }: SummaryBarProps) {
-  const model = state.payload?.data?.summary?.meta?.model || '—';
+  const meta = state.payload?.data?.summary?.meta;
+  const { model, aux } = displayModelLabel(meta?.model, meta?.variants);
 
   return (
     <div className="sidebar-content">
@@ -60,10 +61,17 @@ export default function SummaryBar({
       </div>
 
       <div className="sb-section">
-        <div className="sb-pill model-pill">{model}</div>
+        <div className="sb-pill model-pill" title="V5 ablation peers (stock vs ours)">
+          {model}
+        </div>
+        {aux.length > 0 && (
+          <div className="sb-aux faint" title="Judge / evaluator / distiller matrices — not peer models">
+            aux · {aux.map((a) => (a.includes('minimax') ? `${a} (judge/eval)` : `${a} (aux)`)).join(' · ')}
+          </div>
+        )}
         <div className="sb-stats">
-          <span>{cells} total</span>
-          {filteredCount !== cells && <span className="faint"> · {filteredCount} shown</span>}
+          <span>{filteredCount} shown</span>
+          {filteredCount !== cells && <span className="faint"> · {cells} loaded</span>}
         </div>
         <div className="sb-data-hint faint">
           {cells >= 100 ? 'live V5 contract' : cells <= 2 ? 'lint demo' : 'smoke fixture'}

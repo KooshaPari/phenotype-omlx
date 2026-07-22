@@ -25,7 +25,7 @@ func portageRoot() (string, error) {
 	if v == "" {
 		return "", fmt.Errorf(
 			"PORTAGE_ROOT required (portage-TEMP / Harbor checkout); " +
-				"see docs/guides/EVAL_PORTAGE_LANGSMITH.md",
+				"see docs/guides/EVAL_PORTAGE_LANGFUSE.md",
 		)
 	}
 	info, err := os.Stat(v)
@@ -113,7 +113,7 @@ func normalizeJobEnvironment(job map[string]interface{}) error {
 // portageRunHandler starts a Harbor job.
 // Body modes:
 //  1. {"mode":"hello_world"} or empty → oracle hello-world smoke
-//  2. {"mode":"path","task_path":"...","agent":"oracle","plugin_langsmith":true}
+//  2. {"mode":"path","task_path":"...","agent":"oracle"}
 //  3. full JobConfig JSON with tasks[] (written to -c)
 // Degrades to 503 when the binary is missing; 400 when PORTAGE_ROOT unset.
 func portageRunHandler(w http.ResponseWriter, r *http.Request) {
@@ -174,11 +174,6 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 	_, hasTasks := stub["tasks"]
 	useConfig := hasTasks && mode != "path" && mode != "hello_world"
 
-	pluginLS := false
-	if v, ok := stub["plugin_langsmith"].(bool); ok {
-		pluginLS = v
-	}
-
 	if useConfig {
 		if err := normalizeJobEnvironment(stub); err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -210,18 +205,11 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 			nConc = fmt.Sprintf("%d", int(v))
 		}
 		args = append(parts[1:], "run", "-e", envName, "-p", taskPath, "-a", agent, "-n", nConc, "-o", dir, "-y")
-		if pluginLS {
-			args = append(args, "--plugin", "langsmith")
-		}
 	}
 
 	cmd := exec.CommandContext(ctx, parts[0], args...)
 	cmd.Dir = root
 	cmd.Env = portageCommandEnvironment()
-	pluginSrc := filepath.Join(root, "packages", "harbor-langsmith", "src")
-	if _, err := os.Stat(pluginSrc); err == nil {
-		cmd.Env = append(cmd.Env, "PYTHONPATH="+pluginSrc+string(os.PathListSeparator)+os.Getenv("PYTHONPATH"))
-	}
 
 	out, err := cmd.CombinedOutput()
 	_ = os.WriteFile(filepath.Join(dir, "stdout.log"), out, 0o644)
@@ -247,7 +235,7 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 			"stdout":  truncate(string(out), 4000),
 			"run_id":  runID,
 			"job_dir": dir,
-			"hint":    "POST {\"mode\":\"hello_world\"} or {\"mode\":\"path\",\"task_path\":\"...\",\"agent\":\"oracle\",\"plugin_langsmith\":true}",
+			"hint":    "POST {\"mode\":\"hello_world\"} or {\"mode\":\"path\",\"task_path\":\"...\",\"agent\":\"oracle\"}",
 		})
 		return
 	}

@@ -9,9 +9,10 @@ interface Props {
 function perTask(cells: Cell[]): Map<string, { stock?: Cell; ours?: Cell }> {
   const m = new Map<string, { stock?: Cell; ours?: Cell }>();
   for (const c of cells) {
+    if (c.variant !== 'stock' && c.variant !== 'ours') continue;
     if (!m.has(c.task_id)) m.set(c.task_id, {});
     const entry = m.get(c.task_id)!;
-    entry[c.variant as 'stock' | 'ours'] = c;
+    entry[c.variant] = c;
   }
   return m;
 }

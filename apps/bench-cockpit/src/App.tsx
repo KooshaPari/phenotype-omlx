@@ -11,7 +11,6 @@ import Calibration from './components/Calibration';
 import Throughput from './components/Throughput';
 import RLVRPanel from './components/RLVRPanel';
 import Audit from './components/Audit';
-import LangSmithPanel from './components/LangSmithPanel';
 import { LangfusePanel } from './components/LangfusePanel';
 import SuitePage from './components/SuitePage';
 import TaskPage from './components/TaskPage';
@@ -382,8 +381,6 @@ export default function App() {
         return <Audit cells={allCells} seed={selected} />;
       case 'langfuse':
         return <LangfusePanel />;
-      case 'langsmith':
-        return <LangSmithPanel />;
     }
   };
 
@@ -496,7 +493,7 @@ export default function App() {
       
       <CommandPalette 
         isOpen={paletteOpen}
-        views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit', 'langfuse', 'langsmith']}
+        views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit', 'langfuse']}
         actions={paletteActions}
         cells={cells}
         onSelect={(item) => {

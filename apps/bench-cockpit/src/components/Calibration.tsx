@@ -80,11 +80,12 @@ function computePerItemHist(cells: Cell[]): PerItemHistRow[] {
   }
   const rows: PerItemHistRow[] = [];
   for (const [task_id, group] of byKey) {
+    const peers = group.filter((c) => c.variant === 'stock' || c.variant === 'ours');
     const variants = group.map(c => ({ variant: c.variant, pass_at_1: c.pass_at_1 }));
     let flag: PerItemHistRow['flag'] = null;
-    if (variants.length > 1 && variants.every(v => v.pass_at_1 >= 0.999)) {
+    if (peers.length > 1 && peers.every(v => v.pass_at_1 >= 0.999)) {
       flag = 'all_variants_pass';
-    } else if (group.some(c => c.pass_at_1 >= 0.999 && (c.wall_clock_s < 0.05 || !c.prompt))) {
+    } else if (peers.some(c => c.pass_at_1 >= 0.999 && (c.wall_clock_s < 0.05 || !c.prompt))) {
       flag = 'degenerate';
     }
     rows.push({ task_id, suite: group[0]?.suite || '?', variants, flag });
