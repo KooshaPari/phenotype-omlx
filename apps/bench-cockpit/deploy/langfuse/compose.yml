@@ -96,15 +96,20 @@ services:
       LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-}
 
   clickhouse:
-    image: docker.io/clickhouse/clickhouse-server
+    # Pin 24.8: Apple Container hangs unpacking clickhouse-server:latest (~820MB
+    # arm64) at ~10% / drops XPC (HTTPClientError.remoteConnectionClosed). 24.8
+    # unpacks (~550MB) and starts after a clean `container system` restart.
+    image: docker.io/clickhouse/clickhouse-server:24.8
     restart: always
     # No user: "101:101" — Apple Container bind mounts cannot chown host dirs to
     # uid 101 (sudo chown hangs / unsupported). Image default user + world-writable
     # host binds under LANGFUSE_DATA_DIR/clickhouse{,-logs} (see self-host.sh).
+    # CLICKHOUSE_DO_NOT_CHOWN: entrypoint chown fails on virtiofs with EPERM.
     environment:
       CLICKHOUSE_DB: default
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse} # CHANGEME
+      CLICKHOUSE_DO_NOT_CHOWN: "1"
     volumes:
       # Phenotype durable binds (never anonymous /tmp)
       - ${LANGFUSE_DATA_DIR}/clickhouse:/var/lib/clickhouse

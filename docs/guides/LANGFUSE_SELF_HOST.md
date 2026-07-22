@@ -111,15 +111,28 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
   `~/.local/bin/container-compose` (flaticols/container-compose). Never Docker.
 - Data: bind mounts under `LANGFUSE_DATA_DIR` (default
   `~/.local/share/phenotype/langfuse`) — never `/tmp`.
-- ClickHouse: compose omits `user: "101:101"` because Apple Container cannot
-  `chown` host binds to uid 101 (sudo hangs / unsupported). `self-host.sh`
-  makes `clickhouse` / `clickhouse-logs` world-writable instead.
-- **Known Apple Container blocker (2026-07):** alpine/redis probes succeed after
-  `container system start`, but `clickhouse/clickhouse-server` unpack often
-  stalls ~10% of an ~820MB layer (0 KB/s) then dies (SIGTERM / XPC). Prefer a
-  quiet machine, one compose up at a time, and
-  `printf Y | container system start` so kernel prompts are non-interactive.
-  Until CH starts, keep using cloud Hobby as satellite; do not fall back to Docker.
+- ClickHouse image: **pinned to `clickhouse/clickhouse-server:24.8`**. Apple
+  Container hangs unpacking `:latest` (~820MB arm64, stalls ~10% / Zero KB/s)
+  and often fails with `HTTPClientError.remoteConnectionClosed` or
+  `XPC timeout … networkList` under concurrent load. Prefetch once:
+  `container image pull docker.io/clickhouse/clickhouse-server:24.8` with no
+  other `container run` in flight; restart (`container system stop` then
+  `printf Y | container system start`) if the apiserver wedges.
+- Apple Container bring-up: `self-host.sh up` starts deps **serially**
+  (clickhouse → redis → postgres → minio, settle delay) then web/worker.
+  Parallel `compose up` often kills the apiserver mid-create.
+- Registry: anonymous Docker Hub pulls hit `429 Too Many Requests` after
+  several large images (blocks `postgres:17` and often langfuse images).
+  Workarounds: wait for the rate-limit window, or
+  `container registry login docker.io` with a Hub account, then:
+  `container image pull docker.io/postgres:17` (and langfuse images) before
+  `self-host.sh up`. Never Docker as a fallback.
+- ClickHouse perms: compose omits `user: "101:101"` (cannot host-chown to uid
+  101 without interactive sudo) and sets `CLICKHOUSE_DO_NOT_CHOWN=1` so the
+  entrypoint does not fail on virtiofs binds. `self-host.sh` chmod `a+rwx` on
+  data/log dirs. Host native port is `18123` (avoids `:9000` conflicts).
+- Postgres host port remaps to `15432` when local Homebrew postgres holds
+  `:5432`.
 - Smoke: `up` waits for `http://127.0.0.1:3000/api/public/health` (or
   `bash scripts/langfuse/self-host.sh smoke`).
 - Disk: ClickHouse + MinIO grow with traces — prune data dirs deliberately; never

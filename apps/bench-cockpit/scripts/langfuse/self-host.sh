@@ -95,8 +95,36 @@ ensure_apple_runtime() {
   command -v container >/dev/null 2>&1 || die "Apple Container CLI (container) not found on PATH"
   if ! container system status >/dev/null 2>&1; then
     echo "starting Apple Container system services..."
-    container system start >/dev/null || die "container system start failed"
+    # Non-interactive: confirm default kata kernel if prompted.
+    if ! printf 'Y\n' | container system start >/dev/null; then
+      die "container system start failed"
+    fi
   fi
+}
+
+# Prefetch ClickHouse before compose up. Apple Container drops XPC /
+# HTTPClientError.remoteConnectionClosed when unpacking large CH images under
+# concurrent load; :latest (~820MB) hangs — compose pins :24.8.
+preflight_clickhouse_image() {
+  local ref="docker.io/clickhouse/clickhouse-server:24.8"
+  if container image list 2>/dev/null | grep -qE 'clickhouse/clickhouse-server[[:space:]]+24\.8'; then
+    echo "clickhouse_image=cached ($ref)"
+    return 0
+  fi
+  echo "preflight: pulling $ref (no concurrent container runs — Apple Container XPC)"
+  local attempt
+  for attempt in 1 2 3; do
+    if container image pull "$ref"; then
+      echo "clickhouse_image=pulled ($ref)"
+      return 0
+    fi
+    echo "preflight: pull attempt $attempt failed (remoteConnectionClosed/XPC?) — retrying after system settle"
+    sleep $((attempt * 5))
+  done
+  die "BLOCKER: failed to pull $ref after 3 attempts.
+Workaround: printf 'Y\\n' | container system stop; sleep 2; printf 'Y\\n' | container system start
+then: container image pull $ref
+Do not use clickhouse-server:latest on Apple Container (unpack hang)."
 }
 
 resolve_runtime() {
@@ -270,7 +298,38 @@ cmd_up() {
   local rt
   rt="$(resolve_runtime)"
   echo "runtime=$rt"
-  compose "$rt" up
+  case "$rt" in
+    apple-container|apple-container-standalone)
+      preflight_clickhouse_image
+      # Ensure compose project network exists before multi-service up.
+      container network create "${PROJECT_NAME}-default" >/dev/null 2>&1 || true
+      # Apple Container apiserver drops XPC under parallel multi-service create.
+      # Start deps one-by-one with settle delays, then app containers.
+      local svc settle="${LANGFUSE_SERIAL_SETTLE_SEC:-8}"
+      echo "apple-serial: starting deps one-by-one (settle=${settle}s)"
+      for svc in clickhouse redis postgres minio; do
+        echo "apple-serial: up $svc"
+        if ! compose "$rt" up "$svc"; then
+          die "BLOCKER: failed starting $svc under Apple Container.
+If HTTPClientError.remoteConnectionClosed / XPC timeout:
+  printf 'Y\\n' | container system stop; sleep 2; printf 'Y\\n' | container system start
+  then re-run: $0 up
+If registry 429 Too Many Requests (common on postgres:17 after retries):
+  wait for Docker Hub anonymous rate-limit reset, or:
+    container registry login docker.io
+    container image pull docker.io/postgres:17
+  then: $0 up
+  Never Docker. Pinned ClickHouse: clickhouse/clickhouse-server:24.8 (not :latest)."
+        fi
+        sleep "$settle"
+      done
+      echo "apple-serial: up langfuse-web langfuse-worker"
+      compose "$rt" up langfuse-web langfuse-worker
+      ;;
+    *)
+      compose "$rt" up
+      ;;
+  esac
   echo "Langfuse UI: http://127.0.0.1:3000"
   echo "Point cockpit: LANGFUSE_BASE_URL=http://127.0.0.1:3000"
   cmd_smoke
