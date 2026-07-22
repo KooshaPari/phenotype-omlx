@@ -56,6 +56,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover — Python <3.11 fallback
     import tomli as tomllib  # type: ignore[import-untyped,no-redef]
 
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     FAIL,
     PASS,
@@ -196,6 +197,7 @@ def _count_workspace_members(path: str) -> Tuple[bool, str]:
     )
 
 
+@register_check
 def cargo_workspace_crate_count_at_least_15() -> Check:
     """Verify ``perf-core/Cargo.toml`` declares >= 15 workspace members.
 
@@ -238,8 +240,7 @@ def cargo_workspace_crate_count_at_least_15() -> Check:
             description=desc,
             status=FAIL,
             details=(
-                f"unexpected label format from _count_workspace_members: "
-                f"{label!r}"
+                f"unexpected label format from _count_workspace_members: {label!r}"
             ),
         )
     if count >= _CARGO_WORKSPACE_CRATE_THRESHOLD_PASS:
@@ -272,9 +273,7 @@ _DDM_ORACLE_REL_PATH: str = (
 #: so we only count references inside the schedule enum/match arms
 #: and not false positives elsewhere in the file (e.g. ``Sigmoid``
 #: as a method name elsewhere).
-_DDM_SCHEDULE_KIND_RE = re.compile(
-    r"\bContinuousScheduleKind::([A-Za-z][A-Za-z0-9_]*)"
-)
+_DDM_SCHEDULE_KIND_RE = re.compile(r"\bContinuousScheduleKind::([A-Za-z][A-Za-z0-9_]*)")
 
 #: PASS threshold — at least this many distinct
 #: ``ContinuousScheduleKind`` variants (Linear, Cosine, Sqrt, Sigmoid).
@@ -309,11 +308,10 @@ def _count_ddm_schedule_variants(path: str) -> Tuple[bool, str]:
     variants: set[str] = set()
     for m in _DDM_SCHEDULE_KIND_RE.finditer(text):
         variants.add(m.group(1))
-    return True, (
-        f"found {len(variants)} distinct ContinuousScheduleKind variant(s)"
-    )
+    return True, (f"found {len(variants)} distinct ContinuousScheduleKind variant(s)")
 
 
+@register_check
 def ddm_continuous_schedule_variants_at_least_4() -> Check:
     """Verify the DDM oracle exposes >= 4 distinct ContinuousScheduleKind variants.
 
@@ -358,8 +356,7 @@ def ddm_continuous_schedule_variants_at_least_4() -> Check:
             description=desc,
             status=FAIL,
             details=(
-                f"unexpected label format from _count_ddm_schedule_variants: "
-                f"{label!r}"
+                f"unexpected label format from _count_ddm_schedule_variants: {label!r}"
             ),
         )
     if count >= _DDM_SCHEDULE_VARIANT_THRESHOLD_PASS:

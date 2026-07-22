@@ -45,6 +45,7 @@ import os
 import re
 from typing import Tuple
 
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     FAIL,
     PASS,
@@ -119,6 +120,7 @@ def _count_coverage_tags(path: str) -> Tuple[bool, str]:
     return True, f"found {len(tags)} distinct tag(s) in {os.path.basename(path)}"
 
 
+@register_check
 def coverage_tag_count_at_least_25() -> Check:
     """Verify the SOTA coverage matrix carries >= 25 distinct tag declarations.
 
@@ -163,10 +165,7 @@ def coverage_tag_count_at_least_25() -> Check:
             id="coverage_tag_count_at_least_25",
             description=desc,
             status=FAIL,
-            details=(
-                f"unexpected label format from _count_coverage_tags: "
-                f"{label!r}"
-            ),
+            details=(f"unexpected label format from _count_coverage_tags: {label!r}"),
         )
     if count >= _COVERAGE_TAG_THRESHOLD_PASS:
         status = PASS
@@ -233,6 +232,7 @@ def _count_eval_suites(path: str) -> Tuple[bool, str]:
     return True, f"found {len(variants)} distinct Suite variant(s)"
 
 
+@register_check
 def eval_harness_suite_count_at_least_4() -> Check:
     """Verify the eval-harness crate exposes >= 4 distinct Suite variants.
 
@@ -271,10 +271,7 @@ def eval_harness_suite_count_at_least_4() -> Check:
             id="eval_harness_suite_count_at_least_4",
             description=desc,
             status=FAIL,
-            details=(
-                f"unexpected label format from _count_eval_suites: "
-                f"{label!r}"
-            ),
+            details=(f"unexpected label format from _count_eval_suites: {label!r}"),
         )
     if count >= _EVAL_SUITE_THRESHOLD_PASS:
         status = PASS
@@ -283,8 +280,8 @@ def eval_harness_suite_count_at_least_4() -> Check:
     else:
         status = FAIL
     return Check(
-            id="eval_harness_suite_count_at_least_4",
-            description=desc,
-            status=status,
-            details=label,
-        )
+        id="eval_harness_suite_count_at_least_4",
+        description=desc,
+        status=status,
+        details=label,
+    )

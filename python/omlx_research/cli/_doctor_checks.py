@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import sys
 
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     EXPECTED_KERNEL_OP_COUNT,
     FAIL,
@@ -56,6 +57,7 @@ from ._doctor_turn5_checks import (  # noqa: E402,F401  (re-export)
     dispatch_script_vllm_exists,
     niah_regression_baseline_exists,
 )
+
 # Turn-10 INTERNAL checks live in two sibling modules to keep each
 # file at or below the 500-line cap. After turn-12 measured
 # ``_doctor_internal_checks.py`` at 576 lines, the two longest checks
@@ -78,6 +80,7 @@ from ._doctor_internal_checks_turn12 import (  # noqa: E402,F401  (re-export)
 )
 
 
+@register_check
 def python_version() -> Check:
     current = (sys.version_info.major, sys.version_info.minor)
     expected = f"{MIN_PYTHON[0]}.{MIN_PYTHON[1]}+"
@@ -99,8 +102,9 @@ def python_version() -> Check:
     )
 
 
+@register_check
 def mlx_core() -> Check:
-    is_apple_silicon = (sys.platform == "darwin" and platform.machine() == "arm64")
+    is_apple_silicon = sys.platform == "darwin" and platform.machine() == "arm64"
     try:
         import mlx.core as mx  # type: ignore
     except Exception as e:
@@ -124,6 +128,7 @@ def mlx_core() -> Check:
     )
 
 
+@register_check
 def mlx_lm() -> Check:
     try:
         import mlx_lm  # type: ignore  # noqa: F401
@@ -185,9 +190,7 @@ def mlx_lm_required_by_command(cmd: str) -> Check:
             id="mlx_lm_required_by_command",
             description=desc,
             status=PASS,
-            details=(
-                f"command `{cmd}` does not require mlx_lm; nothing to fail."
-            ),
+            details=(f"command `{cmd}` does not require mlx_lm; nothing to fail."),
         )
     return Check(
         id="mlx_lm_required_by_command",
@@ -197,6 +200,7 @@ def mlx_lm_required_by_command(cmd: str) -> Check:
     )
 
 
+@register_check
 def turboquant_rust_extension() -> Check:
     try:
         import _perf  # type: ignore  # noqa: F401
@@ -220,6 +224,7 @@ def turboquant_rust_extension() -> Check:
     )
 
 
+@register_check
 def kernel_registry_version() -> Check:
     version = read_cargo_version("perf-core/kernel-registry")
     if version == "unknown":
@@ -237,6 +242,7 @@ def kernel_registry_version() -> Check:
     )
 
 
+@register_check
 def regress_baseline_version() -> Check:
     version = read_cargo_version("perf-core/regress-baseline")
     if version == "unknown":
@@ -254,12 +260,10 @@ def regress_baseline_version() -> Check:
     )
 
 
+@register_check
 def model_kernels_operator_coverage() -> Check:
     tags = collect_kernel_op_tags()
-    desc = (
-        f"model-kernels KernelOp tag coverage "
-        f"(expect >= {EXPECTED_KERNEL_OP_COUNT})"
-    )
+    desc = f"model-kernels KernelOp tag coverage (expect >= {EXPECTED_KERNEL_OP_COUNT})"
     if not tags:
         return Check(
             id="model_kernels_operator_coverage",
@@ -289,6 +293,7 @@ def model_kernels_operator_coverage() -> Check:
     )
 
 
+@register_check
 def native_abi_v1() -> Check:
     crate_dir = os.path.join(project_root(), "perf-core", "native-abi")
     cargo_path = os.path.join(crate_dir, "Cargo.toml")
@@ -323,6 +328,7 @@ def native_abi_v1() -> Check:
     )
 
 
+@register_check
 def airlock_v2() -> Check:
     path = shutil.which("airlock-v2")
     if path:
@@ -352,6 +358,7 @@ def airlock_v2() -> Check:
 # file so the existing `checks.<name>` access pattern keeps working.
 
 
+@register_check
 def tests_runnable() -> Check:
     """Run pytest --collect-only on the package; exit 0/5 is acceptable."""
     python_dir = os.path.join(project_root(), "python")
@@ -388,9 +395,11 @@ def tests_runnable() -> Check:
             status=PASS,
             details=f"pytest --collect-only exited {rc} (acceptable)",
         )
-    err_tail = (proc.stderr or proc.stdout).strip().splitlines()[-1] if (
-        proc.stderr or proc.stdout
-    ) else ""
+    err_tail = (
+        (proc.stderr or proc.stdout).strip().splitlines()[-1]
+        if (proc.stderr or proc.stdout)
+        else ""
+    )
     return Check(
         id="tests_runnable",
         description=desc,

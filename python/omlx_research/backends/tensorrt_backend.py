@@ -3,12 +3,18 @@
 from __future__ import annotations
 import logging
 import time
-from .base import BackendBase, BackendCapabilities, GenerateRequest, GenerateResponse
+from .base import (
+    BackendBase,
+    BackendCapabilities,
+    GenerateRequest,
+    GenerateResponse,
+    LazyBackendMixin,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class TensorrtBackend(BackendBase):
+class TensorrtBackend(LazyBackendMixin, BackendBase):
     capabilities = BackendCapabilities(
         name="tensorrt",
         primary="tensorrt",
@@ -33,7 +39,7 @@ class TensorrtBackend(BackendBase):
         except ImportError:
             return False
 
-    def _load(self) -> None:
+    def _load_backend(self) -> None:
         if self._runner is None and self.engine_path:
             try:
                 from tensorrt_llm.runtime import ModelRunner
@@ -46,15 +52,9 @@ class TensorrtBackend(BackendBase):
                 self._load_error = str(e)
 
     def generate(self, req: GenerateRequest) -> GenerateResponse:
-        self._load()
+        self._ensure_loaded()
         if self._runner is None:
-            return GenerateResponse(
-                text="",
-                tokens=0,
-                elapsed_ms=0,
-                backend="tensorrt",
-                metadata={"error": "engine not loaded"},
-            )
+            return self._error_response(req, "engine not loaded", "tensorrt")
         t0 = time.time()
         out = self._runner.generate(req.prompt, max_new_tokens=req.max_tokens)
         text = out[0] if isinstance(out, list) else str(out)

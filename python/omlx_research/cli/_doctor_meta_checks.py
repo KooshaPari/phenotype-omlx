@@ -52,6 +52,7 @@ try:
 except ModuleNotFoundError:  # pragma: no cover — Python <3.11 fallback
     import tomli as tomllib  # type: ignore[import-untyped,no-redef]
 
+from ._doctor_registry import register_check
 from ._doctor_shared import FAIL, PASS, WARN, Check
 
 
@@ -119,7 +120,7 @@ def _config_path() -> Path | None:
     default" — a silent degradation that keeps the doctor running.
     """
     try:
-        candidate = (Path(__file__).resolve().parent / _CONFIG_FILENAME)
+        candidate = Path(__file__).resolve().parent / _CONFIG_FILENAME
     except (OSError, ValueError):
         return None
     return candidate if candidate.is_file() else None
@@ -208,12 +209,11 @@ def _run_doctor_json_subprocess() -> dict[str, Any]:
             f"stdout[:200]={proc.stdout[:200]!r}"
         ) from e
     if not isinstance(envelope, dict) or "checks" not in envelope:
-        raise RuntimeError(
-            f"doctor --json envelope missing 'checks' key: {envelope!r}"
-        )
+        raise RuntimeError(f"doctor --json envelope missing 'checks' key: {envelope!r}")
     return envelope
 
 
+@register_check(priority=900)
 def doctor_check_count_at_least_18() -> Check:
     """Assert the live doctor check count meets the PASS threshold.
 

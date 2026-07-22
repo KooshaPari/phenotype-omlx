@@ -39,6 +39,7 @@ import os
 import re
 from typing import List, Tuple
 
+from ._doctor_registry import register_check
 from ._doctor_shared import (
     FAIL,
     PASS,
@@ -116,9 +117,7 @@ def _count_metal_runtime_tests(src_dir: str) -> Tuple[bool, str]:
     except OSError as e:
         return False, f"{type(e).__name__}: {e}"
     files_label = (
-        f" across {len(files_scanned)} files"
-        if len(files_scanned) > 1
-        else ""
+        f" across {len(files_scanned)} files" if len(files_scanned) > 1 else ""
     )
     return True, (
         f"found {count} distinct #[test] reference(s){files_label} "
@@ -126,6 +125,7 @@ def _count_metal_runtime_tests(src_dir: str) -> Tuple[bool, str]:
     )
 
 
+@register_check
 def metal_runtime_lib_test_count_at_least_25() -> Check:
     """Verify metal-runtime lib.rs carries >= 25 ``#[test]`` references.
 
@@ -168,8 +168,7 @@ def metal_runtime_lib_test_count_at_least_25() -> Check:
             description=desc,
             status=FAIL,
             details=(
-                f"unexpected label format from _count_metal_runtime_tests: "
-                f"{label!r}"
+                f"unexpected label format from _count_metal_runtime_tests: {label!r}"
             ),
         )
     if count >= _METAL_RUNTIME_TEST_THRESHOLD_PASS:
@@ -268,6 +267,7 @@ def _count_cli_subcommands(path: str) -> Tuple[bool, str]:
     return True, f"found {count} distinct cmd_* subcommand(s)"
 
 
+@register_check
 def python_cli_subcommand_count_at_least_6() -> Check:
     """Verify the Python CLI registers >= 6 distinct ``cmd_*`` subcommands.
 
@@ -309,10 +309,7 @@ def python_cli_subcommand_count_at_least_6() -> Check:
             id="python_cli_subcommand_count_at_least_6",
             description=desc,
             status=FAIL,
-            details=(
-                f"unexpected label format from _count_cli_subcommands: "
-                f"{label!r}"
-            ),
+            details=(f"unexpected label format from _count_cli_subcommands: {label!r}"),
         )
     if count >= _PYTHON_CLI_SUBCMD_THRESHOLD_PASS:
         status = PASS

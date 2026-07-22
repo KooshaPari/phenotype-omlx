@@ -68,10 +68,7 @@ impl KernelRegistry {
     /// Register a candidate only if no candidate with the same id exists
     /// yet. Returns the existing candidate on collision so callers can log
     /// provenance.
-    pub fn register_candidate_checked(
-        &mut self,
-        candidate: Candidate,
-    ) -> Option<Candidate> {
+    pub fn register_candidate_checked(&mut self, candidate: Candidate) -> Option<Candidate> {
         self.candidates.insert(candidate.id, candidate)
     }
 
@@ -164,8 +161,10 @@ impl KernelRegistry {
                     .find(|req| !caps.capabilities.contains(req))
                     .map(|c| c.as_str().to_string())
                     .unwrap_or_else(|| "unknown".to_string());
-                rejections
-                    .push(RejectionRecord::new(*id, RejectionReason::MissingCapability(missing)));
+                rejections.push(RejectionRecord::new(
+                    *id,
+                    RejectionReason::MissingCapability(missing),
+                ));
                 continue;
             }
 
@@ -230,8 +229,7 @@ impl KernelRegistry {
 
             // No evidence at all.
             if matches!(policy, SelectionPolicy::ExperimentalOnly) {
-                rejections
-                    .push(RejectionRecord::new(*id, RejectionReason::NoTuningEvidence));
+                rejections.push(RejectionRecord::new(*id, RejectionReason::NoTuningEvidence));
                 continue;
             }
 
@@ -240,8 +238,7 @@ impl KernelRegistry {
                 // tuned short-circuit.
                 reference_fallback.get_or_insert(cand);
             } else {
-                rejections
-                    .push(RejectionRecord::new(*id, RejectionReason::NoTuningEvidence));
+                rejections.push(RejectionRecord::new(*id, RejectionReason::NoTuningEvidence));
             }
         }
 
@@ -297,7 +294,10 @@ impl KernelRegistry {
                         tuning: Box::new(placeholder),
                     };
                 }
-                return SelectionDecision::Rejected { rejections, considered };
+                return SelectionDecision::Rejected {
+                    rejections,
+                    considered,
+                };
             }
         }
 
@@ -323,16 +323,16 @@ impl KernelRegistry {
         }
 
         // 5. Nothing left.
-        SelectionDecision::Rejected { rejections, considered }
+        SelectionDecision::Rejected {
+            rejections,
+            considered,
+        }
     }
 }
 
 /// Pick the winning (candidate, tuning) pair. Sort by `(metric, id)` so
 /// the result is independent of HashMap iteration order.
-fn pick_winner(
-    tuned: &[(Candidate, TuningRecord)],
-    metric: Metric,
-) -> (Candidate, TuningRecord) {
+fn pick_winner(tuned: &[(Candidate, TuningRecord)], metric: Metric) -> (Candidate, TuningRecord) {
     debug_assert!(!tuned.is_empty());
     let mut sorted: Vec<(Candidate, TuningRecord)> = tuned.to_vec();
     sorted.sort_by(|a, b| {
@@ -368,12 +368,12 @@ fn check_production_quality(
     };
     match evaluate_for_production(record, attachment) {
         Ok(()) => Ok(()),
-        Err(QualityError::PromotionGateMissingEvidence { gate }) => Err(
-            RejectionReason::MissingQualityEvidence(format!(
+        Err(QualityError::PromotionGateMissingEvidence { gate }) => {
+            Err(RejectionReason::MissingQualityEvidence(format!(
                 "candidate {} missing evidence for gate '{}'",
                 candidate.id, gate
-            )),
-        ),
+            )))
+        }
         Err(QualityError::PromotionGateRejected {
             gate,
             observed,
@@ -383,15 +383,237 @@ fn check_production_quality(
             observed,
             threshold,
         }),
-        Err(QualityError::PromotionWithoutGates) => Err(RejectionReason::MissingQualityEvidence(
-            format!(
+        Err(QualityError::PromotionWithoutGates) => {
+            Err(RejectionReason::MissingQualityEvidence(format!(
                 "candidate {} attachment has no gates configured",
                 candidate.id
-            ),
-        )),
+            )))
+        }
         Err(e) => Err(RejectionReason::Other(format!(
             "candidate {} quality check failed: {}",
             candidate.id, e
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::candidate::{BackendKind, CandidateId};
+    use crate::compat::{DType, OperatorKind, QuantizationPolicy};
+    use crate::key::{ShapeSignature, ATTENTION_NONE};
+
+    fn wide_shape() -> ShapeSignature {
+        ShapeSignature {
+            m: 4096,
+            n: 4096,
+            k: 4096,
+            batch: 64,
+            seq: 4096,
+            group: 64,
+        }
+    }
+
+    fn narrow_shape() -> ShapeSignature {
+        ShapeSignature {
+            m: 128,
+            n: 128,
+            k: 128,
+            batch: 1,
+            seq: 128,
+            group: 1,
+        }
+    }
+
+    fn make_candidate(name: &str) -> Candidate {
+        Candidate::new(
+            name,
+            BackendKind::Cpu,
+            "src-hash",
+            vec![],
+            ShapeSignature {
+                m: 0,
+                n: 0,
+                k: 0,
+                batch: 0,
+                seq: 0,
+                group: 0,
+            },
+            wide_shape(),
+            vec![DType::Fp16, DType::Bf16],
+            true,
+        )
+    }
+
+    fn make_candidate_with_backend(name: &str, backend: BackendKind) -> Candidate {
+        Candidate::new(
+            name,
+            backend,
+            "src-hash",
+            vec![],
+            ShapeSignature {
+                m: 0,
+                n: 0,
+                k: 0,
+                batch: 0,
+                seq: 0,
+                group: 0,
+            },
+            wide_shape(),
+            vec![DType::Fp16],
+            true,
+        )
+    }
+
+    fn default_key() -> KernelKey {
+        KernelKey {
+            operator_kind: OperatorKind::DenseMatmul,
+            attention_kind: ATTENTION_NONE,
+            shape_signature: narrow_shape(),
+            dtype: DType::Fp16,
+            quantization: QuantizationPolicy::None,
+            state_layout_version: 1,
+            device_fingerprint: "test-fp".to_string(),
+            policy_version: 1,
+        }
+    }
+
+    // --- Task 1: register / overwrite ------------------------------------------------
+
+    #[test]
+    fn register_duplicate_name_overwrites_existing_candidate() {
+        let mut reg = KernelRegistry::new();
+        let c1 = make_candidate("my-kernel");
+        let c2 = make_candidate("my-kernel"); // same (name, backend) → same id
+
+        reg.register_candidate(c1);
+        assert_eq!(reg.list_candidates().len(), 1);
+
+        // Overwrite: second registration with same id replaces the first.
+        reg.register_candidate(c2);
+        let listed = reg.list_candidates();
+        assert_eq!(
+            listed.len(),
+            1,
+            "duplicate insert must not create a second entry"
+        );
+    }
+
+    #[test]
+    fn register_candidate_checked_returns_old_on_collision() {
+        let mut reg = KernelRegistry::new();
+        let c1 = make_candidate("alpha");
+        let c2 = make_candidate("alpha");
+
+        assert!(
+            reg.register_candidate_checked(c1).is_none(),
+            "first insert must return None"
+        );
+        let returned = reg.register_candidate_checked(c2);
+        assert!(
+            returned.is_some(),
+            "collision must return the displaced candidate"
+        );
+        assert_eq!(returned.unwrap().name, "alpha");
+        assert_eq!(reg.list_candidates().len(), 1);
+    }
+
+    #[test]
+    fn register_different_backends_produce_distinct_ids() {
+        let mut reg = KernelRegistry::new();
+        let c_cpu = make_candidate_with_backend("kernel-x", BackendKind::Cpu);
+        let c_metal = make_candidate_with_backend("kernel-x", BackendKind::Metal);
+
+        assert_ne!(
+            c_cpu.id, c_metal.id,
+            "different backends must yield different ids"
+        );
+        reg.register_candidate(c_cpu);
+        reg.register_candidate(c_metal);
+        assert_eq!(reg.list_candidates().len(), 2);
+    }
+
+    // --- Task 1: lookup non-existent -------------------------------------------------
+
+    #[test]
+    fn list_candidates_for_ids_returns_empty_for_unknown_id() {
+        let mut reg = KernelRegistry::new();
+        reg.register_candidate(make_candidate("real"));
+        let unknown = CandidateId(0xDEAD_BEEF);
+        let result = reg.list_candidates_for_ids(&[unknown]);
+        assert!(result.is_empty(), "unknown id must not appear in result");
+    }
+
+    #[test]
+    fn list_candidates_for_ids_mixes_known_and_unknown() {
+        let mut reg = KernelRegistry::new();
+        reg.register_candidate(make_candidate("a"));
+        reg.register_candidate(make_candidate("b"));
+        let known = CandidateId::derive("a", BackendKind::Cpu);
+        let unknown = CandidateId(0x0000);
+        let result = reg.list_candidates_for_ids(&[known, unknown]);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "a");
+    }
+
+    // --- Task 1: listing returns all registered --------------------------------------
+
+    #[test]
+    fn list_candidates_returns_all_registered_sorted_by_id() {
+        let mut reg = KernelRegistry::new();
+        reg.register_candidate(make_candidate("z-last"));
+        reg.register_candidate(make_candidate("a-first"));
+        reg.register_candidate(make_candidate("m-middle"));
+
+        let listed = reg.list_candidates();
+        assert_eq!(listed.len(), 3);
+        for pair in listed.windows(2) {
+            assert!(pair[0].id <= pair[1].id, "list_candidates must sort by id");
+        }
+    }
+
+    #[test]
+    fn list_candidates_returns_empty_for_fresh_registry() {
+        let reg = KernelRegistry::new();
+        assert!(reg.list_candidates().is_empty());
+    }
+
+    // --- Task 1: unregister removes --------------------------------------------------
+
+    #[test]
+    fn unregister_candidate_by_id_removes_from_registry() {
+        let mut reg = KernelRegistry::new();
+        let c = make_candidate("removable");
+        let id = c.id;
+        reg.register_candidate(c);
+        assert_eq!(reg.list_candidates().len(), 1);
+
+        let removed = reg.candidates.remove(&id);
+        assert!(removed.is_some(), "remove must return the candidate");
+        assert!(reg.list_candidates().is_empty());
+    }
+
+    #[test]
+    fn unregister_nonexistent_candidate_returns_none() {
+        let mut reg = KernelRegistry::new();
+        let removed = reg.candidates.remove(&CandidateId(0xBEEF));
+        assert!(removed.is_none());
+    }
+
+    #[test]
+    fn unregister_does_not_affect_other_candidates() {
+        let mut reg = KernelRegistry::new();
+        let c_keep = make_candidate("keep");
+        let keep_id = c_keep.id;
+        let c_remove = make_candidate("remove");
+        let remove_id = c_remove.id;
+        reg.register_candidate(c_keep);
+        reg.register_candidate(c_remove);
+        assert_eq!(reg.list_candidates().len(), 2);
+
+        reg.candidates.remove(&remove_id);
+        let remaining = reg.list_candidates();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].id, keep_id);
     }
 }
