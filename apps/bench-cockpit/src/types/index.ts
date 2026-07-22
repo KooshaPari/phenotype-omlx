@@ -116,7 +116,17 @@ export interface Cell {
   scoring_method?: string;
   system_prompt_hash?: string;
   progress_trace?: any[];
+  /** Dual-read alternate transcript (chat/tool turns). */
+  chat_trace?: any[];
   expected_answer?: string;
+  /** Canvas-style assignment fields (dual-read with metadata.*). */
+  task_title?: string;
+  title?: string;
+  description?: string;
+  task_description?: string;
+  acceptance?: string;
+  acceptance_criteria?: string;
+  rubric?: string;
   metadata?: Record<string, string>;
   [k: string]: any;
 }

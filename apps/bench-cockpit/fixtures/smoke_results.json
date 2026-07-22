@@ -41,6 +41,9 @@
     {
       "suite": "mmlu",
       "task_id": "mmlu-000",
+      "task_title": "MMLU sample item 000",
+      "description": "Answer the multiple-choice question. Canvas-style smoke assignment for cockpit Task page.",
+      "acceptance": "1. Reply contains the expected answer substring.\n2. Format is a single concise answer line.\n3. No fabricated citations.",
       "difficulty": "medium",
       "variant": "stock",
       "ok": true,
@@ -51,6 +54,7 @@
       "peak_gpu_mem_mb": 8000,
       "energy_proxy_joules": 12,
       "pass_at_1": 0.42,
+      "gen_ok": 0.42,
       "partial_credit": 0.378,
       "judge_score": 0.42,
       "intent_preservation_rate": 0.8,
@@ -71,6 +75,12 @@
           "turn": 0,
           "role": "user",
           "content": "q 0"
+        },
+        {
+          "kind": "turn",
+          "turn": 1,
+          "role": "assistant",
+          "content": "answer 0"
         },
         {
           "kind": "llm",
@@ -94,6 +104,9 @@
     {
       "suite": "mmlu",
       "task_id": "mmlu-000",
+      "task_title": "MMLU sample item 000",
+      "description": "Answer the multiple-choice question. Canvas-style smoke assignment for cockpit Task page.",
+      "acceptance": "1. Reply contains the expected answer substring.\n2. Format is a single concise answer line.\n3. No fabricated citations.",
       "difficulty": "medium",
       "variant": "ours",
       "ok": true,
@@ -104,6 +117,7 @@
       "peak_gpu_mem_mb": 8000,
       "energy_proxy_joules": 12,
       "pass_at_1": 0.55,
+      "gen_ok": 0.55,
       "partial_credit": 0.49500000000000005,
       "judge_score": 0.55,
       "intent_preservation_rate": 0.8,
