@@ -118,6 +118,14 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
   `container image pull docker.io/clickhouse/clickhouse-server:24.8` with no
   other `container run` in flight; restart (`container system stop` then
   `printf Y | container system start`) if the apiserver wedges.
+- Apple Container bring-up: `self-host.sh up` starts deps **serially**
+  (clickhouse → redis → postgres → minio, settle delay) then web/worker.
+  Parallel `compose up` often kills the apiserver mid-create.
+- Registry: anonymous Docker Hub pulls hit `429 Too Many Requests` after
+  several large images. Workarounds: wait for the rate-limit window, or
+  `container registry login docker.io` with a Hub account, then:
+  `container image pull docker.io/postgres:17` (and langfuse images) before
+  `self-host.sh up`. Never Docker as a fallback.
 - ClickHouse perms: compose omits `user: "101:101"` (cannot host-chown to uid
   101 without interactive sudo) and sets `CLICKHOUSE_DO_NOT_CHOWN=1` so the
   entrypoint does not fail on virtiofs binds. `self-host.sh` chmod `a+rwx` on
