@@ -29,243 +29,21 @@
 //! compare the hash against a re-serialization to confirm the record has
 //! not been mutated since approval.
 
+#[path = "quality_scoring.rs"]
+mod quality_scoring;
+#[path = "quality_thresholds.rs"]
+mod quality_thresholds;
+
+pub use quality_scoring::{
+    evaluate_for_production, hex_lower, QualityAttachment, QualityError, QualityEvidence,
+};
+pub use quality_thresholds::{GateDirection, QualityGate};
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
 use crate::candidate::CandidateId;
-use crate::record::TuningRecord;
-
-/// One named quality threshold. A gate is *passing* when
-/// `evidence.score >= gate.threshold`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct QualityGate {
-    /// Stable short id used in rejection traces. Convention: lowercase
-    /// hyphenated, e.g. `"mmlu-pro"`, `"gpqa-diamond"`, `"bfcl-ast"`.
-    pub id: String,
-    /// Threshold the gate enforces. The interpretation depends on
-    /// `direction`: for `AtLeast` the score must be `>= threshold`, for
-    /// `AtMost` the score must be `<= threshold`.
-    pub threshold: f64,
-    /// How to interpret `threshold`.
-    pub direction: GateDirection,
-    /// Optional human-readable note (provenance, dataset revision).
-    #[serde(default)]
-    pub note: String,
-}
-
-impl QualityGate {
-    /// Convenience constructor for "score >= threshold".
-    pub fn at_least(id: impl Into<String>, threshold: f64) -> Self {
-        Self {
-            id: id.into(),
-            threshold,
-            direction: GateDirection::AtLeast,
-            note: String::new(),
-        }
-    }
-
-    /// Convenience constructor for "score <= threshold" (e.g. perplexity).
-    pub fn at_most(id: impl Into<String>, threshold: f64) -> Self {
-        Self {
-            id: id.into(),
-            threshold,
-            direction: GateDirection::AtMost,
-            note: String::new(),
-        }
-    }
-
-    /// `true` when `score` satisfies the gate under its direction.
-    pub fn passes(&self, score: f64) -> bool {
-        match self.direction {
-            GateDirection::AtLeast => score >= self.threshold,
-            GateDirection::AtMost => score <= self.threshold,
-        }
-    }
-
-    /// Short stable tag for use in rejection strings.
-    pub fn tag(&self) -> &str {
-        &self.id
-    }
-}
-
-/// How a [`QualityGate`] compares its score against its threshold.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum GateDirection {
-    /// Higher is better. `score >= threshold` to pass.
-    AtLeast,
-    /// Lower is better. `score <= threshold` to pass. Used for
-    /// perplexity, calibration error, and rejection rates.
-    AtMost,
-}
-
-/// One named score attached to a tuning record. Carries the dataset
-/// revision and source revision so quality regressions are attributable.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct QualityEvidence {
-    /// Same id as the corresponding [`QualityGate::id`].
-    pub id: String,
-    /// Observed score on the gate's dataset.
-    pub score: f64,
-    /// Dataset version (e.g. `"MMLU-Pro@2024-06"`, `"GPQA-Diamond@2024-04"`).
-    pub dataset_revision: String,
-    /// Source revision that produced this evidence. Should match
-    /// [`crate::record::TuningRecord::source_revision`].
-    pub source_revision: String,
-    /// Capture timestamp in unix-ms.
-    pub captured_at_unix_ms: u64,
-    /// Optional note (judge model version, evaluator config).
-    #[serde(default)]
-    pub note: String,
-}
-
-impl QualityEvidence {
-    /// Construct an evidence entry. `score` is stored verbatim; the gate
-    /// decides pass/fail.
-    pub fn new(
-        id: impl Into<String>,
-        score: f64,
-        dataset_revision: impl Into<String>,
-        source_revision: impl Into<String>,
-        captured_at_unix_ms: u64,
-    ) -> Self {
-        Self {
-            id: id.into(),
-            score,
-            dataset_revision: dataset_revision.into(),
-            source_revision: source_revision.into(),
-            captured_at_unix_ms,
-            note: String::new(),
-        }
-    }
-
-    /// `true` when this evidence satisfies `gate`.
-    pub fn satisfies(&self, gate: &QualityGate) -> bool {
-        self.id == gate.id && gate.passes(self.score)
-    }
-
-    /// Build evidence from an eval-harness [`EvaluationReport`] JSON blob.
-    ///
-    /// Thin adapter: does **not** depend on the `eval-harness` crate. Expects
-    /// the public report shape (`suite`, `accuracy`, …). Gate id is the suite
-    /// name with `_` → `-` (e.g. `terminal_bench` → `terminal-bench`).
-    ///
-    /// Score is `accuracy` (fraction correct). `dataset_revision` is
-    /// `eval-harness:<suite>`.
-    pub fn from_evaluation_report_json(
-        bytes: &[u8],
-        source_revision: impl Into<String>,
-        captured_at_unix_ms: u64,
-    ) -> Result<Self, QualityError> {
-        #[derive(Deserialize)]
-        struct EvaluationReportView {
-            suite: String,
-            accuracy: f64,
-        }
-
-        let view: EvaluationReportView = serde_json::from_slice(bytes).map_err(|e| {
-            QualityError::InvalidEvaluationReport(format!("parse EvaluationReport JSON: {e}"))
-        })?;
-        if view.suite.trim().is_empty() {
-            return Err(QualityError::InvalidEvaluationReport(
-                "suite must be a non-empty string".into(),
-            ));
-        }
-        if !view.accuracy.is_finite() {
-            return Err(QualityError::InvalidEvaluationReport(
-                "accuracy must be a finite f64".into(),
-            ));
-        }
-        let id = view.suite.replace('_', "-");
-        Ok(Self {
-            id: id.clone(),
-            score: view.accuracy,
-            dataset_revision: format!("eval-harness:{id}"),
-            source_revision: source_revision.into(),
-            captured_at_unix_ms,
-            note: "imported from EvaluationReport JSON".into(),
-        })
-    }
-}
-
-/// Optional attachment to a [`crate::record::TuningRecord`] that carries
-/// one or more [`QualityEvidence`] entries. Promotion policy consults
-/// `gates()` to know which gates must be satisfied.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
-pub struct QualityAttachment {
-    /// Every gate whose id appears in the [`QualityEvidence`] entries
-    /// must pass for promotion. An empty list means "no quality
-    /// requirement" — see [`SelectionPolicy::requires_quality_evidence`].
-    #[serde(default)]
-    pub gates: Vec<QualityGate>,
-    /// Evidence rows. Multiple entries for the same id are not allowed —
-    /// the registry treats this as a programming error and rejects the
-    /// attachment.
-    #[serde(default)]
-    pub evidence: Vec<QualityEvidence>,
-}
-
-impl QualityAttachment {
-    /// Empty attachment — no quality requirement.
-    pub fn empty() -> Self {
-        Self::default()
-    }
-
-    /// Builder-style constructor.
-    pub fn new(gates: Vec<QualityGate>, evidence: Vec<QualityEvidence>) -> Self {
-        Self { gates, evidence }
-    }
-
-    /// `true` when every gate in `self.gates` has a matching evidence row
-    /// that passes. Gates with no matching evidence count as a *missing*
-    /// requirement (not as a passing one). Duplicate ids in `evidence`
-    /// are treated as a programming error.
-    pub fn passes_all(&self) -> Result<bool, QualityError> {
-        let mut by_id: BTreeMap<&str, &QualityEvidence> = BTreeMap::new();
-        for e in &self.evidence {
-            if by_id.insert(e.id.as_str(), e).is_some() {
-                return Err(QualityError::DuplicateEvidence(e.id.clone()));
-            }
-        }
-        if self.gates.is_empty() {
-            return Ok(true);
-        }
-        for gate in &self.gates {
-            match by_id.get(gate.id.as_str()) {
-                Some(ev) if gate.passes(ev.score) => continue,
-                Some(_) => return Ok(false),
-                None => return Ok(false),
-            }
-        }
-        Ok(true)
-    }
-
-    /// `true` when the attachment is missing evidence for `gate`.
-    pub fn missing_for(&self, gate: &QualityGate) -> bool {
-        !self.evidence.iter().any(|e| e.id == gate.id)
-    }
-}
-
-/// Errors produced by the governance surface.
-#[derive(Debug, Clone, thiserror::Error, PartialEq, Serialize, Deserialize)]
-pub enum QualityError {
-    #[error("duplicate quality evidence for gate id {0}")]
-    DuplicateEvidence(String),
-    #[error("promotion requires gates, none provided")]
-    PromotionWithoutGates,
-    #[error("promotion rejected: gate '{gate}' observed={observed:.4} threshold={threshold:.4}")]
-    PromotionGateRejected {
-        gate: String,
-        observed: f64,
-        threshold: f64,
-    },
-    #[error("promotion rejected: gate '{gate}' has no evidence")]
-    PromotionGateMissingEvidence { gate: String },
-    #[error("promotion rejected: signature mismatch (expected={expected}, got={got})")]
-    SignatureMismatch { expected: String, got: String },
-    #[error("invalid EvaluationReport JSON: {0}")]
-    InvalidEvaluationReport(String),
-}
 
 /// Promotion audit-trail artifact. Immutable once written; the
 /// `content_hash` field locks the bytes so a reviewer can detect later
@@ -407,37 +185,43 @@ impl PromotionRecord {
     ///   declared `Serialize` impl — preserving field-name and value
     ///   fidelity — and then concatenated under the sorted top-level key.
     fn canonical_bytes(&self) -> Vec<u8> {
-        // Sort gates + evidence by id to neutralize any caller-driven
-        // reordering. This is independent of serde_json's encoding so the
-        // bytes are guaranteed stable across runs and round-trips.
         let mut gates_sorted: Vec<&QualityGate> = self.gates.iter().collect();
         gates_sorted.sort_by(|a, b| a.id.cmp(&b.id));
         let mut evidence_sorted: Vec<&QualityEvidence> = self.evidence.iter().collect();
         evidence_sorted.sort_by(|a, b| a.id.cmp(&b.id));
 
         let gates_json = serde_json::to_string(&gates_sorted).unwrap_or_else(|_| "[]".to_string());
-        let evidence_json = serde_json::to_string(&evidence_sorted).unwrap_or_else(|_| "[]".to_string());
+        let evidence_json =
+            serde_json::to_string(&evidence_sorted).unwrap_or_else(|_| "[]".to_string());
 
-        // Build each field as a deterministic JSON string then concatenate
-        // the fields in a fixed lexicographic order. This avoids relying on
-        // serde_json::Map's internal ordering across crate versions.
         let mut pairs: Vec<(&'static str, String)> = vec![
             (
                 "candidate_id",
                 serde_json::to_string(&self.candidate_id.0).unwrap_or_else(|_| "0".to_string()),
             ),
-            ("source_revision", serde_json::to_string(&self.source_revision).unwrap_or_default()),
+            (
+                "source_revision",
+                serde_json::to_string(&self.source_revision).unwrap_or_default(),
+            ),
             (
                 "approved_at_unix_ms",
-                serde_json::to_string(&self.approved_at_unix_ms).unwrap_or_else(|_| "0".to_string()),
+                serde_json::to_string(&self.approved_at_unix_ms)
+                    .unwrap_or_else(|_| "0".to_string()),
             ),
-            ("approver", serde_json::to_string(&self.approver).unwrap_or_default()),
+            (
+                "approver",
+                serde_json::to_string(&self.approver).unwrap_or_default(),
+            ),
             ("evidence", evidence_json),
             ("gates", gates_json),
-            ("justification", serde_json::to_string(&self.justification).unwrap_or_default()),
+            (
+                "justification",
+                serde_json::to_string(&self.justification).unwrap_or_default(),
+            ),
             (
                 "tuning_record_id",
-                serde_json::to_string(&self.tuning_record_id).unwrap_or_else(|_| "null".to_string()),
+                serde_json::to_string(&self.tuning_record_id)
+                    .unwrap_or_else(|_| "null".to_string()),
             ),
         ];
         pairs.sort_by(|a, b| a.0.cmp(b.0));
@@ -486,61 +270,6 @@ impl PromotionRecord {
         }
         Ok(())
     }
-}
-
-/// Lowercase hex encoding of a SHA-256 digest. Stable across builds.
-fn hex_lower(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for b in bytes {
-        out.push_str(&format!("{:02x}", b));
-    }
-    out
-}
-
-/// Convenience builder: validate a candidate's tuning record + quality
-/// attachment against every gate in `policy_gates`. Returns `Ok(())` when
-/// the gates pass; otherwise the first failing gate as an error.
-pub fn evaluate_for_production(
-    record: &TuningRecord,
-    attachment: &QualityAttachment,
-) -> Result<(), QualityError> {
-    if attachment.gates.is_empty() {
-        return Err(QualityError::PromotionWithoutGates);
-    }
-    let mut by_id: BTreeMap<&str, &QualityEvidence> = BTreeMap::new();
-    for e in &attachment.evidence {
-        if by_id.insert(e.id.as_str(), e).is_some() {
-            return Err(QualityError::DuplicateEvidence(e.id.clone()));
-        }
-    }
-    for gate in &attachment.gates {
-        match by_id.get(gate.id.as_str()) {
-            None => {
-                return Err(QualityError::PromotionGateMissingEvidence {
-                    gate: gate.id.clone(),
-                })
-            }
-            Some(ev) if !gate.passes(ev.score) => {
-                return Err(QualityError::PromotionGateRejected {
-                    gate: gate.id.clone(),
-                    observed: ev.score,
-                    threshold: gate.threshold,
-                });
-            }
-            Some(_) => continue,
-        }
-    }
-    // Sanity: source revisions must agree.
-    for ev in &attachment.evidence {
-        if ev.source_revision != record.source_revision {
-            return Err(QualityError::PromotionGateRejected {
-                gate: ev.id.clone(),
-                observed: ev.score,
-                threshold: 0.0,
-            });
-        }
-    }
-    Ok(())
 }
 
 /// The action a promotion workflow performs on a candidate.
@@ -626,7 +355,9 @@ impl PromotionValidator {
     /// Build the next "hold" entry for the audit log (caller is waiting
     /// on more evidence). The string is appended verbatim.
     pub fn hold(&self, reason: impl Into<String>) -> PromotionAction {
-        PromotionAction::Hold { reason: reason.into() }
+        PromotionAction::Hold {
+            reason: reason.into(),
+        }
     }
 }
 
