@@ -38,7 +38,7 @@ and auto-expand the suite.
 ```bash
 # or manual:
 cd server && go run . \
-  -data /Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json \
+  -data /Users/kooshapari/CodeProjects/Phenotype/repos/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json \
   -port 8090
 bun install && bun run build && # serve via Go -dist ../dist
 ```

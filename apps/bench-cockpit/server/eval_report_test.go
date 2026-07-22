@@ -66,7 +66,7 @@ func TestResultsFromEvaluationReport_V5LiveOptional(t *testing.T) {
 	if os.Getenv("BENCH_V5_LIVE") != "1" {
 		t.Skip("set BENCH_V5_LIVE=1 to exercise full V5 artifact")
 	}
-	path := "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json"
+	path := "/Users/kooshapari/CodeProjects/Phenotype/repos/pheno-harness/bench/results/stock-vs-ours/run-v5-qwen35-08b-contract.json"
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read: %v", err)
