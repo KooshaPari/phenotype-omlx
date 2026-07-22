@@ -303,9 +303,31 @@ cmd_up() {
       preflight_clickhouse_image
       # Ensure compose project network exists before multi-service up.
       container network create "${PROJECT_NAME}-default" >/dev/null 2>&1 || true
+      # Apple Container apiserver drops XPC under parallel multi-service create.
+      # Start deps one-by-one with settle delays, then app containers.
+      local svc settle="${LANGFUSE_SERIAL_SETTLE_SEC:-8}"
+      echo "apple-serial: starting deps one-by-one (settle=${settle}s)"
+      for svc in clickhouse redis postgres minio; do
+        echo "apple-serial: up $svc"
+        if ! compose "$rt" up "$svc"; then
+          die "BLOCKER: failed starting $svc under Apple Container.
+If HTTPClientError.remoteConnectionClosed / XPC timeout:
+  printf 'Y\\n' | container system stop; sleep 2; printf 'Y\\n' | container system start
+  then re-run: $0 up
+If registry 429 Too Many Requests (common on postgres:17 after retries):
+  wait for Docker Hub anonymous rate-limit reset, or docker login / mirror,
+  then: container image pull docker.io/library/postgres:17 && $0 up
+Pinned ClickHouse: clickhouse/clickhouse-server:24.8 (not :latest)."
+        fi
+        sleep "$settle"
+      done
+      echo "apple-serial: up langfuse-web langfuse-worker"
+      compose "$rt" up langfuse-web langfuse-worker
+      ;;
+    *)
+      compose "$rt" up
       ;;
   esac
-  compose "$rt" up
   echo "Langfuse UI: http://127.0.0.1:3000"
   echo "Point cockpit: LANGFUSE_BASE_URL=http://127.0.0.1:3000"
   cmd_smoke
