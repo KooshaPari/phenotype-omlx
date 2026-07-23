@@ -1,0 +1,17 @@
+{
+  "model_family": "Qwen3.5",
+  "kernel": "mlx_native_gated_delta",
+  "source": "mlx_lm.models.gated_delta.gated_delta_kernel",
+  "shape": {"batch": 1, "tokens": 8, "key_heads": 2, "value_heads": 4, "key_dim": 32, "value_dim": 16},
+  "median_us": 223.417,
+  "p95_us": 298.542,
+  "dispatch_verified": true,
+  "reference": "mlx_compiled_ops",
+  "max_abs_error": 0.0000057220458984375,
+  "state_max_abs_error": 0.0,
+  "parity_verified": true,
+  "hardware": "Apple Metal via MLX",
+  "shape_guard": "key_dim must be >= 32; smaller values produce n_per_t=0 in the upstream kernel",
+  "custom_phenotype_artifact": false,
+  "notes": "Synthetic dispatch benchmark; excludes model loading and tokenizer overhead."
+}

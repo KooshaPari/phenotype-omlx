@@ -1,0 +1,13 @@
+{
+  "schema": "metal-runtime.recurrent-percentiles.v1",
+  "samples": 9,
+  "measurements": {
+    "deltanet_step_f32": {"median_us": 448.292, "p95_us": 708.0},
+    "cca_block_attend_f32": {"median_us": 317.833, "p95_us": 459.542},
+    "mla_cache_attend_f32": {"median_us": 305.916, "p95_us": 368.5},
+    "retnet_retention_step_f32": {"median_us": 328.958, "p95_us": 405.375},
+    "mamba_selective_step_f32": {"median_us": 317.458, "p95_us": 364.084},
+    "mamba_selective_scan_f32": {"median_us": 345.125, "p95_us": 462.083}
+  },
+  "notes": "Fresh artifact-backed Apple Metal baseline; DeltaNet remains a serial one-thread kernel requiring optimization before live replacement."
+}

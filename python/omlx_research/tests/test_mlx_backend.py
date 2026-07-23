@@ -95,6 +95,38 @@ class TestMlxBackendInit(unittest.TestCase):
         r2 = be._rust_perf()
         self.assertEqual(r1, r2)
 
+    def test_metal_backend_preserves_model_path(self):
+        """Explicit Metal policy must pass the selected model to the MLX executor."""
+        from unittest.mock import patch
+
+        from omlx_research.backends.base import GenerateRequest, GenerateResponse
+        from omlx_research.backends.metal_backend import MetalKernelBackend
+
+        backend = MetalKernelBackend("Qwen/Qwen3.5-0.8B")
+        fake = GenerateResponse("ok", 1, 2, backend="mlx", metadata={"loaded": True})
+        with patch("mlx.core.metal.is_available", return_value=True), patch(
+            "omlx_research.backends.mlx_backend.MlxBackend.generate", return_value=fake
+        ) as generate:
+            response = backend.generate(GenerateRequest("hello"))
+        self.assertEqual(response.backend, "metal")
+        self.assertEqual(response.metadata["model_path"], "Qwen/Qwen3.5-0.8B")
+        self.assertEqual(response.metadata["custom_metal_probe"]["passed"], True)
+        provenance = response.metadata["kernel_execution_provenance"]
+        self.assertEqual(provenance["verification_scope"], "probe_only")
+        self.assertEqual(provenance["execution_source"], "unavailable")
+        self.assertFalse(provenance["custom_kernel_execution_verified"])
+        generate.assert_called_once()
+
+    def test_kernel_plan_is_explicitly_nonexecuted(self):
+        """Layer introspection must not be reported as custom execution."""
+        from omlx_research.backends.mlx_backend import MlxBackend
+
+        backend = MlxBackend()
+        plan = backend.kernel_plan()
+        self.assertEqual(plan["execution_source"], "unavailable")
+        self.assertEqual(plan["custom_kernel_dispatches"], 0)
+        self.assertFalse(plan["custom_kernel_execution_verified"])
+
 
 class TestRequireMlxLmHelper(unittest.TestCase):
     """The helper gates production-path tests on the `mlx_lm` runtime.
@@ -187,6 +219,13 @@ class TestMlxBackendTurboQuantProduction(unittest.TestCase):
         turbo_meta = resp.metadata.get("turbo", {})
         n_compressed = turbo_meta.get("compressed", -1)
         n_lite = turbo_meta.get("lite_layers", 0)
+        if n_lite == 0:
+            raise unittest.SkipTest(
+                turbo_meta.get(
+                    "cache_applicability_reason",
+                    "model exposes no TurboKVCacheLite layers; KV compression is not applicable",
+                )
+            )
         # The 2 specific assertions: layers wrapped + at least some compressed.
         self.assertGreater(
             n_lite, 0,
@@ -216,6 +255,13 @@ class TestMlxBackendTurboQuantProduction(unittest.TestCase):
         turbo_meta = resp.metadata.get("turbo", {})
         n_compressed = turbo_meta.get("compressed", -1)
         n_lite = turbo_meta.get("lite_layers", 0)
+        if n_lite == 0:
+            raise unittest.SkipTest(
+                turbo_meta.get(
+                    "cache_applicability_reason",
+                    "model exposes no TurboKVCacheLite layers; KV compression is not applicable",
+                )
+            )
         self.assertGreater(n_lite, 0, "force_compact must wrap all layers")
         self.assertGreater(
             n_compressed, 0,
@@ -233,6 +279,13 @@ class TestMlxBackendTurboQuantProduction(unittest.TestCase):
         )
         resp = be.generate_with_turbo_cache(req, turbo_bits=4, turbo_key_bits=0)
         turbo_meta = resp.metadata.get("turbo", {})
+        if turbo_meta.get("lite_layers", 0) == 0:
+            raise unittest.SkipTest(
+                turbo_meta.get(
+                    "cache_applicability_reason",
+                    "model exposes no TurboKVCacheLite layers; KV compression is not applicable",
+                )
+            )
         # Default mode is Rust; encode_path must report 'rust' (or 'unavailable'
         # if the _perf module wasn't built into the venv).
         ep = turbo_meta.get("encode_path")

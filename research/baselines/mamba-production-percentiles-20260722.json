@@ -1,0 +1,13 @@
+{
+  "schema": "metal-runtime.mamba-production-percentiles.v1",
+  "workload": "production-shape",
+  "steps": 256,
+  "state_dim": 64,
+  "samples": 9,
+  "fused_median_us": 2473.459,
+  "fused_p95_us": 3738.25,
+  "repeated_step_median_us": 203610.333,
+  "repeated_step_p95_us": 329004.125,
+  "fused_artifact_sha256": "ea5ff667cf0e2cc116dfd46e8f9b9b7d0e9f23a655359dade88a024666db574c",
+  "step_artifact_sha256": "c47ffb86fb2e025f5f109db5cb489da25ce9a7cd36eb5a249b084cc2d005b887"
+}

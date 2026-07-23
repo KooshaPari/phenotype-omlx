@@ -1,0 +1,38 @@
+{
+  "schema": "metal-runtime.recurrent-percentiles.v1",
+  "samples": 9,
+  "measurements": {
+    "cca_block_attend_f32": {
+      "median_us": 1651.708,
+      "p95_us": 6643.708
+    },
+    "deltanet_step_f32": {
+      "median_us": 2184.417,
+      "p95_us": 8718.583
+    },
+    "mamba_selective_scan_f32": {
+      "median_us": 1340.541,
+      "p95_us": 4549.375
+    },
+    "mamba_selective_step_f32": {
+      "median_us": 1840.1660000000002,
+      "p95_us": 3399.9159999999997
+    },
+    "mla_cache_attend_f32": {
+      "median_us": 2944.042,
+      "p95_us": 5503.415999999999
+    },
+    "retnet_retention_step_f32": {
+      "median_us": 5557.291,
+      "p95_us": 9286.917000000001
+    }
+  },
+  "artifacts": {
+    "CCA_METALLIB": "1474100b4bff885b566166fbab1cdb4b133dd17ebc453f17bac3078e7ae44625",
+    "DELTANET_METALLIB": "1a93dd5cf6f5a5257815ede89e4fe7f86abda31de7c58c7abdb855284cc17a5e",
+    "MAMBA_METALLIB": "c47ffb86fb2e025f5f109db5cb489da25ce9a7cd36eb5a249b084cc2d005b887",
+    "MAMBA_SCAN_METALLIB": "10d0c75bd4cd3bdff0528b8165dcae97eb1f4a4f39ddd12ef6d12de3c58328db",
+    "MLA_CACHE_METALLIB": "c7619be93f884a98b8a364e50924597470b1f59e479d1878299645743930b9cc",
+    "RETNET_METALLIB": "2e948ab6030d09af859e1e661fedd93de4a51e7389fb216f1c899b9e1fadda21"
+  }
+}

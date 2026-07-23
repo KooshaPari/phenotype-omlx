@@ -25,6 +25,7 @@ class MlxBackend(BackendBase):
     def __init__(self, model_path: str | None = None):
         self.model_path = model_path
         self._model = None
+        self._load_error: str | None = None
         # CRITICAL: initialize eagerly so production code that calls
         # generate_with_turbo_cache() never hits AttributeError on first
         # access to _perf_module. _rust_perf() lazily populates this with
@@ -177,10 +178,46 @@ class MlxBackend(BackendBase):
         return list(perf.turbo_quant_decode(packed, scales, zeros, n, group_size, bits))
 
     def _load(self) -> None:
-        if self._model is None and self.model_path:
-            import mlx_lm
+        if self._model is None and self._load_error is None and self.model_path:
+            try:
+                import mlx_lm
 
-            self._model, self._tokenizer = mlx_lm.load(self.model_path)
+                self._model, self._tokenizer = mlx_lm.load(self.model_path)
+            except Exception as exc:
+                self._load_error = str(exc)
+                logger.warning("MlxBackend._load failed: %s", exc)
+
+    def kernel_plan(self) -> dict:
+        """Describe model-layer families for registry/provenance reporting."""
+        if self._model is None:
+            return {
+                "source": "unavailable",
+                "layers": {},
+                "execution_source": "unavailable",
+                "custom_kernel_dispatches": 0,
+                "custom_kernel_execution_verified": False,
+            }
+        counts: dict[str, int] = {}
+        for layer in getattr(self._model, "layers", []):
+            family = "dense_attention"
+            if hasattr(layer, "linear_attn"):
+                inner = getattr(layer, "linear_attn")
+                name = type(inner).__name__.lower()
+                family = "deltanet" if "delta" in name else "linear_recurrent"
+            elif hasattr(layer, "self_attn"):
+                family = "gqa_attention"
+            counts[family] = counts.get(family, 0) + 1
+        # Introspection identifies the operators that *could* be replaced.  It
+        # does not prove that MLX invoked our artifacts, so keep execution
+        # provenance explicit and conservative until a layer hook reports an
+        # actual custom dispatch.
+        return {
+            "source": "mlx_model_introspection",
+            "layers": counts,
+            "execution_source": "mlx_native",
+            "custom_kernel_dispatches": 0,
+            "custom_kernel_execution_verified": False,
+        }
 
     def generate(self, req: GenerateRequest) -> GenerateResponse:
         self._load()
@@ -284,6 +321,13 @@ class MlxBackend(BackendBase):
         )
         n_lite_layers = sum(1 for c in turbo_cache if isinstance(c, TurboKVCacheLite))
         n_baseline = len(turbo_cache) - n_lite_layers
+        cache_applicability = "supported" if n_lite_layers else "not_applicable"
+        cache_applicability_reason = (
+            None
+            if n_lite_layers
+            else "model exposes no TurboKVCacheLite layers; standard KV-cache compression "
+            "does not apply to this architecture"
+        )
 
         import mlx_lm
 
@@ -374,6 +418,8 @@ class MlxBackend(BackendBase):
                         if self._use_python_turboquant
                         else ("rust" if rust_encode_shape else "unavailable")
                     ),
+                    "cache_applicability": cache_applicability,
+                    "cache_applicability_reason": cache_applicability_reason,
                 },
             },
         )

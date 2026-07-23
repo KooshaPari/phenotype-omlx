@@ -1,0 +1,84 @@
+{
+  "schema_version": "metal-runtime.candidate-manifest.v1",
+  "candidate": {
+    "repo": "phenotype-omlx",
+    "source_revision": "a062446e",
+    "platform": "macos-arm64-metal",
+    "evidence_complete": false,
+    "qwen35_mlx_live_verified": true,
+    "qwen35_mlx_8192_live_verified": true,
+    "qwen35_mlx_8192_verified": true,
+    "qwen35_mlx_8192_exact_match": true
+  },
+  "artifacts": [
+    {"name": "adaln_rms", "path": "adaln_rms.metallib", "sha256": "6f571a99a5df74ae3e0dcb2b3c6d95114ee19c850e9491a0214292f482c762b1"},
+    {"name": "moe_topk", "path": "moe_topk.metallib", "sha256": "516848f26f8b6f63e09a76cb6936c6c0db406155d06b10afe979b784379d25d7"},
+    {"name": "moe_grouped_gemm", "path": "moe_grouped_gemm.metallib", "sha256": "de8e81b66d7a51ed9293d15f00845d3253b5307061013c32e192c4acfe7473a3"},
+    {"name": "ternary_gemm", "path": "ternary_gemm.metallib", "sha256": "9f115c62bf9ac39f606affb0ec5728e5158b7e8ab860b210ed482d70994863dd"},
+    {"name": "diffusion_confidence", "path": "diffusion_argmax_confidence.metallib", "sha256": "07ca5451f91bba30ecce118a41b39c40221c8f6e30f7bb9fdb28ea54da2e3d42"},
+    {"name": "short_conv", "path": "short_conv1d.metallib", "sha256": "52f3acdcd61f24f564b49eaefc236c4af618b8d2a82ab40b5192ca860ba4478d"},
+    {"name": "rwkv7", "path": "rwkv7_time_mix.metallib", "sha256": "cf6cdd59f627419459e7af061578a59ecb967a8e7a10a0e75b78527e474e0579"},
+    {"name": "mamba_step", "path": "mamba_selective_step.metallib", "sha256": "c47ffb86fb2e025f5f109db5cb489da25ce9a7cd36eb5a249b084cc2d005b887"},
+    {"name": "mamba_scan", "path": "mamba_selective_scan.metallib", "sha256": "ea5ff667cf0e2cc116dfd46e8f9b9b7d0e9f23a655359dade88a024666db574c"},
+    {"name": "deltanet", "path": "deltanet_step.metallib", "sha256": "1a93dd5cf6f5a5257815ede89e4fe7f86abda31de7c58c7abdb855284cc17a5e"},
+    {"name": "cca", "path": "cca_block_attend.metallib", "sha256": "1474100b4bff885b566166fbab1cdb4b133dd17ebc453f17bac3078e7ae44625"},
+    {"name": "mla_cache", "path": "mla_cache_attend.metallib", "sha256": "c7619be93f884a98b8a364e50924597470b1f59e479d1878299645743930b9cc"},
+    {"name": "retnet", "path": "retnet_retention_step.metallib", "sha256": "2e948ab6030d09af859e1e661fedd93de4a51e7389fb216f1c899b9e1fadda21"
+    }
+  ],
+  "verification": {
+    "build_command": "OUT_DIR=<temp> ./scripts/build_moe_metallibs.sh",
+    "kernel_registry": "cargo test -p kernel-registry",
+    "metal_parity": "artifact-backed focused parity suites",
+    "production_mamba": "research/baselines/mamba-production-percentiles-20260722.json",
+    "recurrent_artifact_benchmark": {
+      "command": "cargo test --manifest-path perf-core/Cargo.toml -p metal-runtime --features metal --test metal_recurrent_bench -- --ignored --nocapture",
+      "result": "pass",
+      "baseline": "research/baselines/metal-runtime-recurrent-percentiles-20260722.json"
+    },
+    "qwen35_live": {
+      "path": "research/baselines/qwen35-mlx-live-20260722.json",
+      "sha256": "0e54564a34340fea029ad12847c1d03648584370f3dcdea92c33307323f735fe",
+      "exact_match": true,
+      "model": "Qwen/Qwen3.5-0.8B"
+    },
+    "qwen35_niah_8192": {
+      "path": "research/baselines/qwen35-niah-8192-20260722-rerun.json",
+      "sha256": "55cd87666a24be4c89b0ed136b61446f6e6b616eb1e6a385ecec80db19cfff8b",
+      "actual_tokens": 8192,
+      "partial_match": false,
+      "exact_match": true,
+      "model": "Qwen/Qwen3.5-0.8B"
+    }
+  },
+  "dispatch_provenance": [
+    {"artifact": "moe_topk", "operator_kind": "Moe", "model_families": ["Qwen3.5-MoE", "OlmoE"], "selector_test": "moe_routing_top_k_small"},
+    {"artifact": "moe_grouped_gemm", "operator_kind": "Moe", "model_families": ["Qwen3.5-MoE", "OlmoE"], "selector_test": "grouped_gemm_moe"},
+    {"artifact": "ternary_gemm", "operator_kind": "Quantized", "model_families": ["Bonsai", "BitNet"], "selector_test": "bonsai_ternary"},
+    {"artifact": "diffusion_confidence", "operator_kind": "Diffusion", "model_families": ["LLaDA", "Dream"], "selector_test": "diffusion"},
+    {"artifact": "short_conv", "operator_kind": "ShortConv", "model_families": ["LFM2"], "selector_test": "lfm_routing"},
+    {"artifact": "rwkv7", "operator_kind": "Recurrent", "model_families": ["RWKV-7"], "selector_test": "rwkv7"},
+    {"artifact": "mamba_step", "operator_kind": "DeltaNet", "model_families": ["Qwen3.5 hybrid", "Mamba"], "selector_test": "mamba_scan"},
+    {"artifact": "mamba_scan", "operator_kind": "Scan", "model_families": ["Qwen3.5 hybrid", "Mamba"], "selector_test": "mamba_scan"},
+    {"artifact": "deltanet", "operator_kind": "DeltaNet", "model_families": ["Qwen3-Coder-Next"], "selector_test": "qwen_deltanet"},
+    {"artifact": "cca", "operator_kind": "Cca", "model_families": ["Zaya"], "selector_test": "cca_block"},
+    {"artifact": "mla_cache", "operator_kind": "Mla", "model_families": ["DeepSeek"], "selector_test": "mla_cache"},
+    {"artifact": "retnet", "operator_kind": "Recurrent", "model_families": ["RetNet"], "selector_test": "retnet_builder_selects_metal_retention_candidate"}
+  ],
+  "reference_baselines": [
+    {
+      "name": "mlx_native_gated_delta",
+      "model_families": ["Qwen3.5"],
+      "source": "mlx_lm.models.gated_delta.gated_delta_kernel",
+      "evidence": "research/baselines/qwen35-native-gated-delta-20260723.json",
+      "custom_phenotype_artifact": false,
+      "dispatch_verified": true,
+      "parity_verified": true
+    }
+  ],
+  "remaining_gates": [
+    "Wire the selected artifacts into the production model dispatch path",
+    "Run direct Qwen3.5 hybrid-kernel dispatch when that model path exposes the matching operator",
+    "Promote only after evidence_complete becomes true"
+  ]
+}
