@@ -19,7 +19,7 @@ dependencies = [
 metal = []
 mps = ["torch>=2.2"]
 cuda = ["torch>=2.2", "vllm", "sglang", "tensorrt-llm"]
-dev = ["pytest", "pytest-asyncio", "ruff", "mypy"]
+dev = ["pytest", "pytest-asyncio", "ruff", "mypy", "pydantic>=2.0"]
 
 [project.scripts]
 omlx-research = "omlx_research.cli:main"

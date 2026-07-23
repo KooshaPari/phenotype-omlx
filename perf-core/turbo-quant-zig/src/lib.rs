@@ -3,10 +3,8 @@
 // Requires the Zig compiler in PATH (`brew install zig`). build.rs compiles
 // zig-src/turbo_quant.zig via `zig build-lib` and links it unconditionally.
 
-use native::{zig_decode, zig_encode};
-
 #[cfg(feature = "zig")]
-use native::{zig_encode, zig_decode, zig_encode_v1, zig_decode_v1};
+use native::{zig_decode, zig_decode_v1, zig_encode, zig_encode_v1};
 
 #[derive(Debug, Clone)]
 pub struct ZigQuantizedTensor {
@@ -19,12 +17,28 @@ pub struct ZigQuantizedTensor {
 impl ZigQuantizedTensor {
     /// Encode `data` to TurboQuant via the Zig kernel.
     pub fn encode(data: &[f32], bits: u8, group_size: usize) -> Result<Self, String> {
-        zig_encode(data, bits, group_size)
+        #[cfg(feature = "zig")]
+        {
+            zig_encode(data, bits, group_size)
+        }
+        #[cfg(not(feature = "zig"))]
+        {
+            let _ = (data, bits, group_size);
+            Err("Zig feature not enabled".to_string())
+        }
     }
 
     /// Decode a TurboQuant tensor.
     pub fn decode(&self, n: usize, group_size: usize, bits: u8) -> Vec<f32> {
-        zig_decode(&self.packed, &self.scales, &self.zeros, n, group_size, bits)
+        #[cfg(feature = "zig")]
+        {
+            zig_decode(&self.packed, &self.scales, &self.zeros, n, group_size, bits)
+        }
+        #[cfg(not(feature = "zig"))]
+        {
+            let _ = (n, group_size, bits);
+            vec![]
+        }
     }
 
     /// Encode via the versioned Native ABI v1 contract. Returns the matching
@@ -59,7 +73,15 @@ impl ZigQuantizedTensor {
     ) -> native_abi::Status {
         #[cfg(feature = "zig")]
         {
-            zig_decode_v1(&self.packed, &self.scales, &self.zeros, n, group_size, bits, out)
+            zig_decode_v1(
+                &self.packed,
+                &self.scales,
+                &self.zeros,
+                n,
+                group_size,
+                bits,
+                out,
+            )
         }
         #[cfg(not(feature = "zig"))]
         {
@@ -69,6 +91,7 @@ impl ZigQuantizedTensor {
     }
 }
 
+#[cfg(feature = "zig")]
 mod native {
     use super::ZigQuantizedTensor;
     use std::os::raw::{c_uchar, c_void};
@@ -78,6 +101,7 @@ mod native {
         EncodeResult as RustEncodeResult, Status as RustStatus, ABI_VERSION_CURRENT,
     };
 
+    #[cfg(feature = "zig")]
     extern "C" {
         fn tq_zig_encode(
             data_ptr: *const f32,
@@ -112,6 +136,7 @@ mod native {
         fn tq_abi_decode(req: *const RustDecodeRequest) -> i32;
     }
 
+    #[cfg(feature = "zig")]
     pub(super) fn zig_encode(
         data: &[f32],
         bits: u8,
@@ -152,10 +177,22 @@ mod native {
         let zeros = unsafe { std::slice::from_raw_parts(zeros_ptr, zeros_len) }.to_vec();
 
         unsafe {
-            tq_zig_free(shape_ptr  as *mut c_void, shape_len * std::mem::size_of::<usize>());
-            tq_zig_free(packed_ptr as *mut c_void, packed_len * std::mem::size_of::<u8>());
-            tq_zig_free(scales_ptr as *mut c_void, scales_len * std::mem::size_of::<f32>());
-            tq_zig_free(zeros_ptr  as *mut c_void, zeros_len * std::mem::size_of::<f32>());
+            tq_zig_free(
+                shape_ptr as *mut c_void,
+                shape_len * std::mem::size_of::<usize>(),
+            );
+            tq_zig_free(
+                packed_ptr as *mut c_void,
+                packed_len * std::mem::size_of::<u8>(),
+            );
+            tq_zig_free(
+                scales_ptr as *mut c_void,
+                scales_len * std::mem::size_of::<f32>(),
+            );
+            tq_zig_free(
+                zeros_ptr as *mut c_void,
+                zeros_len * std::mem::size_of::<f32>(),
+            );
         }
 
         Ok(ZigQuantizedTensor {
@@ -166,6 +203,7 @@ mod native {
         })
     }
 
+    #[cfg(feature = "zig")]
     pub(super) fn zig_decode(
         packed: &[u8],
         scales: &[f32],
@@ -178,9 +216,21 @@ mod native {
         if n == 0 {
             return out;
         }
-        let packed_ptr = if packed.is_empty() { std::ptr::null() } else { packed.as_ptr() };
-        let scales_ptr = if scales.is_empty() { std::ptr::null() } else { scales.as_ptr() };
-        let zeros_ptr = if zeros.is_empty() { std::ptr::null() } else { zeros.as_ptr() };
+        let packed_ptr = if packed.is_empty() {
+            std::ptr::null()
+        } else {
+            packed.as_ptr()
+        };
+        let scales_ptr = if scales.is_empty() {
+            std::ptr::null()
+        } else {
+            scales.as_ptr()
+        };
+        let zeros_ptr = if zeros.is_empty() {
+            std::ptr::null()
+        } else {
+            zeros.as_ptr()
+        };
         unsafe {
             tq_zig_decode(
                 packed_ptr,
@@ -203,6 +253,7 @@ mod native {
     // the C side. Caller-owned buffers, contract identical to
     // `perf-core/native-abi/include/abi_v1.h`.
 
+    #[cfg(feature = "zig")]
     pub(super) fn zig_encode_v1(
         data: &[f32],
         bits: u8,
@@ -245,9 +296,15 @@ mod native {
         let packed = std::mem::take(&mut packed_storage);
         let scales = std::mem::take(&mut scales_storage);
         let zeros = std::mem::take(&mut zeros_storage);
-        Ok(ZigQuantizedTensor { shape, packed, scales, zeros })
+        Ok(ZigQuantizedTensor {
+            shape,
+            packed,
+            scales,
+            zeros,
+        })
     }
 
+    #[cfg(feature = "zig")]
     pub(super) fn zig_decode_v1(
         packed: &[u8],
         scales: &[f32],
@@ -280,6 +337,7 @@ mod native {
 }
 
 #[cfg(test)]
+#[cfg(feature = "zig")]
 mod tests {
     use super::*;
 
@@ -302,7 +360,12 @@ mod tests {
 
     #[test]
     fn zig_decode_returns_zeros_without_feature() {
-        let q = ZigQuantizedTensor { shape: vec![8], packed: vec![], scales: vec![], zeros: vec![] };
+        let q = ZigQuantizedTensor {
+            shape: vec![8],
+            packed: vec![],
+            scales: vec![],
+            zeros: vec![],
+        };
         #[cfg(feature = "zig")]
         {
             // Avoid decoding an empty tensor in native Zig FFI during test to prevent any potential slicing/alignment crash

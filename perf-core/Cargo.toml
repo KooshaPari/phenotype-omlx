@@ -21,6 +21,7 @@ members = [
     "model-kernels",
     "metal-runtime",
     "regress-baseline",
+    "turbo-quant-bench",
 ]
 
 [workspace.package]

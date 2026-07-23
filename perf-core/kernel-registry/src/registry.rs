@@ -414,7 +414,7 @@ mod tests {
         }
     }
 
-    fn narrow_shape() -> ShapeSignature {
+    fn _narrow_shape() -> ShapeSignature {
         ShapeSignature {
             m: 128,
             n: 128,
@@ -465,11 +465,11 @@ mod tests {
         )
     }
 
-    fn default_key() -> KernelKey {
+    fn _default_key() -> KernelKey {
         KernelKey {
             operator_kind: OperatorKind::DenseMatmul,
             attention_kind: ATTENTION_NONE,
-            shape_signature: narrow_shape(),
+            shape_signature: _narrow_shape(),
             dtype: DType::Fp16,
             quantization: QuantizationPolicy::None,
             state_layout_version: 1,

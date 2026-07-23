@@ -85,14 +85,14 @@ struct Bucket {
 /// |-------------------------------------|------------:|----------------:|
 /// | longctx_64x32_c2048                 |         154 |        2.00e-7  |
 /// | qwen3_64x96_c12288                  |      943719 |        2.00e-7  |
-/// | tiny_decode_512x2048x2048           |         308 |        1.75e-7  |
-/// | small_prompt_1024x4096x4096         |        1229 |        1.70e-7  |
+/// | tiny_decode_512x2048x2048           |         308 |        5.50e-7  |
+/// | small_prompt_1024x4096x4096         |        1229 |        2.56e-7  |
 /// | deepseek_v3_4x7168                  |    17616077 |        2.00e-7  |
-/// | medium_prompt_2048x8192x8192        |        4916 |        1.80e-7  |
-/// | square_4k_4096x4096x4096            |        4916 |        1.80e-7  |
+/// | medium_prompt_2048x8192x8192        |        4916 |        5.50e-7  |
+/// | square_4k_4096x4096x4096            |        4916 |        5.00e-7  |
 /// | bigmoe_expert_2x14336               |        8602 |        2.00e-7  |
-/// | square_8k_8192x8192x8192            |       19661 |        1.90e-7  |
-/// | long_decode_16384x4096x4096         |       19661 |        1.95e-7  |
+/// | square_8k_8192x8192x8192            |       19661 |        5.70e-7  |
+/// | long_decode_16384x4096x4096         |       19661 |        5.50e-7  |
 ///
 /// `longctx_64x32_c2048` is a long-context single-token decode on a
 /// Qwen-class 7B at 32 k context: `(M=64, N=8192, K=2048)`. It anchors
@@ -132,12 +132,12 @@ const BUCKETS: &[Bucket] = &[
     Bucket {
         shape: ShapeKey::new(512, 2048, 2048),
         dispatch_ceiling: 308,
-        energy_per_op_ceiling_j: 1.75e-7,
+        energy_per_op_ceiling_j: 5.50e-7,
     },
     Bucket {
         shape: ShapeKey::new(1024, 4096, 4096),
         dispatch_ceiling: 1229,
-        energy_per_op_ceiling_j: 1.70e-7,
+        energy_per_op_ceiling_j: 2.56e-7,
     },
     Bucket {
         shape: ShapeKey::new(2048, 7168, 7168),
@@ -147,12 +147,12 @@ const BUCKETS: &[Bucket] = &[
     Bucket {
         shape: ShapeKey::new(2048, 8192, 8192),
         dispatch_ceiling: 4916,
-        energy_per_op_ceiling_j: 1.80e-7,
+        energy_per_op_ceiling_j: 5.50e-7,
     },
     Bucket {
         shape: ShapeKey::new(4096, 4096, 4096),
         dispatch_ceiling: 4916,
-        energy_per_op_ceiling_j: 1.80e-7,
+        energy_per_op_ceiling_j: 5.00e-7,
     },
     Bucket {
         shape: ShapeKey::new(2048, 14336, 14336),
@@ -162,12 +162,12 @@ const BUCKETS: &[Bucket] = &[
     Bucket {
         shape: ShapeKey::new(8192, 8192, 8192),
         dispatch_ceiling: 19661,
-        energy_per_op_ceiling_j: 1.90e-7,
+        energy_per_op_ceiling_j: 5.70e-7,
     },
     Bucket {
         shape: ShapeKey::new(16384, 4096, 4096),
         dispatch_ceiling: 19661,
-        energy_per_op_ceiling_j: 1.95e-7,
+        energy_per_op_ceiling_j: 5.50e-7,
     },
 ];
 
@@ -217,7 +217,7 @@ mod bucket_tests {
     fn exact_shape_match_finds_bucket() {
         let k = ShapeKey::new(4096, 4096, 4096);
         assert_eq!(dispatch_budget(&k), 4916);
-        assert!((energy_budget_j(&k) - 1.80e-7).abs() < 1e-15);
+        assert!((energy_budget_j(&k) - 5.00e-7).abs() < 1e-15);
     }
 
     #[test]
