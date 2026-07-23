@@ -26,6 +26,7 @@ pub mod engine;
 pub mod proposal;
 pub mod proposal_state;
 pub mod state;
+pub mod tree_proposal;
 pub mod verify;
 
 pub use backend::{BackendInfo, DraftBackend, NullDraftBackend, TargetBackend, TargetOutput};
@@ -33,6 +34,24 @@ pub use engine::{DraftCandidate, SpecDecodeEngine, SpecStats};
 pub use proposal::{dedup_preserve, MedusaHead, MedusaProposal, MockMedusaHead, TreeTopology};
 pub use proposal_state::ProposalState;
 pub use state::{EngineState, HISTORY_CAP};
+pub use tree_proposal::{
+    create_parallel_trees, merge_parallel_results, DraftNode, DraftTree, ParallelTreeConfig,
+};
+
+/// Proposal strategy — selects which draft proposal path the engine uses.
+#[derive(Debug, Clone)]
+pub enum ProposalMode {
+    /// Legacy Medusa multi-head proposal.
+    Medusa,
+    /// EAGLE-3 / P-EAGLE tree-based proposal.
+    Eagle3(tree_proposal::ParallelTreeConfig),
+}
+
+impl Default for ProposalMode {
+    fn default() -> Self {
+        ProposalMode::Medusa
+    }
+}
 pub use verify::{verify as verify_draft, VerifyResult};
 
 /// Draft strategy selection — mirrors `turbo_mlx.ssd.DraftMode`.
@@ -87,9 +106,15 @@ pub struct SpecDecodeConfig {
     pub fallback_on_reject: bool,
 }
 
-fn default_tree_width() -> usize { 4 }
-fn default_tree_depth() -> usize { 1 }
-fn default_true() -> bool { true }
+fn default_tree_width() -> usize {
+    4
+}
+fn default_tree_depth() -> usize {
+    1
+}
+fn default_true() -> bool {
+    true
+}
 
 impl Default for SpecDecodeConfig {
     fn default() -> Self {

@@ -6,6 +6,8 @@
 //! in `shaders/turbo_quant.metallib` and consumed by `perf-core/spec-decode`'s
 //! optional `metal` feature.
 
+pub mod candidates;
+pub mod echokv;
 mod minmax;
 
 use minmax::min_max;

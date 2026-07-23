@@ -1042,6 +1042,7 @@ name = "turbo-quant"
 version = "0.1.0"
 dependencies = [
  "half",
+ "kernel-registry",
  "serde",
  "serde_json",
  "tracing",
