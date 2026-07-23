@@ -85,6 +85,8 @@ pub fn plan_kernel_tag(op: &OperatorPlan) -> Option<&'static str> {
     }
     match op.kind {
         OperatorKind::MoeRouter { .. } => Some(KernelOp::MoeRouter.tag()),
+        OperatorKind::MambaScan { .. } => Some(KernelOp::MambaSelectiveScan.tag()),
+        OperatorKind::RetNet { .. } => Some(KernelOp::RetNet.tag()),
         // Recurrent / linear-recurrent family — no attention slot.
         // The Qwen3-Coder-Next hybrid uses these in alternation with
         // attention layers, so the plan carries a plain kind here.
@@ -186,36 +188,56 @@ mod tests {
 
     #[test]
     fn mla_attention_maps_to_mla_attention_tag() {
-        let op = op_with_attn(1, OperatorKind::Rope, AttentionKind::Mla {
-            d_latent: 64,
-            d_rope: 16,
-        });
+        let op = op_with_attn(
+            1,
+            OperatorKind::Rope,
+            AttentionKind::Mla {
+                d_latent: 64,
+                d_rope: 16,
+            },
+        );
         assert_eq!(plan_kernel_tag(&op), Some("mla_attention"));
     }
 
     #[test]
     fn cca_attention_maps_to_cca_attention_tag() {
-        let op = op_with_attn(1, OperatorKind::Rope, AttentionKind::Cca { compressed_factor: 4 });
+        let op = op_with_attn(
+            1,
+            OperatorKind::Rope,
+            AttentionKind::Cca {
+                compressed_factor: 4,
+            },
+        );
         assert_eq!(plan_kernel_tag(&op), Some("cca_attention"));
     }
 
     #[test]
     fn paged_attention_maps_to_paged_attention_tag() {
-        let op = op_with_attn(1, OperatorKind::Rope, AttentionKind::Paged { block_size: 16 });
+        let op = op_with_attn(
+            1,
+            OperatorKind::Rope,
+            AttentionKind::Paged { block_size: 16 },
+        );
         assert_eq!(plan_kernel_tag(&op), Some("paged_attention"));
     }
 
     #[test]
     fn tree_attention_maps_to_tree_attention_tag() {
-        let op = op_with_attn(1, OperatorKind::Rope, AttentionKind::Tree { width: 4, depth: 3 });
+        let op = op_with_attn(
+            1,
+            OperatorKind::Rope,
+            AttentionKind::Tree { width: 4, depth: 3 },
+        );
         assert_eq!(plan_kernel_tag(&op), Some("tree_attention"));
     }
 
     #[test]
     fn sliding_window_attention_maps_to_sliding_window_attention_tag() {
-        let op = op_with_attn(1, OperatorKind::Rope, AttentionKind::SlidingWindow {
-            window_size: 256,
-        });
+        let op = op_with_attn(
+            1,
+            OperatorKind::Rope,
+            AttentionKind::SlidingWindow { window_size: 256 },
+        );
         assert_eq!(
             plan_kernel_tag(&op),
             Some("sliding_window_attention"),
@@ -235,7 +257,8 @@ mod tests {
     fn plain_softmax_has_no_kernel_mapping() {
         let op = op_plain(1, OperatorKind::Softmax);
         assert_eq!(
-            plan_kernel_tag(&op), None,
+            plan_kernel_tag(&op),
+            None,
             "Softmax has no kernel-registry mapping yet"
         );
     }
@@ -264,6 +287,34 @@ mod tests {
         assert_eq!(plan_kernel_tag(&op), Some(KernelOp::MoeRouter.tag()));
     }
 
+    #[test]
+    fn mamba_scan_maps_to_selective_scan_kernel() {
+        let op = op_plain(
+            2,
+            OperatorKind::MambaScan {
+                state_dim: 16,
+                chunk_size: 64,
+            },
+        );
+        assert_eq!(
+            plan_kernel_tag(&op),
+            Some(KernelOp::MambaSelectiveScan.tag())
+        );
+    }
+
+    #[test]
+    fn retnet_maps_to_retention_kernel() {
+        let op = op_plain(
+            3,
+            OperatorKind::RetNet {
+                num_heads: 4,
+                head_dim: 16,
+                chunk_size: 64,
+            },
+        );
+        assert_eq!(plan_kernel_tag(&op), Some(KernelOp::RetNet.tag()));
+    }
+
     // -- emit_per_op_stub: format invariants ---------------------------
 
     #[test]
@@ -271,29 +322,54 @@ mod tests {
         let op = op_with_attn(7, OperatorKind::Rope, AttentionKind::Gqa { kv_heads: 4 });
         let line = emit_per_op_stub(&op);
         assert!(line.contains("op#7"), "must include op id: {line}");
-        assert!(line.contains("rope"), "must include plan-side kind tag: {line}");
+        assert!(
+            line.contains("rope"),
+            "must include plan-side kind tag: {line}"
+        );
         assert!(
             line.contains("[kernel=gqa_attention"),
             "must include the kernel-registry tag: {line}"
         );
-        assert!(line.contains("from-plan=rope"), "must include from-plan tag: {line}");
-        assert!(line.contains("1 input(s)"), "must include input count: {line}");
-        assert!(line.contains("1 output(s)"), "must include output count: {line}");
+        assert!(
+            line.contains("from-plan=rope"),
+            "must include from-plan tag: {line}"
+        );
+        assert!(
+            line.contains("1 input(s)"),
+            "must include input count: {line}"
+        );
+        assert!(
+            line.contains("1 output(s)"),
+            "must include output count: {line}"
+        );
     }
 
     #[test]
     fn per_op_stub_marks_unmapped_operators_clearly() {
         let op = op_plain(11, OperatorKind::Softmax);
         let line = emit_per_op_stub(&op);
-        assert!(line.contains("[kernel=no-kernel-tag"), "must mark unmapped: {line}");
-        assert!(line.contains("from-plan=softmax"), "must include plan tag: {line}");
+        assert!(
+            line.contains("[kernel=no-kernel-tag"),
+            "must mark unmapped: {line}"
+        );
+        assert!(
+            line.contains("from-plan=softmax"),
+            "must include plan tag: {line}"
+        );
     }
 
     #[test]
     fn per_op_stub_line_ends_with_newline() {
-        let op = op_with_attn(1, OperatorKind::Rope, AttentionKind::SlidingWindow { window_size: 4 });
+        let op = op_with_attn(
+            1,
+            OperatorKind::Rope,
+            AttentionKind::SlidingWindow { window_size: 4 },
+        );
         let line = emit_per_op_stub(&op);
-        assert!(line.ends_with('\n'), "per-op stub must end with newline: {line:?}");
+        assert!(
+            line.ends_with('\n'),
+            "per-op stub must end with newline: {line:?}"
+        );
     }
 
     #[test]
@@ -301,7 +377,10 @@ mod tests {
         let op = OperatorPlan {
             id: OperatorId(3),
             kind: OperatorKind::Rope,
-            attention: Some(AttentionKind::Mla { d_latent: 64, d_rope: 16 }),
+            attention: Some(AttentionKind::Mla {
+                d_latent: 64,
+                d_rope: 16,
+            }),
             inputs: (0..5).map(|i| tr(&format!("in{i}"))).collect(),
             outputs: (0..2).map(|i| tr(&format!("out{i}"))).collect(),
             precision: Precision::Fp32,
@@ -321,7 +400,11 @@ mod tests {
         // DeltaNet via Rope-without-attn placeholder, plain softmax)
         // and confirm we get one mapped kernel tag + two unmapped.
         let ops = vec![
-            op_with_attn(1, OperatorKind::Rope, AttentionKind::SlidingWindow { window_size: 256 }),
+            op_with_attn(
+                1,
+                OperatorKind::Rope,
+                AttentionKind::SlidingWindow { window_size: 256 },
+            ),
             op_with_attn(2, OperatorKind::Rope, AttentionKind::Gqa { kv_heads: 2 }),
             op_plain(3, OperatorKind::Softmax),
         ];
@@ -339,7 +422,11 @@ mod tests {
         let tags: Vec<Option<&str>> = plan.operators.iter().map(plan_kernel_tag).collect();
         assert_eq!(
             tags,
-            vec![Some("sliding_window_attention"), Some("gqa_attention"), None],
+            vec![
+                Some("sliding_window_attention"),
+                Some("gqa_attention"),
+                None
+            ],
             "Qwen3-Next hybrid plan must emit the expected kernel tags"
         );
     }
@@ -350,17 +437,46 @@ mod tests {
         // plan_kernel_tag match `KernelOp::tag()` exactly. This guards
         // against accidental drift between the two namespaces.
         let cases: &[(&str, AttentionKind, KernelOp)] = &[
-            ("gqa_attention", AttentionKind::Gqa { kv_heads: 4 }, KernelOp::GqaAttention),
-            ("mla_attention", AttentionKind::Mla { d_latent: 64, d_rope: 16 }, KernelOp::MlaAttention),
-            ("cca_attention", AttentionKind::Cca { compressed_factor: 4 }, KernelOp::CcaAttention),
-            ("paged_attention", AttentionKind::Paged { block_size: 16 }, KernelOp::PagedAttention),
-            ("tree_attention", AttentionKind::Tree { width: 4, depth: 3 }, KernelOp::TreeAttention),
+            (
+                "gqa_attention",
+                AttentionKind::Gqa { kv_heads: 4 },
+                KernelOp::GqaAttention,
+            ),
+            (
+                "mla_attention",
+                AttentionKind::Mla {
+                    d_latent: 64,
+                    d_rope: 16,
+                },
+                KernelOp::MlaAttention,
+            ),
+            (
+                "cca_attention",
+                AttentionKind::Cca {
+                    compressed_factor: 4,
+                },
+                KernelOp::CcaAttention,
+            ),
+            (
+                "paged_attention",
+                AttentionKind::Paged { block_size: 16 },
+                KernelOp::PagedAttention,
+            ),
+            (
+                "tree_attention",
+                AttentionKind::Tree { width: 4, depth: 3 },
+                KernelOp::TreeAttention,
+            ),
             (
                 "sliding_window_attention",
                 AttentionKind::SlidingWindow { window_size: 256 },
                 KernelOp::SlidingWindowAttention,
             ),
-            ("dense_attention", AttentionKind::Dense, KernelOp::DenseAttention),
+            (
+                "dense_attention",
+                AttentionKind::Dense,
+                KernelOp::DenseAttention,
+            ),
         ];
         for (want, attn, _op) in cases {
             let op = op_with_attn(1, OperatorKind::Rope, attn.clone());

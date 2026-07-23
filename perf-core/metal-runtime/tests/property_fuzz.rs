@@ -72,7 +72,11 @@ fn linear_plan(op_count: usize) -> model_plan::ModelPlan {
     // Op i depends on op (i-1) for i > 0. Each op has 1 in / 1 out.
     let ops: Vec<OperatorPlan> = (0..op_count)
         .map(|i| {
-            let deps = if i == 0 { vec![] } else { vec![OperatorId(i as u64)] };
+            let deps = if i == 0 {
+                vec![]
+            } else {
+                vec![OperatorId(i as u64)]
+            };
             op_copy(i as u64 + 1, 1, 1, deps)
         })
         .collect();

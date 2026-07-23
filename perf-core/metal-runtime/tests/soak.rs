@@ -81,8 +81,7 @@ fn make_linear_plan(op_count: usize) -> model_plan::ModelPlan {
         4,
         8,
     );
-    plan.validate()
-        .expect("soak: linear plan must validate");
+    plan.validate().expect("soak: linear plan must validate");
     plan
 }
 

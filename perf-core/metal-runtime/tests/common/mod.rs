@@ -9,11 +9,11 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use metal_runtime::{DeviceFingerprint, GpuFamily};
 use model_plan::{
     DType, ModelId, ModelPlan, OperatorId, OperatorKind, OperatorPlan, Precision,
     QuantizationPolicy, SchedulerPolicy, TensorRef,
 };
-use metal_runtime::{DeviceFingerprint, GpuFamily};
 
 /// Current unix epoch in milliseconds. Used to bound fingerprint timestamps.
 pub fn tnow_ms() -> u64 {
