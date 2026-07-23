@@ -75,6 +75,54 @@ func TestCellUnmarshalJSON_RlvrAliasDualRead(t *testing.T) {
 	}
 }
 
+func TestCellUnmarshalJSON_HarnessMixedBreakdown(t *testing.T) {
+	// Real pheno-harness dry-run cell shape: numeric L0–L3 plus string metadata
+	// inside rlvr_reward_breakdown. Must not fail loud on import.
+	raw := []byte(`{
+		"suite":"mmlu-pro","task_id":"mmlu-pro-task-000","variant":"baseline_mlx",
+		"pass_at_1":0.0,
+		"rlvr_composite":0.5531,
+		"rlvr_l0":0.6667,"rlvr_l1":0.4125,"rlvr_l2":0.0,"rlvr_l3":1.0,
+		"rlvr_reward":0.5531,
+		"rlvr_reward_breakdown":{
+			"l0":0.6667,"l1":0.4125,"l2":0.0,"l3":1.0,
+			"soft_partial":0.35,"process_bonus":0.65,
+			"heuristic_reward":0.5,
+			"heuristic_reason":"expected 'ok' not found in synthetic answer",
+			"verifier_total":0.25,
+			"motion":"forward"
+		},
+		"rlvr_passed":false,
+		"rlvr_verifiable":true,
+		"rlvr_tournament_delta":0.0
+	}`)
+	var c Cell
+	if err := json.Unmarshal(raw, &c); err != nil {
+		t.Fatalf("harness mixed breakdown must unmarshal: %v", err)
+	}
+	if c.RlvrComposite != 0.5531 || c.RlvrReward != 0.5531 {
+		t.Fatalf("composite=%v reward=%v", c.RlvrComposite, c.RlvrReward)
+	}
+	if c.RlvrL0 != 0.6667 || c.RlvrL1 != 0.4125 || c.RlvrL3 != 1.0 {
+		t.Fatalf("layers l0=%v l1=%v l2=%v l3=%v", c.RlvrL0, c.RlvrL1, c.RlvrL2, c.RlvrL3)
+	}
+	if c.RlvrRewardBreakdown["l0"] != 0.6667 || c.RlvrRewardBreakdown["soft_partial"] != 0.35 {
+		t.Fatalf("numeric breakdown=%v", c.RlvrRewardBreakdown)
+	}
+	if _, ok := c.RlvrRewardBreakdown["heuristic_reason"]; ok {
+		t.Fatalf("string metadata must be dropped from float map, got %v", c.RlvrRewardBreakdown)
+	}
+	if _, ok := c.RlvrRewardBreakdown["motion"]; ok {
+		t.Fatalf("string motion must be dropped from float map, got %v", c.RlvrRewardBreakdown)
+	}
+	if !c.RlvrVerifiable {
+		t.Fatal("expected rlvr_verifiable=true")
+	}
+	if c.RlvrPassed {
+		t.Fatal("expected rlvr_passed=false")
+	}
+}
+
 func TestCellFromTask_RlvrFromAdditionalProperties(t *testing.T) {
 	ap := map[string]interface{}{
 		"pass_at_1":       1.0,
