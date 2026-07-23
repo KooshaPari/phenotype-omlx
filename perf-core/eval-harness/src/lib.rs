@@ -34,10 +34,13 @@ pub mod report;
 pub mod runner;
 pub mod terminal_bench;
 
-pub use backend::{Backend, BackendCompletion};
+#[cfg(feature = "python")]
+pub mod python;
+
+pub use backend::{Backend, BackendCompletion, ChoiceLogprobs, LogprobResult, TokenLogprob};
 pub use error::{EvalError, Result};
 pub use fixture_backend::OracleBackend;
-pub use runner::{run_multiple_choice_suite, run_suite};
+pub use runner::{run_mcq_suite, run_multiple_choice_suite, run_suite};
 
 use serde::{Deserialize, Serialize};
 
@@ -242,6 +245,25 @@ pub fn score_choice(completion: &str, expected: &str, num_choices: usize) -> boo
         }
     }
     false
+}
+
+/// Score a multiple-choice question using log-probabilities.
+///
+/// Returns `1.0` if the choice with the highest aggregate log-probability
+/// matches `correct_answer` (compared case-insensitively after trimming),
+/// `0.0` otherwise. When `logprobs.choices` is empty or no choice matches
+/// `correct_answer`, returns `0.0`.
+pub fn score_multiple_choice(logprobs: &LogprobResult, correct_answer: &str) -> f64 {
+    let normalized_expected = correct_answer.trim().to_uppercase();
+    let best = logprobs.choices.iter().max_by(|a, b| {
+        a.logprob
+            .partial_cmp(&b.logprob)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    match best {
+        Some(choice) if choice.choice.trim().to_uppercase() == normalized_expected => 1.0,
+        _ => 0.0,
+    }
 }
 
 /// Score a single completion against a task. The pure deterministic scorer

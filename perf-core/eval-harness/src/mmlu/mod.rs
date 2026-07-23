@@ -204,7 +204,9 @@ anatomy,\"Heart, lung, and bones form what?\",Cranial,Thoracic,B\n";
         let dataset = load_csv_bytes(bytes, "x.csv", "v1", "test").unwrap();
         assert_eq!(dataset.len(), 1);
         // The question must keep its embedded comma and span only column 1.
-        assert!(dataset[0].prompt.contains("Heart, lung, and bones form what?"));
+        assert!(dataset[0]
+            .prompt
+            .contains("Heart, lung, and bones form what?"));
         assert_eq!(dataset[0].choices, vec!["Cranial", "Thoracic"]);
         assert_eq!(dataset[0].expected.as_deref(), Some("B"));
     }

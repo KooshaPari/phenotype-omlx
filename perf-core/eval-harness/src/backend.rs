@@ -1,5 +1,35 @@
 //! Model backend contract used by evaluation runners.
 
+/// Per-token log-probability detail returned by [`Backend::complete_with_logprobs`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct TokenLogprob {
+    /// The token string.
+    pub token: String,
+    /// Log-probability assigned to this token.
+    pub logprob: f64,
+    /// Raw bytes of the token, if available from the backend.
+    pub bytes: Option<Vec<u8>>,
+}
+
+/// Log-probability result for a single candidate choice.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChoiceLogprobs {
+    /// The choice text that was scored.
+    pub choice: String,
+    /// Aggregate log-probability for this choice.
+    pub logprob: f64,
+    /// Per-token log-probabilities composing this choice.
+    pub tokens: Vec<TokenLogprob>,
+}
+
+/// Aggregated log-probability result across all candidate choices.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogprobResult {
+    /// Per-choice log-probability details, one per entry in the `choices`
+    /// slice passed to [`Backend::complete_with_logprobs`].
+    pub choices: Vec<ChoiceLogprobs>,
+}
+
 /// A generated completion with backend-reported accounting and latency.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Completion {
@@ -44,4 +74,19 @@ pub trait Backend {
         prompt: &str,
         continuation: &str,
     ) -> std::result::Result<Likelihood, BackendError>;
+
+    /// Return per-token log-probabilities for each candidate choice.
+    ///
+    /// The default implementation returns
+    /// [`BackendError::Unavailable`]; backends that can supply token-level
+    /// log-probabilities should override this method.
+    fn complete_with_logprobs(
+        &self,
+        _prompt: &str,
+        _choices: &[String],
+    ) -> std::result::Result<LogprobResult, BackendError> {
+        Err(BackendError::Unavailable {
+            message: "complete_with_logprobs not implemented by this backend".into(),
+        })
+    }
 }

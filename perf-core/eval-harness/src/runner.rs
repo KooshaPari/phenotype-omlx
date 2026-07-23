@@ -1,7 +1,7 @@
 //! Deterministic runners for completion and multiple-choice evaluations.
 
 use crate::{
-    backend::{BackendError, Likelihood},
+    backend::{BackendError, Likelihood, LogprobResult},
     evaluate, Backend, EvalError, Result, Suite, TaskResult, TaskSpec,
 };
 
@@ -30,6 +30,25 @@ pub fn run_multiple_choice_suite<B: Backend>(
         .iter()
         .filter(|task| task.suite == suite)
         .map(|task| run_multiple_choice_task(backend, task))
+        .collect()
+}
+
+/// Run a multiple-choice evaluation suite using `complete_with_logprobs`.
+///
+/// Each task's `choices` are scored via the backend's token-level
+/// log-probability interface. The choice with the highest aggregate
+/// log-probability is selected as the model's answer.
+///
+/// Returns per-task results suitable for aggregate scoring (e.g. pass@1).
+pub fn run_mcq_suite<B: Backend>(
+    suite: Suite,
+    backend: &B,
+    tasks: &[TaskSpec],
+) -> Result<Vec<TaskResult>> {
+    tasks
+        .iter()
+        .filter(|task| task.suite == suite && task.is_multiple_choice())
+        .map(|task| run_mcq_task(backend, task))
         .collect()
 }
 
@@ -89,6 +108,41 @@ fn run_multiple_choice_task<B: Backend>(backend: &B, task: &TaskSpec) -> Result<
     result.prompt_tokens = task.prompt.split_whitespace().count().saturating_sub(1);
     result.completion_tokens = likelihood.token_count;
     result.latency_ms = latency_ms;
+    result.matched_answer = Some(label);
+    Ok(result)
+}
+
+fn run_mcq_task<B: Backend>(backend: &B, task: &TaskSpec) -> Result<TaskResult> {
+    let logprob_result: LogprobResult = backend
+        .complete_with_logprobs(&task.prompt, &task.choices)
+        .map_err(|source| backend_error(task, source))?;
+
+    let best = logprob_result
+        .choices
+        .iter()
+        .enumerate()
+        .max_by(|(_, a), (_, b)| {
+            a.logprob
+                .partial_cmp(&b.logprob)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+    let (index, choice) = best.ok_or_else(|| {
+        backend_error(
+            task,
+            BackendError::InvalidResponse {
+                message: "complete_with_logprobs returned no choices".into(),
+            },
+        )
+    })?;
+
+    let label = char::from(b'A' + index as u8).to_string();
+    let mut result = evaluate(task, &label)?;
+    result.correct = task.expected.as_deref() == Some(label.as_str());
+    result.score = f64::from(result.correct);
+    result.prompt_tokens = task.prompt.split_whitespace().count().saturating_sub(1);
+    result.completion_tokens = choice.tokens.len();
+    result.latency_ms = 0.0;
     result.matched_answer = Some(label);
     Ok(result)
 }
