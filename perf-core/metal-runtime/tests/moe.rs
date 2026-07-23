@@ -223,6 +223,8 @@ fn metal_grouped_gemm_matches_assignment_oracle() {
 #[test]
 fn production_router_source_contains_no_runtime_source_compilation() {
     let source = include_str!("../src/moe.rs");
+    let cache_source = include_str!("../src/metal_cache.rs");
     assert!(!source.contains("new_library_with_source"));
-    assert!(source.contains("new_library_with_data"));
+    assert!(!cache_source.contains("new_library_with_source"));
+    assert!(cache_source.contains("new_library_with_data"));
 }

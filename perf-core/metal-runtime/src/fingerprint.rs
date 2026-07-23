@@ -146,7 +146,11 @@ mod macos {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn run_sysctl(name: &str) -> Option<String> {
-        let out = Command::new("/usr/sbin/sysctl").arg("-n").arg(name).output().ok()?;
+        let out = Command::new("/usr/sbin/sysctl")
+            .arg("-n")
+            .arg(name)
+            .output()
+            .ok()?;
         if !out.status.success() {
             return None;
         }
@@ -185,8 +189,8 @@ mod macos {
         } else {
             run_sysctl("hw.machine").unwrap_or_else(|| std::env::consts::ARCH.to_string())
         };
-        let brand = run_sysctl("machdep.cpu.brand_string")
-            .unwrap_or_else(|| "unknown-cpu".to_string());
+        let brand =
+            run_sysctl("machdep.cpu.brand_string").unwrap_or_else(|| "unknown-cpu".to_string());
         let model = run_sysctl("hw.model").unwrap_or_else(|| "unknown-model".to_string());
 
         // hw.memsize is in bytes; fall back to 0 if the call fails.
@@ -251,7 +255,7 @@ mod tests {
         };
         let b = DeviceFingerprint {
             captured_at_unix_ms: 200, // different time
-            sysctl_cached: true,       // different cache state
+            sysctl_cached: true,      // different cache state
             ..a.clone()
         };
         assert_eq!(a.fingerprint_hash(), b.fingerprint_hash());

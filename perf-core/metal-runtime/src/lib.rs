@@ -73,7 +73,7 @@ pub use cca::cca_block_attend_metal;
 pub use cca::CcaError;
 pub use compile::{BoundedCompiler, CompileBudget};
 #[cfg(all(feature = "metal", target_os = "macos"))]
-pub use deltanet::deltanet_step_metal;
+pub use deltanet::{deltanet_step_metal, deltanet_step_metal_two_pass};
 pub use deltanet::DeltaNetError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use diffusion_confidence::diffusion_argmax_confidence_metal;
