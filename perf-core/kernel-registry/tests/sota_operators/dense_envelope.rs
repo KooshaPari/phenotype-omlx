@@ -85,13 +85,22 @@ fn dispatch_buckets_gqa_attention_within_budget() {
         let min = shape(1, 1, 1, 1, 1, 1);
         let max = shape(16, 16, 128, 1, 8192, 8);
         let scalar = make_candidate(
-            "GqaAttentionScalar", BackendKind::Reference, vec![],
-            min, max, vec![DType::Fp32, DType::Bf16], false,
+            "GqaAttentionScalar",
+            BackendKind::Reference,
+            vec![],
+            min,
+            max,
+            vec![DType::Fp32, DType::Bf16],
+            false,
         );
         let metal = make_candidate(
-            "GqaAttentionMetal", BackendKind::Metal,
+            "GqaAttentionMetal",
+            BackendKind::Metal,
             vec![Capability::MetalGpu, Capability::Bf16],
-            min, max, vec![DType::Bf16, DType::Fp16], true,
+            min,
+            max,
+            vec![DType::Bf16, DType::Fp16],
+            true,
         );
         let id_metal = metal.id;
         let mut reg = KernelRegistry::new();
@@ -105,22 +114,38 @@ fn dispatch_buckets_gqa_attention_within_budget() {
         reg.attach_tuning_record(
             key.clone(),
             build_record_with_dispatches(
-                id_metal, key.clone(), &samples_with_p95(1300),
-                Some(NOW_UNIX_MS + 86_400_000), oracle,
+                id_metal,
+                key.clone(),
+                &samples_with_p95(1300),
+                Some(NOW_UNIX_MS + 86_400_000),
+                oracle,
             ),
         );
         let decision = reg.select_with_caps(
-            &key, SelectionPolicy::Deterministic { prefer_lower_p95: true },
-            &fresh_capabilities(), NOW_UNIX_MS,
+            &key,
+            SelectionPolicy::Deterministic {
+                prefer_lower_p95: true,
+            },
+            &fresh_capabilities(),
+            NOW_UNIX_MS,
         );
         match &decision {
             SelectionDecision::Chosen { candidate, tuning } => {
-                assert_eq!(candidate.id, id_metal,
-                    "[{name}] deterministic must pick Metal; got {:?}", candidate.name);
-                let observed = tuning.median_dispatches
+                assert_eq!(
+                    candidate.id, id_metal,
+                    "[{name}] deterministic must pick Metal; got {:?}",
+                    candidate.name
+                );
+                let observed = tuning
+                    .median_dispatches
                     .expect("Metal tuning record must carry dispatches metadata");
-                assert_within_envelope(observed, oracle,
-                    &format!("GQA q_h={q_h} kv_h={kv_h} head_dim={head_dim} seq_q={seq_q} seq_k={seq_k}"));
+                assert_within_envelope(
+                    observed,
+                    oracle,
+                    &format!(
+                        "GQA q_h={q_h} kv_h={kv_h} head_dim={head_dim} seq_q={seq_q} seq_k={seq_k}"
+                    ),
+                );
             }
             other => panic!("[{name}] expected Chosen under Deterministic, got {other:?}"),
         }
@@ -158,13 +183,22 @@ fn dispatch_buckets_moe_within_budget() {
         let min = shape(1, 1, 1, 1, 1, 1);
         let max = shape(128, 128, 128, 4096, 1, 1);
         let scalar = make_candidate(
-            "MoeScalar", BackendKind::Reference, vec![],
-            min, max, vec![DType::Fp32, DType::Bf16], false,
+            "MoeScalar",
+            BackendKind::Reference,
+            vec![],
+            min,
+            max,
+            vec![DType::Fp32, DType::Bf16],
+            false,
         );
         let metal = make_candidate(
-            "MoeMetal", BackendKind::Metal,
+            "MoeMetal",
+            BackendKind::Metal,
             vec![Capability::MetalGpu, Capability::Bf16],
-            min, max, vec![DType::Bf16, DType::Fp16], true,
+            min,
+            max,
+            vec![DType::Bf16, DType::Fp16],
+            true,
         );
         let id_metal = metal.id;
         let mut reg = KernelRegistry::new();
@@ -178,22 +212,32 @@ fn dispatch_buckets_moe_within_budget() {
         reg.attach_tuning_record(
             key.clone(),
             build_record_with_dispatches(
-                id_metal, key.clone(), &samples_with_p95(1400),
-                Some(NOW_UNIX_MS + 86_400_000), oracle,
+                id_metal,
+                key.clone(),
+                &samples_with_p95(1400),
+                Some(NOW_UNIX_MS + 86_400_000),
+                oracle,
             ),
         );
         let decision = reg.select_with_caps(
-            &key, SelectionPolicy::Deterministic { prefer_lower_p95: true },
-            &fresh_capabilities(), NOW_UNIX_MS,
+            &key,
+            SelectionPolicy::Deterministic {
+                prefer_lower_p95: true,
+            },
+            &fresh_capabilities(),
+            NOW_UNIX_MS,
         );
         match &decision {
             SelectionDecision::Chosen { candidate, tuning } => {
-                assert_eq!(candidate.id, id_metal,
-                    "[{name}] deterministic must pick Metal; got {:?}", candidate.name);
-                let observed = tuning.median_dispatches
+                assert_eq!(
+                    candidate.id, id_metal,
+                    "[{name}] deterministic must pick Metal; got {:?}",
+                    candidate.name
+                );
+                let observed = tuning
+                    .median_dispatches
                     .expect("Metal tuning record must carry dispatches metadata");
-                assert_within_envelope(observed, oracle,
-                    &format!("MoE batch={batch}"));
+                assert_within_envelope(observed, oracle, &format!("MoE batch={batch}"));
             }
             other => panic!("[{name}] expected Chosen under Deterministic, got {other:?}"),
         }
@@ -233,13 +277,22 @@ fn dispatch_buckets_dense_matmul_within_budget() {
         let min = shape(1, 1, 1, 1, 1, 1);
         let max = shape(8192, 16384, 8192, 1, 1, 1);
         let scalar = make_candidate(
-            "DenseMatmulScalar", BackendKind::Reference, vec![],
-            min, max, vec![DType::Fp32, DType::Bf16], false,
+            "DenseMatmulScalar",
+            BackendKind::Reference,
+            vec![],
+            min,
+            max,
+            vec![DType::Fp32, DType::Bf16],
+            false,
         );
         let metal = make_candidate(
-            "DenseMatmulMetal", BackendKind::Metal,
+            "DenseMatmulMetal",
+            BackendKind::Metal,
             vec![Capability::MetalGpu, Capability::Bf16],
-            min, max, vec![DType::Bf16, DType::Fp16], true,
+            min,
+            max,
+            vec![DType::Bf16, DType::Fp16],
+            true,
         );
         let id_metal = metal.id;
         let mut reg = KernelRegistry::new();
@@ -252,22 +305,32 @@ fn dispatch_buckets_dense_matmul_within_budget() {
         reg.attach_tuning_record(
             key.clone(),
             build_record_with_dispatches(
-                id_metal, key.clone(), &samples_with_p95(1200),
-                Some(NOW_UNIX_MS + 86_400_000), oracle,
+                id_metal,
+                key.clone(),
+                &samples_with_p95(1200),
+                Some(NOW_UNIX_MS + 86_400_000),
+                oracle,
             ),
         );
         let decision = reg.select_with_caps(
-            &key, SelectionPolicy::Deterministic { prefer_lower_p95: true },
-            &fresh_capabilities(), NOW_UNIX_MS,
+            &key,
+            SelectionPolicy::Deterministic {
+                prefer_lower_p95: true,
+            },
+            &fresh_capabilities(),
+            NOW_UNIX_MS,
         );
         match &decision {
             SelectionDecision::Chosen { candidate, tuning } => {
-                assert_eq!(candidate.id, id_metal,
-                    "[{name}] deterministic must pick Metal; got {:?}", candidate.name);
-                let observed = tuning.median_dispatches
+                assert_eq!(
+                    candidate.id, id_metal,
+                    "[{name}] deterministic must pick Metal; got {:?}",
+                    candidate.name
+                );
+                let observed = tuning
+                    .median_dispatches
                     .expect("Metal tuning record must carry dispatches metadata");
-                assert_within_envelope(observed, oracle,
-                    &format!("DenseMatmul M={m} N={n}"));
+                assert_within_envelope(observed, oracle, &format!("DenseMatmul M={m} N={n}"));
             }
             other => panic!("[{name}] expected Chosen under Deterministic, got {other:?}"),
         }

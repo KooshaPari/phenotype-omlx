@@ -6,9 +6,7 @@
 
 use kernel_registry::compat::{AttentionKind, DType, OperatorKind, QuantizationPolicy};
 use kernel_registry::selector::SelectionDecision;
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy};
 
 use super::{
     build_record, fresh_capabilities, make_candidate, samples_with_p95, shape, NOW_UNIX_MS,
@@ -75,26 +73,45 @@ fn sliding_window_deterministic_picks_lowest_p95_metal_backend() {
     let key = sliding_window_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(4500), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(4500),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_zmm, key.clone(), &samples_with_p95(1300), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_zmm,
+            key.clone(),
+            &samples_with_p95(1300),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_metal,
-                "Metal p95=900 must beat zmm p95=1300 and scalar p95=4500");
+            assert_eq!(
+                candidate.id, id_metal,
+                "Metal p95=900 must beat zmm p95=1300 and scalar p95=4500"
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
@@ -129,11 +146,18 @@ fn sliding_window_trace_lists_chosen_candidate() {
     let key = sliding_window_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );

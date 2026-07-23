@@ -36,7 +36,9 @@ use kernel_registry::{
     SelectionPolicy,
 };
 
-use super::{build_record, fresh_capabilities, samples_with_p95, shape, NOW_UNIX_MS, TEST_FINGERPRINT};
+use super::{
+    build_record, fresh_capabilities, samples_with_p95, shape, NOW_UNIX_MS, TEST_FINGERPRINT,
+};
 
 /// Canonical set of external inference engines the runtime must be able to
 /// route against. Kept here (not in `src/`) because they are a project /
@@ -160,14 +162,18 @@ fn sglang_candidate_and_mlx_metal_both_appear_in_considered_list() {
     let (reg, id_metal, id_sglang, key) = registry_with_pair(SGLANG, 2000, 1500);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_sglang,
-                "SGLang candidate p95=1500 must beat MLX/Metal p95=2000");
+            assert_eq!(
+                candidate.id, id_sglang,
+                "SGLang candidate p95=1500 must beat MLX/Metal p95=2000"
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
@@ -176,10 +182,14 @@ fn sglang_candidate_and_mlx_metal_both_appear_in_considered_list() {
     // `list_candidates_for_key` snapshot.
     let visible = reg.list_candidates_for_key(&key);
     let visible_ids: Vec<CandidateId> = visible.iter().map(|c| c.id).collect();
-    assert!(visible_ids.contains(&id_metal),
-        "MLX/Metal candidate must appear in considered list; got {visible_ids:?}");
-    assert!(visible_ids.contains(&id_sglang),
-        "SGLang candidate must appear in considered list; got {visible_ids:?}");
+    assert!(
+        visible_ids.contains(&id_metal),
+        "MLX/Metal candidate must appear in considered list; got {visible_ids:?}"
+    );
+    assert!(
+        visible_ids.contains(&id_sglang),
+        "SGLang candidate must appear in considered list; got {visible_ids:?}"
+    );
 }
 
 #[test]
@@ -187,14 +197,18 @@ fn sglang_trace_human_explanation_includes_engine_name() {
     let (reg, _id_metal, id_sglang, key) = registry_with_pair(SGLANG, 2000, 1500);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match &decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_sglang,
-                "SGLang (lower p95) must be the chosen candidate");
+            assert_eq!(
+                candidate.id, id_sglang,
+                "SGLang (lower p95) must be the chosen candidate"
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
@@ -221,8 +235,11 @@ fn sglang_source_hash_folds_engine_name_deterministically() {
         vec![DType::Fp16],
         true,
     );
-    assert_eq!(with_engine.source_hash, format!("{base}[engine:{SGLANG}]"),
-        "source_hash must include the engine tag deterministically");
+    assert_eq!(
+        with_engine.source_hash,
+        format!("{base}[engine:{SGLANG}]"),
+        "source_hash must include the engine tag deterministically"
+    );
     assert_eq!(with_engine.engine_name.as_deref(), Some(SGLANG));
 
     // No engine -> hash is the bare base, no suffix.
@@ -237,8 +254,10 @@ fn sglang_source_hash_folds_engine_name_deterministically() {
         vec![DType::Fp16],
         true,
     );
-    assert_eq!(without_engine.source_hash, base,
-        "source_hash must NOT be modified when engine_name is None");
+    assert_eq!(
+        without_engine.source_hash, base,
+        "source_hash must NOT be modified when engine_name is None"
+    );
     assert!(without_engine.engine_name.is_none());
 }
 
@@ -247,23 +266,29 @@ fn vllm_deterministic_policy_picks_lower_p95() {
     let (reg, id_metal, id_vllm, key) = registry_with_pair(VLLM, 1800, 1200);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match &decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_vllm,
-                "vLLM candidate p95=1200 must beat MLX/Metal p95=1800");
+            assert_eq!(
+                candidate.id, id_vllm,
+                "vLLM candidate p95=1200 must beat MLX/Metal p95=1800"
+            );
             assert_ne!(candidate.id, id_metal);
             assert_eq!(candidate.engine_name.as_deref(), Some(VLLM));
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
     let trace = reg.explain(&decision);
-    assert!(trace.human_explanation.contains(VLLM),
+    assert!(
+        trace.human_explanation.contains(VLLM),
         "trace must surface vLLM in human_explanation; got {:?}",
-        trace.human_explanation);
+        trace.human_explanation
+    );
 }
 
 #[test]
@@ -271,22 +296,28 @@ fn trtllm_deterministic_policy_picks_lower_p95_and_records_engine() {
     let (reg, id_metal, id_trt, key) = registry_with_pair(TRT_LLM, 1700, 1100);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match &decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_trt,
-                "TRT-LLM candidate p95=1100 must beat MLX/Metal p95=1700");
+            assert_eq!(
+                candidate.id, id_trt,
+                "TRT-LLM candidate p95=1100 must beat MLX/Metal p95=1700"
+            );
             assert_ne!(candidate.id, id_metal);
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
     let trace = reg.explain(&decision);
-    assert!(trace.human_explanation.contains(TRT_LLM),
+    assert!(
+        trace.human_explanation.contains(TRT_LLM),
         "trace must surface TRT-LLM in human_explanation; got {:?}",
-        trace.human_explanation);
+        trace.human_explanation
+    );
 }
 
 #[test]
@@ -294,22 +325,28 @@ fn llama_cpp_deterministic_policy_picks_lower_p95_and_records_engine() {
     let (reg, id_metal, id_lcpp, key) = registry_with_pair(LLAMA_CPP, 1600, 1000);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match &decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_lcpp,
-                "llama.cpp candidate p95=1000 must beat MLX/Metal p95=1600");
+            assert_eq!(
+                candidate.id, id_lcpp,
+                "llama.cpp candidate p95=1000 must beat MLX/Metal p95=1600"
+            );
             assert_ne!(candidate.id, id_metal);
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
     let trace = reg.explain(&decision);
-    assert!(trace.human_explanation.contains(LLAMA_CPP),
+    assert!(
+        trace.human_explanation.contains(LLAMA_CPP),
         "trace must surface llama.cpp in human_explanation; got {:?}",
-        trace.human_explanation);
+        trace.human_explanation
+    );
 }
 
 #[test]
@@ -319,23 +356,31 @@ fn metal_candidate_still_wins_when_its_p95_is_lower_than_external_engine() {
     let (reg, id_metal, id_external, key) = registry_with_pair(SGLANG, 800, 1500);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match &decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_metal,
-                "MLX/Metal p95=800 must beat SGLang p95=1500");
+            assert_eq!(
+                candidate.id, id_metal,
+                "MLX/Metal p95=800 must beat SGLang p95=1500"
+            );
             assert_ne!(candidate.id, id_external);
-            assert!(candidate.engine_name.is_none(),
+            assert!(
+                candidate.engine_name.is_none(),
                 "the winning in-tree candidate must NOT carry an engine tag; got {:?}",
-                candidate.engine_name);
+                candidate.engine_name
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
     let trace = reg.explain(&decision);
-    assert!(!trace.human_explanation.contains(SGLANG),
+    assert!(
+        !trace.human_explanation.contains(SGLANG),
         "trace must NOT surface SGLang when MLX/Metal won; got {:?}",
-        trace.human_explanation);
+        trace.human_explanation
+    );
 }

@@ -31,6 +31,7 @@ use kernel_registry::{
     BackendKind, Candidate, CandidateId, Capability, DeviceCaps, KernelKey, KernelRegistry,
     Measurement, SelectionPolicy, ShapeSignature, TuningRecord,
 };
+use std::collections::HashMap;
 
 pub(crate) const NOW_UNIX_MS: u64 = 1_700_000_000_000;
 pub(crate) const TEST_FINGERPRINT: &str =
@@ -38,8 +39,22 @@ pub(crate) const TEST_FINGERPRINT: &str =
 
 // Shared builders used by every per-family module below.
 
-pub(crate) fn shape(m: usize, n: usize, k: usize, batch: usize, seq: usize, group: usize) -> ShapeSignature {
-    ShapeSignature { m, n, k, batch, seq, group }
+pub(crate) fn shape(
+    m: usize,
+    n: usize,
+    k: usize,
+    batch: usize,
+    seq: usize,
+    group: usize,
+) -> ShapeSignature {
+    ShapeSignature {
+        m,
+        n,
+        k,
+        batch,
+        seq,
+        group,
+    }
 }
 
 pub(crate) fn build_record(
@@ -52,8 +67,12 @@ pub(crate) fn build_record(
     sorted.sort_unstable();
     let n = sorted.len();
     let median = sorted[n / 2];
-    let p95_idx = ((n as f64 * 0.95).ceil() as usize).saturating_sub(1).min(n - 1);
-    let p99_idx = ((n as f64 * 0.99).ceil() as usize).saturating_sub(1).min(n - 1);
+    let p95_idx = ((n as f64 * 0.95).ceil() as usize)
+        .saturating_sub(1)
+        .min(n - 1);
+    let p99_idx = ((n as f64 * 0.99).ceil() as usize)
+        .saturating_sub(1)
+        .min(n - 1);
     let mean = sorted.iter().sum::<u64>() as f64 / n as f64;
     let variance = sorted
         .iter()
@@ -106,6 +125,7 @@ pub(crate) fn make_candidate(
         supports_dtypes,
         tunable,
         engine_name: None,
+        properties: HashMap::new(),
     }
 }
 
@@ -161,8 +181,12 @@ pub(crate) fn build_record_with_dispatches(
     sorted.sort_unstable();
     let n = sorted.len();
     let median = sorted[n / 2];
-    let p95_idx = ((n as f64 * 0.95).ceil() as usize).saturating_sub(1).min(n - 1);
-    let p99_idx = ((n as f64 * 0.99).ceil() as usize).saturating_sub(1).min(n - 1);
+    let p95_idx = ((n as f64 * 0.95).ceil() as usize)
+        .saturating_sub(1)
+        .min(n - 1);
+    let p99_idx = ((n as f64 * 0.99).ceil() as usize)
+        .saturating_sub(1)
+        .min(n - 1);
     let mean = sorted.iter().sum::<u64>() as f64 / n as f64;
     let variance = sorted
         .iter()
@@ -204,13 +228,17 @@ fn selector_runs_are_deterministic_across_sota_operator_families() {
     let (reg, _, _, id_metal) = recurrent::mamba_registry();
     let d1 = reg.select_with_caps(
         &recurrent::mamba_key(),
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     let d2 = reg.select_with_caps(
         &recurrent::mamba_key(),
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -240,15 +268,24 @@ fn selector_rejects_when_no_candidate_supports_ternary_dtype() {
     reg.register_candidate(scalar);
     let decision = reg.select_with_caps(
         &bonsai_qwen::bonsai_key(),
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match decision {
-        SelectionDecision::Rejected { rejections, considered } => {
+        SelectionDecision::Rejected {
+            rejections,
+            considered,
+        } => {
             assert!(considered.contains(&id));
-            assert!(rejections.iter().any(|r| matches!(r.reason, RejectionReason::UnsupportedDtype(_))),
-                "expected UnsupportedDtype rejection, got {rejections:?}");
+            assert!(
+                rejections
+                    .iter()
+                    .any(|r| matches!(r.reason, RejectionReason::UnsupportedDtype(_))),
+                "expected UnsupportedDtype rejection, got {rejections:?}"
+            );
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
@@ -260,17 +297,17 @@ mod bonsai_qwen;
 mod builders_integration;
 mod coverage_matrix;
 mod deepseek_mla_mtp;
-mod diffusion;
 mod dense_envelope;
+mod diffusion;
 mod discrete_diffusion_l2;
 mod discrete_diffusion_l2_continuous;
 mod discrete_diffusion_oracle;
 mod discrete_diffusion_sampler;
 mod discrete_diffusion_schedule;
-mod discrete_diffusion_schedule_derivative;
-mod discrete_diffusion_schedule_convexity;
-mod discrete_diffusion_schedule_midpoint;
 mod discrete_diffusion_schedule_asymmetry;
+mod discrete_diffusion_schedule_convexity;
+mod discrete_diffusion_schedule_derivative;
+mod discrete_diffusion_schedule_midpoint;
 mod grouped_gemm_moe;
 mod lfm_routing;
 mod mod_routing;

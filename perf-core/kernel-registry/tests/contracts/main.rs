@@ -12,6 +12,8 @@
 //! - `now_unix_ms` is a fixed integer (`1_700_000_000_000`) so the tests are
 //!   deterministic regardless of wall-clock time.
 
+use std::collections::HashMap;
+
 use kernel_registry::compat::OperatorKind;
 use kernel_registry::{
     BackendKind, Candidate, CandidateId, Capability, DType, KernelKey, Measurement,
@@ -23,7 +25,14 @@ pub(crate) const TEST_DEVICE_FINGERPRINT: &str =
 pub(crate) const NOW_UNIX_MS: u64 = 1_700_000_000_000;
 
 pub(crate) fn shape(m: usize, n: usize, k: usize) -> ShapeSignature {
-    ShapeSignature { m, n, k, batch: 1, seq: 1, group: 1 }
+    ShapeSignature {
+        m,
+        n,
+        k,
+        batch: 1,
+        seq: 1,
+        group: 1,
+    }
 }
 
 pub(crate) fn shape_with(
@@ -34,7 +43,14 @@ pub(crate) fn shape_with(
     seq: usize,
     group: usize,
 ) -> ShapeSignature {
-    ShapeSignature { m, n, k, batch, seq, group }
+    ShapeSignature {
+        m,
+        n,
+        k,
+        batch,
+        seq,
+        group,
+    }
 }
 
 pub(crate) fn key_with(
@@ -73,6 +89,7 @@ pub(crate) fn candidate_from(
         supports_dtypes: vec![DType::Fp16, DType::Bf16],
         tunable: true,
         engine_name: None,
+        properties: HashMap::new(),
     }
 }
 
@@ -97,10 +114,12 @@ pub(crate) fn tuning_record(
     let mut sorted = samples.to_vec();
     sorted.sort_unstable();
     let median = sorted[sorted.len() / 2];
-    let p95_idx =
-        ((sorted.len() as f64 * 0.95).ceil() as usize).saturating_sub(1).min(sorted.len() - 1);
-    let p99_idx =
-        ((sorted.len() as f64 * 0.99).ceil() as usize).saturating_sub(1).min(sorted.len() - 1);
+    let p95_idx = ((sorted.len() as f64 * 0.95).ceil() as usize)
+        .saturating_sub(1)
+        .min(sorted.len() - 1);
+    let p99_idx = ((sorted.len() as f64 * 0.99).ceil() as usize)
+        .saturating_sub(1)
+        .min(sorted.len() - 1);
     let p95 = sorted[p95_idx];
     let p99 = sorted[p99_idx];
     let mean = sorted.iter().sum::<u64>() as f64 / sorted.len() as f64;

@@ -80,14 +80,7 @@ fn concat_last_axis(fwd: &[f32], rev: &[f32], l: usize, d: usize) -> Vec<f32> {
 }
 
 // Gated SSM scalar reference: `h_t = a * h_{t-1} + b * gate * x`.
-fn mamba_gated_scan(
-    x: &[f32],
-    gate: &[f32],
-    a: &[f32],
-    b: &[f32],
-    l: usize,
-    d: usize,
-) -> Vec<f32> {
+fn mamba_gated_scan(x: &[f32], gate: &[f32], a: &[f32], b: &[f32], l: usize, d: usize) -> Vec<f32> {
     let mut h = vec![0.0f32; d];
     let mut y = vec![0.0f32; l * d];
     for t in 0..l {
@@ -111,8 +104,12 @@ fn mamba_bidirectional_scan_byte_identical_to_split_forward_backward() {
     let d = 8usize;
     let l = 16usize;
     let mut rng = 0xC0FFEE01u32;
-    let a: Vec<f32> = (0..d).map(|_| 0.5 + 0.4 * rand_unit(&mut rng).abs()).collect();
-    let b: Vec<f32> = (0..d).map(|_| 0.3 + 0.5 * rand_unit(&mut rng).abs()).collect();
+    let a: Vec<f32> = (0..d)
+        .map(|_| 0.5 + 0.4 * rand_unit(&mut rng).abs())
+        .collect();
+    let b: Vec<f32> = (0..d)
+        .map(|_| 0.3 + 0.5 * rand_unit(&mut rng).abs())
+        .collect();
     let mut x: Vec<f32> = Vec::with_capacity(batch * l * d);
     for _ in 0..batch * l * d {
         x.push(rand_unit(&mut rng));
@@ -153,8 +150,12 @@ fn mamba_gated_ssm_byte_identical_to_reference() {
     let d = 8usize;
     let l = 16usize;
     let mut rng = 0xDEADBEEFu32;
-    let a: Vec<f32> = (0..d).map(|_| 0.4 + 0.5 * rand_unit(&mut rng).abs()).collect();
-    let b: Vec<f32> = (0..d).map(|_| 0.2 + 0.6 * rand_unit(&mut rng).abs()).collect();
+    let a: Vec<f32> = (0..d)
+        .map(|_| 0.4 + 0.5 * rand_unit(&mut rng).abs())
+        .collect();
+    let b: Vec<f32> = (0..d)
+        .map(|_| 0.2 + 0.6 * rand_unit(&mut rng).abs())
+        .collect();
     let mut x: Vec<f32> = Vec::with_capacity(batch * l * d);
     for _ in 0..batch * l * d {
         x.push(rand_unit(&mut rng));
@@ -179,8 +180,10 @@ fn mamba_gated_ssm_byte_identical_to_reference() {
     for bi in 0..batch {
         let xb = &x[bi * l * d..(bi + 1) * l * d];
         let gb = &gate[bi * l * d..(bi + 1) * l * d];
-        ref_out[bi * l * d..(bi + 1) * l * d].copy_from_slice(&mamba_gated_scan(xb, gb, &a, &b, l, d));
-        opt_out[bi * l * d..(bi + 1) * l * d].copy_from_slice(&mamba_gated_scan(xb, gb, &a, &b, l, d));
+        ref_out[bi * l * d..(bi + 1) * l * d]
+            .copy_from_slice(&mamba_gated_scan(xb, gb, &a, &b, l, d));
+        opt_out[bi * l * d..(bi + 1) * l * d]
+            .copy_from_slice(&mamba_gated_scan(xb, gb, &a, &b, l, d));
     }
 
     for (idx, (&r, &o)) in ref_out.iter().zip(opt_out.iter()).enumerate() {
@@ -200,7 +203,10 @@ fn mamba_gated_ssm_byte_identical_to_reference() {
         .iter()
         .zip(gated_b0.iter())
         .any(|(u, g)| u.to_bits() != g.to_bits());
-    assert!(differs, "gated and ungated SSMs must diverge for at least one timestep");
+    assert!(
+        differs,
+        "gated and ungated SSMs must diverge for at least one timestep"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -295,11 +301,18 @@ fn mamba_extended_selector_picks_metal_for_bimamba_shape() {
     let key = bimamba_extended_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1800), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1800),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );

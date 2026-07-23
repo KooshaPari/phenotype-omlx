@@ -38,9 +38,7 @@
 
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
 use kernel_registry::selector::SelectionDecision;
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy};
 
 use super::{
     build_record, full_capabilities, make_candidate, samples_with_p95, shape, NOW_UNIX_MS,
@@ -146,9 +144,7 @@ pub(crate) fn deterministic_input(seed: u64) -> [[f32; C]; B] {
     for row in out.iter_mut() {
         for slot in row.iter_mut() {
             // Linear congruential step (Numerical Recipes constants).
-            state = state
-                .wrapping_mul(1_664_525)
-                .wrapping_add(1_013_904_223);
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
             // Map to `[-1.0, 1.0]` so the L2 error bound stays uniform.
             let v = ((state >> 8) as f32) / ((1u64 << 24) as f32) - 1.0;
             // Bias away from zero so sign() never sees a degenerate
@@ -206,30 +202,53 @@ fn zaya_binary_act_deterministic_picks_lowest_p95_metal_backend() {
     let key = zaya_binary_act_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(6800), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(6800),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1700), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1700),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_cpu, key.clone(), &samples_with_p95(2400), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_cpu,
+            key.clone(),
+            &samples_with_p95(2400),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &full_capabilities(),
         NOW_UNIX_MS,
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_metal,
-                "metal p95=1700 must beat cpu p95=2400 and scalar p95=6800");
-            assert_ne!(candidate.id, id_scalar,
-                "scalar must never win when a tuned optimized backend is eligible");
-            assert_ne!(candidate.id, id_cpu,
-                "metal must win the head-to-head against cpu at p95=1700 vs p95=2400");
+            assert_eq!(
+                candidate.id, id_metal,
+                "metal p95=1700 must beat cpu p95=2400 and scalar p95=6800"
+            );
+            assert_ne!(
+                candidate.id, id_scalar,
+                "scalar must never win when a tuned optimized backend is eligible"
+            );
+            assert_ne!(
+                candidate.id, id_cpu,
+                "metal must win the head-to-head against cpu at p95=1700 vs p95=2400"
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
@@ -291,9 +310,13 @@ fn zaya_binary_act_round_trip_byte_identical() {
     // from `pack_binary_packed` would otherwise read as out-of-bounds
     // rather than a contract violation.
     let expected_bytes = B * C.div_ceil(8);
-    assert_eq!(packed.len(), expected_bytes,
+    assert_eq!(
+        packed.len(),
+        expected_bytes,
         "packed buffer must hold B * ceil(C/8) bytes; got {}, expected {}",
-        packed.len(), expected_bytes);
+        packed.len(),
+        expected_bytes
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -321,19 +344,19 @@ fn zaya_binary_act_quantization_error_within_tolerance() {
     for row in x.iter_mut() {
         for slot in row.iter_mut() {
             // Stable LCG bit stream for the binary reference `b`.
-            state = state
-                .wrapping_mul(1_664_525)
-                .wrapping_add(1_013_904_223);
-            let b = if (state >> 31) == 0 { 1.0_f32 } else { -1.0_f32 };
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            let b = if (state >> 31) == 0 {
+                1.0_f32
+            } else {
+                -1.0_f32
+            };
             // Independent LCG stream for the perturbation `η` so the
             // sign of `b + η` is deterministically `b`'s sign. We
             // discard the high bits and re-normalize into [0, 1) so
             // the cast to f32 stays in the representable range —
             // a raw `(state >> 8) as f32` would overflow the f32
             // mantissa and produce values >> 1.
-            let eta_state = state
-                .wrapping_mul(2_654_435_761)
-                .wrapping_add(40_569);
+            let eta_state = state.wrapping_mul(2_654_435_761).wrapping_add(40_569);
             let low24 = (eta_state & 0x00FF_FFFF) as f32; // in [0, 2^24)
             let eta_norm = low24 / 16_777_216.0_f32; // in [0, 1)
             let eta = (eta_norm * 2.0 - 1.0) * perturb_amp; // in [-amp, +amp]

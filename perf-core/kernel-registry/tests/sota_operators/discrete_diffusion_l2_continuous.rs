@@ -48,9 +48,7 @@
 //! one test family and brings both back under the 500-line cap
 //! without changing the existing test surface at all.
 
-use super::discrete_diffusion_l2::{
-    reconstruction_l2_error, sweep_t_values, Schedule,
-};
+use super::discrete_diffusion_l2::{reconstruction_l2_error, sweep_t_values, Schedule};
 
 // ---------------------------------------------------------------------------
 // Turn-11: continuous schedule L2-decay coverage (Sqrt + Sigmoid k=10)
@@ -179,8 +177,7 @@ fn discrete_diffusion_l2_error_below_clipping_floor_at_T_large_sqrt() {
         "clipping-floor test requires t_large > 200 (the noise cap); got {t_large}"
     );
 
-    let l2_sqrt =
-        reconstruction_l2_error(t_large, Schedule::Sqrt, &tokens, vocab, mask_id, seed);
+    let l2_sqrt = reconstruction_l2_error(t_large, Schedule::Sqrt, &tokens, vocab, mask_id, seed);
 
     assert!(
         l2_sqrt < 1e-9,

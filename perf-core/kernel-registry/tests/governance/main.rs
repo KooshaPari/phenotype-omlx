@@ -13,16 +13,25 @@
 //! Promotion-record and Promotion-validator contract tests live in
 //! `promotion.rs`; Quality-gate and metric tests live in `quality.rs`.
 
+use std::collections::HashMap;
+
+use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
+use kernel_registry::record::Measurement;
 use kernel_registry::{
     BackendKind, Candidate, CandidateId, DeviceCaps, KernelKey, KernelRegistry, Metric,
     QualityAttachment, QualityEvidence, QualityGate, RejectionReason, SelectionDecision,
     SelectionPolicy, ShapeSignature, TuningRecord,
 };
-use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
-use kernel_registry::record::Measurement;
 
 fn shape(m: usize, n: usize, k: usize) -> ShapeSignature {
-    ShapeSignature { m, n, k, batch: 0, seq: 0, group: 0 }
+    ShapeSignature {
+        m,
+        n,
+        k,
+        batch: 0,
+        seq: 0,
+        group: 0,
+    }
 }
 
 fn min_max() -> (ShapeSignature, ShapeSignature) {
@@ -33,7 +42,14 @@ pub(crate) fn std_key() -> KernelKey {
     KernelKey {
         operator_kind: OperatorKind::DenseMatmul,
         attention_kind: None,
-        shape_signature: ShapeSignature { m: 16, n: 16, k: 16, batch: 0, seq: 0, group: 0 },
+        shape_signature: ShapeSignature {
+            m: 16,
+            n: 16,
+            k: 16,
+            batch: 0,
+            seq: 0,
+            group: 0,
+        },
         dtype: DType::Fp16,
         quantization: QuantizationPolicy::None,
         state_layout_version: 1,
@@ -58,6 +74,7 @@ fn make_candidate(
         supports_dtypes: vec![DType::Fp16],
         tunable: true,
         engine_name: None,
+        properties: HashMap::new(),
     }
 }
 
@@ -123,15 +140,17 @@ fn production_rejects_when_quality_attachment_missing() {
     let key = std_key();
     reg.attach_tuning_record(key.clone(), record);
 
-    let policy = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::P95 };
+    let policy = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::P95,
+    };
     let decision = reg.select_with_caps(&key, policy, &empty_caps(), 1_700_000_000_000);
     match decision {
         SelectionDecision::Rejected { rejections, .. } => {
             assert!(
-                rejections.iter().any(|r| matches!(
-                    r.reason,
-                    RejectionReason::MissingQualityEvidence(_)
-                )),
+                rejections
+                    .iter()
+                    .any(|r| matches!(r.reason, RejectionReason::MissingQualityEvidence(_))),
                 "expected MissingQualityEvidence rejection"
             );
         }
@@ -148,9 +167,15 @@ fn production_accepts_when_quality_attachment_passes() {
     let key = std_key();
     reg.attach_tuning_record(key.clone(), record);
 
-    let policy = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::P95 };
+    let policy = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::P95,
+    };
     let decision = reg.select_with_caps(&key, policy, &empty_caps(), 1_700_000_000_000);
-    assert!(decision.is_chosen(), "expected chosen with passing evidence");
+    assert!(
+        decision.is_chosen(),
+        "expected chosen with passing evidence"
+    );
     assert_eq!(
         decision.selected(),
         Some(cand.id),
@@ -190,7 +215,10 @@ fn production_rejects_when_quality_gate_fails() {
     let key = std_key();
     reg.attach_tuning_record(key.clone(), r);
 
-    let policy = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::P95 };
+    let policy = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::P95,
+    };
     let decision = reg.select_with_caps(&key, policy, &empty_caps(), 1_700_000_000_000);
     match decision {
         SelectionDecision::Rejected { rejections, .. } => {
@@ -218,13 +246,25 @@ fn metric_energy_selects_lower_energy_among_two_candidates() {
         .map(|i| Measurement::with_metadata(i, 100, Some(0.9), Some(1), 0))
         .collect();
     let mut r1 = TuningRecord::from_measurements(
-        c1.id, key.clone(), m1, "metal-msl", "3.2",
-        1_700_000_000_000, "rev-test", None,
+        c1.id,
+        key.clone(),
+        m1,
+        "metal-msl",
+        "3.2",
+        1_700_000_000_000,
+        "rev-test",
+        None,
     );
     r1.quality = Some(quality_passing());
     let mut r2 = TuningRecord::from_measurements(
-        c2.id, key.clone(), m2, "metal-msl", "3.2",
-        1_700_000_000_000, "rev-test", None,
+        c2.id,
+        key.clone(),
+        m2,
+        "metal-msl",
+        "3.2",
+        1_700_000_000_000,
+        "rev-test",
+        None,
     );
     r2.quality = Some(quality_passing());
     let mut reg = KernelRegistry::new();
@@ -232,7 +272,10 @@ fn metric_energy_selects_lower_energy_among_two_candidates() {
     reg.register_candidate(c2);
     reg.attach_tuning_record(key.clone(), r1);
     reg.attach_tuning_record(key.clone(), r2);
-    let policy = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::EnergyPerOp };
+    let policy = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::EnergyPerOp,
+    };
     let d = reg.select_with_caps(&key, policy, &empty_caps(), 1_700_000_000_000);
     assert!(d.is_chosen());
     assert_eq!(d.selected(), Some(c1.id));
@@ -250,13 +293,25 @@ fn metric_dispatches_selects_fewer_dispatch_candidate() {
         .map(|i| Measurement::with_metadata(i, 100, None, Some(3), 0))
         .collect();
     let mut r1 = TuningRecord::from_measurements(
-        c1.id, key.clone(), m1, "metal-msl", "3.2",
-        1_700_000_000_000, "rev-test", None,
+        c1.id,
+        key.clone(),
+        m1,
+        "metal-msl",
+        "3.2",
+        1_700_000_000_000,
+        "rev-test",
+        None,
     );
     r1.quality = Some(quality_passing());
     let mut r2 = TuningRecord::from_measurements(
-        c2.id, key.clone(), m2, "metal-msl", "3.2",
-        1_700_000_000_000, "rev-test", None,
+        c2.id,
+        key.clone(),
+        m2,
+        "metal-msl",
+        "3.2",
+        1_700_000_000_000,
+        "rev-test",
+        None,
     );
     r2.quality = Some(quality_passing());
     let mut reg = KernelRegistry::new();
@@ -264,7 +319,10 @@ fn metric_dispatches_selects_fewer_dispatch_candidate() {
     reg.register_candidate(c2);
     reg.attach_tuning_record(key.clone(), r1);
     reg.attach_tuning_record(key.clone(), r2);
-    let policy = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::Dispatches };
+    let policy = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::Dispatches,
+    };
     let d = reg.select_with_caps(&key, policy, &empty_caps(), 1_700_000_000_000);
     assert!(d.is_chosen());
     assert_eq!(d.selected(), Some(c1.id));

@@ -14,6 +14,7 @@
 mod dispatch_envelope;
 mod mamba_extended;
 mod mamba_scan;
+mod retnet;
 mod rwkv7;
 mod rwkv_extended;
 

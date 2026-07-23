@@ -63,7 +63,11 @@ const NUM_SEEDS_SWEEP: usize = 8;
 /// Binarization threshold floor: any fp value ≥ 0 maps to +1,
 /// strictly negative maps to -1. Mirrors `zaya_activations.rs`.
 fn binarize(x: f32) -> i8 {
-    if x >= 0.0 { 1 } else { -1 }
+    if x >= 0.0 {
+        1
+    } else {
+        -1
+    }
 }
 
 /// Pack a token of binarized values into a `u32` fingerprint so a
@@ -88,9 +92,7 @@ fn deterministic_input(token: usize, channels: usize, seed: u64) -> Vec<f32> {
     let mut state: u64 = seed.wrapping_add(token as u64 * 1_664_525);
     let mut out = Vec::with_capacity(channels);
     for _ in 0..channels {
-        state = state
-            .wrapping_mul(1_664_525)
-            .wrapping_add(1_013_904_223);
+        state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
         // Map to [-1.0, 1.0] so binarization hits both signs uniformly.
         let v = ((state >> 8) as f32) / ((1u64 << 24) as f32) - 1.0;
         out.push(if v == 0.0 { 1e-6 } else { v });
@@ -129,8 +131,10 @@ fn lfm_route_token(fingerprint: u32, token_seed: u64) -> Vec<u8> {
         while experts.contains(&(idx as u8)) {
             idx = (idx + 1) % NUM_EXPERTS;
             probes += 1;
-            assert!(probes < NUM_EXPERTS * 2,
-                "linear probe exhausted; router stuck on full expert pool");
+            assert!(
+                probes < NUM_EXPERTS * 2,
+                "linear probe exhausted; router stuck on full expert pool"
+            );
         }
         experts.push(idx as u8);
     }
@@ -214,7 +218,10 @@ fn zaya_activations_bias_lfm_routing_toward_fewer_experts() {
             count <= EXPERT_CAP_PER_TOKEN,
             "token {i}: ZAYA-routed unique expert count {count} exceeds bias cap {EXPERT_CAP_PER_TOKEN}",
         );
-        assert!(!unique.is_empty(), "token {i}: router returned zero experts");
+        assert!(
+            !unique.is_empty(),
+            "token {i}: router returned zero experts"
+        );
         zaya_unique_counts.push(count);
     }
 
@@ -231,8 +238,7 @@ fn zaya_activations_bias_lfm_routing_toward_fewer_experts() {
         })
         .sum();
     let ref_avg = ref_total as f64 / NUM_TOKENS as f64;
-    let zaya_avg =
-        zaya_unique_counts.iter().sum::<usize>() as f64 / NUM_TOKENS as f64;
+    let zaya_avg = zaya_unique_counts.iter().sum::<usize>() as f64 / NUM_TOKENS as f64;
     assert!(
         ref_avg > zaya_avg + 0.5,
         "reference (un-binarized) average unique experts/token {ref_avg:.3} \
