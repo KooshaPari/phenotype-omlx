@@ -26,19 +26,4 @@ export fn tq_zig_free(ptr: ?*anyopaque, size: usize) void {
     tq.tq_zig_free(ptr, size);
 }
 
-// ── Native ABI v1 — re-exported through root ──────────────────────────
-//
-// The Zig kernel implements the versioned ABI directly; root.zig just
-// re-exports the same symbols so the staticlib surface is unchanged.
-export fn tq_abi_encode(req: [*]const tq.TqAbiEncodeRequest) tq.TqAbiEncodeResult {
-    return tq.tq_abi_encode(req.ptr);
-}
-export fn tq_abi_decode(req: [*]const tq.TqAbiDecodeRequest) c_int {
-    return tq.tq_abi_decode(req.ptr);
-}
-export fn tq_abi_release(kind: c_int, ptr: ?*anyopaque, count: usize) void {
-    tq.tq_abi_release(kind, ptr, count);
-}
-
-// Removed entrypoint main to prevent duplicate symbol linker collision with Rust test framework
-
+// Symbols tq_abi_encode, tq_abi_decode, and tq_abi_release are exported directly by turbo_quant.zig.

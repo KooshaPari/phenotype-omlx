@@ -1,0 +1,24 @@
+{
+  "schema": "metal-runtime.percentiles.v1",
+  "workload": "binding-smoke",
+  "warmups": 2,
+  "samples": 9,
+  "measurements": {
+    "moe_grouped_gemm_f32": {"median_us": 399.541, "p95_us": 600.125},
+    "ternary_gemm_f32": {"median_us": 368.333, "p95_us": 463.791},
+    "diffusion_argmax_confidence_f32": {"median_us": 404.834, "p95_us": 428.750},
+    "adaln_rms_f32": {"median_us": 417.750, "p95_us": 484.542},
+    "flow_cfg_step_f32": {"median_us": 394.583, "p95_us": 499.125},
+    "joint_attention_f32": {"median_us": 431.959, "p95_us": 539.792},
+    "rope_3d_f32": {"median_us": 442.417, "p95_us": 532.083},
+    "short_conv1d_step_f32": {"median_us": 391.042, "p95_us": 735.708},
+    "temporal_window_attention_f32": {"median_us": 438.541, "p95_us": 472.458}
+  },
+  "artifacts": {
+    "moe_grouped_gemm": "de8e81b66d7a51ed9293d15f00845d3253b5307061013c32e192c4acfe7473a3",
+    "ternary_gemm": "c384997791b83f891eacb793c7415a932f8b669dd08dbc9c789a51ce1c2b5694",
+    "diffusion_confidence": "07ca5451f91bba30ecce118a41b39c40221c8f6e30f7bb9fdb28ea54da2e3d42"
+  },
+  "decision": "baseline_recorded",
+  "notes": "Artifact-backed Metal percentile baseline; measurements are binding-smoke workloads, not model-level throughput claims."
+}

@@ -19,3 +19,8 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 half = "2"
 kernel-registry = { path = "../kernel-registry" }
+native-abi = { path = "../native-abi" }
+turbo-quant-c = { path = "../turbo-quant-c" }
+turbo-quant-zig = { path = "../turbo-quant-zig" }
+turbo-quant-nim = { path = "../turbo-quant-nim" }
+turbo-quant-mojo = { path = "../turbo-quant-mojo" }

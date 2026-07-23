@@ -7,6 +7,7 @@ mlx.core's compiled-kernel API.
 
 from __future__ import annotations
 import time
+import os
 from .base import BackendBase, BackendCapabilities, GenerateRequest, GenerateResponse
 
 
@@ -73,13 +74,20 @@ class MetalKernelBackend(BackendBase):
         # The Metal policy still uses MLX for model execution, but must preserve
         # the selected model path.  Dropping it here created a silent "no model"
         # response for every explicit `--policy metal --model ...` invocation.
-        b = MlxBackend(model_path=self.model_path)
+        # Experimental replacement stays opt-in until native-vs-custom generation
+        # parity is proven on the current MLX/Qwen3.5 runtime.
+        use_custom = os.environ.get("PHENOTYPE_OMLX_ENABLE_CUSTOM_QWEN_KERNEL", "0") == "1"
+        b = MlxBackend(
+            model_path=self.model_path,
+            enable_custom_qwen_kernel=use_custom,
+        )
         if not b.is_available():
             return GenerateResponse(text="", tokens=0, elapsed_ms=0, backend="metal",
                                     metadata={"error": "mlx unavailable"})
         t0 = time.time()
         probe_ok = _run_custom_metal_probe(mx)
         out = b.generate(req)
+        custom_stats = b.custom_kernel_stats
         elapsed = int((time.time() - t0) * 1000)
         model_kernel_plan = b.kernel_plan()
         return GenerateResponse(text=out.text, tokens=out.tokens, elapsed_ms=elapsed, backend="metal",
@@ -97,9 +105,18 @@ class MetalKernelBackend(BackendBase):
                                         "execution_source": model_kernel_plan.get(
                                             "execution_source", "unknown"
                                         ),
-                                        "custom_kernel_dispatches": 0,
+                                        "custom_kernel_dispatches": custom_stats.get(
+                                            "dispatches", 0
+                                        ),
                                         "probe_dispatches": 1 if probe_ok else 0,
-                                        "custom_kernel_execution_verified": False,
-                                        "verification_scope": "probe_only",
+                                        "custom_kernel_execution_verified": custom_stats.get(
+                                            "dispatches", 0
+                                        ) > 0,
+                                        "custom_kernel_installation": custom_stats,
+                                        "verification_scope": (
+                                            "qwen35_gated_delta_replacement"
+                                            if custom_stats.get("dispatches", 0) > 0
+                                            else "probe_only"
+                                        ),
                                     },
                                 })

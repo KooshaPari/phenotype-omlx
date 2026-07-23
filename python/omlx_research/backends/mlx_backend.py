@@ -22,8 +22,11 @@ class MlxBackend(BackendBase):
         supports_spec_decode=True,
     )
 
-    def __init__(self, model_path: str | None = None):
+    def __init__(self, model_path: str | None = None, enable_custom_qwen_kernel: bool = False):
         self.model_path = model_path
+        self._enable_custom_qwen_kernel = enable_custom_qwen_kernel
+        self.custom_kernel_stats = {"installed": False, "dispatches": 0, "fallbacks": 0}
+        self._custom_kernel_attempted = False
         self._model = None
         self._load_error: str | None = None
         # CRITICAL: initialize eagerly so production code that calls
@@ -229,6 +232,21 @@ class MlxBackend(BackendBase):
                 backend="mlx",
                 metadata={"error": "no model"},
             )
+        if self._enable_custom_qwen_kernel and not self._custom_kernel_attempted:
+            self._custom_kernel_attempted = True
+            try:
+                from .qwen_gated_delta_kernel import install
+
+                import mlx.core as mx
+
+                self.custom_kernel_stats = install(self._model, mx)
+            except Exception as exc:
+                self.custom_kernel_stats = {
+                    "installed": False,
+                    "dispatches": 0,
+                    "fallbacks": 0,
+                    "install_error": type(exc).__name__,
+                }
         import mlx_lm
 
         t0 = time.time()

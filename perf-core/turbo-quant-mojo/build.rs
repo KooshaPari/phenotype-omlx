@@ -46,6 +46,15 @@ fn main() {
         // Tests and downstream binaries must resolve the colocated Mojo ABI at runtime.
         // Keep this explicit and local rather than requiring a machine-global DYLD path.
         println!("cargo:rustc-link-arg=-Wl,-rpath,{}", parent.display());
+
+        // Copy dylib to target/debug and target/debug/deps so downstream test binaries find it.
+        if let Ok(target_dir) = env::var("OUT_DIR") {
+            let target_path = PathBuf::from(target_dir);
+            if let Some(debug_dir) = target_path.ancestors().nth(3) {
+                let _ = std::fs::copy(found, debug_dir.join("libturbo_quant_mojo.dylib"));
+                let _ = std::fs::copy(found, debug_dir.join("deps").join("libturbo_quant_mojo.dylib"));
+            }
+        }
         println!("cargo:info=mojo staticlib found at {}", found.display());
     } else {
         println!(
