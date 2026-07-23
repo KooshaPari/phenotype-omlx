@@ -212,6 +212,15 @@ func langfuseSetupHandler(w http.ResponseWriter, r *http.Request) {
 					"tokens_per_second":  c.TokensPerSecond,
 					"scoring_method":     c.ScoringMethod,
 					"source":             "bench-cockpit",
+					"rlvr_composite":     c.RlvrComposite,
+					"rlvr_l0":            c.RlvrL0,
+					"rlvr_l1":            c.RlvrL1,
+					"rlvr_l2":            c.RlvrL2,
+					"rlvr_l3":            c.RlvrL3,
+					"rlvr_reward":        c.RlvrReward,
+					"rlvr_passed":        c.RlvrPassed,
+					"rlvr_verifiable":    c.RlvrVerifiable,
+					"rlvr_tournament_delta": c.RlvrTournamentDelta,
 				},
 				"input":  inp,
 				"output": outBody,
@@ -267,6 +276,45 @@ func langfuseSetupHandler(w http.ResponseWriter, r *http.Request) {
 					"dataType":      "NUMERIC",
 				},
 			})
+		}
+		if c.RlvrComposite > 0 || c.RlvrReward > 0 || c.RlvrVerifiable {
+			batch = append(batch, map[string]any{
+				"id":        newUUID(),
+				"type":      "score-create",
+				"timestamp": now,
+				"body": map[string]any{
+					"id":            newUUID(),
+					"traceId":       tid,
+					"observationId": oid,
+					"name":          "rlvr_composite",
+					"value":         c.RlvrComposite,
+					"dataType":      "NUMERIC",
+					"comment":       "harness RLVR-AF composite",
+				},
+			})
+			for name, val := range map[string]float64{
+				"rlvr_l0": c.RlvrL0,
+				"rlvr_l1": c.RlvrL1,
+				"rlvr_l2": c.RlvrL2,
+				"rlvr_l3": c.RlvrL3,
+			} {
+				if val == 0 {
+					continue
+				}
+				batch = append(batch, map[string]any{
+					"id":        newUUID(),
+					"type":      "score-create",
+					"timestamp": now,
+					"body": map[string]any{
+						"id":            newUUID(),
+						"traceId":       tid,
+						"observationId": oid,
+						"name":          name,
+						"value":         val,
+						"dataType":      "NUMERIC",
+					},
+				})
+			}
 		}
 	}
 

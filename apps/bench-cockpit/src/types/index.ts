@@ -135,6 +135,17 @@ export interface Cell {
   chat_trace?: any[];
   expected_answer?: string;
   metadata?: Record<string, string>;
+  /** RLVR-AF scalars emitted by pheno-harness (passthrough; dual-read with PascalCase aliases). */
+  rlvr_composite?: number;
+  rlvr_l0?: number;
+  rlvr_l1?: number;
+  rlvr_l2?: number;
+  rlvr_l3?: number;
+  rlvr_reward?: number;
+  rlvr_reward_breakdown?: Record<string, number>;
+  rlvr_passed?: boolean;
+  rlvr_verifiable?: boolean;
+  rlvr_tournament_delta?: number;
   [k: string]: any;
 }
 

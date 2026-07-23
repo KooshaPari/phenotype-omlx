@@ -107,8 +107,19 @@ type Cell struct {
 	ErrorMessage        string                 `json:"error_message"`
 	ErrorCode           string                 `json:"error_code"`
 	Metadata            map[string]string      `json:"metadata"`
-	dualReadGenOkSet      bool                   `json:"-"`
-	dualReadVerifiedSet   bool                   `json:"-"`
+	// RLVR-AF scalars from pheno-harness ablation cells (passthrough).
+	RlvrComposite         float64            `json:"rlvr_composite,omitempty"`
+	RlvrL0                float64            `json:"rlvr_l0,omitempty"`
+	RlvrL1                float64            `json:"rlvr_l1,omitempty"`
+	RlvrL2                float64            `json:"rlvr_l2,omitempty"`
+	RlvrL3                float64            `json:"rlvr_l3,omitempty"`
+	RlvrReward            float64            `json:"rlvr_reward,omitempty"`
+	RlvrRewardBreakdown   map[string]float64 `json:"rlvr_reward_breakdown,omitempty"`
+	RlvrPassed            bool               `json:"rlvr_passed,omitempty"`
+	RlvrVerifiable        bool               `json:"rlvr_verifiable,omitempty"`
+	RlvrTournamentDelta   float64            `json:"rlvr_tournament_delta,omitempty"`
+	dualReadGenOkSet      bool               `json:"-"`
+	dualReadVerifiedSet   bool               `json:"-"`
 }
 
 type ResultsData struct {

@@ -64,6 +64,7 @@ func (c *Cell) UnmarshalJSON(data []byte) error {
 		c.dualReadVerifiedSet = true
 	}
 	ensureAssignmentFromRaw(c, raw)
+	ensureRlvrFromRaw(c, raw)
 	return nil
 }
 
@@ -95,6 +96,7 @@ func normalizeDualRead(data *ResultsData) {
 			c.GenOk = c.PassAt1
 		}
 		normalizeAssignmentDualRead(c)
+		normalizeRlvrDualRead(c)
 	}
 	enriched := summarizeByVariant(data.Cells)
 	if data.Summary.ByVariant == nil {
