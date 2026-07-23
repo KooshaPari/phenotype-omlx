@@ -242,6 +242,7 @@ func cellFromTask(suite, variant string, rep evalReport, tr evalTaskResult, ap m
 		Metadata:            meta,
 	}
 	applyAssignmentFromAP(&cell, ap)
+	applyRlvrFromAP(&cell, ap)
 	return cell
 }
 
