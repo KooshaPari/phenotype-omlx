@@ -37,11 +37,11 @@
 //!   `1 / capacity_factor` to preserve the unconditional expectation
 //!   of the per-token contribution.
 
-mod route;
 mod apply;
+mod route;
 
-pub use route::{ModRoutePlan, ModRouterConfig, mod_route};
 pub use apply::{mod_apply, mod_scatter_back};
+pub use route::{mod_route, ModRoutePlan, ModRouterConfig};
 // Re-exported so the `use super::*;` inside the `mod tests` block can
 // resolve `KernelError`, matching the original flat-file layout where
 // the parent module had `use crate::error::{KernelError, Result};` at

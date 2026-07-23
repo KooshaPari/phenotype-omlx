@@ -7,7 +7,6 @@
 
 use super::*;
 
-
 #[test]
 fn denoise_step_updates_only_masked_tokens() {
     // Two tokens, the second is masked.
@@ -19,19 +18,11 @@ fn denoise_step_updates_only_masked_tokens() {
     // already unmasked).
     let model_logits = vec![
         // position 0
-        0.0, 0.1, 5.0, 0.0,
-        // position 1
+        0.0, 0.1, 5.0, 0.0, // position 1
         0.0, 0.1, 0.2, 9.0,
     ];
-    let upd: DenoiseUpdate = denoise_step(
-        &x_t,
-        &mask,
-        &model_logits,
-        RemaskStrategy::None,
-        0.0,
-        vocab,
-    )
-    .unwrap();
+    let upd: DenoiseUpdate =
+        denoise_step(&x_t, &mask, &model_logits, RemaskStrategy::None, 0.0, vocab).unwrap();
     // Position 0 untouched.
     assert_eq!(upd.next_x[0], 0);
     assert!(!upd.next_mask[0]);
@@ -48,19 +39,8 @@ fn denoise_step_with_no_remask_strategy_leaves_mask_unchanged() {
     let vocab = 3;
     let x_t = vec![0u32, 0];
     let mask = vec![true, true];
-    let model_logits = vec![
-        0.0, 5.0, 0.1,
-        2.0, 0.0, 0.0,
-    ];
-    let upd = denoise_step(
-        &x_t,
-        &mask,
-        &model_logits,
-        RemaskStrategy::None,
-        0.0,
-        vocab,
-    )
-    .unwrap();
+    let model_logits = vec![0.0, 5.0, 0.1, 2.0, 0.0, 0.0];
+    let upd = denoise_step(&x_t, &mask, &model_logits, RemaskStrategy::None, 0.0, vocab).unwrap();
     for &m in &upd.next_mask {
         assert!(!m);
     }
@@ -73,7 +53,14 @@ fn remask_low_confidence_respects_percentile() {
     // means the *lower* half (relative to confidence) is re-masked.
     let scores = vec![0.9, 0.8, 0.2, 0.1];
     let mut mask = vec![true, true, true, true];
-    remask(&scores, &mut mask, &RemaskStrategy::LowConfidence { percentile: 50.0 }, 0, 1).unwrap();
+    remask(
+        &scores,
+        &mut mask,
+        &RemaskStrategy::LowConfidence { percentile: 50.0 },
+        0,
+        1,
+    )
+    .unwrap();
     // Tokens 0 and 1 (confidence >= median) are accepted; tokens 2 and 3
     // are re-masked.
     assert!(!mask[0]);
@@ -116,10 +103,12 @@ fn parallel_denoise_matches_sequential_denoise() {
     // accepts its argmax.
     for i in 0..n {
         if mask[i] {
-            assert!(!upd.next_mask[i], "masked token {i} should accept at frac=0");
+            assert!(
+                !upd.next_mask[i],
+                "masked token {i} should accept at frac=0"
+            );
         } else {
             assert_eq!(upd.next_x[i], x_t[i]);
         }
     }
 }
-

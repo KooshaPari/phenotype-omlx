@@ -21,20 +21,26 @@ pub struct TidarAgent {
 
 impl TidarAgent {
     pub fn drafter(draft_len: usize, steps: usize, device: impl Into<Arc<str>>) -> Self {
-        Self { role: TidarRole::Drafter, draft_len, steps, device: device.into() }
+        Self {
+            role: TidarRole::Drafter,
+            draft_len,
+            steps,
+            device: device.into(),
+        }
     }
     pub fn verifier(device: impl Into<Arc<str>>) -> Self {
-        Self { role: TidarRole::Verifier, draft_len: 0, steps: 0, device: device.into() }
+        Self {
+            role: TidarRole::Verifier,
+            draft_len: 0,
+            steps: 0,
+            device: device.into(),
+        }
     }
 }
 
 #[async_trait]
 impl ExecBackend for TidarAgent {
-    async fn run(
-        &self,
-        id: AgentId,
-        req: ExecRequest,
-    ) -> Result<ExecResult, JobError> {
+    async fn run(&self, id: AgentId, req: ExecRequest) -> Result<ExecResult, JobError> {
         // The actual TiDAR forward pass lives in the Python reference; this
         // Rust adapter simply provides a scheduling handle for the perf-core
         // to call *into* the Python side via pyO3.
@@ -44,7 +50,12 @@ impl ExecBackend for TidarAgent {
         };
         Ok(ExecResult::ok_with_text(format!(
             "[tidar:{} role={} draft_len={} steps={} device={} chars={}]",
-            id, role, self.draft_len, self.steps, self.device, req.prompt.len(),
+            id,
+            role,
+            self.draft_len,
+            self.steps,
+            self.device,
+            req.prompt.len(),
         )))
     }
 }

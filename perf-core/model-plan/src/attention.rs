@@ -81,10 +81,7 @@ mod tests {
     #[test]
     fn tag_for_each_variant() {
         assert_eq!(AttentionKind::Dense.tag(), "dense");
-        assert_eq!(
-            AttentionKind::Gqa { kv_heads: 4 }.tag(),
-            "gqa"
-        );
+        assert_eq!(AttentionKind::Gqa { kv_heads: 4 }.tag(), "gqa");
         assert_eq!(
             AttentionKind::Mla {
                 d_latent: 64,
@@ -100,18 +97,8 @@ mod tests {
             .tag(),
             "cca"
         );
-        assert_eq!(
-            AttentionKind::Paged { block_size: 16 }.tag(),
-            "paged"
-        );
-        assert_eq!(
-            AttentionKind::Tree {
-                width: 4,
-                depth: 3
-            }
-            .tag(),
-            "tree"
-        );
+        assert_eq!(AttentionKind::Paged { block_size: 16 }.tag(), "paged");
+        assert_eq!(AttentionKind::Tree { width: 4, depth: 3 }.tag(), "tree");
         assert_eq!(
             AttentionKind::SlidingWindow { window_size: 256 }.tag(),
             "sliding_window"
@@ -130,10 +117,7 @@ mod tests {
                 compressed_factor: 4,
             },
             AttentionKind::Paged { block_size: 16 },
-            AttentionKind::Tree {
-                width: 4,
-                depth: 3,
-            },
+            AttentionKind::Tree { width: 4, depth: 3 },
             AttentionKind::SlidingWindow { window_size: 256 },
             AttentionKind::Dense,
         ];

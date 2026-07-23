@@ -162,10 +162,7 @@ fn validate_detects_binary_op_dtype_mismatch() {
     p.operators[0].kind = OperatorKind::Add;
     p.operators[0].inputs[0].dtype = DType::F32;
     p.operators[0].inputs[1].dtype = DType::I8;
-    assert!(matches!(
-        p.validate(),
-        Err(PlanError::DtypeMismatch { .. })
-    ));
+    assert!(matches!(p.validate(), Err(PlanError::DtypeMismatch { .. })));
 }
 
 #[test]

@@ -2,7 +2,9 @@
 
 use serde_json::json;
 
-use super::super::{assert_close_envelope, checked_in_baselines_dir, BaselineRecorder, VerifyResult};
+use super::super::{
+    assert_close_envelope, checked_in_baselines_dir, BaselineRecorder, VerifyResult,
+};
 
 #[test]
 fn cca_block_baseline_round_trip() {

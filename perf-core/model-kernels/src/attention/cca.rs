@@ -20,7 +20,10 @@ pub fn cca_attention(
     out: &mut [f32],
 ) -> Result<()> {
     if head_dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "head_dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "head_dim",
+            got: 0,
+        });
     }
     if compressed_factor == 0 {
         return Err(KernelError::ZeroDimension {
@@ -37,7 +40,9 @@ pub fn cca_attention(
     }
     let compressed_len = seq_k / compressed_factor;
     if compressed_len == 0 {
-        return Err(KernelError::EmptySequence { what: "compressed_len" });
+        return Err(KernelError::EmptySequence {
+            what: "compressed_len",
+        });
     }
     let expected = compressed_len * head_dim;
     if compressed_k.len() != expected {

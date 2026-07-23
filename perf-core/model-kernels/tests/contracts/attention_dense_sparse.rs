@@ -169,8 +169,7 @@ fn tree_attention_uses_external_tree_causal_mask() {
 
     let mask = tree_attention::tree_causal_mask(seq_k, 2, 1, 2);
     let mut out = vec![0.0f32; seq_q * head_dim];
-    tree_attention_step(&q, &k, &v, &mask, head_dim, seq_q, seq_k, &mut out)
-        .unwrap();
+    tree_attention_step(&q, &k, &v, &mask, head_dim, seq_q, seq_k, &mut out).unwrap();
 
     // Expected: q attends to {0, 1} (prefix) and {2} (tree root, since
     // root is ancestor-or-self of all tree nodes). It does NOT attend to
@@ -184,8 +183,15 @@ fn tree_attention_uses_external_tree_causal_mask() {
         .map(|c| v[c])
         .collect();
     let mut dense_out = vec![0.0f32; head_dim];
-    dense_attention(&q, &visible, &vis_v, head_dim, seq_q, visible.len(), &mut dense_out)
-        .unwrap();
+    dense_attention(
+        &q,
+        &visible,
+        &vis_v,
+        head_dim,
+        seq_q,
+        visible.len(),
+        &mut dense_out,
+    )
+    .unwrap();
     assert_buf_close(&out, &dense_out, 1e-5, 1e-4);
 }
-

@@ -114,6 +114,27 @@ pub fn softmax_row(xs: &mut [f32]) -> f32 {
     }
 }
 
+/// Return the maximum softmax probability without allocating or mutating the row.
+/// This is the hot path for diffusion confidence/remask scoring.
+pub fn softmax_max(xs: &[f32]) -> f32 {
+    if xs.is_empty() {
+        return 0.0;
+    }
+    let max = xs.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    if !max.is_finite() {
+        return 0.0;
+    }
+    let mut sum = 0.0f32;
+    for &value in xs {
+        sum += (value - max).exp();
+    }
+    if sum > 0.0 {
+        1.0 / sum
+    } else {
+        0.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,5 +217,15 @@ mod tests {
     fn softmax_row_empty_is_zero_sum() {
         let mut xs: [f32; 0] = [];
         assert_eq!(softmax_row(&mut xs), 0.0);
+    }
+
+    #[test]
+    fn softmax_max_matches_in_place_softmax_without_mutation() {
+        let xs = [1.0f32, 2.0, 5.0, 0.0];
+        let mut normalized = xs;
+        softmax_row(&mut normalized);
+        let expected = normalized.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        assert!((softmax_max(&xs) - expected).abs() < 1e-6);
+        assert_eq!(xs, [1.0, 2.0, 5.0, 0.0]);
     }
 }

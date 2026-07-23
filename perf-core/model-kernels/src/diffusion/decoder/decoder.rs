@@ -50,7 +50,10 @@ impl DiffusionDecoder {
         confidence_threshold: f32,
     ) -> Result<Self> {
         if vocab == 0 {
-            return Err(KernelError::ZeroDimension { what: "vocab", got: 0 });
+            return Err(KernelError::ZeroDimension {
+                what: "vocab",
+                got: 0,
+            });
         }
         if !vocab.is_power_of_two() {
             return Err(KernelError::BadBufferLength {

@@ -46,7 +46,9 @@ pub mod selector;
 pub mod trace;
 pub mod tuner;
 
-pub use builders::{deltanet_batched_key, deltanet_key, sliding_window_key};
+pub use builders::{
+    deltanet_batched_key, deltanet_key, mamba_scan_key, retnet_key, sliding_window_key,
+};
 pub use candidate::{BackendKind, Candidate, CandidateId, Capability};
 pub use compat::{AttentionKind, DType, OperatorKind, QuantizationPolicy};
 pub use error::{Error, Result};
@@ -57,8 +59,6 @@ pub use quality::{
 };
 pub use record::{Measurement, TuningRecord};
 pub use registry::{DeviceCaps, KernelRegistry};
-pub use selector::{
-    Metric, RejectionReason, RejectionRecord, SelectionDecision, SelectionPolicy,
-};
+pub use selector::{Metric, RejectionReason, RejectionRecord, SelectionDecision, SelectionPolicy};
 pub use trace::{ExecutionTrace, TraceRejection};
 pub use tuner::{BoundedTuner, TunerError};

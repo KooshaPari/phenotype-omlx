@@ -85,9 +85,8 @@ pub(crate) fn parse_csv(content: &str, path: &str) -> Result<Vec<TaskSpec>> {
     // its own record positions which we map back to 1-based file line numbers.
     for (record_idx, record) in reader.records().enumerate() {
         let line_no = record_idx + 2;
-        let record = record.map_err(|e| {
-            EvalError::csv(path, line_no, format!("malformed CSV row: {e}"))
-        })?;
+        let record =
+            record.map_err(|e| EvalError::csv(path, line_no, format!("malformed CSV row: {e}")))?;
         // Skip rows that are entirely empty (every field empty/whitespace).
         if record.iter().all(|f| f.trim().is_empty()) {
             continue;
@@ -189,7 +188,9 @@ anatomy,The heart is located in which cavity?,Cranial,Thoracic,Abdominal,Pelvic,
         assert_eq!(tasks[0].expected.as_deref(), Some("B"));
         assert!(tasks[0].is_multiple_choice());
         // The prompt stitches the question + labeled choices together.
-        assert!(tasks[0].prompt.starts_with("The heart is located in which cavity?\nA) Cranial"));
+        assert!(tasks[0]
+            .prompt
+            .starts_with("The heart is located in which cavity?\nA) Cranial"));
         assert!(tasks[0].prompt.ends_with("Answer:"));
         assert!(tasks[0].criteria.is_none());
     }
@@ -221,10 +222,7 @@ anatomy,The heart is located in which cavity?,Cranial,Thoracic,Abdominal,Pelvic,
     fn parse_preserves_many_choice_columns() {
         let csv = "subject,question,A,B,C,D,E,F,answer\ns,q,a,b,c,d,e,f,F\n";
         let tasks = parse_csv(csv, "x.csv").unwrap();
-        assert_eq!(
-            tasks[0].choices,
-            vec!["a", "b", "c", "d", "e", "f"]
-        );
+        assert_eq!(tasks[0].choices, vec!["a", "b", "c", "d", "e", "f"]);
         assert_eq!(tasks[0].expected.as_deref(), Some("F"));
     }
 
@@ -234,7 +232,9 @@ anatomy,The heart is located in which cavity?,Cranial,Thoracic,Abdominal,Pelvic,
         match err {
             EvalError::Csv { line, message, .. } => {
                 assert_eq!(line, 1);
-                assert!(message.contains("missing header") || message.contains("failed to read header"));
+                assert!(
+                    message.contains("missing header") || message.contains("failed to read header")
+                );
             }
             other => panic!("expected Csv error, got {other:?}"),
         }
@@ -242,8 +242,8 @@ anatomy,The heart is located in which cavity?,Cranial,Thoracic,Abdominal,Pelvic,
 
     #[test]
     fn parse_rejects_duplicate_columns() {
-        let err = parse_csv("subject,subject,question,A,answer\ns1,s2,Q,x,B\n", "x.csv")
-            .unwrap_err();
+        let err =
+            parse_csv("subject,subject,question,A,answer\ns1,s2,Q,x,B\n", "x.csv").unwrap_err();
         match err {
             EvalError::Csv { message, .. } => assert!(message.contains("duplicate")),
             other => panic!("expected Csv error, got {other:?}"),

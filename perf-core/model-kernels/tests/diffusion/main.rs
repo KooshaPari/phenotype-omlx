@@ -51,7 +51,11 @@ fn staged_confidence_logits(
     let target_prefix = (prefix_step0 + prefix_step_increment * step).min(n);
     let mut out = Vec::with_capacity(n * vocab);
     for i in 0..n {
-        let logit = if i < target_prefix { high_logit } else { low_logit };
+        let logit = if i < target_prefix {
+            high_logit
+        } else {
+            low_logit
+        };
         for j in 0..vocab {
             out.push(if j == 0 { logit } else { 0.0 });
         }

@@ -34,7 +34,7 @@ mod group_size;
 mod round_trip;
 
 use native_abi::{
-    encode_v1, AbiVersion, DecodeRequest, EncodeRequest, EncodeResult, Status, expected_packed_len,
+    encode_v1, expected_packed_len, AbiVersion, DecodeRequest, EncodeRequest, EncodeResult, Status,
 };
 use proptest::prelude::*;
 
@@ -223,11 +223,7 @@ pub(crate) fn assert_fencepost_packed_len(data: &[f32], n: usize, bits: u8) {
     req.out_zeros = &mut zp;
     req.out_zeros_capacity = zeros.len();
     let result: EncodeResult = unsafe { encode_v1(&req) };
-    assert_eq!(
-        result.status,
-        Status::Ok,
-        "encode failed bits={bits} n={n}"
-    );
+    assert_eq!(result.status, Status::Ok, "encode failed bits={bits} n={n}");
     assert_eq!(
         result.written_packed_len, expected,
         "written_packed_len drift"

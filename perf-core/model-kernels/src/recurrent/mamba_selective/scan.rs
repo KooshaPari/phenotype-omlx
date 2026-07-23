@@ -32,11 +32,7 @@ pub fn mamba_selective_scan(
             got: 0,
         });
     }
-    if params.dt.len() != n
-        || params.b.len() != n
-        || params.c.len() != n
-        || params.d.len() != n
-    {
+    if params.dt.len() != n || params.b.len() != n || params.c.len() != n || params.d.len() != n {
         return Err(KernelError::BadBufferLength {
             what: "dt/b/c/d",
             expected: n,
@@ -137,8 +133,7 @@ mod tests {
         let d = [0.0f32];
         let u = [1.0f32];
         let mut state = [0.0f32; 1];
-        let ys =
-            mamba_selective_scan(&params_1channel(&dt, &b, &c, &d), &u, &mut state).unwrap();
+        let ys = mamba_selective_scan(&params_1channel(&dt, &b, &c, &d), &u, &mut state).unwrap();
         assert!((ys[0] - 1.0).abs() < 1e-5, "got {}", ys[0]);
         assert!((state[0] - 1.0).abs() < 1e-5);
     }
@@ -222,13 +217,9 @@ mod tests {
                     c: &c_full[pos..pos + cs],
                     d: &d_full[pos..pos + cs],
                 };
-                let (chunk_out, new_state) = mamba_selective_scan_chunk(
-                    &chunk_params,
-                    &u_full[pos..pos + cs],
-                    &mut s,
-                    cs,
-                )
-                .unwrap();
+                let (chunk_out, new_state) =
+                    mamba_selective_scan_chunk(&chunk_params, &u_full[pos..pos + cs], &mut s, cs)
+                        .unwrap();
                 acc.extend_from_slice(&chunk_out);
                 s = new_state;
                 pos += cs;
@@ -237,16 +228,10 @@ mod tests {
         };
         assert_eq!(full_ys.len(), chunk_ys.len());
         for (i, (&a, &b_v)) in full_ys.iter().zip(chunk_ys.iter()).enumerate() {
-            assert!(
-                (a - b_v).abs() < 1e-5,
-                "step {i}: full {a} vs chunk {b_v}"
-            );
+            assert!((a - b_v).abs() < 1e-5, "step {i}: full {a} vs chunk {b_v}");
         }
         for (i, (&a, &b_v)) in s_full.iter().zip(chunk_state.iter()).enumerate() {
-            assert!(
-                (a - b_v).abs() < 1e-5,
-                "final state[{i}]: {a} vs {b_v}"
-            );
+            assert!((a - b_v).abs() < 1e-5, "final state[{i}]: {a} vs {b_v}");
         }
     }
 
@@ -330,8 +315,7 @@ mod tests {
             d: &[0.0, 0.0, 0.0],
         };
         let mut state = [0.0f32; 1];
-        let err =
-            mamba_selective_scan_chunk(&params, &[1.0, 2.0], &mut state, 3).unwrap_err();
+        let err = mamba_selective_scan_chunk(&params, &[1.0, 2.0], &mut state, 3).unwrap_err();
         assert!(matches!(err, KernelError::BadBufferLength { .. }));
     }
 }

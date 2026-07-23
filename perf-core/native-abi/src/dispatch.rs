@@ -22,7 +22,7 @@ use core::slice;
 use std::alloc::{self, Layout};
 
 use crate::descriptor::{
-    DecodeRequest, EncodeRequest, EncodeResult, expected_packed_len, group_count,
+    expected_packed_len, group_count, DecodeRequest, EncodeRequest, EncodeResult,
 };
 use crate::status::Status;
 
@@ -43,7 +43,10 @@ pub unsafe fn encode_v1(req: &EncodeRequest) -> EncodeResult {
     macro_rules! fail {
         ($status:expr) => {{
             zero_outputs(req);
-            return EncodeResult { status: $status, ..EncodeResult::zeroed() };
+            return EncodeResult {
+                status: $status,
+                ..EncodeResult::zeroed()
+            };
         }};
     }
 
@@ -102,8 +105,12 @@ pub unsafe fn encode_v1(req: &EncodeRequest) -> EncodeResult {
 
         let (mut gmin, mut gmax) = (data[start], data[start]);
         for &v in &data[start + 1..end] {
-            if v < gmin { gmin = v; }
-            if v > gmax { gmax = v; }
+            if v < gmin {
+                gmin = v;
+            }
+            if v > gmax {
+                gmax = v;
+            }
         }
 
         let span = gmax - gmin;
@@ -237,12 +244,11 @@ fn write_bits(buf: &mut [u8], bit_offset: usize, value: u8, bits: u8) {
         buf[byte_idx] = (buf[byte_idx] & !shift_mask) | (value << bit_in_byte);
     } else {
         let lo_mask = (1u8 << room) - 1;
-        buf[byte_idx] = (buf[byte_idx] & !(lo_mask << bit_in_byte))
-            | ((value & lo_mask) << bit_in_byte);
+        buf[byte_idx] =
+            (buf[byte_idx] & !(lo_mask << bit_in_byte)) | ((value & lo_mask) << bit_in_byte);
         let hi_bits = bits as usize - room;
         let hi_mask = (1u8 << hi_bits) - 1;
-        buf[byte_idx + 1] =
-            (buf[byte_idx + 1] & !hi_mask) | ((value >> room) & hi_mask);
+        buf[byte_idx + 1] = (buf[byte_idx + 1] & !hi_mask) | ((value >> room) & hi_mask);
     }
 }
 

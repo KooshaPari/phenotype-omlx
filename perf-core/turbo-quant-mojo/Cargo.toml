@@ -19,5 +19,7 @@ default = ["mojo"]
 # Compile + link the Mojo kernel. Requires `mojo` in PATH and the generated
 # `libturbo_quant_mojo.dylib` beside this manifest.
 mojo = []
+# Enable Mojo GEMV FFI path (falls back to Rust on panic or missing symbol).
+mojo-ffi = []
 
 [build-dependencies]

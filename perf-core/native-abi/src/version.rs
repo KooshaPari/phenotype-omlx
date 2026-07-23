@@ -24,10 +24,7 @@ pub struct AbiVersion {
 /// Backends and frontends compare this against their local expectations and
 /// must reject the call (with [`Status::ErrVersionMismatch`]) when the major
 /// versions differ.
-pub const ABI_VERSION_CURRENT: AbiVersion = AbiVersion {
-    major: 1,
-    minor: 0,
-};
+pub const ABI_VERSION_CURRENT: AbiVersion = AbiVersion { major: 1, minor: 0 };
 
 /// Returns true iff the host and guest can exchange ABI v1 descriptors.
 ///

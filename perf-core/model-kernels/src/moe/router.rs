@@ -29,7 +29,10 @@ pub fn router_topk(
         });
     }
     if top_k == 0 {
-        return Err(KernelError::ZeroDimension { what: "top_k", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "top_k",
+            got: 0,
+        });
     }
     if top_k > num_experts {
         return Err(KernelError::DimMismatch {
@@ -38,11 +41,7 @@ pub fn router_topk(
             got: top_k,
         });
     }
-    let mut indexed: Vec<(usize, f32)> = router_logits
-        .iter()
-        .copied()
-        .enumerate()
-        .collect();
+    let mut indexed: Vec<(usize, f32)> = router_logits.iter().copied().enumerate().collect();
     // Sort by (score DESC, expert_id ASC). Using reversed sort key.
     indexed.sort_by(|(ea, la), (eb, lb)| {
         lb.partial_cmp(la)
@@ -63,7 +62,11 @@ pub fn router_topk(
     // function's randomness surface is documented and stable.
     let mut out = Vec::with_capacity(top_k);
     for (i, (e, _)) in picks.iter().enumerate() {
-        let w = if sum > 0.0 { exp[i] / sum } else { 1.0 / top_k as f32 };
+        let w = if sum > 0.0 {
+            exp[i] / sum
+        } else {
+            1.0 / top_k as f32
+        };
         let _ = rng.next_u64();
         out.push((*e, w));
     }

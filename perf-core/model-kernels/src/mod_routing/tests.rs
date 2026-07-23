@@ -71,8 +71,7 @@ fn apply_scatter_round_trip_with_zero_fill_is_exact() {
     let mut scattered = mod_scatter_back(&selected, &plan, num_tokens, dim, 0.0).unwrap();
     // Zero out the non-survivor rows on a reference copy.
     let mut expected = full.clone();
-    let survivor: std::collections::HashSet<u32> =
-        plan.selected_tokens.iter().copied().collect();
+    let survivor: std::collections::HashSet<u32> = plan.selected_tokens.iter().copied().collect();
     for t in 0..num_tokens {
         if !survivor.contains(&(t as u32)) {
             for d in 0..dim {
@@ -89,7 +88,10 @@ fn apply_scatter_round_trip_with_zero_fill_is_exact() {
             d * d
         })
         .sum();
-    assert_eq!(l2, 0.0, "round-trip should be exact with fill=0.0; got L2={l2}");
+    assert_eq!(
+        l2, 0.0,
+        "round-trip should be exact with fill=0.0; got L2={l2}"
+    );
     // Sanity: the surviving rows really are the original rows.
     for &idx in &plan.selected_tokens {
         let row = idx as usize;

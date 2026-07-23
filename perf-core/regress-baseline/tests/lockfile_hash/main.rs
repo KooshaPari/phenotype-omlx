@@ -51,7 +51,9 @@ use sha2::{Digest, Sha256};
 /// Path to the workspace's `Cargo.lock`, resolved relative to the
 /// regress-baseline crate's manifest directory (`perf-core/regress-baseline`).
 fn cargo_lock_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("Cargo.lock")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("Cargo.lock")
 }
 
 /// Path to the workspace's `lockfile.lock` fingerprint file.
@@ -94,7 +96,10 @@ fn parse_expected_sha256(contents: &str) -> Result<String, String> {
             ));
         }
     }
-    Err("MISSING sha256: LINE in lockfile.lock (expected format: `sha256: <64-hex-digest>`)".to_string())
+    Err(
+        "MISSING sha256: LINE in lockfile.lock (expected format: `sha256: <64-hex-digest>`)"
+            .to_string(),
+    )
 }
 
 #[test]
@@ -106,8 +111,8 @@ fn lockfile_hash_matches_cargo_lock_sha256() {
     let actual = sha256_file_hex(&lock_path).unwrap_or_else(|e| panic!("{e}"));
 
     // 2. Parse the expected SHA-256 from lockfile.lock.
-    let fp_bytes = fs::read_to_string(&fp_path)
-        .unwrap_or_else(|e| panic!("read {}: {e}", fp_path.display()));
+    let fp_bytes =
+        fs::read_to_string(&fp_path).unwrap_or_else(|e| panic!("read {}: {e}", fp_path.display()));
     let expected = parse_expected_sha256(&fp_bytes).unwrap_or_else(|e| panic!("{e}"));
 
     // 3. Assert they match. Failure prints both digests and the

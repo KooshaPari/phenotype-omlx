@@ -18,7 +18,9 @@ use model_kernels::attention::{
     tree_attention_step,
 };
 use model_kernels::common::{approx_eq, Lcg};
-use model_kernels::diffusion::{denoise_step, confidence_scores, remask, DenoiseUpdate, RemaskStrategy};
+use model_kernels::diffusion::{
+    confidence_scores, denoise_step, remask, DenoiseUpdate, RemaskStrategy,
+};
 use model_kernels::error::KernelError;
 use model_kernels::moe::{
     grouped_gemm, moe_dispatch, router_topk, shared_expert, weighted_reduce, DispatchPlan,
@@ -47,18 +49,15 @@ fn assert_buf_close(a: &[f32], b: &[f32], abs: f32, rel: f32) {
     assert_eq!(a.len(), b.len(), "buffer length mismatch");
     for (i, (&x, &y)) in a.iter().zip(b.iter()).enumerate() {
         if !model_kernels::common::approx_eq_tol(x, y, abs, rel) {
-            panic!(
-                "buffers differ at {i}: got {x}, expected {y} (abs={abs}, rel={rel})"
-            );
+            panic!("buffers differ at {i}: got {x}, expected {y} (abs={abs}, rel={rel})");
         }
     }
 }
 
-
 mod attention_dense_sparse;
 mod attention_gqa_mla;
-mod moe;
-mod recurrent;
 mod diffusion;
-mod quantized;
 mod dispatch_plan;
+mod moe;
+mod quantized;
+mod recurrent;

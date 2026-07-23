@@ -152,8 +152,7 @@ fn tree_causal_mask_is_causal_in_prefix_region() {
         for (r, row) in mask.iter().enumerate() {
             let expected = if r >= c { 1 } else { 0 };
             assert_eq!(
-                row[c],
-                expected,
+                row[c], expected,
                 "prefix mask mismatch at r={r}, c={c}: expected {expected}"
             );
         }
@@ -200,10 +199,7 @@ fn tree_causal_mask_handles_depth_zero_correctly() {
 fn tree_causal_mask_consistent_with_tree_plan_total_nodes() {
     let plan = TreePlan::new(4, 2);
     let expected_tree_len = plan.total_nodes();
-    assert_eq!(
-        expected_tree_len, 21,
-        "1 + 4 + 16 = 21 for width=4 depth=2"
-    );
+    assert_eq!(expected_tree_len, 21, "1 + 4 + 16 = 21 for width=4 depth=2");
 
     let seq_len = 64;
     let offset = 8;
@@ -246,8 +242,7 @@ fn tree_causal_mask_singleton_width_one_is_causal() {
         for (c, &cell) in (offset..tree_end).zip(row[offset..tree_end].iter()) {
             let expected = if r >= c { 1 } else { 0 };
             assert_eq!(
-                cell,
-                expected,
+                cell, expected,
                 "width=1 chain should be causal at r={r}, c={c}"
             );
         }
@@ -267,11 +262,7 @@ fn tree_causal_mask_rejects_querying_beyond_tree_end() {
     for (r, row) in mask.iter().enumerate().take(tree_start) {
         let upper = tree_end.min(row.len());
         for (c, &cell) in (tree_start..upper).zip(row[tree_start..upper].iter()) {
-            assert_eq!(
-                cell,
-                0,
-                "prefix query r={r} must not see tree key c={c}"
-            );
+            assert_eq!(cell, 0, "prefix query r={r} must not see tree key c={c}");
         }
     }
 }
@@ -289,23 +280,22 @@ fn tree_causal_mask_depth_one_width_w() {
     let mask = tree_causal_mask(seq_len, width, 1, offset);
 
     // Children positions: offset+1 .. offset+width.
-    for (child_idx, child_row) in ((offset + 1)..(offset + 1 + width))
-        .zip(mask[(offset + 1)..(offset + 1 + width)].iter())
+    for (child_idx, child_row) in
+        ((offset + 1)..(offset + 1 + width)).zip(mask[(offset + 1)..(offset + 1 + width)].iter())
     {
         let child = child_idx;
         // Child attends to root (root is child's ancestor).
         assert_eq!(child_row[offset], 1, "child {child} must attend to root");
         // Child does NOT attend to its siblings (siblings are not ancestors).
-        for (sibling_idx, sibling_cell) in
-            ((offset + 1)..(offset + 1 + width)).zip(child_row[(offset + 1)..(offset + 1 + width)].iter())
+        for (sibling_idx, sibling_cell) in ((offset + 1)..(offset + 1 + width))
+            .zip(child_row[(offset + 1)..(offset + 1 + width)].iter())
         {
             let sibling = sibling_idx;
             if sibling == child {
                 continue;
             }
             assert_eq!(
-                *sibling_cell,
-                0,
+                *sibling_cell, 0,
                 "child {child} must not attend to sibling {sibling}"
             );
         }
@@ -316,11 +306,7 @@ fn tree_causal_mask_depth_one_width_w() {
     for (child, &cell) in ((offset + 1)..(offset + 1 + width))
         .zip(root_row[(offset + 1)..(offset + 1 + width)].iter())
     {
-        assert_eq!(
-            cell,
-            0,
-            "root must not attend to descendant {child}"
-        );
+        assert_eq!(cell, 0, "root must not attend to descendant {child}");
     }
 }
 

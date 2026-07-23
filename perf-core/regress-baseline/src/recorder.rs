@@ -92,7 +92,8 @@ impl BaselineRecorder {
             input_hash: Self::hash_inputs(inputs),
             output: outputs,
         };
-        file.baselines.insert(kernel_name.to_string(), entry.clone());
+        file.baselines
+            .insert(kernel_name.to_string(), entry.clone());
         self.write(&file)?;
         Ok(entry)
     }

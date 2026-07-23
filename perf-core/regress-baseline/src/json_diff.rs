@@ -47,7 +47,15 @@ pub(crate) fn find_first_diff(
             for k in keys {
                 let exp_v = &e[k];
                 let act_v = a.get(k).unwrap_or(&Value::Null);
-                let child = format!("{}.{}", if path.is_empty() { k.clone() } else { format!("{path}.{k}") }, "");
+                let child = format!(
+                    "{}.{}",
+                    if path.is_empty() {
+                        k.clone()
+                    } else {
+                        format!("{path}.{k}")
+                    },
+                    ""
+                );
                 if let Some(diff) = find_first_diff(exp_v, act_v, &child[..child.len() - 1]) {
                     return Some(diff);
                 }
@@ -55,7 +63,11 @@ pub(crate) fn find_first_diff(
             // Surplus keys on `actual` count as a mismatch.
             for k in a.keys() {
                 if !e.contains_key(k) {
-                    let p = if path.is_empty() { k.clone() } else { format!("{path}.{k}") };
+                    let p = if path.is_empty() {
+                        k.clone()
+                    } else {
+                        format!("{path}.{k}")
+                    };
                     return Some((p, Value::Null, a[k].clone()));
                 }
             }

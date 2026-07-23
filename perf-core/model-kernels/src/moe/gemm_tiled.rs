@@ -157,7 +157,9 @@ mod tests {
     /// tensor.
     fn deterministic_experts(num_experts: usize, k: usize, n: usize, salt: u64) -> Vec<f32> {
         let mut rng = Lcg::new(0xDEAD_BEEF ^ salt);
-        (0..num_experts * k * n).map(|_| rng.next_signed()).collect()
+        (0..num_experts * k * n)
+            .map(|_| rng.next_signed())
+            .collect()
     }
 
     /// Bit-equality check against the scalar reference. Both
@@ -191,11 +193,8 @@ mod tests {
         let n = 32;
         let a = deterministic_activations(num_tokens, k, 0xA1);
         let b = deterministic_experts(num_experts, k, n, 0xB2);
-        let buckets: Vec<Vec<usize>> = vec![
-            vec![0usize, 3, 5],
-            vec![1usize, 6],
-            vec![2usize, 4, 7],
-        ];
+        let buckets: Vec<Vec<usize>> =
+            vec![vec![0usize, 3, 5], vec![1usize, 6], vec![2usize, 4, 7]];
         let m = 0; // unused; mirrors the scalar path's contract.
 
         let mut scalar_out = vec![0.0f32; num_tokens * n];
@@ -232,7 +231,12 @@ mod tests {
         let mut scalar_out = vec![99.0f32; num_tokens * n];
         crate::moe::gemm::grouped_gemm(&a, &b, &buckets, 0, k, n, &mut scalar_out)
             .expect("scalar path must accept empty buckets");
-        assert_close(&tiled_out, &scalar_out, 1e-5, "tiled vs scalar with empty buckets");
+        assert_close(
+            &tiled_out,
+            &scalar_out,
+            1e-5,
+            "tiled vs scalar with empty buckets",
+        );
     }
 
     /// `k == 0` and `n == 0` are both rejected with the same
@@ -273,7 +277,11 @@ mod tests {
         let mut out = vec![0.0f32; 4];
         let err = grouped_gemm_tiled(&a, &b, &buckets, 1, 2, 2, &mut out).unwrap_err();
         match err {
-            KernelError::BadBufferLength { what, expected, got } => {
+            KernelError::BadBufferLength {
+                what,
+                expected,
+                got,
+            } => {
                 assert_eq!(what, "b", "expected BadBufferLength for b, got {what}");
                 assert_eq!(expected, 8);
                 assert_eq!(got, 4);
@@ -290,12 +298,19 @@ mod tests {
         let mut out2 = vec![0.0f32; 2]; // expects 3 * 2 = 6
         let err = grouped_gemm_tiled(&a2, &b2, &buckets2, 2, 2, 2, &mut out2).unwrap_err();
         match err {
-            KernelError::BadBufferLength { what, expected, got } => {
+            KernelError::BadBufferLength {
+                what,
+                expected,
+                got,
+            } => {
                 assert!(
                     what == "a" || what == "out",
                     "expected BadBufferLength for a or out, got {what:?}"
                 );
-                assert!(expected > got, "expected > got must hold ({expected} > {got})");
+                assert!(
+                    expected > got,
+                    "expected > got must hold ({expected} > {got})"
+                );
             }
             other => panic!("expected BadBufferLength, got {other:?}"),
         }

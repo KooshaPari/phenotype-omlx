@@ -184,7 +184,13 @@ mod tests {
     /// Helper: compute `out = a @ b^T` where `a` is `[m, k]` and `b`
     /// is `[k, n]` f32 row-major, against the unpacked ternary
     /// reference.
-    fn reference_matmul(a: &[f32], b_unpacked: &[SignedTernary], m: usize, k: usize, n: usize) -> Vec<f32> {
+    fn reference_matmul(
+        a: &[f32],
+        b_unpacked: &[SignedTernary],
+        m: usize,
+        k: usize,
+        n: usize,
+    ) -> Vec<f32> {
         let mut out = vec![0.0f32; m * n];
         for row in 0..m {
             for j in 0..n {
@@ -226,13 +232,18 @@ mod tests {
         ternary_matmul(&a, &packed, &scales, &zeros, group_size, m, k, n, &mut out).unwrap();
 
         let mut unpacked = vec![SignedTernary::Zero; values.len()];
-        ternary_unpack(&packed, &scales, &zeros, values.len(), group_size, &mut unpacked).unwrap();
+        ternary_unpack(
+            &packed,
+            &scales,
+            &zeros,
+            values.len(),
+            group_size,
+            &mut unpacked,
+        )
+        .unwrap();
         let expected = reference_matmul(&a, &unpacked, m, k, n);
         for (i, (&g, &e)) in out.iter().zip(expected.iter()).enumerate() {
-            assert!(
-                approx_eq(g, e),
-                "mismatch at {i}: got {g}, expected {e}"
-            );
+            assert!(approx_eq(g, e), "mismatch at {i}: got {g}, expected {e}");
         }
     }
 
@@ -247,8 +258,10 @@ mod tests {
         let scales = vec![1.0f32; 1];
         let zeros = vec![0.0f32; 1];
         let mut out = vec![0.0f32; m * n];
-        let err = ternary_matmul(&a, &b_packed, &scales, &zeros, group_size, m, k, n, &mut out)
-            .unwrap_err();
+        let err = ternary_matmul(
+            &a, &b_packed, &scales, &zeros, group_size, m, k, n, &mut out,
+        )
+        .unwrap_err();
         assert!(matches!(err, KernelError::BadBufferLength { .. }));
     }
 
@@ -259,8 +272,7 @@ mod tests {
         let scales = [1.0f32];
         let zeros = [0.0f32];
         let mut out = vec![0.0f32; 1];
-        let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 0, 1, 1, 1, &mut out)
-            .unwrap_err();
+        let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 0, 1, 1, 1, &mut out).unwrap_err();
         assert!(matches!(err, KernelError::ZeroDimension { .. }));
     }
 
@@ -273,8 +285,7 @@ mod tests {
         let scales = [1.0f32];
         let zeros = [0.0f32];
         let mut out = vec![0.0f32; 3];
-        let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 4, 1, 4, 3, &mut out)
-            .unwrap_err();
+        let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 4, 1, 4, 3, &mut out).unwrap_err();
         assert!(matches!(err, KernelError::DimMismatch { .. }));
     }
 
@@ -313,22 +324,22 @@ mod tests {
         // m == 0
         {
             let mut out = vec![0.0f32; 0];
-            let err = ternary_matmul(&[], &b_packed, &scales, &zeros, 1, 0, 1, 1, &mut out)
-                .unwrap_err();
+            let err =
+                ternary_matmul(&[], &b_packed, &scales, &zeros, 1, 0, 1, 1, &mut out).unwrap_err();
             assert!(matches!(err, KernelError::ZeroDimension { what: "m", .. }));
         }
         // k == 0
         {
             let mut out = vec![0.0f32; 1];
-            let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 1, 1, 0, 1, &mut out)
-                .unwrap_err();
+            let err =
+                ternary_matmul(&a, &b_packed, &scales, &zeros, 1, 1, 0, 1, &mut out).unwrap_err();
             assert!(matches!(err, KernelError::ZeroDimension { what: "k", .. }));
         }
         // n == 0
         {
             let mut out = vec![0.0f32; 0];
-            let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 1, 1, 1, 0, &mut out)
-                .unwrap_err();
+            let err =
+                ternary_matmul(&a, &b_packed, &scales, &zeros, 1, 1, 1, 0, &mut out).unwrap_err();
             assert!(matches!(err, KernelError::ZeroDimension { what: "n", .. }));
         }
     }

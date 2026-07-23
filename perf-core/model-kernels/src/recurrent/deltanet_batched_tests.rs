@@ -14,9 +14,7 @@
 use crate::common::approx_eq;
 use crate::error::KernelError;
 use crate::recurrent::deltanet::deltanet_chunk;
-use crate::recurrent::deltanet_batched::{
-    deltanet_batched_chunk, deltanet_batched_chunk_stepwise,
-};
+use crate::recurrent::deltanet_batched::{deltanet_batched_chunk, deltanet_batched_chunk_stepwise};
 
 fn fill_with(seed: u64, len: usize) -> Vec<f32> {
     let mut rng = crate::common::Lcg::new(seed);
@@ -26,7 +24,10 @@ fn fill_with(seed: u64, len: usize) -> Vec<f32> {
 fn assert_close(actual: &[f32], expected: &[f32]) {
     assert_eq!(actual.len(), expected.len());
     for (i, (&a, &e)) in actual.iter().zip(expected.iter()).enumerate() {
-        assert!(approx_eq(a, e), "mismatch at index {i}: actual={a}, expected={e}");
+        assert!(
+            approx_eq(a, e),
+            "mismatch at index {i}: actual={a}, expected={e}"
+        );
     }
 }
 
@@ -136,7 +137,13 @@ fn rejects_zero_batch_size() {
     let initial_state = [0.0f32; 9];
     let err = deltanet_batched_chunk(&[], &[], &[], &initial_state, 0, 1, 2, 3).unwrap_err();
     assert!(
-        matches!(err, KernelError::ZeroDimension { what: "batch_size", .. }),
+        matches!(
+            err,
+            KernelError::ZeroDimension {
+                what: "batch_size",
+                ..
+            }
+        ),
         "got {err:?}"
     );
 }
@@ -146,7 +153,13 @@ fn rejects_zero_num_heads() {
     let initial_state = [0.0f32; 9];
     let err = deltanet_batched_chunk(&[], &[], &[], &initial_state, 1, 0, 2, 3).unwrap_err();
     assert!(
-        matches!(err, KernelError::ZeroDimension { what: "num_heads", .. }),
+        matches!(
+            err,
+            KernelError::ZeroDimension {
+                what: "num_heads",
+                ..
+            }
+        ),
         "got {err:?}"
     );
 }
@@ -156,7 +169,13 @@ fn rejects_zero_chunk_size() {
     let initial_state = [0.0f32; 9];
     let err = deltanet_batched_chunk(&[], &[], &[], &initial_state, 1, 1, 0, 3).unwrap_err();
     assert!(
-        matches!(err, KernelError::ZeroDimension { what: "chunk_size", .. }),
+        matches!(
+            err,
+            KernelError::ZeroDimension {
+                what: "chunk_size",
+                ..
+            }
+        ),
         "got {err:?}"
     );
 }
@@ -166,7 +185,13 @@ fn rejects_zero_head_dim_batched() {
     let initial_state: [f32; 0] = [];
     let err = deltanet_batched_chunk(&[], &[], &[], &initial_state, 1, 1, 2, 0).unwrap_err();
     assert!(
-        matches!(err, KernelError::ZeroDimension { what: "head_dim", .. }),
+        matches!(
+            err,
+            KernelError::ZeroDimension {
+                what: "head_dim",
+                ..
+            }
+        ),
         "got {err:?}"
     );
 }
@@ -197,7 +222,13 @@ fn rejects_mismatched_initial_state_length() {
     let initial_state = vec![0.0f32; 9 - 1];
     let err = deltanet_batched_chunk(&q, &k, &v, &initial_state, 1, 1, 2, 3).unwrap_err();
     assert!(
-        matches!(err, KernelError::BadBufferLength { what: "initial_state", .. }),
+        matches!(
+            err,
+            KernelError::BadBufferLength {
+                what: "initial_state",
+                ..
+            }
+        ),
         "got {err:?}"
     );
 }
@@ -257,8 +288,8 @@ fn stepwise_wrapper_matches_primary() {
     let v = fill_with(19, b * h * c * d);
     let initial_state = fill_with(23, b * h * d * d);
 
-    let (outs_a, state_a) =
-        deltanet_batched_chunk(&q, &k, &v, &initial_state, b, h, c, d).expect("primary must succeed");
+    let (outs_a, state_a) = deltanet_batched_chunk(&q, &k, &v, &initial_state, b, h, c, d)
+        .expect("primary must succeed");
     let (outs_b, state_b) = deltanet_batched_chunk_stepwise(&q, &k, &v, &initial_state, b, h, c, d)
         .expect("stepwise must succeed");
     assert_close(&outs_a, &outs_b);

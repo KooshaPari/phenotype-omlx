@@ -28,7 +28,7 @@
 // | LFM     | recurrent::short_conv                  | tests::zaya_lfm::lfm2_gated_short_conv_16_steps_matches_elementwise_product                    |
 // | ZAYA    | attention::cca                          | tests::zaya_lfm::zaya_block_parallel_three_blocks_matches_explicit_reference                   |
 // |         |                                         | tests::zaya_lfm::zaya_block_parallel_handles_non_uniform_block_sizes                            |
-// | Bonsai  | quant::ternary                          | tests::qwen_bonsai::bonsai_ternary_matmul_matches_unpacked_reference                           |
+// | Bonsai  | quant::ternary (Bonsai-27B target)       | tests::qwen_bonsai::bonsai_ternary_matmul_matches_unpacked_reference                           |
 // |         |                                         | tests::contracts::ternary_pack_matches_manual_packing                                          |
 // |         |                                         | tests::contracts::ternary_unpack_inverts_pack                                                  |
 // | LLaDA   | diffusion::denoise + remask            | tests::diffusion::llada_acceptance_trace_finishes_with_all_unmasked                            |
@@ -39,6 +39,7 @@
 // |         |   (EntropyBased strategy)               | tests::diffusion::dream_acceptance_trace_is_deterministic_across_runs                           |
 // |         |                                         | tests::diffusion::dream_running_unmasked_count_is_monotonically_non_decreasing                   |
 // |         |                                         | tests::diffusion::dream_remask_count_per_position_bounded_by_total_steps_minus_one              |
+// | DiffGem | diffusion::denoise + remask (target)    | LLaDA/Dream fixtures retained until DiffusionGemma artifact fixtures land                   |
 // | Mamba   | recurrent::mamba                        | tests::contracts::mamba_scan_matches_recurrent_definition                                      |
 // |         |                                         | tests::recurrent_hybrid::short_conv1d_32_input_trace_matches_naive_convolution                 |
 // | Jamba   | recurrent::mamba + attention::gqa       | tests::recurrent_hybrid::jamba_mamba_chunked_output_matches_repeated_single_steps              |

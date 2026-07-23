@@ -173,16 +173,15 @@ mod tests {
         let mut per_step_state = [0.0f32; 4];
         let mut per_step_outs = Vec::new();
         for x in &xs {
-            let y = rwkv7_time_mix(x, &mut per_step_state, mix_k, mix_v, mix_r, mix_g, decay)
-                .unwrap();
+            let y =
+                rwkv7_time_mix(x, &mut per_step_state, mix_k, mix_v, mix_r, mix_g, decay).unwrap();
             per_step_outs.push(y);
         }
 
         let mut joint_state = [0.0f32; 4];
         let mut joint_outs = Vec::new();
         for x in &xs {
-            let y = rwkv7_time_mix(x, &mut joint_state, mix_k, mix_v, mix_r, mix_g, decay)
-                .unwrap();
+            let y = rwkv7_time_mix(x, &mut joint_state, mix_k, mix_v, mix_r, mix_g, decay).unwrap();
             joint_outs.push(y);
         }
         for (i, (a, b)) in per_step_outs.iter().zip(joint_outs.iter()).enumerate() {

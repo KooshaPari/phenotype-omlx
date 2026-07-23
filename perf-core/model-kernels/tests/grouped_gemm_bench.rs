@@ -62,8 +62,20 @@ struct Shape {
 }
 
 const SHAPES: &[Shape] = &[
-    Shape { name: "qwen_moe_canonical", num_tokens: 128, num_experts: 8, k: 64,  n: 64  },
-    Shape { name: "moe_stress",        num_tokens: 512, num_experts: 8, k: 128, n: 128 },
+    Shape {
+        name: "qwen_moe_canonical",
+        num_tokens: 128,
+        num_experts: 8,
+        k: 64,
+        n: 64,
+    },
+    Shape {
+        name: "moe_stress",
+        num_tokens: 512,
+        num_experts: 8,
+        k: 128,
+        n: 128,
+    },
 ];
 
 /// Build a deterministic `[num_tokens, k]` activation matrix from
@@ -78,7 +90,9 @@ fn activations(num_tokens: usize, k: usize, salt: u64) -> Vec<f32> {
 /// from `salt`.
 fn experts(num_experts: usize, k: usize, n: usize, salt: u64) -> Vec<f32> {
     let mut rng = Lcg::new(0xDEAD_BEEF ^ salt);
-    (0..num_experts * k * n).map(|_| rng.next_signed()).collect()
+    (0..num_experts * k * n)
+        .map(|_| rng.next_signed())
+        .collect()
 }
 
 /// Round-robin per-token assignment: token `t` is owned by expert
@@ -135,7 +149,10 @@ fn time_one(shape: &Shape, path: Path, salt: u64) -> (u128, Vec<f32>) {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum Path { Scalar, Tiled }
+enum Path {
+    Scalar,
+    Tiled,
+}
 
 #[derive(Debug, Clone, Copy)]
 struct Row {
@@ -164,8 +181,18 @@ fn grouped_gemm_scalar_vs_tiled_bench() {
         let (scalar_ns, scalar_out) = time_one(shape, Path::Scalar, salt);
         let (tiled_ns, tiled_out) = time_one(shape, Path::Tiled, salt);
         let bytes = shape.num_tokens * shape.n * std::mem::size_of::<f32>();
-        rows.push(Row { shape: shape.name, path: "scalar", median_ns: scalar_ns, bytes });
-        rows.push(Row { shape: shape.name, path: "tiled",  median_ns: tiled_ns,  bytes });
+        rows.push(Row {
+            shape: shape.name,
+            path: "scalar",
+            median_ns: scalar_ns,
+            bytes,
+        });
+        rows.push(Row {
+            shape: shape.name,
+            path: "tiled",
+            median_ns: tiled_ns,
+            bytes,
+        });
         oracle_pairs.push((scalar_out, tiled_out, shape.name));
     }
 
@@ -174,7 +201,11 @@ fn grouped_gemm_scalar_vs_tiled_bench() {
     // scalar path at the bench level the bench would silently emit
     // a misleading timing comparison — this assertion trips first.
     for (scalar_out, tiled_out, name) in &oracle_pairs {
-        assert_eq!(scalar_out.len(), tiled_out.len(), "[{name}] length mismatch");
+        assert_eq!(
+            scalar_out.len(),
+            tiled_out.len(),
+            "[{name}] length mismatch"
+        );
         for (i, (&x, &y)) in scalar_out.iter().zip(tiled_out.iter()).enumerate() {
             assert!(
                 (x - y).abs() <= 1e-5,
@@ -185,10 +216,19 @@ fn grouped_gemm_scalar_vs_tiled_bench() {
 
     eprintln!();
     eprintln!("grouped_gemm bench (median over {ITERS} iters, {WARMUP} warmup)");
-    eprintln!("{:<22} {:<8} {:>12} {:>12} {:>8}", "shape", "path", "median_ns", "bytes", "ratio");
+    eprintln!(
+        "{:<22} {:<8} {:>12} {:>12} {:>8}",
+        "shape", "path", "median_ns", "bytes", "ratio"
+    );
     for shape in SHAPES {
-        let scalar_row = rows.iter().find(|r| r.shape == shape.name && r.path == "scalar").unwrap();
-        let tiled_row  = rows.iter().find(|r| r.shape == shape.name && r.path == "tiled").unwrap();
+        let scalar_row = rows
+            .iter()
+            .find(|r| r.shape == shape.name && r.path == "scalar")
+            .unwrap();
+        let tiled_row = rows
+            .iter()
+            .find(|r| r.shape == shape.name && r.path == "tiled")
+            .unwrap();
         let ratio = scalar_row.median_ns as f64 / tiled_row.median_ns as f64;
         eprintln!(
             "{:<22} {:<8} {:>12} {:>12} {:>7.2}x",
@@ -203,14 +243,20 @@ fn grouped_gemm_scalar_vs_tiled_bench() {
 
     // Optional JSON dump to research/baselines/. Skipped by default
     // so the test stays side-effect-free under `cargo test`.
-    if env::var("OMLX_BENCH_DUMP").map(|v| v == "1").unwrap_or(false) {
+    if env::var("OMLX_BENCH_DUMP")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
         let out_path = resolve_baseline_path();
         let json = render_baseline_json(&rows);
         if let Some(parent) = out_path.parent() {
             fs::create_dir_all(parent).expect("create research/baselines/");
         }
         fs::write(&out_path, json).expect("write baseline JSON");
-        eprintln!("[grouped_gemm_bench] wrote baseline to {}", out_path.display());
+        eprintln!(
+            "[grouped_gemm_bench] wrote baseline to {}",
+            out_path.display()
+        );
     }
 }
 
@@ -219,8 +265,7 @@ fn grouped_gemm_scalar_vs_tiled_bench() {
 fn resolve_baseline_path() -> PathBuf {
     // Walk up from CARGO_MANIFEST_DIR (perf-core/model-kernels) to
     // the repo root, then descend into research/baselines/.
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR")
-        .unwrap_or_else(|_| ".".to_string());
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let mut p = PathBuf::from(manifest_dir);
     p.pop(); // model-kernels
     p.pop(); // perf-core
@@ -255,7 +300,9 @@ fn render_baseline_json(rows: &[Row]) -> String {
             "    {{\"shape\": \"{}\", \"path\": \"{}\", \"median_ns\": {}, \"bytes\": {}}}",
             r.shape, r.path, r.median_ns, r.bytes
         );
-        if i + 1 < rows.len() { s.push(','); }
+        if i + 1 < rows.len() {
+            s.push(',');
+        }
         s.push('\n');
     }
     s.push_str("  ]\n");

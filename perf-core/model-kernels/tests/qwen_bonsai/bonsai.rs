@@ -36,7 +36,15 @@ fn bonsai_ternary_matmul_matches_unpacked_reference() {
 
     // Reference: unpack and run a dense per-row inner-product.
     let mut unpacked = vec![SignedTernary::Zero; values.len()];
-    ternary_unpack(&packed, &scales, &zeros, values.len(), group_size, &mut unpacked).unwrap();
+    ternary_unpack(
+        &packed,
+        &scales,
+        &zeros,
+        values.len(),
+        group_size,
+        &mut unpacked,
+    )
+    .unwrap();
 
     let mut expected = vec![0.0f32; m * n];
     for row in 0..m {
@@ -55,5 +63,8 @@ fn bonsai_ternary_matmul_matches_unpacked_reference() {
     }
     assert_buf_close(&out, &expected, 1e-5, 1e-4);
     // Bonus: every entry must be finite.
-    assert!(out.iter().all(|v| v.is_finite()), "out has a non-finite entry");
+    assert!(
+        out.iter().all(|v| v.is_finite()),
+        "out has a non-finite entry"
+    );
 }

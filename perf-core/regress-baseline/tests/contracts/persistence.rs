@@ -58,10 +58,7 @@ fn record_persists_to_disk_and_reloads() {
     assert!(file.baselines.contains_key("swa_dense_attention_2x2"));
     let reloaded = &file.baselines["swa_dense_attention_2x2"];
     assert_eq!(reloaded.output, outputs);
-    assert_eq!(
-        reloaded.input_hash,
-        BaselineRecorder::hash_inputs(&inputs)
-    );
+    assert_eq!(reloaded.input_hash, BaselineRecorder::hash_inputs(&inputs));
     let r = recorder_b
         .verify("swa_dense_attention_2x2", &inputs, &outputs)
         .expect("verify b");
@@ -73,7 +70,9 @@ fn missing_baseline_file_returns_empty_envelope() {
     let tmp = TempDir::new().expect("tempdir");
     let nested = tmp.path().join("does_not_exist");
     let recorder = BaselineRecorder::new(nested);
-    let file = recorder.load().expect("load of missing dir must return empty envelope");
+    let file = recorder
+        .load()
+        .expect("load of missing dir must return empty envelope");
     assert_eq!(file.schema_version, SCHEMA_VERSION);
     assert!(file.baselines.is_empty());
 }

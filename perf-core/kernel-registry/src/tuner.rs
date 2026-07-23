@@ -39,7 +39,11 @@ impl BoundedTuner {
     /// `max_time_ms` is the upper bound on total wall-clock spent in
     /// `measure` calls.
     pub fn new(warmup: usize, samples: usize, max_time_ms: u64) -> Self {
-        Self { warmup, samples, max_time_ms }
+        Self {
+            warmup,
+            samples,
+            max_time_ms,
+        }
     }
 
     /// Run the tuner. `measure` is called `warmup + samples` times; each
@@ -93,11 +97,7 @@ impl BoundedTuner {
 
         // Build the record. Stats are computed over the *post-warmup*
         // samples so the warmup phase cannot poison median / p95.
-        let samples_vec: Vec<u64> = all
-            .iter()
-            .skip(self.warmup)
-            .map(|m| m.latency_ns)
-            .collect();
+        let samples_vec: Vec<u64> = all.iter().skip(self.warmup).map(|m| m.latency_ns).collect();
         let record = TuningRecord::from_samples(
             candidate.id,
             key,
@@ -120,7 +120,10 @@ fn elapsed_ms(started: Instant) -> u64 {
 /// Re-attach the full measurement vector (warmup + samples) to the
 /// summary record. We can't do this inside `TuningRecord::from_samples`
 /// because that builder only accepts latencies.
-fn record_with_measurements(mut record: TuningRecord, measurements: Vec<Measurement>) -> TuningRecord {
+fn record_with_measurements(
+    mut record: TuningRecord,
+    measurements: Vec<Measurement>,
+) -> TuningRecord {
     record.measurements = measurements;
     record
 }

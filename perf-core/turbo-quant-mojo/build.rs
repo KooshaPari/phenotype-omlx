@@ -32,11 +32,25 @@ fn main() {
 
     if let Some(found) = candidates.iter().find(|p| p.exists()) {
         let parent = found.parent().unwrap();
+        // Normalize prebuilt Mojo artifacts that were emitted with an absolute
+        // temporary install name; otherwise dyld ignores the consumer rpath.
+        #[cfg(target_os = "macos")]
+        {
+            let _ = std::process::Command::new("install_name_tool")
+                .args(["-id", "@rpath/libturbo_quant_mojo.dylib"])
+                .arg(found)
+                .status();
+        }
         println!("cargo:rustc-link-search=native={}", parent.display());
         println!("cargo:rustc-link-lib=dylib=turbo_quant_mojo");
+        // Tests and downstream binaries must resolve the colocated Mojo ABI at runtime.
+        // Keep this explicit and local rather than requiring a machine-global DYLD path.
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", parent.display());
         println!("cargo:info=mojo staticlib found at {}", found.display());
     } else {
-        println!("cargo:warning=libturbo_quant_mojo.dylib not found — turbo-quant-mojo is a no-op stub");
+        println!(
+            "cargo:warning=libturbo_quant_mojo.dylib not found — turbo-quant-mojo is a no-op stub"
+        );
         println!("cargo:warning=build with:  mojo build mojo-src/turbo_quant.mojo --emit shared-lib -o libturbo_quant_mojo.dylib");
         println!("cargo:warning=install:     modular install mojo");
     }

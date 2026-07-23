@@ -16,6 +16,9 @@ pub struct NativeAbiError {
 
 impl NativeAbiError {
     pub fn new(kind: Status, message: impl Into<String>) -> Self {
-        Self { kind, message: message.into() }
+        Self {
+            kind,
+            message: message.into(),
+        }
     }
 }

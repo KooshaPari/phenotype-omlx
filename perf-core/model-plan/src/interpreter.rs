@@ -66,10 +66,7 @@ impl ReferenceInterpreter {
     /// `inputs` maps input tensor **name** to f32 values. Outputs of one
     /// operator are stored under their declared output names and become
     /// available as inputs to dependent operators (matched by name).
-    pub fn run(
-        &self,
-        inputs: &HashMap<String, Vec<f32>>,
-    ) -> InterpreterResult<StepOutputs> {
+    pub fn run(&self, inputs: &HashMap<String, Vec<f32>>) -> InterpreterResult<StepOutputs> {
         let mut arena: HashMap<String, Vec<f32>> = inputs.clone();
         let mut execution_order = Vec::with_capacity(self.order.len());
 
@@ -117,10 +114,12 @@ fn fetch_input<'a>(
     arena: &'a HashMap<String, Vec<f32>>,
     slot: &crate::tensor::TensorRef,
 ) -> InterpreterResult<&'a Vec<f32>> {
-    arena.get(&slot.name).ok_or_else(|| InterpreterError::MissingInput {
-        operator: op.id,
-        name: slot.name.clone(),
-    })
+    arena
+        .get(&slot.name)
+        .ok_or_else(|| InterpreterError::MissingInput {
+            operator: op.id,
+            name: slot.name.clone(),
+        })
 }
 
 fn check_shape(

@@ -112,13 +112,20 @@ fn rwkv7_state_resume_after_first_step_matches_full_trace() {
 
     // Step 0 alone.
     let mut resumed_state = [0.0f32; 4];
-    let first = rwkv7_time_mix(&xs[0], &mut resumed_state, mix_k, mix_v, mix_r, mix_g, decay)
-        .unwrap();
+    let first = rwkv7_time_mix(
+        &xs[0],
+        &mut resumed_state,
+        mix_k,
+        mix_v,
+        mix_r,
+        mix_g,
+        decay,
+    )
+    .unwrap();
     // Continue from step 1.
     let mut resumed_outs = vec![first];
     for x in &xs[1..] {
-        let y =
-            rwkv7_time_mix(x, &mut resumed_state, mix_k, mix_v, mix_r, mix_g, decay).unwrap();
+        let y = rwkv7_time_mix(x, &mut resumed_state, mix_k, mix_v, mix_r, mix_g, decay).unwrap();
         resumed_outs.push(y);
     }
 
