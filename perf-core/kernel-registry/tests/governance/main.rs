@@ -58,6 +58,7 @@ fn make_candidate(
         supports_dtypes: vec![DType::Fp16],
         tunable: true,
         engine_name: None,
+        properties: std::collections::HashMap::new(),
     }
 }
 
