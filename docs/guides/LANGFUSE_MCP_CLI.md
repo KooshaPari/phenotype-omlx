@@ -72,5 +72,7 @@ Same key pair as SDKs / cockpit BFF. Use for traces, prompts, datasets, scores.
 | Offline scores | **Offline Minimax → scores** |
 | Agent R/W | MCP / Skill / CLI above |
 
-Self-host (unlimited vs Hobby): `docs/guides/LANGFUSE_SELF_HOST.md`.
+Cloud primary: `docs/guides/LANGFUSE_CLOUD.md`.
+Org integrations: `docs/guides/LANGFUSE_ORG_INTEGRATIONS.md`.
+Self-host overflow: `docs/guides/LANGFUSE_SELF_HOST.md`.
 Alternatives decision: `docs/research/LANGFUSE_ALTERNATIVES.md`.

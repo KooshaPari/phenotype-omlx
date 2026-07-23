@@ -66,28 +66,38 @@ Overview → **Suite coverage** table shows paired stock/ours vs partial/missing
 (catalog includes `ycbench` as unimplemented gap). Full stock+ours for every suite
 still requires extending `pheno-harness` `stock_vs_ours.SUITES` and re-running.
 
-Agents / MCP / self-host: `docs/guides/LANGFUSE_AGENTS_AND_SELFHOST.md`.
+Agents / MCP / Cloud: `docs/guides/LANGFUSE_AGENTS_AND_SELFHOST.md`.
+Org integrations: `../../docs/guides/LANGFUSE_ORG_INTEGRATIONS.md`.
 
-## Observability (Langfuse — required)
+## Observability (Langfuse Cloud primary)
 
-**Langfuse** is the canonical observability backend for tracing, playground, and
-hosted LLM-as-judge — MIT OSS, self-hostable, full feature control. LangSmith
-has been removed from the operator path; if Portage or Langfuse ingest is buggy,
-fix Portage — there is no LangSmith fallback.
+**Recommendation:** **Langfuse Cloud Hobby** for tracing, dashboards, and hosted
+LLM-as-judge until Hobby caps or a meaningful fork. Self-host is overflow only.
+LangSmith is optional/legacy.
 
 ```bash
 # .env (gitignored)
 OBSERVABILITY_BACKEND=langfuse
 LANGFUSE_PUBLIC_KEY=pk-lf-...
 LANGFUSE_SECRET_KEY=sk-lf-...
-LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # or self-host URL
+LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 MINIMAX_API_KEY=...                               # offline judges + coding-plan
 MINIMAX_JUDGE_MODEL=MiniMax-M3
 ```
 
+One-shot Cloud bootstrap (score configs, dataset, prompt, annotation queue,
+`bench-cockpit-ops` dashboard + widgets, then judges):
+
+```bash
+python3 scripts/evals/setup_langfuse_cloud.py
+python3 scripts/evals/setup_langfuse_cloud.py --status
+```
+
+Guide: `../../docs/guides/LANGFUSE_CLOUD.md`.
+
 ### Hosted Minimax judges (preferred)
 
-1. **UI once:** Langfuse → Settings → LLM Connections → custom provider:
+1. **UI once** (already done on Phenotype Cloud project): Settings → LLM Connections:
    - Provider name: `Minimax`
    - Adapter: `anthropic`
    - Base URL: `https://api.minimax.io/anthropic`
@@ -117,7 +127,7 @@ python3 scripts/evals/run_langfuse_evaluators.py judge --limit 20
 
 - **Langfuse** view: Sync hosted judges · Seed traces+generations · Offline scores.
 
-### Self-host (preferred over freemium Cloud Hobby)
+### Self-host (overflow when Hobby caps)
 
 Unlimited units/retention vs Hobby (50k / 30d / 2 users). Same product images.
 
@@ -127,7 +137,7 @@ bash scripts/langfuse/self-host.sh up     # Apple Container or Podman — never 
 # then LANGFUSE_BASE_URL=http://127.0.0.1:3000 in .env
 ```
 
-Guide: `../../docs/guides/LANGFUSE_SELF_HOST.md` (dual-write / migrate strategies).
+Guide: `../../docs/guides/LANGFUSE_SELF_HOST.md`.
 
 ### MCP · CLI · Agent Skill
 
@@ -144,3 +154,17 @@ Guide: `../../docs/guides/LANGFUSE_MCP_CLI.md`.
 
 Decision record: `../../docs/research/LANGFUSE_ALTERNATIVES.md` — Langfuse stays
 primary; Phoenix/Braintrust only as optional side tools.
+
+## LangSmith (optional legacy)
+
+Put `LANGSMITH_API_KEY` in gitignored `.env` only if still needed for old Harbor
+experiments. Prefer Langfuse for new eval work.
+
+```bash
+# legacy only
+.venv-evals/bin/python scripts/evals/setup_hosted_judges.py
+python3 scripts/evals/run_evaluators.py sync|run|all --limit 20
+bash apps/bench-cockpit/scripts/evals/harbor_langfuse_smoke.sh  # Harbor → Langfuse
+# bash apps/bench-cockpit/scripts/evals/harbor_langsmith_smoke.sh  # legacy LangSmith
+
+```

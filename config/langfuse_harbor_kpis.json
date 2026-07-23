@@ -1,13 +1,18 @@
 {
+  "dataset": "omlx-harbor-tasks",
   "dataset_note": "Harbor tasks sync as Langfuse traces under sessionId=harbor_job_id (not a LangSmith dataset).",
+  "session_model": {
+    "harbor_job_id": "Langfuse sessionId",
+    "harbor_trial": "Langfuse trace (name harbor-trial:<task>)"
+  },
   "session": {
     "id_source": "harbor_job_id",
     "meaning": "One Langfuse session per Harbor job; trials are traces in that session"
   },
   "score_keys": {
     "reward": {
-      "source": "/logs/verifier/reward.txt",
-      "meaning": "Primary Harbor trial score (0|1) posted as Langfuse score name `reward`"
+      "source": "verifier_result.rewards.reward",
+      "meaning": "Primary Harbor trial score (0|1) as Langfuse numeric score `reward`"
     },
     "harbor_error": {
       "source": "trial.exception_info",
@@ -19,8 +24,18 @@
     "harbor_job_id": "Job UUID",
     "harbor_job_name": "Job name",
     "harbor_trial_id": "Trial id",
-    "harbor_task": "Task name"
+    "harbor_task": "Task name",
+    "source": "harbor-langfuse"
   },
+  "env": {
+    "LANGFUSE_PUBLIC_KEY": "required",
+    "LANGFUSE_SECRET_KEY": "required",
+    "LANGFUSE_BASE_URL": "https://us.cloud.langfuse.com (Phenotype default)",
+    "HARBOR_LANGFUSE_ENVIRONMENT": "harbor (default)",
+    "HARBOR_LANGFUSE_FAIL_FAST": "true|false"
+  },
+  "plugin": "langfuse",
+  "package": "packages/harbor-langfuse (portage)",
   "cockpit_cell_kpis": [
     "pass_at_1",
     "gen_ok",
@@ -28,8 +43,9 @@
     "partial_credit",
     "judge_score",
     "format_compliance_rate",
-    "intent_preservation_rate"
-  ],
-  "canonical_backend": "langfuse",
-  "langsmith": "removed_from_operator_path"
+    "intent_preservation_rate",
+    "hallucination_count",
+    "wall_clock_s",
+    "tokens_per_second"
+  ]
 }

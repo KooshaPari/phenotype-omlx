@@ -145,6 +145,9 @@ services:
       - 9090:9000
       - 127.0.0.1:9091:9001
     volumes:
+      # Host bind: needs >~1% free on the Data volume or MinIO returns
+      # XMinioStorageFull (virtiofs Use%=100). Named volumes currently fail
+      # Apple VZ "storage device attachment is invalid" when disk is tight.
       - ${LANGFUSE_DATA_DIR}/minio:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
@@ -200,6 +203,7 @@ services:
 
 # ClickHouse + MinIO stay on LANGFUSE_DATA_DIR binds (DO_NOT_CHOWN / world-writable).
 # Postgres + Redis use named volumes — Apple Container virtiofs rejects entrypoint chown.
+# MinIO cannot use named volumes when Apple VZ rejects attachments under low disk.
 volumes:
   langfuse-redis-data:
   langfuse-postgres-data:

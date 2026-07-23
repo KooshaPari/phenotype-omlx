@@ -1,14 +1,15 @@
 # LLM observability alternatives — why Langfuse wins for Phenotype
 
 **Verdict (2026-07):** Langfuse remains the absolute best default for
-bench-cockpit / Phenotype eval observability. Keep Phoenix and Braintrust as
-*side* tools only if a specific gap appears; do not replace Langfuse as primary.
+bench-cockpit / Phenotype eval observability. **Operate on Cloud Hobby first**;
+self-host only when caps force it or a meaningful fork appears. Keep Phoenix and
+Braintrust as *side* tools only if a specific gap appears.
 
 ## Decision criteria (Phenotype)
 
 | Criterion | Weight | Why it matters here |
 |-----------|--------|---------------------|
-| Self-host MIT / no SaaS meter | Critical | Cloud Hobby caps (50k units, 30d retention, 2 users); agent fleets exceed that |
+| Self-host MIT / no SaaS meter | High (overflow) | Prefer Cloud Hobby until caps; self-host when fleet volume exceeds Hobby |
 | Tracing + datasets + LLM-as-judge + playground | Critical | Parity with LangSmith evaluators we are migrating off |
 | Custom LLM connections (Minimax Anthropic adapter) | Critical | Hosted judges already wired to `Minimax` / `Minimax-M3` |
 | Agent surface (MCP + CLI + Agent Skill) | High | Agents must R/W traces/scores/prompts without leaving Cursor/Claude |
@@ -36,8 +37,8 @@ Open-Techstack, SideGuy). Re-verify pricing before budget commits.
 
 1. **Already integrated:** cockpit BFF, seed+generation, Minimax hosted judges,
    score configs, observation rules, offline judge fallback.
-2. **Self-host removes freemium pain:** unlimited units/users/retention vs Cloud
-   Hobby hard caps — same product features (MIT), ops on Apple Container/Podman.
+2. **Cloud Hobby first, self-host as overflow:** same product features; remove
+   freemium pain only when units/seats/retention actually block work.
 3. **Agent path is native:** MCP (`/api/public/mcp`), `langfuse-cli`, Agent Skill
    (`npx skills add langfuse/skills`) — matches Phenotype agent-first workflow.
 4. **Phoenix** wins only if we standardize purely on OTel collectors and accept
