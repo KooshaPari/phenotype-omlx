@@ -1,16 +1,22 @@
 import type { SuiteCoverageRow } from '../types';
+import { auxRoleLabel } from '../lib/arms';
 
 type Props = {
   rows: SuiteCoverageRow[];
   onJumpToSuite?: (suite: string) => void;
 };
 
-function armsLabel(row: SuiteCoverageRow): string {
+function peersLabel(row: SuiteCoverageRow): string {
   const parts: string[] = [];
   if (row.has_stock) parts.push('stock');
   if (row.has_ours) parts.push('ours');
-  for (const a of row.experiment_arms ?? []) parts.push(a);
   return parts.length ? parts.join(' · ') : '—';
+}
+
+function auxLabel(row: SuiteCoverageRow): string {
+  const arms = row.experiment_arms ?? [];
+  if (!arms.length) return '—';
+  return arms.map(auxRoleLabel).join(' · ');
 }
 
 export function SuiteCoverage({ rows, onJumpToSuite }: Props) {
@@ -24,7 +30,7 @@ export function SuiteCoverage({ rows, onJumpToSuite }: Props) {
       <h3 className="section-title">Suite coverage</h3>
       <p className="muted" style={{ marginTop: 4 }}>
         Catalog {rows.length} · loaded {present} · stock+ours paired {stockOurs} · gaps {gaps.length}.
-        V5 ablation is stock/ours; extended matrices land as experiment arms (e.g. minimax-m3).
+        Peers are stock/ours only. Aux columns are judge / evaluator / distiller matrices — not competing models.
       </p>
       <div className="table-wrap" style={{ marginTop: 12, overflowX: 'auto' }}>
         <table className="data-table">
@@ -32,7 +38,8 @@ export function SuiteCoverage({ rows, onJumpToSuite }: Props) {
             <tr>
               <th>Suite</th>
               <th>Status</th>
-              <th>Arms</th>
+              <th>Peers</th>
+              <th>Aux (judge/eval)</th>
               <th>Cells</th>
             </tr>
           </thead>
@@ -48,7 +55,8 @@ export function SuiteCoverage({ rows, onJumpToSuite }: Props) {
               >
                 <td className="mono">{r.suite}</td>
                 <td>{r.present ? (r.has_stock && r.has_ours ? 'paired' : 'partial') : 'missing'}</td>
-                <td className="mono faint">{armsLabel(r)}</td>
+                <td className="mono faint">{peersLabel(r)}</td>
+                <td className="mono faint">{auxLabel(r)}</td>
                 <td>{r.n_cells}</td>
               </tr>
             ))}

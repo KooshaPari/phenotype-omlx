@@ -7,7 +7,7 @@ DEPRECATED for operator acceptance — prefer Portage/Harbor NIAH API smoke:
     bash scripts/evals/run_via_harbor.sh --niah
 
 Keep this script for TurboQuant+ KV-mode matrices on Metal hosts only.
-New operator surfaces belong under ``evals/harbor/`` + LangSmith plugin.
+New operator surfaces belong under ``evals/harbor/`` + ``harbor-langfuse``.
 
 Measures retrieval accuracy + tokens/sec + RSS memory for 4 KV-cache modes:
   - baseline_fp16       : vanilla mlx_lm KVCache (full precision)

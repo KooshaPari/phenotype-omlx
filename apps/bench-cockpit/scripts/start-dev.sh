@@ -33,11 +33,14 @@ elif [[ "$DATA_PATH" != /* ]]; then
   DATA_PATH="$ROOT/$DATA_PATH"
 fi
 
-# Merge extended single-arm matrices (HLE, PinchBench, VendBench, …) as experiment arms.
-EXTRA_PATH="${BENCH_EXTRA_DATA:-}"
-if [[ -z "$EXTRA_PATH" && -f "$DEFAULT_MINIMAX_MATRIX" ]]; then
+# Optional aux matrices (judge / evaluator / distiller) — not peer models.
+# Unset BENCH_EXTRA_DATA → auto-attach minimax matrix when present.
+# BENCH_EXTRA_DATA="" → no extras. BENCH_EXTRA_DATA=/path → that file only.
+EXTRA_PATH="${BENCH_EXTRA_DATA-}"
+if [[ -z "${BENCH_EXTRA_DATA+x}" && -f "$DEFAULT_MINIMAX_MATRIX" ]]; then
   EXTRA_PATH="$DEFAULT_MINIMAX_MATRIX"
 fi
+
 
 (cd server && go build -o "$RUN_DIR/bench-cockpit-server" .)
 [[ -d dist ]] || bun run build

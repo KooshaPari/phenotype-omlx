@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Seed Langfuse traces/generations from V5 JSON and run Minimax judges.
 
-Preferred observability backend (OSS / self-hostable). LangSmith remains optional.
+Canonical observability backend (OSS / self-hostable). LangSmith removed.
 
   OBSERVABILITY_BACKEND=langfuse
   LANGFUSE_PUBLIC_KEY=pk-...

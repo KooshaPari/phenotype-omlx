@@ -3,8 +3,8 @@
 Reads ``config/smoke_models.json``. Enforces Qwen3.5 for acceptance paths.
 Qwen2.5 is quarantined behind ``OMLX_ALLOW_LEGACY_QWEN25=1``.
 
-Mature evals belong in **Portage/Harbor** + ``harbor-langsmith``, not ad-hoc
-scripts. Prefer ``scripts/evals/run_via_harbor.sh``.
+Mature evals belong in **Portage/Harbor** + ``harbor-langfuse``, not ad-hoc
+scripts or LangSmith. Langfuse is the canonical observability backend. Prefer ``scripts/evals/run_via_harbor.sh``.
 """
 from __future__ import annotations
 

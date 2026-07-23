@@ -18,7 +18,8 @@
   "portage": {
     "require_portage_root": true,
     "harbor_env": "apple-container",
-    "langsmith_plugin": "langsmith",
+    "langfuse_plugin": "langfuse",
+    "observability_backend": "langfuse",
     "hello_world_task": "examples/tasks/hello-world",
     "omlx_policy_task": "evals/harbor/tasks/omlx-qwen35-policy",
     "omlx_niah_task": "evals/harbor/tasks/omlx-niah-api-smoke",
