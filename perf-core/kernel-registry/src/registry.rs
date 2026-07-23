@@ -41,6 +41,7 @@ pub struct DeviceCaps {
 }
 
 impl DeviceCaps {
+    /// Create a new device capability set from the given capabilities.
     pub fn new(capabilities: Vec<Capability>) -> Self {
         Self { capabilities }
     }
@@ -54,6 +55,7 @@ pub struct KernelRegistry {
 }
 
 impl KernelRegistry {
+    /// Create an empty registry with no candidates or tuning records.
     pub fn new() -> Self {
         Self::default()
     }

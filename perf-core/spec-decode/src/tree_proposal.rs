@@ -164,11 +164,7 @@ impl DraftTree {
     }
 
     fn count_nodes(node: &DraftNode) -> usize {
-        1 + node
-            .children
-            .iter()
-            .map(|c| Self::count_nodes(c))
-            .sum::<usize>()
+        1 + node.children.iter().map(Self::count_nodes).sum::<usize>()
     }
 
     /// Remove every child whose probability is below `threshold`.

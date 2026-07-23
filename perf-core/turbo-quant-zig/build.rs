@@ -32,9 +32,9 @@ fn main() {
         .arg("build-obj")
         .arg("-O")
         .arg("ReleaseFast")
-        .arg(format!("--name"))
+        .arg("--name")
         .arg("turbo_quant_zig")
-        .arg(format!("-femit-bin={}", lib_path.display()))
+        .arg(format!("-femit-bin={}", obj_path.display()))
         .arg(&zig_file)
         .status()
         .unwrap_or_else(|e| panic!("turbo-quant-zig: failed to invoke zig build-obj: {e}"));
@@ -47,10 +47,7 @@ fn main() {
     }
 
     println!("cargo:rustc-link-arg={}", obj_path.display());
-    println!(
-        "cargo:info=linking Zig object at {}",
-        obj_path.display()
-    );
+    println!("cargo:info=linking Zig object at {}", obj_path.display());
 }
 
 fn which(name: &str) -> Option<PathBuf> {

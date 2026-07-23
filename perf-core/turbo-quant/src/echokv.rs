@@ -45,6 +45,7 @@ pub struct EchoKVCache {
 }
 
 impl EchoKVCache {
+    /// Create a new cache manager with the given configuration.
     pub fn new(config: EchoKVConfig) -> Self {
         Self {
             config,

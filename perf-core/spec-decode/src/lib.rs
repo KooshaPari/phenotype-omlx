@@ -39,18 +39,13 @@ pub use tree_proposal::{
 };
 
 /// Proposal strategy — selects which draft proposal path the engine uses.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum ProposalMode {
     /// Legacy Medusa multi-head proposal.
+    #[default]
     Medusa,
     /// EAGLE-3 / P-EAGLE tree-based proposal.
     Eagle3(tree_proposal::ParallelTreeConfig),
-}
-
-impl Default for ProposalMode {
-    fn default() -> Self {
-        ProposalMode::Medusa
-    }
 }
 pub use verify::{verify as verify_draft, VerifyResult};
 

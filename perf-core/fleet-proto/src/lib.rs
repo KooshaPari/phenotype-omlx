@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Hardware and software capabilities advertised by a fleet node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeCapabilities {
     pub backends: Vec<String>, // ["mlx", "vllm", "sglang", "tensorrt", "llamacpp", "metal"]
@@ -17,6 +18,7 @@ pub struct NodeCapabilities {
     pub metal: bool,
 }
 
+/// Periodic heartbeat message sent by each fleet node to advertise liveness and load.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Heartbeat {
     pub node_id: String,
@@ -27,9 +29,13 @@ pub struct Heartbeat {
     pub inflight: usize,
 }
 
+/// Trait for fleet membership management — announce, discover, and evict nodes.
 pub trait Fleet: Send + Sync {
+    /// Register or update a node's heartbeat in the fleet directory.
     fn announce(&self, hb: Heartbeat) -> Result<(), String>;
+    /// Return all non-stale peer heartbeats known to this fleet instance.
     fn peers(&self) -> Vec<Heartbeat>;
+    /// Remove a node from the fleet directory by its identifier.
     fn remove(&self, node_id: &str) -> Result<(), String>;
 }
 
@@ -41,6 +47,7 @@ pub struct InMemoryFleet {
 }
 
 impl InMemoryFleet {
+    /// Create a new in-memory fleet registry with the given TTL in milliseconds.
     pub fn new(ttl_ms: u64) -> Self {
         Self {
             nodes: parking_lot::RwLock::new(BTreeMap::new()),

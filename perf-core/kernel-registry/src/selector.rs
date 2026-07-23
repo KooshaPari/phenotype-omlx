@@ -209,6 +209,7 @@ impl RejectionRecord {
 
 /// The outcome of a single [`crate::KernelRegistry::select_with_caps`] call.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SelectionDecision {
     Chosen {
         candidate: Candidate,
