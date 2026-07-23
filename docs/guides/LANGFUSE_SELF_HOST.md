@@ -1,9 +1,8 @@
 # Langfuse self-host (Apple Container / Podman)
 
-Self-host runs the **same codebase** as Langfuse Cloud with **unlimited** units,
-users, and retention under the MIT core. Use this as **primary** when Hobby caps
-(50k units / 30d / 2 users) or freemium friction appear. Cloud stays an optional
-mirror for sharing / backup.
+**Not the default.** Phenotype uses [Langfuse Cloud Hobby](./LANGFUSE_CLOUD.md)
+until caps bite or a meaningful fork appears. Self-host is the overflow / lab
+path: same codebase as Cloud, unlimited units/users/retention under the MIT core.
 
 **Never Docker.** Runtime order:
 
@@ -145,6 +144,9 @@ See `docs/guides/LANGFUSE_MCP_CLI.md`.
   data/log dirs. Host native port is `18123` (avoids `:9000` conflicts).
 - Redis: named volume `langfuse-redis-data` (virtiofs bind + entrypoint
   `chown` → EPERM). Healthcheck uses `REDISCLI_AUTH`.
+- Disk: host Data volume must keep **>~1% free** (~10 GiB on a 1 TB disk) or
+  MinIO returns `XMinioStorageFull` and ingestion/seed fail even with an empty
+  bucket (virtiofs Use%=100). Free space before `self-host.sh up` / seed.
 - Smoke: `up` waits for `http://127.0.0.1:3000/api/public/health` (or
   `bash scripts/langfuse/self-host.sh smoke`). Verified on Apple Container
   with host PG + IP inject + 4 GiB web.

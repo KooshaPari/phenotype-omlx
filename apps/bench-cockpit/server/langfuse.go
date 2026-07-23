@@ -26,7 +26,7 @@ func langfuseBase() string {
 			return strings.TrimRight(v, "/")
 		}
 	}
-	return "https://cloud.langfuse.com"
+	return "https://us.cloud.langfuse.com"
 }
 
 func observabilityBackend() string {

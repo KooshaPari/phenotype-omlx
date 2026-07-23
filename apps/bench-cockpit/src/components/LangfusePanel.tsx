@@ -104,9 +104,9 @@ export function LangfusePanel() {
       <div className="ds" style={{ marginBottom: 16 }}>
         <h3>Langfuse (primary)</h3>
         <p className="muted" style={{ marginTop: 4 }}>
-          OSS observability — traces, playground, hosted LLM-as-judge. Prefer self-host (Apple
-          Container / Podman; never Docker) for unlimited data vs Cloud Hobby. Agents: MCP / CLI /
-          Skill. LangSmith is optional legacy only.
+          Cloud Hobby by default — traces, custom dashboards (bench-cockpit-ops), hosted
+          LLM-as-judge, datasets, MCP/CLI/Skill. Self-host only when Hobby caps bite. LangSmith is
+          optional legacy.
         </p>
         <div className="kv-grid" style={{ marginTop: 12 }}>
           <div className="kv">
@@ -173,10 +173,20 @@ export function LangfusePanel() {
           <a className="gt-btn" href={dash} target="_blank" rel="noreferrer">
             Open Langfuse
           </a>
+          <a
+            className="gt-btn"
+            href={dash}
+            target="_blank"
+            rel="noreferrer"
+            title="Cloud UI → Dashboards → bench-cockpit-ops"
+          >
+            Dashboards
+          </a>
         </div>
         <p className="faint mono" style={{ marginTop: 10 }}>
-          MCP/CLI: scripts/langfuse/mcp-auth-header.sh · self-host:
-          scripts/langfuse/self-host.sh · skill: npx skills add langfuse/skills --skill langfuse
+          bootstrap: scripts/evals/setup_langfuse_cloud.py · MCP:
+          scripts/langfuse/print-cursor-mcp-snippet.sh · skill: npx skills add langfuse/skills
+          --skill langfuse
         </p>
 
         {conns.length > 0 && (

@@ -1,16 +1,21 @@
-# Eval ownership — Portage / LangSmith / omlx
+# Eval ownership — Portage / Langfuse / omlx
 
-> **Rule:** mature evals run through **portage-TEMP (Harbor)** + optional
-> **harbor-langsmith**. Ad-hoc `scripts/*.py` are thin adapters or legacy
-> instruments — not the operator SSOT.
+> **Rule:** mature evals run through **portage (Harbor)** + **harbor-langfuse**.
+> LangSmith (`harbor-langsmith`) is optional legacy. Ad-hoc `scripts/*.py` are
+> thin adapters — not the operator SSOT.
+
+See also: [`LANGFUSE_CLOUD.md`](./LANGFUSE_CLOUD.md),
+[`LANGFUSE_ORG_INTEGRATIONS.md`](./LANGFUSE_ORG_INTEGRATIONS.md),
+KPI SSOT: `config/langfuse_harbor_kpis.json`.
 
 ## Layers
 
 | Layer | Owns | Does not own |
 |-------|------|----------------|
 | `config/smoke_models.json` + `omlx_research.smoke_models` | Qwen3.5 model ids for smoke / FR | Long-running agent trials |
-| **portage-TEMP** (`PORTAGE_ROOT`) | Harbor tasks, datasets, sandboxes, RL rollouts | Hardcoded MLX HF paths in Python scripts |
-| **harbor-langsmith** plugin | Experiment/dataset sync to LangSmith | Local-only EvaluationReport JSON |
+| **portage** (`PORTAGE_ROOT`) | Harbor tasks, datasets, sandboxes, RL rollouts | Hardcoded MLX HF paths in Python scripts |
+| **harbor-langfuse** plugin | Job→session, trial→trace, reward→score on Langfuse Cloud | Local-only EvaluationReport JSON |
+| **harbor-langsmith** plugin | Legacy LangSmith mirror | New Phenotype eval work |
 | **pheno-harness** `bench/` | EvaluationReport contracts, RLVR verifiers | Harbor fork sources |
 | **bench-cockpit** | Operator UI + `POST /api/eval/run` → Portage bridge | Inventing new eval frameworks |
 
@@ -19,33 +24,37 @@
 ```bash
 export PORTAGE_ROOT=/path/to/portage/worktree   # required — no hardcoded default
 export HARBOR_ENV=apple-container
+export LANGFUSE_PUBLIC_KEY=pk-lf-...
+export LANGFUSE_SECRET_KEY=sk-lf-...
+export LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 
 # Harbor hello-world (oracle)
 bash scripts/evals/run_via_harbor.sh
 
-# + LangSmith plugin
+# + Langfuse plugin (primary)
+bash scripts/evals/run_via_harbor.sh --langfuse
+
+# Cockpit smoke helper
+bash apps/bench-cockpit/scripts/evals/harbor_langfuse_smoke.sh
+
+# Legacy LangSmith mirror (optional)
 export LANGSMITH_API_KEY=...
 bash scripts/evals/run_via_harbor.sh --langsmith
 
 # OMLX Qwen3.5 policy Harbor task
-bash scripts/evals/run_via_harbor.sh --policy
+bash scripts/evals/run_via_harbor.sh --policy --langfuse
 
 # NIAH via OpenAI-compatible omlx/MLX server (Qwen3.5 SSOT)
-# OPENAI_BASE_URL = self-hosted chat-completions base (…/v1). Pick any free port.
-# Example (self-host ownership — do not steal a port already serving another app):
-#   mlx_lm server --model mlx-community/Qwen3.5-0.8B-OptiQ-4bit --host 0.0.0.0 --port 8766
-#   export OPENAI_BASE_URL=http://127.0.0.1:8766/v1                    # host dry-run
-#   export OPENAI_BASE_URL=http://$(ipconfig getifaddr en0):8766/v1    # Harbor→host (LAN)
-# Env is injected via task [environment.env]/[solution.env] and run_via_harbor --ae.
 export OPENAI_BASE_URL=http://127.0.0.1:8766/v1
-bash scripts/evals/run_via_harbor.sh --niah
+bash scripts/evals/run_via_harbor.sh --niah --langfuse
 
-# TurboQuant SSOT gate (Metal TurboQuant+ stays host-side ready check 12)
-bash scripts/evals/run_via_harbor.sh --turbo
+# TurboQuant SSOT gate
+bash scripts/evals/run_via_harbor.sh --turbo --langfuse
 ```
 
-JobConfig templates (documentation / future `harbor run -c`):  
-`evals/harbor/jobs/niah-qwen35.yaml`, `evals/harbor/jobs/turboquant-ssot.yaml`.
+Cockpit BFF: `POST /api/eval/run` with `{"mode":"hello_world"}` auto-attaches
+`--plugin langfuse` when `OBSERVABILITY_BACKEND=langfuse`. Explicit:
+`{"plugin_langfuse":true}`.
 
 ## Harbor tasks in this repo
 
@@ -58,31 +67,13 @@ JobConfig templates (documentation / future `harbor run -c`):
 ## Offline quality gates (no MLX)
 
 ```bash
-# L1 judge vs EM — already under pheno-harness/bench/results/judge-vs-em/
-# L2 contamination / synthetic trust:
 python3 scripts/evals/contamination_scan.py
-# → research/contamination/qwen35-08b-report.{json,md}
-# → mirrors to pheno-harness/bench/results/contamination/qwen35-08b/
-
-# L6 RLVR-AF Phase-1 hard-verifier smoke (wraps pheno-harness bench.rlvr_af):
 python3 scripts/evals/rlvr_af_smoke.py
-# → research/rlvr_af/qwen35-08b-smoke.{json,md}
 ```
-
-UNTRUSTED_SYNTHETIC means stock-vs-ours V5 cannot ground quality or RLVR soft rewards.
-
-## Qwen2.5 quarantine
-
-- Defaults **must** be Qwen3.5 (FR-5 / org directive).
-- Legacy id only with `OMLX_ALLOW_LEGACY_QWEN25=1` (local debug, never FR).
-- Pre-retarget baselines: `.archive/qwen25-baselines/`.
 
 ## Deprecation
 
-Prefer Harbor JobConfig / tasks over growing `scripts/niah_*.py`,
-`perf_turboquant.py`, and dispatch stubs. Those scripts now read
-`smoke_models`. Live NIAH for operators should use
-`scripts/evals/run_via_harbor.sh --niah` (OpenAI-compatible endpoint).
-Full Metal TurboQuant+ remains host `phenotype_omlx_ready.py` check 12;
-Harbor `--turbo` only gates SSOT policy until a Metal-capable Harbor
-environment exists.
+- Prefer Langfuse Cloud until Hobby caps; self-host overflow only.
+- Do not add new LangSmith-only operator paths.
+- Legacy guide name `EVAL_PORTAGE_LANGSMITH.md` redirects here conceptually —
+  this file is the SSOT.

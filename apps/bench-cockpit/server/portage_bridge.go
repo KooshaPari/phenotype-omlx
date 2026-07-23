@@ -25,7 +25,7 @@ func portageRoot() (string, error) {
 	if v == "" {
 		return "", fmt.Errorf(
 			"PORTAGE_ROOT required (portage-TEMP / Harbor checkout); " +
-				"see docs/guides/EVAL_PORTAGE_LANGSMITH.md",
+				"see docs/guides/EVAL_PORTAGE_LANGSMITH.md (Langfuse primary)",
 		)
 	}
 	info, err := os.Stat(v)
@@ -113,7 +113,8 @@ func normalizeJobEnvironment(job map[string]interface{}) error {
 // portageRunHandler starts a Harbor job.
 // Body modes:
 //  1. {"mode":"hello_world"} or empty → oracle hello-world smoke
-//  2. {"mode":"path","task_path":"...","agent":"oracle","plugin_langsmith":true}
+//  2. {"mode":"path","task_path":"...","agent":"oracle","plugin_langfuse":true}
+	//     (plugin_langsmith remains as legacy optional mirror)
 //  3. full JobConfig JSON with tasks[] (written to -c)
 // Degrades to 503 when the binary is missing; 400 when PORTAGE_ROOT unset.
 func portageRunHandler(w http.ResponseWriter, r *http.Request) {
@@ -174,9 +175,17 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 	_, hasTasks := stub["tasks"]
 	useConfig := hasTasks && mode != "path" && mode != "hello_world"
 
+	pluginLF := false
 	pluginLS := false
+	if v, ok := stub["plugin_langfuse"].(bool); ok {
+		pluginLF = v
+	}
 	if v, ok := stub["plugin_langsmith"].(bool); ok {
 		pluginLS = v
+	}
+	// Default observability: Langfuse when backend is langfuse and caller omitted flags.
+	if !pluginLF && !pluginLS && strings.EqualFold(strings.TrimSpace(os.Getenv("OBSERVABILITY_BACKEND")), "langfuse") {
+		pluginLF = true
 	}
 
 	if useConfig {
@@ -210,6 +219,9 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 			nConc = fmt.Sprintf("%d", int(v))
 		}
 		args = append(parts[1:], "run", "-e", envName, "-p", taskPath, "-a", agent, "-n", nConc, "-o", dir, "-y")
+		if pluginLF {
+			args = append(args, "--plugin", "langfuse")
+		}
 		if pluginLS {
 			args = append(args, "--plugin", "langsmith")
 		}
@@ -218,9 +230,19 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.CommandContext(ctx, parts[0], args...)
 	cmd.Dir = root
 	cmd.Env = portageCommandEnvironment()
-	pluginSrc := filepath.Join(root, "packages", "harbor-langsmith", "src")
-	if _, err := os.Stat(pluginSrc); err == nil {
-		cmd.Env = append(cmd.Env, "PYTHONPATH="+pluginSrc+string(os.PathListSeparator)+os.Getenv("PYTHONPATH"))
+	var pyParts []string
+	for _, pkg := range []string{"harbor-langfuse", "harbor-langsmith"} {
+		pluginSrc := filepath.Join(root, "packages", pkg, "src")
+		if _, err := os.Stat(pluginSrc); err == nil {
+			pyParts = append(pyParts, pluginSrc)
+		}
+	}
+	if len(pyParts) > 0 {
+		joined := strings.Join(pyParts, string(os.PathListSeparator))
+		if prev := os.Getenv("PYTHONPATH"); prev != "" {
+			joined = joined + string(os.PathListSeparator) + prev
+		}
+		cmd.Env = append(cmd.Env, "PYTHONPATH="+joined)
 	}
 
 	out, err := cmd.CombinedOutput()
@@ -247,7 +269,7 @@ func portageRunHandler(w http.ResponseWriter, r *http.Request) {
 			"stdout":  truncate(string(out), 4000),
 			"run_id":  runID,
 			"job_dir": dir,
-			"hint":    "POST {\"mode\":\"hello_world\"} or {\"mode\":\"path\",\"task_path\":\"...\",\"agent\":\"oracle\",\"plugin_langsmith\":true}",
+			"hint":    "POST {\"mode\":\"hello_world\"} or {\"mode\":\"path\",\"task_path\":\"...\",\"agent\":\"oracle\",\"plugin_langfuse\":true}",
 		})
 		return
 	}
