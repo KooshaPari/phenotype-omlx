@@ -70,7 +70,10 @@ LANGFUSE_SECRET_KEY=...
 LANGFUSE_BASE_URL=https://us.cloud.langfuse.com
 
 python3 scripts/evals/setup_langfuse_cloud.py
-python3 scripts/evals/run_langfuse_evaluators.py sync|seed|judge
+python3 scripts/evals/setup_langfuse_judges.py      # hosted Minimax judges
+# Historical V5 cells (no new stock_vs_ours trials) → traces → live scores
+python3 scripts/evals/run_langfuse_evaluators.py all --limit 5
 ```
 
-Dashboard: Cloud → **bench-cockpit-ops**.
+Dashboard: Cloud → **bench-cockpit-ops**. `all` fails loudly if Minimax keys are missing
+(no silent `judge_score=0`).
