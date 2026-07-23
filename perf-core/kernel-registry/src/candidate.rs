@@ -6,6 +6,8 @@
 //! and `min_shape` / `max_shape` to filter eligibility and falls back to
 //! tunability to decide whether evidence can be promoted.
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::compat::DType;
@@ -161,6 +163,12 @@ pub struct Candidate {
     /// distinction.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub engine_name: Option<String>,
+    /// Extensible key-value metadata attached to a candidate. Selectors
+    /// and policy logic can consult arbitrary properties without changing
+    /// the core struct. For example, `"dynamic_eviction" => "true"` marks
+    /// candidates that integrate with EchoKV cache management.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub properties: HashMap<String, String>,
 }
 
 impl Candidate {
@@ -191,6 +199,7 @@ impl Candidate {
             supports_dtypes,
             tunable,
             engine_name: None,
+            properties: HashMap::new(),
         }
     }
 
@@ -228,6 +237,7 @@ impl Candidate {
             supports_dtypes,
             tunable,
             engine_name,
+            properties: HashMap::new(),
         }
     }
 
@@ -256,5 +266,19 @@ impl Candidate {
     /// `true` when `dtype` is in `supports_dtypes`.
     pub fn supports_dtype(&self, dtype: DType) -> bool {
         self.supports_dtypes.contains(&dtype)
+    }
+
+    /// Attach a key-value property to this candidate (builder pattern).
+    pub fn with_property(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.properties.insert(key.into(), value.into());
+        self
+    }
+
+    /// `true` when property `key` exists and equals `"true"`.
+    pub fn has_property(&self, key: &str) -> bool {
+        self.properties
+            .get(key)
+            .map(|v| v == "true")
+            .unwrap_or(false)
     }
 }
