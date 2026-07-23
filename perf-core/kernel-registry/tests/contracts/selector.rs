@@ -169,6 +169,7 @@ fn selector_falls_back_to_reference_when_no_tuning_records() {
         supports_dtypes: vec![DType::Fp16],
         tunable: false,
         engine_name: None,
+        properties: std::collections::HashMap::new(),
     };
     let id_ref = reference.id;
     let id_fast = fast.id;
@@ -209,6 +210,7 @@ fn selector_returns_rejected_with_human_explanation_when_no_candidate_matches() 
         supports_dtypes: vec![DType::Bf16], // does not support Fp16
         tunable: true,
         engine_name: None,
+        properties: std::collections::HashMap::new(),
     };
     reg.register_candidate(cand);
 

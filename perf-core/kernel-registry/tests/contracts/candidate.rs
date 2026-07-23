@@ -66,6 +66,7 @@ fn candidate_shape_range_filter_rejects_out_of_range() {
         supports_dtypes: vec![DType::Fp16],
         tunable: true,
         engine_name: None,
+        properties: std::collections::HashMap::new(),
     };
     let id = cand.id;
     reg.register_candidate(cand);
