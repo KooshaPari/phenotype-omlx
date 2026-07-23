@@ -10,6 +10,7 @@ use crate::state::EngineState;
 use crate::tree_proposal;
 use crate::verify::{verify as verify_draft, verify_linear, verify_tree, VerifyResult};
 use crate::{AcceptedToken, DraftMode, ProposalMode, SpecDecodeConfig, SpecError, StepResult};
+use turbo_quant::echokv::{EchoKVCache, EchoKVConfig};
 
 /// Cancellation token: returns `true` when the caller wants to abort.
 pub type CancelFn = dyn Fn() -> bool;
@@ -52,6 +53,10 @@ pub struct SpecDecodeEngine {
     pub proposal_mode: ProposalMode,
     /// Observable engine state — KV length, drafted/accepted counters, history.
     state: EngineState,
+    /// EchoKV cache for adaptive eviction during decode.
+    kv_cache: Option<EchoKVCache>,
+    /// Configuration for the EchoKV cache.
+    kv_config: EchoKVConfig,
 }
 
 impl SpecDecodeEngine {
@@ -60,6 +65,7 @@ impl SpecDecodeEngine {
         target: Box<dyn TargetBackend>,
         draft: Option<Box<dyn DraftBackend>>,
     ) -> Self {
+        let kv_config = EchoKVConfig::default();
         Self {
             config,
             target,
@@ -68,11 +74,22 @@ impl SpecDecodeEngine {
             seen_tokens: Vec::new(),
             proposal_mode: ProposalMode::default(),
             state: EngineState::new(),
+            kv_cache: None,
+            kv_config,
         }
     }
 
     pub fn with_proposal_mode(mut self, mode: ProposalMode) -> Self {
         self.proposal_mode = mode;
+        self
+    }
+
+    pub fn with_echokv(mut self, max_cache_size: usize) -> Self {
+        self.kv_config = EchoKVConfig {
+            max_cache_size,
+            ..self.kv_config
+        };
+        self.kv_cache = Some(EchoKVCache::new(self.kv_config.clone()));
         self
     }
 
@@ -359,6 +376,21 @@ impl SpecDecodeEngine {
 
         let drafted = candidates.first().map(|c| c.tokens.len()).unwrap_or(0);
 
+        // Evict low-scoring KV entries before verification.
+        if let Some(ref mut cache) = self.kv_cache {
+            for &tok in &self.seen_tokens {
+                cache.insert(tok as usize, 1.0);
+            }
+            let evicted = cache.evict();
+            if !evicted.is_empty() {
+                tracing::debug!(
+                    evicted_count = evicted.len(),
+                    remaining = cache.len(),
+                    "echokv: evicted entries before verification"
+                );
+            }
+        }
+
         let accepted = verify_tree(&*self.target, prefix, &candidates).await?;
 
         let mut accepted_tokens: Vec<AcceptedToken> = Vec::new();
@@ -527,6 +559,34 @@ mod tests {
             BackendInfo {
                 engine: "test".into(),
                 model_id: "constant".into(),
+                device: "cpu".into(),
+                dtype: "f32".into(),
+                kv_cache_type: None,
+            }
+        }
+    }
+
+    struct AcceptAllTarget;
+    #[async_trait]
+    impl TargetBackend for AcceptAllTarget {
+        async fn forward(&self, _: &[u32]) -> Result<TargetOutput, String> {
+            Ok(TargetOutput {
+                logits: vec![0.0; 64],
+                hidden: None,
+                finished: false,
+            })
+        }
+        async fn verify_tree(
+            &self,
+            _: &[u32],
+            candidates: &[Vec<u32>],
+        ) -> Result<Vec<bool>, String> {
+            Ok(vec![true; candidates.len()])
+        }
+        fn info(&self) -> BackendInfo {
+            BackendInfo {
+                engine: "test".into(),
+                model_id: "accept-all".into(),
                 device: "cpu".into(),
                 dtype: "f32".into(),
                 kv_cache_type: None,
@@ -806,5 +866,21 @@ mod tests {
         let result = e.step_eagle3(&[1, 2], vec![]).await.unwrap();
         assert!(result.accepted.is_empty());
         assert_eq!(result.drafted, 0);
+    }
+
+    #[test]
+    fn engine_with_echokv_evicts_on_step() {
+        use tree_proposal::ParallelTreeConfig;
+        let config = ParallelTreeConfig::default();
+        let engine = SpecDecodeEngine::new(
+            SpecDecodeConfig::default(),
+            Box::new(AcceptAllTarget),
+            None,
+        )
+        .with_proposal_mode(ProposalMode::Eagle3(config))
+        .with_echokv(16);
+
+        assert!(engine.kv_cache.is_some());
+        assert_eq!(engine.kv_cache.as_ref().unwrap().len(), 0);
     }
 }
