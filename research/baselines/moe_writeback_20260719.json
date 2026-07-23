@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "kind": "moe_writeback_bench",
+  "generated_at": "2026-07-19T00:00:00Z",
+  "description": "Microbenchmark envelope for the turn-12 dispatch-aware DRAM writeback pipeline (stage_expert_outputs + coalesced_writeback) at three production-realistic MoE shapes. Median over WB_ITERS=5 timed runs after WB_WARMUP=2 warmup calls, measured with std::time::Instant. Seed baseline; the bench harness rewrites it when OMLX_BENCH_DUMP=1.",
+  "iters": 5,
+  "warmup": 2,
+  "shapes": ["moe_writeback_small", "moe_writeback_medium", "moe_writeback_large"],
+  "paths": ["staged_writeback"],
+  "rows": [
+    {"shape": "moe_writeback_small", "path": "staged_writeback", "median_ns": 19166, "bytes": 32768},
+    {"shape": "moe_writeback_medium", "path": "staged_writeback", "median_ns": 164417, "bytes": 524288},
+    {"shape": "moe_writeback_large", "path": "staged_writeback", "median_ns": 7721334, "bytes": 4194304}
+  ]
+}

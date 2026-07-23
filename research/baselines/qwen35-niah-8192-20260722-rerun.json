@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "kind": "niah_live_run",
+  "evidence_label": "live_verified",
+  "reported": true,
+  "synthetic": false,
+  "model": "Qwen/Qwen3.5-0.8B",
+  "backend": "mlx_lm_inprocess",
+  "architecture_caveat": "Qwen3.5 may mix linear + full attention. TurboKV metrics (packed_state, resident vs fp16 baseline) apply only to full-attention layers where TurboKVCache is installed.",
+  "kv_modes_applicable": false,
+  "packed_state_any": false,
+  "byte_reduction_any": false,
+  "compression_any_effective": false,
+  "seed": 42,
+  "lengths": [
+    8192
+  ],
+  "modes": [
+    "baseline_fp16"
+  ],
+  "results": [
+    {
+      "mode": "baseline_fp16",
+      "target_len": 8192,
+      "actual_len": 8192,
+      "prefill_ms": 10353.573500000493,
+      "decode_ms": 3182.076875000348,
+      "decode_tok_per_sec": 0.3142601638120043,
+      "rss_mb_before": 576.28125,
+      "rss_mb_after": 190.078125,
+      "needle": "the secret code is 214-125-alpha",
+      "answer": "\n</think>\n\n214-125-alpha.<|endoftext|><|im_start|>\n\n<think>\n\n</think>\n\n214-125-alpha.<|endoftext|><|im_start|>\n\n<think>\n\n</think>\n\nThe critical fact mentioned in the passage is: \"the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the the",
+      "exact_match": true,
+      "partial_match": true,
+      "contains_secret": true,
+      "error": "",
+      "turbo_layers": 0,
+      "attention_layers": 6,
+      "compressed_layers": 0,
+      "packed_state_present": false,
+      "kv_raw_bytes": 0,
+      "kv_packed_bytes": 0,
+      "kv_inner_fp16_bytes": 0,
+      "kv_turbo_resident_bytes": 0,
+      "kv_fp16_baseline_bytes": 206487552,
+      "byte_reduction_ratio": null,
+      "byte_reduction_effective": false,
+      "compression_effective": false
+    }
+  ]
+}
