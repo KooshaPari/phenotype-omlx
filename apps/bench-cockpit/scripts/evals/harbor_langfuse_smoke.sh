@@ -49,6 +49,11 @@ export HARBOR_LANGFUSE_ENVIRONMENT="${HARBOR_LANGFUSE_ENVIRONMENT:-harbor}"
 export HARBOR_LANGFUSE_FAIL_FAST="${HARBOR_LANGFUSE_FAIL_FAST:-true}"
 
 cd "$PORTAGE"
+# Entry point `langfuse` requires the package installed (not just PYTHONPATH).
+if ! uv run harbor plugins list 2>/dev/null | grep -q langfuse; then
+  echo "Installing harbor-langfuse editable so --plugin langfuse resolves…"
+  uv pip install -e "$PORTAGE/packages/harbor-langfuse"
+fi
 uv run python -c "import harbor_langfuse; print('plugin ok', harbor_langfuse.LangfusePlugin)"
 
 echo "harbor env: $HARBOR_ENV base: $LANGFUSE_BASE_URL"
