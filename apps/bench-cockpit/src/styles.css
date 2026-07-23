@@ -482,6 +482,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); line
 
 /* Badge */
 .badge { display: inline-block; padding: 1px 5px; font-size: 9px; border-radius: 4px; background: rgba(255,255,255,.06); color: var(--text-faint); }
+.badge-warn { background: rgba(220,160,40,0.2); color: #e8b84a; border: 1px solid rgba(220,160,40,0.35); }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }

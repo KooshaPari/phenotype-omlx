@@ -1,9 +1,11 @@
 /** Resolve RLVR-AF scalars for a bench cell. */
 
-export type RlvrSource = 'harness' | 'trace' | 'derived';
+export type RlvrSource = 'harness' | 'trace' | 'derived' | 'unavailable';
 
 export interface RlvrResolved {
   source: RlvrSource;
+  /** Authoritative only for harness/trace. Derived/unavailable are non-authoritative. */
+  authoritative: boolean;
   composite: number;
   l0: number;
   l1: number;
@@ -13,6 +15,14 @@ export interface RlvrResolved {
   verifiable: boolean;
   passed: boolean;
   breakdown: Record<string, number>;
+}
+
+export interface ResolveRlvrOptions {
+  /**
+   * Opt-in: synthesize L0–L3 from quality/perf stubs (intent/hallu/judge/…).
+   * Off by default — missing harness rlvr_* must not look like proven quality.
+   */
+  allowDerived?: boolean;
 }
 
 function num(v: unknown, fallback = 0): number {
@@ -43,6 +53,7 @@ function fromHarness(c: Record<string, unknown>): RlvrResolved | null {
       : (l0 + l1 + l2 + l3) / 4;
   return {
     source: 'harness',
+    authoritative: true,
     composite: comp,
     l0,
     l1,
@@ -76,6 +87,7 @@ function fromTrace(c: Record<string, unknown>): RlvrResolved | null {
           : {};
       return {
         source: 'trace',
+        authoritative: true,
         composite,
         l0,
         l1,
@@ -91,8 +103,11 @@ function fromTrace(c: Record<string, unknown>): RlvrResolved | null {
   return null;
 }
 
-/** Provisional L0–L3 from quality/perf metrics when harness has no RLVR. */
-function derived(c: Record<string, unknown>): RlvrResolved {
+/**
+ * Provisional L0–L3 from quality/perf metrics when harness has no RLVR.
+ * Non-authoritative — for debugging only. Prefer resolveRlvr without allowDerived.
+ */
+export function deriveRlvr(c: Record<string, unknown>): RlvrResolved {
   const format = clamp01(num(c.format_compliance_rate));
   const pc = clamp01(num(c.partial_credit));
   const judge = num(c.judge_score);
@@ -114,6 +129,7 @@ function derived(c: Record<string, unknown>): RlvrResolved {
 
   return {
     source: 'derived',
+    authoritative: false,
     composite,
     l0,
     l1,
@@ -135,7 +151,43 @@ function derived(c: Record<string, unknown>): RlvrResolved {
   };
 }
 
-export function resolveRlvr(cell: unknown): RlvrResolved {
+/** Fail-loud placeholder: no harness/trace RLVR — do not invent scores. */
+export function unavailableRlvr(): RlvrResolved {
+  return {
+    source: 'unavailable',
+    authoritative: false,
+    composite: Number.NaN,
+    l0: Number.NaN,
+    l1: Number.NaN,
+    l2: Number.NaN,
+    l3: Number.NaN,
+    tournamentDelta: Number.NaN,
+    verifiable: false,
+    passed: false,
+    breakdown: {},
+  };
+}
+
+export function formatRlvrScore(v: number, digits = 3): string {
+  return Number.isFinite(v) ? v.toFixed(digits) : '—';
+}
+
+/**
+ * Resolve RLVR for a cell.
+ * Prefer harness rlvr_*, then progress_trace reward spans.
+ * Default: unavailable (NaN scores) when both missing — never silently treat
+ * stub intent/hallu/judge as proven RLVR. Pass `{ allowDerived: true }` to
+ * opt into non-authoritative synthesis for debugging.
+ */
+export function resolveRlvr(
+  cell: unknown,
+  opts: ResolveRlvrOptions = {},
+): RlvrResolved {
   const c = (cell && typeof cell === 'object' ? cell : {}) as Record<string, unknown>;
-  return fromHarness(c) ?? fromTrace(c) ?? derived(c);
+  const harness = fromHarness(c);
+  if (harness) return harness;
+  const trace = fromTrace(c);
+  if (trace) return trace;
+  if (opts.allowDerived) return deriveRlvr(c);
+  return unavailableRlvr();
 }
