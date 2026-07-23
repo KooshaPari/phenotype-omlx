@@ -1,0 +1,44 @@
+[
+  {
+    "strategy": "sequential",
+    "tasks": 10,
+    "elapsed_ms": 62.3,
+    "current_mb": 0.01,
+    "peak_mb": 0.01
+  },
+  {
+    "strategy": "parallel",
+    "tasks": 10,
+    "elapsed_ms": 6.8,
+    "current_mb": 0.0,
+    "peak_mb": 0.02
+  },
+  {
+    "strategy": "sequential",
+    "tasks": 50,
+    "elapsed_ms": 437.6,
+    "current_mb": 0.01,
+    "peak_mb": 0.01
+  },
+  {
+    "strategy": "parallel",
+    "tasks": 50,
+    "elapsed_ms": 10.5,
+    "current_mb": 0.01,
+    "peak_mb": 0.07
+  },
+  {
+    "strategy": "sequential",
+    "tasks": 100,
+    "elapsed_ms": 707.7,
+    "current_mb": 0.0,
+    "peak_mb": 0.01
+  },
+  {
+    "strategy": "parallel",
+    "tasks": 100,
+    "elapsed_ms": 14.3,
+    "current_mb": 0.02,
+    "peak_mb": 0.14
+  }
+]

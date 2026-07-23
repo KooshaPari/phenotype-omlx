@@ -10,9 +10,14 @@ description = "Model-family kernel packages: attention, MoE, recurrent, diffusio
 name = "model_kernels"
 path = "src/lib.rs"
 
+[[bench]]
+name = "moe_bench"
+harness = false
+
 [dependencies]
 thiserror = { workspace = true }
 
 [dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
 tree-attention = { path = "../tree-attention" }
 libc = "0.2"
