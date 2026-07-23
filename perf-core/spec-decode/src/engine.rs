@@ -476,13 +476,20 @@ fn find_subseq(hay: &[u32], needle: &[u32]) -> Option<usize> {
     if needle.is_empty() || hay.len() < needle.len() {
         return None;
     }
-    'outer: for i in 0..=hay.len() - needle.len() {
-        for j in 0..needle.len() {
-            if hay[i + j] != needle[j] {
-                continue 'outer;
+    let mut match_len = 0usize;
+    let mut start = 0usize;
+    for (i, &h) in hay.iter().enumerate() {
+        if h == needle[match_len] {
+            if match_len == 0 {
+                start = i;
             }
+            match_len += 1;
+            if match_len == needle.len() {
+                return Some(start);
+            }
+        } else {
+            match_len = 0;
         }
-        return Some(i);
     }
     None
 }
