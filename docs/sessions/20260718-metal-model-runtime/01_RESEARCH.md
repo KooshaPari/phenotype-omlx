@@ -169,3 +169,11 @@ failed upstream Metal compilation because its `Dk / 32` tile count becomes zero;
 kernel selection must enforce `Dk >= 32` (Qwen3.5 production dimensions satisfy this).
 Against MLX's compiled ops reference on the same tensors, the native kernel measured
 `max_abs_error=5.72e-6` and `state_max_abs_error=0.0` across eight recurrent tokens.
+### 2026-07-23 — Qwen3.5 gated-delta replacement
+
+The isolated MLX-LM 0.31.2 runtime exposes `mlx_lm.models.gated_delta.gated_delta_kernel` as a
+vector-gated `mx.fast.metal_kernel` with the shape contract `[B,T,Hk,Dk]`, `[B,T,Hv,Dv]`, and
+`Dk % 32 == 0`. A real Qwen3.5-0.8B-OptiQ-4bit generation observed 54 native gated-delta
+dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirrors that kernel
+behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
+clean native-vs-custom parity run.

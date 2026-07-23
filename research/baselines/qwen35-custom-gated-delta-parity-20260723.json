@@ -1,0 +1,23 @@
+{
+  "schema": "qwen35-custom-gated-delta-parity/v1",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "prompt": "Reply with one word: ready",
+  "max_tokens": 4,
+  "native_text": "\n\n<think>\n\n</think>",
+  "custom_text": "\n\n<think>\n\n</think>",
+  "exact_text_match": true,
+  "custom_kernel_dispatches": 108,
+  "custom_kernel_fallbacks": 0,
+  "kernel_kinds": {"scalar": 108},
+  "first_call_tensor_max_abs_error": 0.0,
+  "first_call_state_max_abs_error": 0.0,
+  "decision": "parity_pass_reference_only",
+  "verification": {
+    "runtime": "mlx_lm 0.31.2 / mlx 0.31.2",
+    "model_snapshot": "ef60586933bd2cc02b763f77eb8839a5114bbec1",
+    "same_input_first_call": true,
+    "custom_opt_in": "PHENOTYPE_OMLX_ENABLE_CUSTOM_QWEN_KERNEL=1",
+    "default_remains_disabled": true
+  },
+  "notes": "Fresh Qwen3.5-0.8B-OptiQ-4bit run: scalar gated-delta kernel dispatched for all 108 calls, matched native generation exactly, and matched native first-call output/state tensors exactly. Keep reference-only until longer-context and full production regression gates pass."
+}

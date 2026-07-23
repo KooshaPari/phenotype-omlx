@@ -1,0 +1,14 @@
+{
+  "schema": "qwen35-native-gated-delta-dispatch/v1",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "prompt": "Reply with one word: ready",
+  "max_tokens": 1,
+  "runtime": "mlx_lm.generate",
+  "gated_delta_update_calls": 54,
+  "gated_delta_kernel_calls": 54,
+  "native_mlx_metal_kernel_dispatch_observed": true,
+  "custom_phenotype_dispatches": 0,
+  "custom_phenotype_kernel_execution_verified": false,
+  "kernel_source": "mlx_lm.models.gated_delta.gated_delta_kernel",
+  "notes": "Instrumentation observes the native MLX mx.fast.metal_kernel path for Qwen3.5 gated-delta. This is independent evidence from phenotype-omlx custom artifacts and must not be counted as custom dispatch promotion."
+}

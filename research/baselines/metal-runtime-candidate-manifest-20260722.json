@@ -14,7 +14,7 @@
     {"name": "adaln_rms", "path": "adaln_rms.metallib", "sha256": "6f571a99a5df74ae3e0dcb2b3c6d95114ee19c850e9491a0214292f482c762b1"},
     {"name": "moe_topk", "path": "moe_topk.metallib", "sha256": "516848f26f8b6f63e09a76cb6936c6c0db406155d06b10afe979b784379d25d7"},
     {"name": "moe_grouped_gemm", "path": "moe_grouped_gemm.metallib", "sha256": "de8e81b66d7a51ed9293d15f00845d3253b5307061013c32e192c4acfe7473a3"},
-    {"name": "ternary_gemm", "path": "ternary_gemm.metallib", "sha256": "9f115c62bf9ac39f606affb0ec5728e5158b7e8ab860b210ed482d70994863dd"},
+    {"name": "ternary_gemm", "path": "ternary_gemm.metallib", "sha256": "c384997791b83f891eacb793c7415a932f8b669dd08dbc9c789a51ce1c2b5694"},
     {"name": "diffusion_confidence", "path": "diffusion_argmax_confidence.metallib", "sha256": "07ca5451f91bba30ecce118a41b39c40221c8f6e30f7bb9fdb28ea54da2e3d42"},
     {"name": "short_conv", "path": "short_conv1d.metallib", "sha256": "52f3acdcd61f24f564b49eaefc236c4af618b8d2a82ab40b5192ca860ba4478d"},
     {"name": "rwkv7", "path": "rwkv7_time_mix.metallib", "sha256": "cf6cdd59f627419459e7af061578a59ecb967a8e7a10a0e75b78527e474e0579"},
@@ -49,6 +49,43 @@
       "partial_match": false,
       "exact_match": true,
       "model": "Qwen/Qwen3.5-0.8B"
+    },
+    "qwen35_layer_execution": {
+      "path": "research/baselines/qwen35-layer-call-evidence-20260723.json",
+      "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+      "native_layer_execution_observed": true,
+      "custom_kernel_dispatches": 0,
+      "custom_kernel_execution_verified": false,
+      "scope": "native-layer-call-observation"
+    },
+    "moe_ternary_runtime": {
+      "path": "research/baselines/moe-ternary-runtime-20260723.json",
+      "moe_tests_passed": 9,
+      "ternary_tests_passed": 2,
+      "runtime_parity": true,
+      "throughput_benchmark": false
+    },
+    "public_binding_percentiles": {
+      "path": "research/baselines/metal-runtime-percentiles-20260723.json",
+      "result": "pass",
+      "samples": 9,
+      "warmups": 2,
+      "scope": "artifact-backed binding smoke"
+    },
+    "model_moe_grouped_gemm": {
+      "path": "research/baselines/moe-grouped-gemm-bench-20260723.json",
+      "parity": "pass",
+      "canonical_tiled_over_scalar": 1.1486,
+      "stress_tiled_over_scalar": 0.8444,
+      "promotion_status": "shape-gated-reference"
+    },
+    "qwen35_custom_long_parity": {
+      "path": "research/baselines/qwen35-custom-gated-delta-long-parity-20260723.json",
+      "max_tokens": 128,
+      "exact_match": true,
+      "dispatches": 2340,
+      "fallbacks": 0,
+      "promotion_status": "reference-only-until-harbor-8192"
     }
   },
   "dispatch_provenance": [
@@ -74,6 +111,27 @@
       "custom_phenotype_artifact": false,
       "dispatch_verified": true,
       "parity_verified": true
+    },
+    {
+      "name": "mlx_native_gated_delta_dispatch",
+      "model_families": ["Qwen3.5"],
+      "source": "mlx_lm.models.gated_delta.gated_delta_kernel",
+      "evidence": "research/baselines/qwen35-native-gated-delta-dispatch-20260723.json",
+      "custom_phenotype_artifact": false,
+      "dispatch_verified": true,
+      "parity_verified": false,
+      "promotion_status": "reference_only"
+    },
+    {
+      "name": "phenotype_qwen35_gated_delta_scalar",
+      "model_families": ["Qwen3.5"],
+      "source": "python/omlx_research/backends/qwen_gated_delta_kernel.py",
+      "evidence": "research/baselines/qwen35-custom-gated-delta-parity-20260723.json",
+      "custom_phenotype_artifact": true,
+      "dispatch_verified": true,
+      "parity_verified": true,
+      "promotion_status": "reference_only",
+      "scope": "short_context_exact_tensor_and_generation_parity"
     }
   ],
   "remaining_gates": [

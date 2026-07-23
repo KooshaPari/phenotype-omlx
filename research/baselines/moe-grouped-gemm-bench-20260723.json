@@ -1,0 +1,19 @@
+{
+  "schema": "moe-grouped-gemm-bench/v1",
+  "generated_at": "2026-07-23T12:00:44Z",
+  "iters": 20,
+  "warmup": 3,
+  "parity": "pass",
+  "rows": [
+    {"shape": "qwen_moe_canonical", "path": "scalar", "median_ns": 480125, "bytes": 32768},
+    {"shape": "qwen_moe_canonical", "path": "tiled", "median_ns": 551458, "bytes": 32768},
+    {"shape": "moe_stress", "path": "scalar", "median_ns": 9339875, "bytes": 262144},
+    {"shape": "moe_stress", "path": "tiled", "median_ns": 7886750, "bytes": 262144}
+  ],
+  "ratios": {
+    "qwen_moe_canonical_tiled_over_scalar": 1.1486,
+    "moe_stress_tiled_over_scalar": 0.8444
+  },
+  "decision": "tiled_path_only_for_stress_shape",
+  "notes": "Model-kernels benchmark compares scalar and tiled grouped GEMM. Tiled is slower on canonical decode-like shape and faster on stress/prefill shape; no unconditional promotion."
+}
