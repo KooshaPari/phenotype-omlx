@@ -40,6 +40,17 @@ extern "C" {
     fn tq_mojo_free(address: isize);
 }
 
+#[cfg(feature = "mojo-ffi")]
+extern "C" {
+    fn tq_gemv_decode(
+        weights: *const f32,
+        input: *const f32,
+        output: *mut f32,
+        rows: usize,
+        cols: usize,
+    );
+}
+
 /// RAII guard that releases every strictly-positive Mojo-allocated address
 /// exactly once on drop. Built around three safety invariants:
 ///
@@ -254,6 +265,25 @@ pub(super) fn mojo_try_decode(
     }
 
     Ok(out)
+}
+
+#[cfg(feature = "mojo-ffi")]
+pub fn mojo_gemv_decode(
+    weights: &[f32],
+    input: &[f32],
+    output: &mut [f32],
+    rows: usize,
+    cols: usize,
+) {
+    unsafe {
+        tq_gemv_decode(
+            weights.as_ptr(),
+            input.as_ptr(),
+            output.as_mut_ptr(),
+            rows,
+            cols,
+        );
+    }
 }
 
 #[cfg(test)]

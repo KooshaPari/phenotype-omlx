@@ -68,11 +68,20 @@ pub use crate::moe::writeback::{coalesced_writeback, stage_expert_outputs, Write
 mod tests {
     use super::*;
 
-    fn inputs(tokens: usize, experts: usize, k: usize, n: usize) -> (Vec<f32>, Vec<f32>, Vec<Vec<usize>>) {
+    fn inputs(
+        tokens: usize,
+        experts: usize,
+        k: usize,
+        n: usize,
+    ) -> (Vec<f32>, Vec<f32>, Vec<Vec<usize>>) {
         let a = vec![1.0; tokens * k];
         let b = vec![1.0; experts * k * n];
         let buckets = (0..experts)
-            .map(|expert| (0..tokens).filter(|token| token % experts == expert).collect())
+            .map(|expert| {
+                (0..tokens)
+                    .filter(|token| token % experts == expert)
+                    .collect()
+            })
             .collect();
         (a, b, buckets)
     }

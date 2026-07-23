@@ -1,4 +1,5 @@
-//! Diffusion-family kernels: LLaDA / Dream parallel denoise.
+//! Diffusion-family kernels: DiffusionGemma-oriented parallel denoise, with
+//! LLaDA/Dream retained as deterministic regression fixtures.
 //!
 //! Every function in this module is pure and deterministic. Random
 //! re-mask policies accept an optional seed via [`RemaskStrategy`]

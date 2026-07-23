@@ -18,7 +18,10 @@ pub fn weighted_reduce(
     out: &mut [f32],
 ) -> Result<()> {
     if hidden == 0 {
-        return Err(KernelError::ZeroDimension { what: "hidden", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "hidden",
+            got: 0,
+        });
     }
     if experts_per_token == 0 {
         return Err(KernelError::ZeroDimension {

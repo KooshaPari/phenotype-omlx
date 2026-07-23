@@ -38,20 +38,24 @@ pub struct ExecResult {
 
 impl ExecResult {
     pub fn empty() -> Self {
-        Self { text: String::new(), tokens: 0, elapsed_ms: 0 }
+        Self {
+            text: String::new(),
+            tokens: 0,
+            elapsed_ms: 0,
+        }
     }
     pub fn ok_with_text(s: impl Into<String>) -> Self {
-        Self { text: s.into(), tokens: 1, elapsed_ms: 1 }
+        Self {
+            text: s.into(),
+            tokens: 1,
+            elapsed_ms: 1,
+        }
     }
 }
 
 #[async_trait]
 pub trait ExecBackend: Send + Sync {
-    async fn run(
-        &self,
-        id: plan::AgentId,
-        req: ExecRequest,
-    ) -> Result<ExecResult, JobError>;
+    async fn run(&self, id: plan::AgentId, req: ExecRequest) -> Result<ExecResult, JobError>;
 }
 
-pub use plan::{AgentId, fan_out, first_success, Job, JobOutput, ScheduleStrategy, Scheduler};
+pub use plan::{fan_out, first_success, AgentId, Job, JobOutput, ScheduleStrategy, Scheduler};

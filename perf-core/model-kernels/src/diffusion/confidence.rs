@@ -1,6 +1,6 @@
 //! Per-token softmax-max confidence scores.
 
-use crate::common::softmax_row;
+use crate::common::softmax_max;
 use crate::error::{KernelError, Result};
 
 /// Compute confidence scores for `vocab`-wide logits.
@@ -15,7 +15,10 @@ use crate::error::{KernelError, Result};
 /// the caller pre-pad logits to a known size without surprises.
 pub fn confidence_scores(logits: &[f32], vocab: usize) -> Result<Vec<f32>> {
     if vocab == 0 {
-        return Err(KernelError::ZeroDimension { what: "vocab", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "vocab",
+            got: 0,
+        });
     }
     if !vocab.is_power_of_two() {
         return Err(KernelError::BadBufferLength {
@@ -38,9 +41,7 @@ pub fn confidence_scores(logits: &[f32], vocab: usize) -> Result<Vec<f32>> {
     let mut scores = Vec::with_capacity(n);
     for i in 0..n {
         let row = &logits[i * vocab..(i + 1) * vocab];
-        let mut copy = row.to_vec();
-        softmax_row(&mut copy);
-        scores.push(copy.iter().copied().fold(f32::NEG_INFINITY, f32::max));
+        scores.push(softmax_max(row));
     }
     Ok(scores)
 }

@@ -37,18 +37,16 @@ fn qwen_sparse_moe_pipeline_runs_end_to_end() {
     // Dispatch: capacity_factor * num_tokens / num_experts -> 2 per
     // expert under cap=1.0.
     let token_indices: Vec<usize> = (0..num_tokens).collect();
-    let plan: DispatchPlan = moe_dispatch(
-        &token_indices,
-        &assignments,
-        num_experts,
-        capacity_factor,
-    )
-    .unwrap();
+    let plan: DispatchPlan =
+        moe_dispatch(&token_indices, &assignments, num_experts, capacity_factor).unwrap();
 
     // Capacity-factor contract: no expert exceeds ceil(cap * n / E).
     let per_expert_cap = (capacity_factor * num_tokens as f32 / num_experts as f32).ceil() as usize;
     for (e, used) in plan.capacity_used.iter().enumerate() {
-        assert!(*used <= per_expert_cap, "expert {e} used {used} > cap {per_expert_cap}");
+        assert!(
+            *used <= per_expert_cap,
+            "expert {e} used {used} > cap {per_expert_cap}"
+        );
     }
     let total_assigned: usize = plan.capacity_used.iter().sum();
     assert_eq!(total_assigned + plan.dropped.len(), num_tokens);
@@ -71,7 +69,10 @@ fn qwen_sparse_moe_pipeline_runs_end_to_end() {
         }
     }
     assert_buf_close(&shared_out, &shared_ref, 1e-5, 1e-4);
-    assert!(shared_out.iter().all(|v| v.is_finite()), "shared_out not finite");
+    assert!(
+        shared_out.iter().all(|v| v.is_finite()),
+        "shared_out not finite"
+    );
 
     // weighted_reduce: shrink picks_per_token to its weights and
     // build a (num_tokens, top_k, hidden) expert_outs buffer by
@@ -90,7 +91,8 @@ fn qwen_sparse_moe_pipeline_runs_end_to_end() {
             for j in 0..hidden {
                 let mut acc = 0.0f32;
                 for kk in 0..k {
-                    acc += x[t * k + kk] * (((*expert as f32) + 1.0) * 0.1 + 0.05 * (j as f32) + 0.01 * (kk as f32));
+                    acc += x[t * k + kk]
+                        * (((*expert as f32) + 1.0) * 0.1 + 0.05 * (j as f32) + 0.01 * (kk as f32));
                 }
                 expert_outs[(t * top_k + e_idx) * hidden + j] = acc;
             }
@@ -122,7 +124,10 @@ fn qwen_sparse_moe_pipeline_runs_end_to_end() {
     // weights (a single top-k weight must be > 0).
     for (t, picks) in picks_per_token.iter().enumerate() {
         for (e, w) in picks {
-            assert!(w.is_finite() && *w > 0.0, "token {t} expert {e} weight not finite/positive");
+            assert!(
+                w.is_finite() && *w > 0.0,
+                "token {t} expert {e} weight not finite/positive"
+            );
         }
     }
 }

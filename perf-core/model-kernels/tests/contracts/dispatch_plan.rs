@@ -7,7 +7,6 @@
 
 use super::*;
 
-
 #[test]
 fn dispatch_plan_exposes_buckets_and_dropped() {
     let assignments: Vec<(usize, f32)> = vec![(0, 0.9), (0, 0.8), (1, 0.7)];

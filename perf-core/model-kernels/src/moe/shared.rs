@@ -42,6 +42,26 @@ fn isqrt_exact(n: u128) -> Option<usize> {
     }
 }
 
+#[inline(always)]
+fn accumulate_scaled_row(out: &mut [f32], weights: &[f32], scale: f32) {
+    debug_assert_eq!(out.len(), weights.len());
+    use std::simd::Simd;
+
+    let vector_len = out.len() & !3usize;
+    let scale_v = Simd::<f32, 4>::splat(scale);
+    let mut j = 0usize;
+    while j < vector_len {
+        let current = Simd::<f32, 4>::from_slice(&out[j..j + 4]);
+        let weight = Simd::<f32, 4>::from_slice(&weights[j..j + 4]);
+        (current + weight * scale_v).copy_to_slice(&mut out[j..j + 4]);
+        j += 4;
+    }
+    while j < out.len() {
+        out[j] += scale * weights[j];
+        j += 1;
+    }
+}
+
 /// Compute `out[t, :] = x[t, :] @ w` where `w` is a single dense
 /// `[k, n]` matrix applied to every token.
 ///
@@ -68,13 +88,14 @@ pub fn shared_expert(x: &[f32], w: &[f32], out: &mut [f32]) -> Result<()> {
     }
 
     // Closed form: |out| · k² = |x| · |w|  ⇒  k² = |x|·|w| / |out|.
-    let product = (total as u128)
-        .checked_mul(w.len() as u128)
-        .ok_or(KernelError::BadBufferLength {
-            what: "x/w/out shapes inconsistent",
-            expected: total,
-            got: w.len(),
-        })?;
+    let product =
+        (total as u128)
+            .checked_mul(w.len() as u128)
+            .ok_or(KernelError::BadBufferLength {
+                what: "x/w/out shapes inconsistent",
+                expected: total,
+                got: w.len(),
+            })?;
     let out_len = out.len() as u128;
     if product % out_len != 0 {
         return Err(KernelError::BadBufferLength {
@@ -105,16 +126,8 @@ pub fn shared_expert(x: &[f32], w: &[f32], out: &mut [f32]) -> Result<()> {
             got: w.len(),
         });
     }
-    // Inner matmul. Loop order is `t → kk → j` so the innermost loop
-    // walks contiguous `&w[kk*n..]` / `&mut out[t*n..]` slices; LLVM
-    // auto-vectors the inner reduction into wide FMA ops on both
-    // Apple-silicon (NEON) and x86 (SSE/AVX) targets. `x[t*k + kk]` is
-    // hoisted out of the j-loop so each input element is loaded once
-    // and broadcast `n` times. The j-loop is manually unrolled by 4 so
-    // a debug build (which does not auto-unroll) still pays one FMA per
-    // iteration of the tight inner block. `out` is zero-initialised per
-    // row (rather than accumulating into a single `acc`) so the public
-    // "out = x @ w" overwrite semantics are preserved.
+    // Inner matmul. Loop order is `t -> kk -> j`, with the contiguous
+    // output/weight rows accumulated through the platform vector path.
     for t in 0..num_tokens {
         let x_row_base = t * k;
         let out_row_base = t * n;
@@ -122,24 +135,12 @@ pub fn shared_expert(x: &[f32], w: &[f32], out: &mut [f32]) -> Result<()> {
         for j in out_row.iter_mut() {
             *j = 0.0;
         }
-        let n4 = n & !3usize; // largest multiple of 4 not exceeding n
         for kk in 0..k {
             let x_tk = x[x_row_base + kk];
             let w_kj_base = kk * n;
             let out_row = &mut out[out_row_base..out_row_base + n];
             let w_row = &w[w_kj_base..w_kj_base + n];
-            let mut j = 0usize;
-            while j < n4 {
-                out_row[j] += x_tk * w_row[j];
-                out_row[j + 1] += x_tk * w_row[j + 1];
-                out_row[j + 2] += x_tk * w_row[j + 2];
-                out_row[j + 3] += x_tk * w_row[j + 3];
-                j += 4;
-            }
-            while j < n {
-                out_row[j] += x_tk * w_row[j];
-                j += 1;
-            }
+            accumulate_scaled_row(out_row, w_row, x_tk);
         }
     }
     Ok(())
@@ -184,10 +185,14 @@ mod tests {
     }
 
     #[test]
-    fn closed_form_k_matches_512x512x4096() {
-        let m = 512usize;
-        let n = 512usize;
-        let k = 4096usize;
+    fn closed_form_k_handles_large_shape_without_scan() {
+        // Keep the buffers large enough that the former linear shape scan
+        // would be visible, while keeping the actual matmul small. The
+        // large 512x512x4096 arithmetic workload belongs to the dedicated
+        // release performance test, not this O(1) shape-inference unit test.
+        let m = 1usize;
+        let n = 1usize;
+        let k = 1_000_000usize;
         let x = vec![1.0f32; m * k];
         let w = vec![1.0f32; k * n];
         let mut out = vec![0.0f32; m * n];

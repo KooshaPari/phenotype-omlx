@@ -15,9 +15,7 @@
 //! `Err("CUDA backend requires NVIDIA GPU")`.
 
 use async_trait::async_trait;
-use concurrent_exec::{
-    AgentId, ExecBackend, ExecRequest, ExecResult, JobError,
-};
+use concurrent_exec::{AgentId, ExecBackend, ExecRequest, ExecResult, JobError};
 use thiserror::Error;
 
 /// Compile-time marker used by the loader. We refuse to dlopen on macOS even
@@ -68,7 +66,10 @@ pub struct CudaJetSpecBackend {
 
 impl CudaJetSpecBackend {
     pub fn new(tree_width: usize, tree_depth: usize) -> Self {
-        Self { tree_width, tree_depth }
+        Self {
+            tree_width,
+            tree_depth,
+        }
     }
 }
 
@@ -78,33 +79,21 @@ impl CudaJetSpecBackend {
 
 #[async_trait]
 impl ExecBackend for CudaLatentMasBackend {
-    async fn run(
-        &self,
-        _id: AgentId,
-        _req: ExecRequest,
-    ) -> Result<ExecResult, JobError> {
+    async fn run(&self, _id: AgentId, _req: ExecRequest) -> Result<ExecResult, JobError> {
         Err(JobError::Backend(REQUIRES_NVIDIA_GPU.into()))
     }
 }
 
 #[async_trait]
 impl ExecBackend for CudaSsdBackend {
-    async fn run(
-        &self,
-        _id: AgentId,
-        _req: ExecRequest,
-    ) -> Result<ExecResult, JobError> {
+    async fn run(&self, _id: AgentId, _req: ExecRequest) -> Result<ExecResult, JobError> {
         Err(JobError::Backend(REQUIRES_NVIDIA_GPU.into()))
     }
 }
 
 #[async_trait]
 impl ExecBackend for CudaJetSpecBackend {
-    async fn run(
-        &self,
-        _id: AgentId,
-        _req: ExecRequest,
-    ) -> Result<ExecResult, JobError> {
+    async fn run(&self, _id: AgentId, _req: ExecRequest) -> Result<ExecResult, JobError> {
         Err(JobError::Backend(REQUIRES_NVIDIA_GPU.into()))
     }
 }
@@ -205,17 +194,19 @@ pub mod loader {
     /// Resolve a kernel symbol by name. Caller is responsible for casting to
     /// the correct `extern "C" fn(...)` signature declared in
     /// `cuda/kernels/*.cu`.
-    pub fn resolve(
-        lib: &libloading::Library,
-        name: &str,
-    ) -> Result<KernelHandle, LoaderError> {
-        let cstr = CString::new(name)
-            .map_err(|_| LoaderError::DlSym { symbol: name.into(), source: libloading::Error::DlSymUnknown })?;
+    pub fn resolve(lib: &libloading::Library, name: &str) -> Result<KernelHandle, LoaderError> {
+        let cstr = CString::new(name).map_err(|_| LoaderError::DlSym {
+            symbol: name.into(),
+            source: libloading::Error::DlSymUnknown,
+        })?;
         // SAFETY: caller ensures `name` matches an `extern "C"` export.
         unsafe {
             lib.get::<KernelHandle>(cstr.as_bytes_with_nul())
                 .map(|sym| *sym)
-                .map_err(|e| LoaderError::DlSym { symbol: name.into(), source: e })
+                .map_err(|e| LoaderError::DlSym {
+                    symbol: name.into(),
+                    source: e,
+                })
         }
     }
 
@@ -223,7 +214,7 @@ pub mod loader {
     /// Runtime API so we can wrap it from Rust via libloading.
     #[allow(non_snake_case, dead_code)]
     pub type CuLaunchKernelFn = unsafe extern "C" fn(
-        KernelHandle,        // function handle
+        KernelHandle,            // function handle
         *const std::ffi::c_void, // kernel args (packed by driver)
     ) -> i32;
 }

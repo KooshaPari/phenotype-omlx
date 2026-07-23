@@ -38,7 +38,10 @@ pub fn cca_block_attend(
     out: &mut [f32],
 ) -> Result<()> {
     if head_dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "head_dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "head_dim",
+            got: 0,
+        });
     }
     if q.len() != head_dim {
         return Err(KernelError::BadBufferLength {

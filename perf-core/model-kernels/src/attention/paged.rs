@@ -31,7 +31,10 @@ pub fn paged_attention(
         });
     }
     if head_dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "head_dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "head_dim",
+            got: 0,
+        });
     }
     if kv_heads == 0 {
         return Err(KernelError::ZeroDimension {
@@ -121,8 +124,8 @@ mod tests {
         let k = [0.0f32; 4];
         let v = [0.0f32; 4];
         let block_tables = vec![(0usize, 0usize)];
-        let err = paged_attention(&q, &k, &v, &block_tables, 2, 1, 1, 1, 2, &mut [0.0; 1])
-            .unwrap_err();
+        let err =
+            paged_attention(&q, &k, &v, &block_tables, 2, 1, 1, 1, 2, &mut [0.0; 1]).unwrap_err();
         assert!(matches!(err, KernelError::DimMismatch { .. }));
     }
 
@@ -132,8 +135,8 @@ mod tests {
         let k = [0.0f32; 4];
         let v = [0.0f32; 4];
         let block_tables = vec![(0usize, 5usize)]; // offset >= block_size
-        let err = paged_attention(&q, &k, &v, &block_tables, 2, 1, 1, 1, 1, &mut [0.0; 1])
-            .unwrap_err();
+        let err =
+            paged_attention(&q, &k, &v, &block_tables, 2, 1, 1, 1, 1, &mut [0.0; 1]).unwrap_err();
         assert!(matches!(err, KernelError::DimMismatch { .. }));
     }
 }

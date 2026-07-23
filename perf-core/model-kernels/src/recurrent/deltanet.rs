@@ -25,7 +25,10 @@ pub fn deltanet_step(
     head_dim: usize,
 ) -> Result<Vec<f32>> {
     if head_dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "head_dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "head_dim",
+            got: 0,
+        });
     }
     let expected_state = head_dim * head_dim;
     if state.len() != expected_state {
@@ -49,9 +52,8 @@ pub fn deltanet_step(
             for p in 0..head_dim {
                 kk += k[p] * state[p * head_dim + j];
             }
-            new_state[i * head_dim + j] = state[i * head_dim + j]
-                - beta * k[i] * kk
-                + beta * v[i] * k[j];
+            new_state[i * head_dim + j] =
+                state[i * head_dim + j] - beta * k[i] * kk + beta * v[i] * k[j];
         }
     }
     state.copy_from_slice(&new_state);

@@ -17,15 +17,15 @@
 
 use serde_json::json;
 
-use super::super::{assert_close_envelope, checked_in_baselines_dir, BaselineRecorder, VerifyResult};
+use super::super::{
+    assert_close_envelope, checked_in_baselines_dir, BaselineRecorder, VerifyResult,
+};
 
 #[test]
 fn qwen_deltanet_moe_end_to_end_baseline_round_trip() {
     let recorder = BaselineRecorder::new(checked_in_baselines_dir());
     let file = recorder.load().expect("load checked-in baselines");
-    assert!(file
-        .baselines
-        .contains_key("qwen_deltanet_moe_end_to_end"));
+    assert!(file.baselines.contains_key("qwen_deltanet_moe_end_to_end"));
 
     let inputs = json!({
         "kernel": "qwen_deltanet_moe_end_to_end",
@@ -251,7 +251,9 @@ const QWEN_MOE_V2_CAPACITY_FACTOR: f32 = 2.0;
 const QWEN_MOE_V2_SEED: u64 = 0xCAFE_BABE_DEAD_BEEF;
 
 fn qwen_moe_v2_det(n: usize, salt: u64) -> Vec<f32> {
-    (0..n).map(|_| model_kernels::common::Lcg::new(QWEN_MOE_V2_SEED ^ salt).next_signed()).collect()
+    (0..n)
+        .map(|_| model_kernels::common::Lcg::new(QWEN_MOE_V2_SEED ^ salt).next_signed())
+        .collect()
 }
 
 /// Returns `(top_picks, router_logits, shared_out, reduced_out,
@@ -259,8 +261,7 @@ fn qwen_moe_v2_det(n: usize, salt: u64) -> Vec<f32> {
 /// pipeline + salts as the integration test in
 /// `model-kernels/tests/qwen_bonsai/qwen_moe_v2.rs`.
 #[allow(clippy::type_complexity)]
-fn compute_qwen_moe_end_to_end_v2_output()
--> (Vec<usize>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
+fn compute_qwen_moe_end_to_end_v2_output() -> (Vec<usize>, Vec<f32>, Vec<f32>, Vec<f32>, Vec<f32>) {
     use model_kernels::moe::{
         coalesced_writeback, grouped_gemm_tiled, moe_dispatch, router_topk, shared_expert,
         stage_expert_outputs, weighted_reduce_tiled,
@@ -285,13 +286,20 @@ fn compute_qwen_moe_end_to_end_v2_output()
         top_picks.push(picks[0].0);
         picks_per_token.push(picks);
     }
-    let plan = moe_dispatch(&(0..n_t).collect::<Vec<_>>(), &assignments, n_e, QWEN_MOE_V2_CAPACITY_FACTOR)
-        .expect("dispatch must accept well-formed inputs");
+    let plan = moe_dispatch(
+        &(0..n_t).collect::<Vec<_>>(),
+        &assignments,
+        n_e,
+        QWEN_MOE_V2_CAPACITY_FACTOR,
+    )
+    .expect("dispatch must accept well-formed inputs");
 
     // Activations and weights — same salts as the integration test.
     let a = qwen_moe_v2_det(n_t * k, 0xA_CE);
     let w = qwen_moe_v2_det(h * h, 0xB_EE);
-    let b: Vec<f32> = (0..n_e).flat_map(|e| qwen_moe_v2_det(k * h, 0xB0_E0 + e as u64)).collect();
+    let b: Vec<f32> = (0..n_e)
+        .flat_map(|e| qwen_moe_v2_det(k * h, 0xB0_E0 + e as u64))
+        .collect();
 
     // Shared-expert projection + routed-GEMM (tiled) into `[n_t, h]`.
     let mut shared_out = vec![0.0f32; n_t * h];
@@ -328,7 +336,13 @@ fn compute_qwen_moe_end_to_end_v2_output()
     coalesced_writeback(&stage, n_t, h, &mut writeback_out)
         .expect("coalesced_writeback must accept well-formed inputs");
 
-    (top_picks, router_logits, shared_out, reduced_out, writeback_out)
+    (
+        top_picks,
+        router_logits,
+        shared_out,
+        reduced_out,
+        writeback_out,
+    )
 }
 
 /// `qwen_moe_end_to_end_v2` baseline round-trip. `inputs` carries every

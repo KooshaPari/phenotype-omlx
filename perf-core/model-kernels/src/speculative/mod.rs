@@ -57,7 +57,10 @@ pub fn mtp_propose(
     vocab: usize,
 ) -> Result<MtpProposal> {
     if vocab == 0 {
-        return Err(KernelError::ZeroDimension { what: "vocab", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "vocab",
+            got: 0,
+        });
     }
     if seed_logits.len() % vocab != 0 {
         return Err(KernelError::BadBufferLength {
@@ -109,7 +112,10 @@ pub fn mtp_verify(
     accepted_threshold: f32,
 ) -> Result<Vec<bool>> {
     if vocab == 0 {
-        return Err(KernelError::ZeroDimension { what: "vocab", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "vocab",
+            got: 0,
+        });
     }
     if !(0.0..=1.0).contains(&accepted_threshold) {
         return Err(KernelError::OutOfRange {

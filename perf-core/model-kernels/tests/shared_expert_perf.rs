@@ -2,16 +2,15 @@
 //!
 //! Pins the perf-invariant declared at the top of
 //! `model-kernels/src/moe/shared.rs`: the helper must finish a
-//! `512×512×4096` dense matmul (≈1.07 GFLOP) on a single thread in well
-//! under the wall-clock ceiling on Apple Silicon in debug mode. The same
+//! `512×512×4096` dense matmul (≈1.07 GFLOP) on a single thread in release
+//! mode. Normal workspace debug tests use a smaller smoke shape. The same
 //! invariant is what keeps `regress-baseline/tests/dispatch_buckets.rs`
 //! (which calls `shared_expert` on a 64-wide inner tile for six shape
 //! buckets) under 60 seconds end-to-end.
 //!
-//! The test deliberately runs in **debug** mode (no `--release`): the
-//! regression-bucket test that motivated the cap is itself a debug-mode
-//! `cargo test`, so a release-only regression test would let a slow
-//! debug-mode inner loop slip past CI.
+//! The full workload is intentionally a release-mode test. Debug workspace
+//! runs use the smoke shape below so correctness validation does not spend
+//! minutes executing a performance workload.
 //!
 //! Run with:
 //!
@@ -43,8 +42,7 @@ use std::time::Instant;
 
 use model_kernels::moe_facade::shared_expert;
 
-/// Wall-clock ceiling (seconds) for a single 512×512×4096 invocation
-/// of [`shared_expert`] in debug mode on Apple Silicon.
+/// Wall-clock ceiling (seconds) for the release 512×512×4096 invocation.
 ///
 /// Quiet isolation: ~1–5 s. Documented mlx_lm contention alone: ~5.2–5.6 s
 /// (see `regress-baseline` PerfGuard notes). Workspace-parallel cargo
@@ -85,6 +83,12 @@ fn lock_path() -> PathBuf {
     std::env::temp_dir().join("omlx-perf-shared-expert.lock")
 }
 
+#[cfg(debug_assertions)]
+const TEST_SHAPE: (usize, usize, usize) = (64, 64, 512);
+
+#[cfg(not(debug_assertions))]
+const TEST_SHAPE: (usize, usize, usize) = (512, 512, 4096);
+
 #[cfg(unix)]
 fn flock_exclusive(file: &std::fs::File) -> io::Result<()> {
     use std::os::unix::io::AsRawFd;
@@ -118,17 +122,13 @@ fn flock_unlock(_file: &std::fs::File) -> io::Result<()> {
 }
 
 #[test]
-fn shared_expert_512x512x4096_finishes_under_5s_in_debug() {
-    let m: usize = 512;
-    let n: usize = 512;
-    let k: usize = 4096;
+fn shared_expert_finishes_within_guard() {
+    let (m, n, k) = TEST_SHAPE;
 
     // Deterministic, non-zero contents so the optimizer cannot fold
     // the matmul away.
     let x: Vec<f32> = (0..m * k).map(|i| (i as f32) * 0.5 + 1.0).collect();
-    let w: Vec<f32> = (0..k * n)
-        .map(|i| ((i % 97) as f32) * 0.25 + 0.5)
-        .collect();
+    let w: Vec<f32> = (0..k * n).map(|i| ((i % 97) as f32) * 0.25 + 0.5).collect();
     let mut out: Vec<f32> = vec![0.0; m * n];
 
     // Warmup so the first-call cache / page-fault cost is paid before

@@ -118,17 +118,12 @@ fn qwen_moe_v2_pipeline_runs_end_to_end_with_tiled_kernels() {
     let (assignments, picks_per_token) = run_router(&router_logits);
 
     let token_indices: Vec<usize> = (0..NUM_TOKENS).collect();
-    let plan: DispatchPlan = moe_dispatch(
-        &token_indices,
-        &assignments,
-        NUM_EXPERTS,
-        CAPACITY_FACTOR,
-    )
-    .expect("dispatch must accept well-formed inputs");
+    let plan: DispatchPlan =
+        moe_dispatch(&token_indices, &assignments, NUM_EXPERTS, CAPACITY_FACTOR)
+            .expect("dispatch must accept well-formed inputs");
 
     // Sanity: no expert exceeds ceil(2.0 * 4 / 3) = 3.
-    let per_expert_cap =
-        (CAPACITY_FACTOR * NUM_TOKENS as f32 / NUM_EXPERTS as f32).ceil() as usize;
+    let per_expert_cap = (CAPACITY_FACTOR * NUM_TOKENS as f32 / NUM_EXPERTS as f32).ceil() as usize;
     for (e, used) in plan.capacity_used.iter().enumerate() {
         assert!(
             *used <= per_expert_cap,
@@ -147,8 +142,7 @@ fn qwen_moe_v2_pipeline_runs_end_to_end_with_tiled_kernels() {
 
     // Shared-expert matmul.
     let mut shared_out = vec![0.0f32; NUM_TOKENS * HIDDEN];
-    shared_expert(&a, &w, &mut shared_out)
-        .expect("shared_expert must accept well-formed inputs");
+    shared_expert(&a, &w, &mut shared_out).expect("shared_expert must accept well-formed inputs");
     let mut shared_ref = vec![0.0f32; NUM_TOKENS * HIDDEN];
     for t in 0..NUM_TOKENS {
         for j in 0..HIDDEN {
@@ -243,13 +237,9 @@ fn qwen_moe_v2_grouped_gemm_tiled_matches_scalar_grouped_gemm() {
     let (assignments, _picks_per_token) = run_router(&router_logits);
 
     let token_indices: Vec<usize> = (0..NUM_TOKENS).collect();
-    let plan: DispatchPlan = moe_dispatch(
-        &token_indices,
-        &assignments,
-        NUM_EXPERTS,
-        CAPACITY_FACTOR,
-    )
-    .expect("dispatch must accept well-formed inputs");
+    let plan: DispatchPlan =
+        moe_dispatch(&token_indices, &assignments, NUM_EXPERTS, CAPACITY_FACTOR)
+            .expect("dispatch must accept well-formed inputs");
 
     let a = deterministic_vec(NUM_TOKENS * K_INTERMEDIATE, 0xA_CE);
     let b: Vec<f32> = (0..NUM_EXPERTS)
@@ -298,13 +288,9 @@ fn qwen_moe_v2_weighted_reduce_tiled_matches_scalar_weighted_reduce() {
     let (assignments, picks_per_token) = run_router(&router_logits);
 
     let token_indices: Vec<usize> = (0..NUM_TOKENS).collect();
-    let plan: DispatchPlan = moe_dispatch(
-        &token_indices,
-        &assignments,
-        NUM_EXPERTS,
-        CAPACITY_FACTOR,
-    )
-    .expect("dispatch must accept well-formed inputs");
+    let plan: DispatchPlan =
+        moe_dispatch(&token_indices, &assignments, NUM_EXPERTS, CAPACITY_FACTOR)
+            .expect("dispatch must accept well-formed inputs");
 
     let a = deterministic_vec(NUM_TOKENS * K_INTERMEDIATE, 0xA_CE);
     let b: Vec<f32> = (0..NUM_EXPERTS)

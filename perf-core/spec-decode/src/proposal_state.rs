@@ -71,7 +71,8 @@ impl ProposalState {
         // Append the verified prefix slice — verbatim from
         // `draft_tokens[..n]` so the bytes are byte-identical to the
         // proposed draft.
-        self.verified_prefix.extend_from_slice(&self.draft_tokens[..n]);
+        self.verified_prefix
+            .extend_from_slice(&self.draft_tokens[..n]);
         self.acceptance_count += n;
         self.acceptance_history.push(n);
     }
@@ -108,7 +109,11 @@ mod tests {
 
     fn state_with_drafts(drafts: &[u32]) -> ProposalState {
         let mut s = ProposalState::new(NUM_DRAFTS, VOCAB_SIZE, SEED);
-        assert_eq!(drafts.len(), NUM_DRAFTS, "fixture must supply exactly num_drafts tokens");
+        assert_eq!(
+            drafts.len(),
+            NUM_DRAFTS,
+            "fixture must supply exactly num_drafts tokens"
+        );
         for (i, &t) in drafts.iter().enumerate() {
             assert!(
                 (t as usize) < VOCAB_SIZE,

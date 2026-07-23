@@ -7,7 +7,6 @@
 
 use super::*;
 
-
 #[test]
 fn router_topk_returns_k_distinct_experts() {
     let num_experts = 8;
@@ -41,7 +40,10 @@ fn router_topk_sums_weights_to_at_most_one_after_renormalisation() {
     let picks = router_topk(&logits, num_experts, top_k, 0).unwrap();
     let total: f32 = picks.iter().map(|(_, w)| *w).sum();
     assert!(total <= 1.0 + 1e-6, "sum {total} > 1.0");
-    assert!((total - 1.0).abs() < 1e-5, "renormalized sum should be ~1, got {total}");
+    assert!(
+        (total - 1.0).abs() < 1e-5,
+        "renormalized sum should be ~1, got {total}"
+    );
     for (_, w) in &picks {
         assert!(*w > 0.0);
     }
@@ -97,7 +99,12 @@ fn moe_dispatch_drops_excess_tokens_into_dropped_bucket() {
     .unwrap();
     assert_eq!(plan.capacity_used[0], 3);
     assert_eq!(plan.capacity_used[1], 2);
-    assert_eq!(plan.dropped.len(), 1, "expected 1 dropped, got {:?}", plan.dropped);
+    assert_eq!(
+        plan.dropped.len(),
+        1,
+        "expected 1 dropped, got {:?}",
+        plan.dropped
+    );
 }
 
 #[test]
@@ -167,7 +174,12 @@ fn weighted_reduce_matches_per_token_scalar_oracle() {
     ];
     let mut out = vec![0.0f32; tokens * n];
     weighted_reduce(&expert_outs, &weights, experts_per_token, n, &mut out).unwrap();
-    let expected = vec![0.6 * 1.0 + 0.4 * 0.0, 0.6 * 0.0 + 0.4 * 1.0, 0.7 * 2.0 + 0.3 * 1.0, 0.7 * 2.0 - 0.3 * 1.0];
+    let expected = vec![
+        0.6 * 1.0 + 0.4 * 0.0,
+        0.6 * 0.0 + 0.4 * 1.0,
+        0.7 * 2.0 + 0.3 * 1.0,
+        0.7 * 2.0 - 0.3 * 1.0,
+    ];
     assert_buf_close(&out, &expected, 1e-5, 1e-4);
 }
 
@@ -195,4 +207,3 @@ fn shared_expert_matches_dense_matmul() {
     }
     assert_buf_close(&out, &expected, 1e-5, 1e-4);
 }
-

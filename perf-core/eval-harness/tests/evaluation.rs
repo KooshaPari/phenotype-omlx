@@ -5,35 +5,47 @@ use eval_harness::{
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name)
 }
 
 #[test]
 fn mmlu_csv_loader_builds_stable_multiple_choice_tasks() {
     let tasks = eval_harness::mmlu::load_csv(fixture("mmlu.csv")).unwrap();
-    assert_eq!(tasks.iter().map(|task| task.id.as_str()).collect::<Vec<_>>(), [
-        "mmlu_anatomy_1",
-        "mmlu_physics_2",
-    ]);
+    assert_eq!(
+        tasks
+            .iter()
+            .map(|task| task.id.as_str())
+            .collect::<Vec<_>>(),
+        ["mmlu_anatomy_1", "mmlu_physics_2",]
+    );
     assert_eq!(tasks[0].suite, Suite::Mmlu);
-    assert_eq!(tasks[0].choices, vec!["Cranial", "Thoracic", "Abdominal", "Pelvic"]);
+    assert_eq!(
+        tasks[0].choices,
+        vec!["Cranial", "Thoracic", "Abdominal", "Pelvic"]
+    );
     assert_eq!(tasks[0].expected.as_deref(), Some("B"));
 }
 
 #[test]
 fn gpqa_jsonl_loader_is_sorted_and_preserves_choices() {
     let tasks = eval_harness::gpqa::load_jsonl(fixture("gpqa.jsonl")).unwrap();
-    assert_eq!(tasks.iter().map(|task| task.id.as_str()).collect::<Vec<_>>(), [
-        "gpqa_biology-1",
-        "gpqa_chemistry-1",
-    ]);
+    assert_eq!(
+        tasks
+            .iter()
+            .map(|task| task.id.as_str())
+            .collect::<Vec<_>>(),
+        ["gpqa_biology-1", "gpqa_chemistry-1",]
+    );
     assert_eq!(tasks[1].choices[0], "Fluorine");
     assert_eq!(tasks[1].suite, Suite::Gpqa);
 }
 
 #[test]
 fn yaml_loader_reads_terminal_bench_criteria_without_execution() {
-    let tasks = eval_harness::terminal_bench::load_yaml(fixture("terminal-bench/task.yaml")).unwrap();
+    let tasks =
+        eval_harness::terminal_bench::load_yaml(fixture("terminal-bench/task.yaml")).unwrap();
     let criteria = tasks[0].criteria.as_ref().unwrap();
     assert_eq!(criteria.expected_commands, vec!["grep -r 'FIXME' ."]);
     assert_eq!(tasks[0].suite, Suite::TerminalBench);
@@ -58,9 +70,19 @@ fn report_is_deterministic_and_serde_round_trips() {
         TaskSpec::multiple_choice("b", Suite::Mmlu, "Q2", vec!["x"], "A"),
         TaskSpec::multiple_choice("a", Suite::Mmlu, "Q1", vec!["x"], "A"),
     ];
-    let results = tasks.iter().map(|task| evaluate(task, "A").unwrap()).collect::<Vec<_>>();
+    let results = tasks
+        .iter()
+        .map(|task| evaluate(task, "A").unwrap())
+        .collect::<Vec<_>>();
     let report = EvaluationReport::from_results(Suite::Mmlu, results);
-    assert_eq!(report.results.iter().map(|r| r.task_id.as_str()).collect::<Vec<_>>(), ["a", "b"]);
+    assert_eq!(
+        report
+            .results
+            .iter()
+            .map(|r| r.task_id.as_str())
+            .collect::<Vec<_>>(),
+        ["a", "b"]
+    );
     assert_eq!(report.accuracy, 1.0);
 
     let encoded = serde_json::to_string(&report).unwrap();

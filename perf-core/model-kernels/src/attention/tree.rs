@@ -20,7 +20,10 @@ pub fn tree_attention_step(
     out: &mut [f32],
 ) -> Result<()> {
     if head_dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "head_dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "head_dim",
+            got: 0,
+        });
     }
     if seq_q == 0 {
         return Err(KernelError::EmptySequence { what: "seq_q" });

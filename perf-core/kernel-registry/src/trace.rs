@@ -68,8 +68,12 @@ impl ExecutionTrace {
                 )
                 .with_engine(candidate.engine_name.as_deref())
             }
-            SelectionDecision::Rejected { rejections, considered: _ } => {
-                let mut sorted: Vec<&crate::selector::RejectionRecord> = rejections.iter().collect();
+            SelectionDecision::Rejected {
+                rejections,
+                considered: _,
+            } => {
+                let mut sorted: Vec<&crate::selector::RejectionRecord> =
+                    rejections.iter().collect();
                 sorted.sort_by_key(|r| r.candidate);
                 let considered: Vec<TraceRejection> = sorted
                     .into_iter()
@@ -104,8 +108,7 @@ impl ExecutionTrace {
             // explanations are unaffected.
             let prefix = format!("selected {sel} ");
             if let Some(rest) = self.human_explanation.strip_prefix(&prefix) {
-                self.human_explanation =
-                    format!("{prefix}(engine: {name}) {rest}");
+                self.human_explanation = format!("{prefix}(engine: {name}) {rest}");
             }
         }
         self
@@ -186,7 +189,11 @@ impl ExecutionTrace {
         format!(
             "rejected: {} considered; top reasons: {}",
             considered.len(),
-            if top_str.is_empty() { "none".to_string() } else { top_str }
+            if top_str.is_empty() {
+                "none".to_string()
+            } else {
+                top_str
+            }
         )
     }
 }

@@ -126,8 +126,12 @@ impl TuningRecord {
         sorted.sort_unstable();
         let n = sorted.len();
         let median_idx = n / 2;
-        let p95_idx = ((n as f64 * 0.95).ceil() as usize).saturating_sub(1).min(n - 1);
-        let p99_idx = ((n as f64 * 0.99).ceil() as usize).saturating_sub(1).min(n - 1);
+        let p95_idx = ((n as f64 * 0.95).ceil() as usize)
+            .saturating_sub(1)
+            .min(n - 1);
+        let p99_idx = ((n as f64 * 0.99).ceil() as usize)
+            .saturating_sub(1)
+            .min(n - 1);
         let median_ns = sorted[median_idx];
         let p95_ns = sorted[p95_idx];
         let p99_ns = sorted[p99_idx];
@@ -186,8 +190,12 @@ impl TuningRecord {
         latencies.sort_unstable();
         let n = latencies.len();
         let median_idx = n / 2;
-        let p95_idx = ((n as f64 * 0.95).ceil() as usize).saturating_sub(1).min(n - 1);
-        let p99_idx = ((n as f64 * 0.99).ceil() as usize).saturating_sub(1).min(n - 1);
+        let p95_idx = ((n as f64 * 0.95).ceil() as usize)
+            .saturating_sub(1)
+            .min(n - 1);
+        let p99_idx = ((n as f64 * 0.99).ceil() as usize)
+            .saturating_sub(1)
+            .min(n - 1);
         let median_ns = latencies[median_idx];
         let p95_ns = latencies[p95_idx];
         let p99_ns = latencies[p99_idx];

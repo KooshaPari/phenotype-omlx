@@ -91,11 +91,7 @@ pub fn mod_route(weights: &[f32], cfg: &ModRouterConfig) -> Result<ModRoutePlan>
             .then_with(|| ia.cmp(ib))
     });
 
-    let selected_tokens: Vec<u32> = indexed
-        .iter()
-        .take(k)
-        .map(|(i, _)| *i as u32)
-        .collect();
+    let selected_tokens: Vec<u32> = indexed.iter().take(k).map(|(i, _)| *i as u32).collect();
     Ok(ModRoutePlan {
         selected_tokens,
         capacity_factor: cfg.capacity_factor,

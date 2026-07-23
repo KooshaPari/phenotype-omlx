@@ -63,11 +63,7 @@ mod tests {
         // Identical summaries + identical scales => equal softmax weights.
         // The output must therefore equal the summary vector scaled by
         // (4 + 8) / 2 = 6, the weighted mean of the two block sizes.
-        let expected: Vec<f32> = blocks[0]
-            .block_summary
-            .iter()
-            .map(|v| v * 6.0)
-            .collect();
+        let expected: Vec<f32> = blocks[0].block_summary.iter().map(|v| v * 6.0).collect();
         assert_buf_close(&out, &expected, "equal-score block_size weighting");
     }
 

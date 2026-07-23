@@ -1,6 +1,6 @@
 //! End-to-end runner tests wiring [`eval_harness::Backend`] to fixture loaders.
 
-use eval_harness::{OracleBackend, Suite, gpqa, mmlu, run_suite};
+use eval_harness::{gpqa, mmlu, run_suite, OracleBackend, Suite};
 use std::path::PathBuf;
 
 fn fixture(name: &str) -> PathBuf {

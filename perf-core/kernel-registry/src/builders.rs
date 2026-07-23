@@ -106,9 +106,15 @@ pub fn deltanet_batched_key(
     device_fingerprint: &str,
     policy_version: u32,
 ) -> KernelKey {
-    assert!(batch_size > 0, "deltanet_batched_key: batch_size must be > 0");
+    assert!(
+        batch_size > 0,
+        "deltanet_batched_key: batch_size must be > 0"
+    );
     assert!(num_heads > 0, "deltanet_batched_key: num_heads must be > 0");
-    assert!(chunk_size > 0, "deltanet_batched_key: chunk_size must be > 0");
+    assert!(
+        chunk_size > 0,
+        "deltanet_batched_key: chunk_size must be > 0"
+    );
     assert!(head_dim > 0, "deltanet_batched_key: head_dim must be > 0");
 
     KernelKey {
@@ -174,6 +180,78 @@ pub fn deltanet_key(
     }
 }
 
+/// Build a [`KernelKey`] for a RetNet retention step.
+///
+/// The recurrent state is indexed by `(batch, heads, head_dim, head_dim)`;
+/// `seq` records the number of tokens in the dispatched chunk and `group`
+/// records the head count.  Keeping this as `OperatorKind::Recurrent` avoids
+/// introducing a new serialized enum variant while still distinguishing the
+/// shape from RWKV-style recurrent candidates.
+pub fn retnet_key(
+    batch_size: usize,
+    num_heads: usize,
+    head_dim: usize,
+    chunk_size: usize,
+    dtype: DType,
+    device_fingerprint: &str,
+    policy_version: u32,
+) -> KernelKey {
+    assert!(batch_size > 0, "retnet_key: batch_size must be > 0");
+    assert!(num_heads > 0, "retnet_key: num_heads must be > 0");
+    assert!(head_dim > 0, "retnet_key: head_dim must be > 0");
+    assert!(chunk_size > 0, "retnet_key: chunk_size must be > 0");
+
+    KernelKey {
+        operator_kind: OperatorKind::Recurrent,
+        attention_kind: None,
+        shape_signature: ShapeSignature {
+            m: head_dim,
+            n: head_dim,
+            k: head_dim,
+            batch: batch_size,
+            seq: chunk_size,
+            group: num_heads,
+        },
+        dtype,
+        quantization: QuantizationPolicy::None,
+        state_layout_version: 1,
+        device_fingerprint: device_fingerprint.to_string(),
+        policy_version,
+    }
+}
+
+/// Build a [`KernelKey`] for a chunked Mamba selective scan.
+pub fn mamba_scan_key(
+    batch_size: usize,
+    state_dim: usize,
+    chunk_size: usize,
+    dtype: DType,
+    device_fingerprint: &str,
+    policy_version: u32,
+) -> KernelKey {
+    assert!(batch_size > 0, "mamba_scan_key: batch_size must be > 0");
+    assert!(state_dim > 0, "mamba_scan_key: state_dim must be > 0");
+    assert!(chunk_size > 0, "mamba_scan_key: chunk_size must be > 0");
+
+    KernelKey {
+        operator_kind: OperatorKind::Scan,
+        attention_kind: None,
+        shape_signature: ShapeSignature {
+            m: state_dim,
+            n: state_dim,
+            k: state_dim,
+            batch: batch_size,
+            seq: chunk_size,
+            group: 1,
+        },
+        dtype,
+        quantization: QuantizationPolicy::None,
+        state_layout_version: 1,
+        device_fingerprint: device_fingerprint.to_string(),
+        policy_version,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,23 +277,24 @@ mod tests {
     #[test]
     fn sliding_window_window_size_above_seq_len_is_clamped() {
         let key = sliding_window_key(8, 2, 64, 1, 8, 4, 999, DType::Bf16, FP, 1);
-        assert_eq!(key.shape_signature.group, 8,
-            "window_size > seq_len must clamp to seq_len (8)");
+        assert_eq!(
+            key.shape_signature.group, 8,
+            "window_size > seq_len must clamp to seq_len (8)"
+        );
     }
 
     #[test]
     fn sliding_window_window_size_zero_is_clamped_to_one() {
         let key = sliding_window_key(8, 2, 64, 1, 8, 4, 0, DType::Bf16, FP, 1);
-        assert_eq!(key.shape_signature.group, 1,
-            "window_size == 0 must clamp to 1 so scalar fallbacks still match");
+        assert_eq!(
+            key.shape_signature.group, 1,
+            "window_size == 0 must clamp to 1 so scalar fallbacks still match"
+        );
     }
 
     #[test]
     fn sliding_window_forwards_dtype_fingerprint_and_policy_version() {
-        let key = sliding_window_key(
-            8, 2, 64, 1, 8, 4, 4,
-            DType::Fp16, "custom-fp", 7,
-        );
+        let key = sliding_window_key(8, 2, 64, 1, 8, 4, 4, DType::Fp16, "custom-fp", 7);
         assert_eq!(key.dtype, DType::Fp16);
         assert_eq!(key.device_fingerprint, "custom-fp");
         assert_eq!(key.policy_version, 7);
@@ -314,5 +393,40 @@ mod tests {
     #[should_panic(expected = "chunk_size must be > 0")]
     fn deltanet_panics_on_zero_chunk_size() {
         let _ = deltanet_key(8, 0, DType::Bf16, FP, 1);
+    }
+
+    #[test]
+    fn retnet_key_uses_recurrent_shape_contract() {
+        let key = retnet_key(2, 4, 16, 8, DType::Bf16, FP, 3);
+        assert_eq!(key.operator_kind, OperatorKind::Recurrent);
+        assert_eq!(
+            key.shape_signature,
+            ShapeSignature {
+                m: 16,
+                n: 16,
+                k: 16,
+                batch: 2,
+                seq: 8,
+                group: 4
+            }
+        );
+        assert_eq!(key.policy_version, 3);
+    }
+
+    #[test]
+    fn mamba_scan_key_uses_scan_shape_contract() {
+        let key = mamba_scan_key(1, 257, 32, DType::Fp32, FP, 4);
+        assert_eq!(key.operator_kind, OperatorKind::Scan);
+        assert_eq!(
+            key.shape_signature,
+            ShapeSignature {
+                m: 257,
+                n: 257,
+                k: 257,
+                batch: 1,
+                seq: 32,
+                group: 1
+            }
+        );
     }
 }

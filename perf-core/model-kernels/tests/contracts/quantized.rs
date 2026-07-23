@@ -7,7 +7,6 @@
 
 use super::*;
 
-
 #[test]
 fn ternary_pack_matches_manual_packing() {
     // 8 values packed into 2 bytes (2 bits each), single group of size 8.
@@ -90,8 +89,16 @@ fn subbyte_pack_handles_partial_trailing_group() {
     let bits = 4;
     let (packed, scales, zeros) = subbyte_pack(&values, bits, group_size).unwrap();
     let mut out = vec![0.0f32; values.len()];
-    subbyte_unpack(&packed, &scales, &zeros, values.len(), group_size, bits, &mut out)
-        .unwrap();
+    subbyte_unpack(
+        &packed,
+        &scales,
+        &zeros,
+        values.len(),
+        group_size,
+        bits,
+        &mut out,
+    )
+    .unwrap();
     for (i, (&v, &r)) in values.iter().zip(out.iter()).enumerate() {
         let slack = 1.0 / (1u32 << bits) as f32;
         assert!(
@@ -100,4 +107,3 @@ fn subbyte_pack_handles_partial_trailing_group() {
         );
     }
 }
-

@@ -4,9 +4,7 @@
 //! scheme.
 
 use super::subbyte::{subbyte_pack, subbyte_unpack};
-use super::ternary::{
-    ternary_pack, ternary_unpack, SignedTernary,
-};
+use super::ternary::{ternary_pack, ternary_unpack, SignedTernary};
 use crate::error::KernelError;
 
 #[test]
@@ -115,8 +113,16 @@ fn subbyte_handles_partial_trailing_group() {
     let bits = 4;
     let (packed, scales, zeros) = subbyte_pack(&values, bits, group_size).unwrap();
     let mut out = vec![0.0f32; values.len()];
-    subbyte_unpack(&packed, &scales, &zeros, values.len(), group_size, bits, &mut out)
-        .unwrap();
+    subbyte_unpack(
+        &packed,
+        &scales,
+        &zeros,
+        values.len(),
+        group_size,
+        bits,
+        &mut out,
+    )
+    .unwrap();
     let slack = 1.0 / (1u32 << bits) as f32;
     for (i, (&v, &r)) in values.iter().zip(out.iter()).enumerate() {
         let tol = slack + 1e-5;

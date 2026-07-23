@@ -52,8 +52,11 @@ fn capacity_one_is_identity_routing() {
     // contract is "routing is a no-op identity": no token is dropped.
     let weights = deterministic_vec(8, 0xA1);
     let plan = mod_route(&weights, &cfg(1.0)).unwrap();
-    assert_eq!(plan.selected_tokens.len(), weights.len(),
-        "capacity=1.0 must return all tokens");
+    assert_eq!(
+        plan.selected_tokens.len(),
+        weights.len(),
+        "capacity=1.0 must return all tokens"
+    );
     // Survivors are a permutation of the input indices; sort to compare.
     let mut sorted = plan.selected_tokens.clone();
     sorted.sort();
@@ -74,18 +77,27 @@ fn capacity_half_returns_exactly_half_top_scored() {
     weights[1] = -3.0;
     weights[2] = -1.0;
     let plan = mod_route(&weights, &cfg(0.5)).unwrap();
-    assert_eq!(plan.selected_tokens.len(), n / 2,
-        "capacity=0.5 on n=10 must return floor(0.5 * 10) = 5 tokens");
+    assert_eq!(
+        plan.selected_tokens.len(),
+        n / 2,
+        "capacity=0.5 on n=10 must return floor(0.5 * 10) = 5 tokens"
+    );
     // All of the top 5 weights (indices 5..10 with strict monotonic
     // increase) must be present.
     for i in 5..n {
-        assert!(plan.selected_tokens.contains(&(i as u32)),
-            "high-weight token {i} must survive; plan={:?}", plan.selected_tokens);
+        assert!(
+            plan.selected_tokens.contains(&(i as u32)),
+            "high-weight token {i} must survive; plan={:?}",
+            plan.selected_tokens
+        );
     }
     // None of the bottom 3 (which we set to large negatives) may survive.
     for i in 0..3 {
-        assert!(!plan.selected_tokens.contains(&(i as u32)),
-            "low-weight token {i} must not survive; plan={:?}", plan.selected_tokens);
+        assert!(
+            !plan.selected_tokens.contains(&(i as u32)),
+            "low-weight token {i} must not survive; plan={:?}",
+            plan.selected_tokens
+        );
     }
 }
 
@@ -118,8 +130,11 @@ fn ties_break_deterministically_by_lower_index() {
     let n = 6usize;
     let weights = vec![0.0f32; n];
     let plan = mod_route(&weights, &cfg(0.5)).unwrap();
-    assert_eq!(plan.selected_tokens, vec![0, 1, 2],
-        "all-ties case must select the first floor(0.5*6)=3 indices");
+    assert_eq!(
+        plan.selected_tokens,
+        vec![0, 1, 2],
+        "all-ties case must select the first floor(0.5*6)=3 indices"
+    );
     // A second capacity factor selects the same lower-index prefix
     // because tie-break is index ascending.
     let plan2 = mod_route(&weights, &cfg(0.5)).unwrap();
@@ -152,8 +167,7 @@ fn apply_and_scatter_back_round_trip_is_exact_with_zero_fill() {
     let scattered = mod_scatter_back(&selected, &plan, num_tokens, dim, 0.0).unwrap();
     assert_eq!(scattered.len(), num_tokens * dim);
 
-    let survivor: std::collections::HashSet<u32> =
-        plan.selected_tokens.iter().copied().collect();
+    let survivor: std::collections::HashSet<u32> = plan.selected_tokens.iter().copied().collect();
     let mut squared_l2 = 0.0f64;
     for t in 0..num_tokens {
         for d in 0..dim {
@@ -168,8 +182,10 @@ fn apply_and_scatter_back_round_trip_is_exact_with_zero_fill() {
             squared_l2 += diff * diff;
         }
     }
-    assert_eq!(squared_l2, 0.0,
-        "round-trip with fill=0.0 must be exact; got L2^2 = {squared_l2}");
+    assert_eq!(
+        squared_l2, 0.0,
+        "round-trip with fill=0.0 must be exact; got L2^2 = {squared_l2}"
+    );
 }
 
 #[test]
@@ -185,8 +201,7 @@ fn scatter_back_uses_supplied_fill_for_skipped_rows() {
     let selected = mod_apply(&plan, &full, dim).unwrap();
     let back_zero = mod_scatter_back(&selected, &plan, num_tokens, dim, 0.0).unwrap();
     let back_seven = mod_scatter_back(&selected, &plan, num_tokens, dim, 7.5).unwrap();
-    let survivor: std::collections::HashSet<u32> =
-        plan.selected_tokens.iter().copied().collect();
+    let survivor: std::collections::HashSet<u32> = plan.selected_tokens.iter().copied().collect();
     for t in 0..num_tokens {
         for d in 0..dim {
             let i = t * dim + d;
@@ -216,28 +231,38 @@ fn rejects_capacity_factor_outside_unit_interval_with_clear_error() {
     // Zero: capacity must be strictly positive.
     let err = mod_route(&weights, &cfg(0.0)).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("capacity_factor"),
-        "error must name the offending argument, got: {msg}");
-    assert!(msg.contains("0"),
-        "error must echo the rejected value, got: {msg}");
+    assert!(
+        msg.contains("capacity_factor"),
+        "error must name the offending argument, got: {msg}"
+    );
+    assert!(
+        msg.contains("0"),
+        "error must echo the rejected value, got: {msg}"
+    );
 
     // Negative: not allowed.
     let err = mod_route(&weights, &cfg(-0.5)).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("capacity_factor"),
-        "error must name capacity_factor, got: {msg}");
+    assert!(
+        msg.contains("capacity_factor"),
+        "error must name capacity_factor, got: {msg}"
+    );
 
     // Above 1: not allowed.
     let err = mod_route(&weights, &cfg(1.5)).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("capacity_factor"),
-        "error must name capacity_factor, got: {msg}");
+    assert!(
+        msg.contains("capacity_factor"),
+        "error must name capacity_factor, got: {msg}"
+    );
 
     // NaN: not finite -> reject.
     let err = mod_route(&weights, &cfg(f32::NAN)).unwrap_err();
     let msg = err.to_string();
-    assert!(msg.contains("capacity_factor"),
-        "NaN capacity_factor must be rejected, got: {msg}");
+    assert!(
+        msg.contains("capacity_factor"),
+        "NaN capacity_factor must be rejected, got: {msg}"
+    );
 }
 
 #[test]

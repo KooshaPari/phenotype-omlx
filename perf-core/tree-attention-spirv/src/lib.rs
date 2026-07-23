@@ -22,28 +22,45 @@ pub struct TreeAttnParams {
 #[cfg(feature = "spirv")]
 pub fn forward(
     params: &TreeAttnParams,
-    q: &[u16], k: &[u16], v: &[u16], mask: &[i32],
+    q: &[u16],
+    k: &[u16],
+    v: &[u16],
+    mask: &[i32],
 ) -> Option<Vec<u16>> {
     extern "C" {
         fn tree_attention_metal_init() -> i32;
         fn tree_attention_metal_forward(
-            q: *const u16, k: *const u16, v: *const u16, mask: *const i32,
-            out: *mut u16, params: *const CBridgeParams, len: usize,
+            q: *const u16,
+            k: *const u16,
+            v: *const u16,
+            mask: *const i32,
+            out: *mut u16,
+            params: *const CBridgeParams,
+            len: usize,
         ) -> i32;
     }
 
     #[repr(C)]
     #[derive(Clone, Copy)]
     struct CBridgeParams {
-        b: u32, h: u32, t: u32, w: u32, d: u32,
+        b: u32,
+        h: u32,
+        t: u32,
+        w: u32,
+        d: u32,
     }
 
     use std::sync::OnceLock;
     static INIT: OnceLock<i32> = OnceLock::new();
-    let rc = INIT.get_or_init(|| unsafe { tree_attention_metal_init() }).clone();
-    if rc != 0 { return None; }
+    let rc = INIT
+        .get_or_init(|| unsafe { tree_attention_metal_init() })
+        .clone();
+    if rc != 0 {
+        return None;
+    }
 
-    let len = params.batch * params.num_heads * params.seq_len * params.tree_width * params.head_dim;
+    let len =
+        params.batch * params.num_heads * params.seq_len * params.tree_width * params.head_dim;
     let mut out = vec![0u16; len];
     let p = CBridgeParams {
         b: params.batch as u32,
@@ -54,17 +71,29 @@ pub fn forward(
     };
     let rc = unsafe {
         tree_attention_metal_forward(
-            q.as_ptr(), k.as_ptr(), v.as_ptr(), mask.as_ptr(),
-            out.as_mut_ptr(), &p, len,
+            q.as_ptr(),
+            k.as_ptr(),
+            v.as_ptr(),
+            mask.as_ptr(),
+            out.as_mut_ptr(),
+            &p,
+            len,
         )
     };
-    if rc == 0 { Some(out) } else { None }
+    if rc == 0 {
+        Some(out)
+    } else {
+        None
+    }
 }
 
 #[cfg(not(feature = "spirv"))]
 pub fn forward(
     _params: &TreeAttnParams,
-    _q: &[u16], _k: &[u16], _v: &[u16], _mask: &[i32],
+    _q: &[u16],
+    _k: &[u16],
+    _v: &[u16],
+    _mask: &[i32],
 ) -> Option<Vec<u16>> {
     None
 }
@@ -76,7 +105,13 @@ mod tests {
 
     #[test]
     fn metal_bridge_compiles_without_panic() {
-        let p = TreeAttnParams { batch: 1, num_heads: 2, seq_len: 4, tree_width: 2, head_dim: 8 };
+        let p = TreeAttnParams {
+            batch: 1,
+            num_heads: 2,
+            seq_len: 4,
+            tree_width: 2,
+            head_dim: 8,
+        };
         let q = vec![0u16; p.batch * p.num_heads * p.seq_len * p.head_dim];
         let k = q.clone();
         let v = q.clone();

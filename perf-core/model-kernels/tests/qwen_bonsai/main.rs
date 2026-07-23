@@ -34,12 +34,8 @@
 //! - [`qwen_mini_trace`] — end-to-end agentic DeltaNet + MoE composition.
 
 use model_kernels::common::{approx_eq, Lcg};
-use model_kernels::moe::{
-    moe_dispatch, router_topk, shared_expert, weighted_reduce, DispatchPlan,
-};
-use model_kernels::quantized::{
-    ternary_matmul, ternary_pack, ternary_unpack, SignedTernary,
-};
+use model_kernels::moe::{moe_dispatch, router_topk, shared_expert, weighted_reduce, DispatchPlan};
+use model_kernels::quantized::{ternary_matmul, ternary_pack, ternary_unpack, SignedTernary};
 use model_kernels::recurrent::{deltanet_chunk, deltanet_step};
 
 const SEED: u64 = 0xCAFE_BABE_DEAD_BEEF;
@@ -56,7 +52,10 @@ fn assert_buf_close(a: &[f32], b: &[f32], abs: f32, rel: f32) {
     for (i, (&x, &y)) in a.iter().zip(b.iter()).enumerate() {
         let diff = (x - y).abs();
         let ok = diff <= abs || diff <= rel * x.abs().max(y.abs());
-        assert!(ok, "buffers differ at {i}: got {x}, expected {y} (abs={abs}, rel={rel})");
+        assert!(
+            ok,
+            "buffers differ at {i}: got {x}, expected {y} (abs={abs}, rel={rel})"
+        );
     }
 }
 
@@ -79,17 +78,34 @@ fn run_qwen_deltanet_trace(
     let mut final_states = Vec::with_capacity(num_heads);
     for h in 0..num_heads {
         let qh: Vec<f32> = (0..chunk_size)
-            .flat_map(|c| q[c * num_heads * head_dim + h * head_dim..c * num_heads * head_dim + h * head_dim + head_dim].iter().copied())
+            .flat_map(|c| {
+                q[c * num_heads * head_dim + h * head_dim
+                    ..c * num_heads * head_dim + h * head_dim + head_dim]
+                    .iter()
+                    .copied()
+            })
             .collect();
         let kh: Vec<f32> = (0..chunk_size)
-            .flat_map(|c| k[c * num_heads * head_dim + h * head_dim..c * num_heads * head_dim + h * head_dim + head_dim].iter().copied())
+            .flat_map(|c| {
+                k[c * num_heads * head_dim + h * head_dim
+                    ..c * num_heads * head_dim + h * head_dim + head_dim]
+                    .iter()
+                    .copied()
+            })
             .collect();
         let vh: Vec<f32> = (0..chunk_size)
-            .flat_map(|c| v[c * num_heads * head_dim + h * head_dim..c * num_heads * head_dim + h * head_dim + head_dim].iter().copied())
+            .flat_map(|c| {
+                v[c * num_heads * head_dim + h * head_dim
+                    ..c * num_heads * head_dim + h * head_dim + head_dim]
+                    .iter()
+                    .copied()
+            })
             .collect();
-        let (oh, sh) = deltanet_chunk(&qh, &kh, &vh, chunk_size, head_dim, &initial_states[h]).unwrap();
+        let (oh, sh) =
+            deltanet_chunk(&qh, &kh, &vh, chunk_size, head_dim, &initial_states[h]).unwrap();
         for c in 0..chunk_size {
-            outs[c * num_heads * head_dim + h * head_dim..c * num_heads * head_dim + h * head_dim + head_dim]
+            outs[c * num_heads * head_dim + h * head_dim
+                ..c * num_heads * head_dim + h * head_dim + head_dim]
                 .copy_from_slice(&oh[c * head_dim..c * head_dim + head_dim]);
         }
         final_states.push(sh);

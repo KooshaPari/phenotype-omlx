@@ -8,9 +8,9 @@
 
 use async_trait::async_trait;
 use spec_decode::{
-    dedup_preserve, verify_draft, AcceptedToken, BackendInfo, DraftMode, EngineState, HISTORY_CAP,
+    build_engine, dedup_preserve, verify_draft, AcceptedToken, BackendInfo, DraftMode, EngineState,
     MedusaHead, MedusaProposal, MockMedusaHead, SharedEngine, SpecDecodeConfig, SpecDecodeEngine,
-    SpecError, StepResult, TargetBackend, TargetOutput, TreeTopology, VerifyResult, build_engine,
+    SpecError, StepResult, TargetBackend, TargetOutput, TreeTopology, VerifyResult, HISTORY_CAP,
 };
 
 // -----------------------------------------------------------------------------
@@ -231,11 +231,8 @@ fn engine_step_medusa_collects_candidates_from_each_head() {
             ..Default::default()
         };
 
-        let mut engine = SpecDecodeEngine::new(
-            config,
-            Box::new(ScriptedTarget::with_argmax(64, 7)),
-            None,
-        );
+        let mut engine =
+            SpecDecodeEngine::new(config, Box::new(ScriptedTarget::with_argmax(64, 7)), None);
 
         let heads: Vec<Box<dyn MedusaHead>> = vec![
             Box::new(MockMedusaHead::new(vec![11, 12])),
@@ -266,10 +263,7 @@ fn engine_step_medusa_deduplicates_by_token_id_preserving_order() {
         let prop = MedusaProposal::from_heads(
             &heads,
             &[1, 2, 3],
-            &TreeTopology {
-                width: 4,
-                depth: 2,
-            },
+            &TreeTopology { width: 4, depth: 2 },
             config.max_draft_tokens,
         );
         assert_eq!(prop.heads.len(), 2);
@@ -302,10 +296,7 @@ fn engine_step_medusa_respects_max_draft_tokens_cap() {
     let prop = MedusaProposal::from_heads(
         &heads,
         &[1, 2, 3],
-        &TreeTopology {
-            width: 4,
-            depth: 2,
-        },
+        &TreeTopology { width: 4, depth: 2 },
         max,
     );
     let total: usize = prop.heads.iter().map(|h| h.len()).sum();
@@ -448,21 +439,14 @@ fn verify_result_serialization_smoke() {
 #[test]
 fn build_engine_returns_shared_handle() {
     let cfg = SpecDecodeConfig::default();
-    let h: SharedEngine = build_engine(
-        cfg,
-        Box::new(ScriptedTarget::with_argmax(8, 1)),
-        None,
-    );
+    let h: SharedEngine = build_engine(cfg, Box::new(ScriptedTarget::with_argmax(8, 1)), None);
     let lock = h.try_lock();
     assert!(lock.is_ok());
 }
 
 #[test]
 fn medusa_proposal_tree_topology_serializes() {
-    let t = TreeTopology {
-        width: 4,
-        depth: 2,
-    };
+    let t = TreeTopology { width: 4, depth: 2 };
     let j = serde_json::to_string(&t).unwrap();
     let back: TreeTopology = serde_json::from_str(&j).unwrap();
     assert_eq!(back.width, 4);
@@ -518,33 +502,20 @@ fn engine_state_push_accepted_evicts_correctly_over_multiple_overflows() {
 #[test]
 fn medusa_proposal_from_heads_with_empty_heads_returns_empty() {
     let heads: Vec<Box<dyn MedusaHead>> = vec![];
-    let prop = MedusaProposal::from_heads(
-        &heads,
-        &[1, 2, 3],
-        &TreeTopology {
-            width: 4,
-            depth: 2,
-        },
-        8,
+    let prop =
+        MedusaProposal::from_heads(&heads, &[1, 2, 3], &TreeTopology { width: 4, depth: 2 }, 8);
+    assert!(
+        prop.heads.is_empty(),
+        "empty heads input must yield empty proposal"
     );
-    assert!(prop.heads.is_empty(), "empty heads input must yield empty proposal");
     assert_eq!(prop.total(), 0);
     assert!(prop.flat_tokens().is_empty());
 }
 
 #[test]
 fn medusa_proposal_from_heads_single_head_proposes_in_order() {
-    let heads: Vec<Box<dyn MedusaHead>> =
-        vec![Box::new(MockMedusaHead::new(vec![10, 20, 30]))];
-    let prop = MedusaProposal::from_heads(
-        &heads,
-        &[],
-        &TreeTopology {
-            width: 4,
-            depth: 3,
-        },
-        3,
-    );
+    let heads: Vec<Box<dyn MedusaHead>> = vec![Box::new(MockMedusaHead::new(vec![10, 20, 30]))];
+    let prop = MedusaProposal::from_heads(&heads, &[], &TreeTopology { width: 4, depth: 3 }, 3);
     assert_eq!(prop.heads.len(), 1);
     assert_eq!(prop.heads[0], vec![10, 20, 30]);
 }
@@ -555,15 +526,7 @@ fn medusa_proposal_from_heads_deduplicates_across_heads_preserving_first_seen() 
         Box::new(MockMedusaHead::new(vec![5, 6])),
         Box::new(MockMedusaHead::new(vec![5, 7])),
     ];
-    let prop = MedusaProposal::from_heads(
-        &heads,
-        &[],
-        &TreeTopology {
-            width: 4,
-            depth: 2,
-        },
-        10,
-    );
+    let prop = MedusaProposal::from_heads(&heads, &[], &TreeTopology { width: 4, depth: 2 }, 10);
     // Token 5 appears in both heads; first head keeps it, second head deduplicates.
     let flat = prop.flat_tokens();
     assert_eq!(flat, vec![5, 6, 7]);
@@ -584,9 +547,17 @@ fn push_accepted_capacity_one_evicts_old_entry() {
     assert_eq!(s.history.len(), HISTORY_CAP);
 
     s.push_accepted(9999);
-    assert_eq!(s.history.len(), HISTORY_CAP, "queue must stay at cap after eviction");
+    assert_eq!(
+        s.history.len(),
+        HISTORY_CAP,
+        "queue must stay at cap after eviction"
+    );
     assert_eq!(s.history[0], 1, "oldest entry (0) must be evicted");
-    assert_eq!(s.history[HISTORY_CAP - 1], 9999, "newest entry must be at back");
+    assert_eq!(
+        s.history[HISTORY_CAP - 1],
+        9999,
+        "newest entry must be at back"
+    );
 }
 
 #[test]
@@ -609,15 +580,7 @@ fn push_accepted_capacity_zero_does_not_crash() {
 #[test]
 fn medusa_proposal_from_heads_empty_heads_returns_empty() {
     let heads: Vec<Box<dyn MedusaHead>> = vec![];
-    let prop = MedusaProposal::from_heads(
-        &heads,
-        &[],
-        &TreeTopology {
-            width: 4,
-            depth: 2,
-        },
-        16,
-    );
+    let prop = MedusaProposal::from_heads(&heads, &[], &TreeTopology { width: 4, depth: 2 }, 16);
     assert!(prop.heads.is_empty());
     assert_eq!(prop.total(), 0);
     assert!(prop.flat_tokens().is_empty());
@@ -631,14 +594,21 @@ fn medusa_proposal_from_heads_empty_heads_returns_empty() {
 #[test]
 fn dedup_preserve_all_duplicates_returns_single_element() {
     let result = dedup_preserve(vec![7, 7, 7, 7, 7]);
-    assert_eq!(result, vec![7], "all-duplicate input must collapse to one element");
+    assert_eq!(
+        result,
+        vec![7],
+        "all-duplicate input must collapse to one element"
+    );
 }
 
 #[test]
 fn dedup_preserve_no_duplicates_preserves_all() {
     let input = vec![10, 20, 30, 40, 50];
     let result = dedup_preserve(input.clone());
-    assert_eq!(result, input, "all-unique input must be preserved unchanged");
+    assert_eq!(
+        result, input,
+        "all-unique input must be preserved unchanged"
+    );
 }
 
 #[test]

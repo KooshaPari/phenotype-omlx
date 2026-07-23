@@ -202,7 +202,9 @@ fn measure_matmul(shape: &ShapeKey) -> (u128, f64) {
     // Deterministic, non-zero contents so the JIT / LLVM can't fold the
     // loop away. Pattern is `i * 0.5 + 1` so values stay small and we
     // don't have to worry about f32 precision drift across buckets.
-    let a: Vec<f32> = (0..m_tile * k_full).map(|i| (i as f32) * 0.5 + 1.0).collect();
+    let a: Vec<f32> = (0..m_tile * k_full)
+        .map(|i| (i as f32) * 0.5 + 1.0)
+        .collect();
     let w: Vec<f32> = (0..k_full * n_tile)
         .map(|i| ((i % 97) as f32) * 0.25 + 0.5)
         .collect();

@@ -6,7 +6,8 @@
 //! (e.g. `spec-decode`) would.
 
 use model_kernels::attention::{
-    mla_attention, mla_cache_append, mla_cache_append_with_capacity, mla_cache_attend, MlaCacheEntry,
+    mla_attention, mla_cache_append, mla_cache_append_with_capacity, mla_cache_attend,
+    MlaCacheEntry,
 };
 use model_kernels::common::{approx_eq_tol, Lcg};
 use model_kernels::error::KernelError;
@@ -43,7 +44,9 @@ fn mla_cache_round_trip_matches_mla_attention_oracle() {
         let ck: Vec<f32> = (0..d_latent)
             .map(|d| 0.1 * (i * d_latent + d) as f32)
             .collect();
-        let kr: Vec<f32> = (0..d_rope).map(|d| 0.05 * (i * d_rope + d) as f32).collect();
+        let kr: Vec<f32> = (0..d_rope)
+            .map(|d| 0.05 * (i * d_rope + d) as f32)
+            .collect();
         mla_cache_append(&mut cache, &ck, &kr).unwrap();
         k_latent_full.extend_from_slice(&ck);
         k_rope_full.extend_from_slice(&kr);
@@ -88,8 +91,7 @@ fn mla_cache_append_beyond_capacity_returns_bad_buffer_length() {
     // memory cost.
     let mut cache: Vec<MlaCacheEntry> = Vec::new();
     mla_cache_append_with_capacity(&mut cache, &[1.0, 2.0], &[3.0, 4.0], 1).unwrap();
-    let err =
-        mla_cache_append_with_capacity(&mut cache, &[5.0, 6.0], &[7.0, 8.0], 1).unwrap_err();
+    let err = mla_cache_append_with_capacity(&mut cache, &[5.0, 6.0], &[7.0, 8.0], 1).unwrap_err();
     match err {
         KernelError::BadBufferLength {
             what,
@@ -144,8 +146,7 @@ fn mtp_verify_accepts_all_ones_high_confidence() {
     };
     let verifier = vec![
         // row 0: massive mass on token 0
-        100.0f32, -100.0, -100.0,
-        // row 1: massive mass on token 1
+        100.0f32, -100.0, -100.0, // row 1: massive mass on token 1
         -100.0, 100.0, -100.0,
     ];
     let mask = mtp_verify(&proposal, &verifier, 3, 0.9).unwrap();

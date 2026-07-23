@@ -81,7 +81,9 @@ pub enum PlanError {
 pub enum InterpreterError {
     /// The operator kind is recognized by the plan but the slow reference
     /// interpreter does not implement it.
-    #[error("operator {operator} of kind {kind:?} is not implemented in the reference interpreter")]
+    #[error(
+        "operator {operator} of kind {kind:?} is not implemented in the reference interpreter"
+    )]
     UnsupportedOperator {
         operator: OperatorId,
         kind: OperatorKind,
@@ -89,10 +91,7 @@ pub enum InterpreterError {
 
     /// A required input tensor was not supplied by the caller.
     #[error("missing input tensor '{name}' for operator {operator}")]
-    MissingInput {
-        operator: OperatorId,
-        name: String,
-    },
+    MissingInput { operator: OperatorId, name: String },
 
     /// A tensor's runtime element count does not match its declared shape.
     #[error(

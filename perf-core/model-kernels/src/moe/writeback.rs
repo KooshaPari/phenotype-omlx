@@ -46,11 +46,7 @@ impl WritebackPlan {
     /// `(num_tokens, experts_per_token, hidden)`. Mirrors the
     /// pre-existing `expected_eo` computation in `reduce_tiled`.
     #[inline]
-    pub fn expected_eo_len(
-        num_tokens: usize,
-        experts_per_token: usize,
-        hidden: usize,
-    ) -> usize {
+    pub fn expected_eo_len(num_tokens: usize, experts_per_token: usize, hidden: usize) -> usize {
         num_tokens * experts_per_token * hidden
     }
 }
@@ -68,7 +64,10 @@ pub fn stage_expert_outputs(
     hidden: usize,
 ) -> Result<WritebackPlan> {
     if hidden == 0 {
-        return Err(KernelError::ZeroDimension { what: "hidden", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "hidden",
+            got: 0,
+        });
     }
     let total_routed: usize = dispatch_plan.capacity_used.iter().sum();
     let total_input: usize = total_routed + dispatch_plan.dropped.len();
@@ -85,8 +84,7 @@ pub fn stage_expert_outputs(
         .iter()
         .map(|&cap| vec![0.0f32; cap * hidden])
         .collect();
-    let mut token_to_expert_slot: Vec<(usize, usize)> =
-        vec![(DROPPED, DROPPED); total_input];
+    let mut token_to_expert_slot: Vec<(usize, usize)> = vec![(DROPPED, DROPPED); total_input];
     for (e, bucket) in dispatch_plan.expert_buckets.iter().enumerate() {
         for (slot, &tok) in bucket.iter().enumerate() {
             let src = &expert_outs[tok * hidden..tok * hidden + hidden];
@@ -115,7 +113,10 @@ pub fn coalesced_writeback(
     out: &mut [f32],
 ) -> Result<()> {
     if hidden == 0 {
-        return Err(KernelError::ZeroDimension { what: "hidden", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "hidden",
+            got: 0,
+        });
     }
     if out.len() != num_tokens * hidden {
         return Err(KernelError::BadBufferLength {
@@ -153,8 +154,7 @@ pub fn coalesced_writeback(
         if expert == DROPPED {
             continue;
         }
-        let src_row =
-            &stage.per_expert_blocks[expert][slot * hidden..slot * hidden + hidden];
+        let src_row = &stage.per_expert_blocks[expert][slot * hidden..slot * hidden + hidden];
         let dst_row = &mut out[t * hidden..t * hidden + hidden];
         let mut h = 0;
         while h < hidden {
@@ -202,13 +202,11 @@ mod tests {
     /// 1. byte-equality against a naive per-token copy.
     #[test]
     fn coalesced_writeback_matches_naive_per_token_sum() {
-        let (plan, expert_outs) =
-            make_plan_and_outs(17, 5, 64, 2.0, 0xA1, 0xB2);
+        let (plan, expert_outs) = make_plan_and_outs(17, 5, 64, 2.0, 0xA1, 0xB2);
         let stage = stage_expert_outputs(&expert_outs, &plan, 64).unwrap();
         let mut naive = vec![0.0f32; 17 * 64];
         for t in 0..17 {
-            naive[t * 64..t * 64 + 64]
-                .copy_from_slice(&expert_outs[t * 64..t * 64 + 64]);
+            naive[t * 64..t * 64 + 64].copy_from_slice(&expert_outs[t * 64..t * 64 + 64]);
         }
         let mut out = vec![f32::NAN; 17 * 64];
         coalesced_writeback(&stage, 17, 64, &mut out).unwrap();
@@ -219,8 +217,7 @@ mod tests {
     /// 2. Stage preserves the per-expert layout in dispatch order.
     #[test]
     fn stage_expert_outputs_preserves_expert_layout() {
-        let (plan, expert_outs) =
-            make_plan_and_outs(9, 3, 4, 2.0, 0xC0FFEE, 0xDEAD);
+        let (plan, expert_outs) = make_plan_and_outs(9, 3, 4, 2.0, 0xC0FFEE, 0xDEAD);
         let stage = stage_expert_outputs(&expert_outs, &plan, 4).unwrap();
         for (e, &cap) in plan.capacity_used.iter().enumerate() {
             assert_eq!(stage.per_expert_blocks[e].len(), cap * 4);
@@ -257,8 +254,7 @@ mod tests {
     /// 4. capacity_used <= 1 across all experts.
     #[test]
     fn writeback_handles_capacity_one() {
-        let (plan, expert_outs) =
-            make_plan_and_outs(5, 5, 8, 1.0, 0x42, 0x99);
+        let (plan, expert_outs) = make_plan_and_outs(5, 5, 8, 1.0, 0x42, 0x99);
         let stage = stage_expert_outputs(&expert_outs, &plan, 8).unwrap();
         for &cap in plan.capacity_used.iter() {
             assert!(cap <= 1);
@@ -267,10 +263,7 @@ mod tests {
         coalesced_writeback(&stage, 5, 8, &mut out).unwrap();
         for t in 0..5 {
             for h in 0..8 {
-                assert_eq!(
-                    out[t * 8 + h].to_bits(),
-                    expert_outs[t * 8 + h].to_bits()
-                );
+                assert_eq!(out[t * 8 + h].to_bits(), expert_outs[t * 8 + h].to_bits());
             }
         }
     }
@@ -292,10 +285,16 @@ mod tests {
         let stage = stage_expert_outputs(&expert_outs, &plan, 3).unwrap();
         let mut out_short = vec![0.0f32; 4 * 3 - 1];
         let err = coalesced_writeback(&stage, 4, 3, &mut out_short).unwrap_err();
-        assert!(matches!(err, KernelError::BadBufferLength { what: "out", .. }));
+        assert!(matches!(
+            err,
+            KernelError::BadBufferLength { what: "out", .. }
+        ));
         let mut out_long = vec![0.0f32; 4 * 3 + 1];
         let err = coalesced_writeback(&stage, 4, 3, &mut out_long).unwrap_err();
-        assert!(matches!(err, KernelError::BadBufferLength { what: "out", .. }));
+        assert!(matches!(
+            err,
+            KernelError::BadBufferLength { what: "out", .. }
+        ));
         let mut bad_stage = stage.clone();
         if let Some(b) = bad_stage.per_expert_blocks.get_mut(0) {
             if !b.is_empty() {
@@ -305,7 +304,13 @@ mod tests {
         let mut out = vec![0.0f32; 12];
         let err = coalesced_writeback(&bad_stage, 4, 3, &mut out).unwrap_err();
         assert!(
-            matches!(err, KernelError::BadBufferLength { what: "per_expert_blocks", .. }),
+            matches!(
+                err,
+                KernelError::BadBufferLength {
+                    what: "per_expert_blocks",
+                    ..
+                }
+            ),
             "got {err:?}"
         );
     }
@@ -313,16 +318,15 @@ mod tests {
     #[test]
     fn writeback_handles_uneven_buckets() {
         let token_indices: Vec<usize> = (0..5).collect();
-        let assignments: Vec<(usize, f32)> =
-            vec![(0, 1.0), (2, 1.0), (0, 1.0), (2, 1.0), (2, 1.0)];
+        let assignments: Vec<(usize, f32)> = vec![(0, 1.0), (2, 1.0), (0, 1.0), (2, 1.0), (2, 1.0)];
         let plan = moe_dispatch(&token_indices, &assignments, 3, 5.0).unwrap();
         assert_eq!(plan.capacity_used, vec![2, 0, 3]);
-        let expert_outs: Vec<f32> =
-            (0..20).map(|_| Lcg::new(0xFEED_FACE).next_signed()).collect();
+        let expert_outs: Vec<f32> = (0..20)
+            .map(|_| Lcg::new(0xFEED_FACE).next_signed())
+            .collect();
         let mut naive = [0.0f32; 20];
         for t in 0..5 {
-            naive[t * 4..t * 4 + 4]
-                .copy_from_slice(&expert_outs[t * 4..t * 4 + 4]);
+            naive[t * 4..t * 4 + 4].copy_from_slice(&expert_outs[t * 4..t * 4 + 4]);
         }
         let stage = stage_expert_outputs(&expert_outs, &plan, 4).unwrap();
         assert_eq!(stage.per_expert_blocks[0].len(), 8);

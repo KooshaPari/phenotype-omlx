@@ -34,8 +34,7 @@ fn jamba_mamba_chunked_output_matches_repeated_single_steps() {
 
     // Reference: single 8-step chunked scan.
     let mut s_full = vec![0.0f32; state_dim];
-    let (full_outs, full_state) =
-        mamba_selective_scan_chunk(&params, &u, &mut s_full, 8).unwrap();
+    let (full_outs, full_state) = mamba_selective_scan_chunk(&params, &u, &mut s_full, 8).unwrap();
 
     // Hybrid: chunk it as 4 + 4 and verify the per-chunk outputs equal
     // the corresponding slice of the full run, with state continuity.

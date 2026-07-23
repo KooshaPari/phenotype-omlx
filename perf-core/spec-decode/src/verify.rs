@@ -39,9 +39,7 @@ pub fn verify(
     config: &SpecDecodeConfig,
 ) -> Result<VerifyResult, SpecError> {
     if target_logits.is_empty() {
-        return Err(SpecError::Config(
-            "target_logits must be non-empty".into(),
-        ));
+        return Err(SpecError::Config("target_logits must be non-empty".into()));
     }
 
     // Validate probs: must either be empty, exactly `draft_tokens.len()`,
@@ -127,10 +125,7 @@ pub async fn verify_linear(
             continue;
         }
         // Greedy accept: argmax of target(prefix) must equal cand.tokens[0].
-        let logits = target
-            .forward(prefix)
-            .await
-            .map_err(SpecError::Backend)?;
+        let logits = target.forward(prefix).await.map_err(SpecError::Backend)?;
         let argmax = logits
             .logits
             .iter()
