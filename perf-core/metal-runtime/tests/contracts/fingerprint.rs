@@ -38,7 +38,11 @@ fn fingerprint_distinct_across_fake_gpu_families() {
         // hash() must be different across families (device_name identical).
         set.insert(fp.fingerprint_hash());
     }
-    assert_eq!(set.len(), 4, "all four GpuFamily variants must hash distinctly");
+    assert_eq!(
+        set.len(),
+        4,
+        "all four GpuFamily variants must hash distinctly"
+    );
 }
 
 #[test]

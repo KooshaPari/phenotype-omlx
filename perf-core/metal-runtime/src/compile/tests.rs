@@ -2,7 +2,7 @@
 //! `#[cfg(test)] mod tests` block during the per-topic module split
 //! (turn-13 module-size sweep). Behavior is unchanged.
 
-use super::{BoundedCompiler, CompileBudget, plan_revision};
+use super::{plan_revision, BoundedCompiler, CompileBudget};
 use model_plan::{
     DType, ModelId, ModelPlan, OperatorId, OperatorKind, OperatorPlan, Precision,
     QuantizationPolicy, SchedulerPolicy, TensorRef,
