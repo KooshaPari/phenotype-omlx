@@ -115,16 +115,50 @@ def now_iso() -> str:
 
 
 def default_data_path() -> Path:
+    """Resolve V5 cells JSON without inventing new trial runs.
+
+    Prefer ``BENCH_DATA``, then the historical short V5 under
+    ``repos/pheno-harness/...`` (read-only; no stock_vs_ours re-run), then
+    cockpit smoke fixtures.
+    """
     env = os.environ.get("BENCH_DATA")
     if env:
         return Path(env)
-    native = Path(
-        "/Users/kooshapari/CodeProjects/Phenotype/repos/pheno-harness/bench/results/"
-        "stock-vs-ours/run-v5-qwen35-08b.json"
+    here = Path(__file__).resolve()
+    candidates: list[Path] = []
+    for parent in here.parents:
+        if parent.name == "repos":
+            candidates.append(
+                parent
+                / "pheno-harness"
+                / "bench"
+                / "results"
+                / "stock-vs-ours"
+                / "run-v5-qwen35-08b.json"
+            )
+            break
+    candidates.append(
+        Path(
+            "/Users/kooshapari/CodeProjects/Phenotype/repos/pheno-harness/bench/results/"
+            "stock-vs-ours/run-v5-qwen35-08b.json"
+        )
     )
-    if native.is_file():
-        return native
+    for native in candidates:
+        if native.is_file():
+            return native
     return ROOT / "fixtures" / "smoke_results.json"
+
+
+def parse_judge_payload(text: str) -> tuple[float, str]:
+    """Extract ``score`` / ``reason`` from a judge model response body."""
+    m = re.search(r"\{[^{}]+\}", text, re.S)
+    if not m:
+        return 0.0, f"unparseable:{text[:120]}"
+    try:
+        parsed = json.loads(m.group(0))
+        return float(parsed.get("score", 0)), str(parsed.get("reason", ""))[:240]
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return 0.0, f"bad_json:{text[:120]}"
 
 
 def load_cells(path: Path, limit: int) -> list[dict[str, Any]]:
@@ -289,24 +323,34 @@ def minimax_judge(prompt: str, reply: str, rubric: str) -> tuple[float, str]:
     for block in data.get("content") or []:
         if isinstance(block, dict) and block.get("type") == "text":
             text += block.get("text") or ""
-    m = re.search(r"\{[^{}]+\}", text, re.S)
-    if not m:
-        return 0.0, f"unparseable:{text[:120]}"
-    try:
-        parsed = json.loads(m.group(0))
-        return float(parsed.get("score", 0)), str(parsed.get("reason", ""))[:240]
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return 0.0, f"bad_json:{text[:120]}"
+    return parse_judge_payload(text)
 
 
-def judge(limit: int) -> dict[str, Any]:
-    code, body = lf_request("GET", f"/api/public/traces?limit={limit}")
-    if code >= 300:
-        die(f"traces {code}: {body}")
-    traces = body.get("data") or body.get("traces") or []
+def judge(limit: int, trace_ids: list[str] | None = None) -> dict[str, Any]:
+    if not _minimax_key():
+        die(
+            "MINIMAX_API_KEY required for live LLM-as-judge "
+            "(env or keychain service minimax-coding-plan); refusing silent zero scores"
+        )
+    traces: list[dict[str, Any]] = []
+    if trace_ids:
+        for tid in trace_ids[:limit]:
+            code, body = lf_request("GET", f"/api/public/traces/{tid}")
+            if code >= 300:
+                die(f"trace {tid} {code}: {body}")
+            # Some APIs wrap under "data"
+            tr = body.get("data") if isinstance(body.get("data"), dict) else body
+            if isinstance(tr, dict) and tr.get("id"):
+                traces.append(tr)
+    else:
+        code, body = lf_request("GET", f"/api/public/traces?limit={limit}")
+        if code >= 300:
+            die(f"traces {code}: {body}")
+        traces = body.get("data") or body.get("traces") or []
     ts = now_iso()
     batch: list[dict[str, Any]] = []
     scored = 0
+    correctness_by_trace: dict[str, float] = {}
     for tr in traces:
         tid = tr.get("id")
         if not tid:
@@ -317,6 +361,8 @@ def judge(limit: int) -> dict[str, Any]:
         reply = str(out.get("reply") or json.dumps(out)[:2000])
         for key, rubric in LLM_RUBRICS:
             score, reason = minimax_judge(prompt, reply, rubric)
+            if reason.startswith("no_minimax_key") or reason.startswith("judge_error:"):
+                die(f"judge failed for trace {tid} / {key}: {reason}")
             batch.append(
                 {
                     "id": str(uuid.uuid4()),
@@ -333,6 +379,8 @@ def judge(limit: int) -> dict[str, Any]:
                 }
             )
             scored += 1
+            if key == "correctness":
+                correctness_by_trace[tid] = score
     if not batch:
         return {"traces": len(traces), "scores": 0, "note": "no traces to judge"}
     code, ing = lf_request("POST", "/api/public/ingestion", {"batch": batch})
@@ -341,8 +389,22 @@ def judge(limit: int) -> dict[str, Any]:
         "traces": len(traces),
         "scores": scored,
         "ingestion": ing,
-        "llm_enabled": bool(_minimax_key()),
+        "llm_enabled": True,
+        "judge_score_by_trace": correctness_by_trace,
+        "mean_judge_score": (
+            round(sum(correctness_by_trace.values()) / len(correctness_by_trace), 4)
+            if correctness_by_trace
+            else None
+        ),
     }
+
+
+def run_all(limit: int, data_path: Path) -> dict[str, Any]:
+    """Seed historical/fixture cells then live-judge those seeded traces only."""
+    seeded = seed(limit, data_path)
+    ids = list(seeded.get("trace_ids") or [])
+    judged = judge(limit, trace_ids=ids)
+    return {"seed": seeded, "judge": judged}
 
 
 def sync_hosted() -> dict[str, Any]:
@@ -373,7 +435,11 @@ def sync_hosted() -> dict[str, Any]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=["seed", "judge", "status", "sync"])
+    ap.add_argument(
+        "action",
+        choices=["seed", "judge", "all", "status", "sync"],
+        help="all = seed historical/fixture cells then live-judge traces",
+    )
     ap.add_argument("--limit", type=int, default=40)
     ap.add_argument("--data", type=Path, default=None)
     args = ap.parse_args()
@@ -389,6 +455,8 @@ def main() -> None:
                     "projects": projects,
                     "llm_connections": conns,
                     "base": BASE,
+                    "default_data": str(default_data_path()),
+                    "default_data_exists": default_data_path().is_file(),
                 },
                 indent=2,
             )
@@ -397,12 +465,17 @@ def main() -> None:
     if args.action == "sync":
         print(json.dumps(sync_hosted(), indent=2))
         return
+    data_path = args.data or default_data_path()
     if args.action == "seed":
-        out = seed(args.limit, args.data or default_data_path())
+        out = seed(args.limit, data_path)
         print(json.dumps(out, indent=2))
         return
     if args.action == "judge":
         out = judge(args.limit)
+        print(json.dumps(out, indent=2))
+        return
+    if args.action == "all":
+        out = run_all(args.limit, data_path)
         print(json.dumps(out, indent=2))
         return
 
