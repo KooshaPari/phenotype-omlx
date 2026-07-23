@@ -32,11 +32,26 @@ pub mod verify;
 pub use backend::{BackendInfo, DraftBackend, NullDraftBackend, TargetBackend, TargetOutput};
 pub use engine::{DraftCandidate, SpecDecodeEngine, SpecStats};
 pub use proposal::{dedup_preserve, MedusaHead, MedusaProposal, MockMedusaHead, TreeTopology};
+pub use proposal_state::ProposalState;
+pub use state::{EngineState, HISTORY_CAP};
 pub use tree_proposal::{
     create_parallel_trees, merge_parallel_results, DraftNode, DraftTree, ParallelTreeConfig,
 };
-pub use proposal_state::ProposalState;
-pub use state::{EngineState, HISTORY_CAP};
+
+/// Proposal strategy — selects which draft proposal path the engine uses.
+#[derive(Debug, Clone)]
+pub enum ProposalMode {
+    /// Legacy Medusa multi-head proposal.
+    Medusa,
+    /// EAGLE-3 / P-EAGLE tree-based proposal.
+    Eagle3(tree_proposal::ParallelTreeConfig),
+}
+
+impl Default for ProposalMode {
+    fn default() -> Self {
+        ProposalMode::Medusa
+    }
+}
 pub use verify::{verify as verify_draft, VerifyResult};
 
 /// Draft strategy selection — mirrors `turbo_mlx.ssd.DraftMode`.

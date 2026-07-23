@@ -8,6 +8,10 @@ description = "phenotype-omlx turbo-quant in Mojo (cross-language FFI polyglot c
 name = "turbo_quant_mojo"
 crate-type = ["staticlib", "rlib"]
 
+[[bench]]
+name = "kernel_ab"
+harness = false
+
 [dependencies]
 libc = "0.2"
 

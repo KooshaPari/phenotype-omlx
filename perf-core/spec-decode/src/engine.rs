@@ -7,8 +7,9 @@
 use crate::backend::{DraftBackend, TargetBackend};
 use crate::proposal::{MedusaHead, MedusaProposal, TreeTopology};
 use crate::state::EngineState;
+use crate::tree_proposal;
 use crate::verify::{verify as verify_draft, verify_linear, verify_tree, VerifyResult};
-use crate::{AcceptedToken, DraftMode, SpecDecodeConfig, SpecError, StepResult};
+use crate::{AcceptedToken, DraftMode, ProposalMode, SpecDecodeConfig, SpecError, StepResult};
 
 /// Cancellation token: returns `true` when the caller wants to abort.
 pub type CancelFn = dyn Fn() -> bool;
@@ -47,6 +48,8 @@ pub struct SpecDecodeEngine {
     pub stats: SpecStats,
     /// Per-call state: most recent KV-cache content for SameModel drafting.
     pub seen_tokens: Vec<u32>,
+    /// Proposal strategy — Medusa or EAGLE-3 tree-based.
+    pub proposal_mode: ProposalMode,
     /// Observable engine state — KV length, drafted/accepted counters, history.
     state: EngineState,
 }
@@ -63,8 +66,14 @@ impl SpecDecodeEngine {
             draft,
             stats: SpecStats::default(),
             seen_tokens: Vec::new(),
+            proposal_mode: ProposalMode::default(),
             state: EngineState::new(),
         }
+    }
+
+    pub fn with_proposal_mode(mut self, mode: ProposalMode) -> Self {
+        self.proposal_mode = mode;
+        self
     }
 
     /// Snapshot of the current engine state — pure data, no locks required.
@@ -78,6 +87,29 @@ impl SpecDecodeEngine {
         self.state.reset();
         self.stats = SpecStats::default();
         self.seen_tokens.clear();
+    }
+
+    /// Generate draft proposals using EAGLE-3 tree-based approach.
+    pub fn propose_eagle3(
+        &self,
+        branch_logits: Vec<Vec<(u32, f32)>>,
+        config: &tree_proposal::ParallelTreeConfig,
+    ) -> tree_proposal::DraftTree {
+        let root_token = self.state.history.back().copied().unwrap_or(0);
+        let trees =
+            tree_proposal::create_parallel_trees(root_token, branch_logits, config);
+        trees
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| tree_proposal::DraftTree {
+                root: tree_proposal::DraftNode {
+                    token_id: root_token,
+                    probability: 1.0,
+                    children: vec![],
+                },
+                depth: 0,
+                total_leaves: 1,
+            })
     }
 
     /// Submit a single prompt and generate up to `max_new_tokens` accepted tokens.
@@ -197,7 +229,13 @@ impl SpecDecodeEngine {
 
         let finished = candidates
             .first()
-            .and_then(|c| if c.tokens.is_empty() { Some(true) } else { None })
+            .and_then(|c| {
+                if c.tokens.is_empty() {
+                    Some(true)
+                } else {
+                    None
+                }
+            })
             .unwrap_or(false);
 
         for t in &accepted_tokens {
@@ -226,12 +264,8 @@ impl SpecDecodeEngine {
             width: self.config.tree_width.max(1),
             depth: self.config.tree_depth.max(1),
         };
-        let proposal = MedusaProposal::from_heads(
-            heads,
-            prompt,
-            &topology,
-            self.config.max_draft_tokens,
-        );
+        let proposal =
+            MedusaProposal::from_heads(heads, prompt, &topology, self.config.max_draft_tokens);
 
         if proposal.total() == 0 {
             return Ok(StepResult {
@@ -283,6 +317,81 @@ impl SpecDecodeEngine {
         })
     }
 
+    /// Run an EAGLE-3 / P-EAGLE step using tree-based draft proposals.
+    ///
+    /// `branch_logits` are the per-depth candidate lists from the EAGLE-3
+    /// draft head. The engine builds parallel trees, flattens every
+    /// root-to-leaf path into a `DraftCandidate`, and verifies via tree
+    /// attention.
+    pub async fn step_eagle3(
+        &mut self,
+        prefix: &[u32],
+        branch_logits: Vec<Vec<(u32, f32)>>,
+    ) -> Result<StepResult, SpecError> {
+        let eagle_config = match &self.proposal_mode {
+            ProposalMode::Eagle3(cfg) => cfg.clone(),
+            _ => tree_proposal::ParallelTreeConfig::default(),
+        };
+
+        let root_token = self.state.history.back().copied().unwrap_or(0);
+        let trees =
+            tree_proposal::create_parallel_trees(root_token, branch_logits, &eagle_config);
+
+        let mut candidates: Vec<DraftCandidate> = Vec::new();
+        for tree in &trees {
+            for path in tree.leaf_paths() {
+                if !path.is_empty() {
+                    candidates.push(DraftCandidate {
+                        tokens: path,
+                        tree_path: None,
+                    });
+                }
+            }
+        }
+
+        if candidates.is_empty() {
+            return Ok(StepResult {
+                accepted: Vec::new(),
+                drafted: 0,
+                finished: false,
+            });
+        }
+
+        let drafted = candidates.first().map(|c| c.tokens.len()).unwrap_or(0);
+
+        let accepted = verify_tree(&*self.target, prefix, &candidates).await?;
+
+        let mut accepted_tokens: Vec<AcceptedToken> = Vec::new();
+        for (i, &ok) in accepted.iter().enumerate() {
+            if ok {
+                if let Some(c) = candidates.get(i) {
+                    if let Some(&tok) = c.tokens.first() {
+                        accepted_tokens.push(AcceptedToken {
+                            token_id: tok,
+                            was_drafted: true,
+                        });
+                    }
+                }
+            }
+        }
+
+        for t in &accepted_tokens {
+            self.state.push_accepted(t.token_id);
+            self.state.extend_kv(1);
+        }
+        self.state.record_step(drafted, accepted_tokens.len());
+        self.seen_tokens.extend(prefix);
+        for t in &accepted_tokens {
+            self.seen_tokens.push(t.token_id);
+        }
+
+        Ok(StepResult {
+            accepted: accepted_tokens,
+            drafted,
+            finished: false,
+        })
+    }
+
     /// Run a deterministic verification pass against the target's logits
     /// without performing any draft step — exposed so external callers
     /// (Python, FFI) can plug in custom draft proposals.
@@ -302,17 +411,27 @@ impl SpecDecodeEngine {
         _heads: &[Box<dyn MedusaHead>],
     ) -> Result<Vec<DraftCandidate>, SpecError> {
         match self.config.mode {
-            DraftMode::SameModel => Ok(prompt_lookup(prefix, &self.seen_tokens, self.config.max_draft_tokens)
-                .into_iter()
-                .map(|tokens| DraftCandidate { tokens, tree_path: None })
-                .collect()),
+            DraftMode::SameModel => {
+                Ok(
+                    prompt_lookup(prefix, &self.seen_tokens, self.config.max_draft_tokens)
+                        .into_iter()
+                        .map(|tokens| DraftCandidate {
+                            tokens,
+                            tree_path: None,
+                        })
+                        .collect(),
+                )
+            }
             DraftMode::DraftModel => {
                 let draft = self.draft.as_ref().ok_or(SpecError::DraftNotLoaded)?;
                 let tokens = draft
                     .draft(prefix, self.config.max_draft_tokens)
                     .await
                     .map_err(SpecError::Backend)?;
-                Ok(vec![DraftCandidate { tokens, tree_path: None }])
+                Ok(vec![DraftCandidate {
+                    tokens,
+                    tree_path: None,
+                }])
             }
             DraftMode::Medusa => {
                 // Medusa is driven through `step_medusa`; `propose` here is
@@ -474,9 +593,211 @@ mod tests {
         );
         let mut logits = vec![0.0_f32; 16];
         logits[5] = 10.0;
-        let r = e
-            .verify_only(&logits, &[5_u32, 5, 5], &[1.0; 16])
-            .unwrap();
+        let r = e.verify_only(&logits, &[5_u32, 5, 5], &[1.0; 16]).unwrap();
         assert_eq!(r.accepted_prefix.len(), 3);
+    }
+
+    // -- find_subseq edge cases -------------------------------------------------------
+
+    #[test]
+    fn find_subseq_at_start_of_haystack() {
+        let hay = vec![1, 2, 3, 4, 5];
+        let needle = vec![1, 2];
+        assert_eq!(find_subseq(&hay, &needle), Some(0));
+    }
+
+    #[test]
+    fn find_subseq_at_end_of_haystack() {
+        let hay = vec![10, 20, 30, 40, 50];
+        let needle = vec![40, 50];
+        assert_eq!(find_subseq(&hay, &needle), Some(3));
+    }
+
+    #[test]
+    fn find_subseq_in_middle_of_haystack() {
+        let hay = vec![10, 20, 30, 40, 50];
+        let needle = vec![20, 30, 40];
+        assert_eq!(find_subseq(&hay, &needle), Some(1));
+    }
+
+    #[test]
+    fn find_subseq_needle_not_found_returns_none() {
+        let hay = vec![1, 2, 3];
+        let needle = vec![4, 5];
+        assert_eq!(find_subseq(&hay, &needle), None);
+    }
+
+    #[test]
+    fn find_subseq_empty_needle_returns_none() {
+        let hay = vec![1, 2, 3];
+        assert_eq!(find_subseq(&hay, &[]), None);
+    }
+
+    #[test]
+    fn find_subseq_hay_shorter_than_needle_returns_none() {
+        let hay = vec![1, 2];
+        let needle = vec![1, 2, 3];
+        assert_eq!(find_subseq(&hay, &needle), None);
+    }
+
+    #[test]
+    fn find_subseq_single_element_match() {
+        let hay = vec![10, 20, 30];
+        let needle = vec![20];
+        assert_eq!(find_subseq(&hay, &needle), Some(1));
+    }
+
+    #[test]
+    fn find_subseq_exact_match_returns_zero() {
+        let hay = vec![7, 8, 9];
+        let needle = vec![7, 8, 9];
+        assert_eq!(find_subseq(&hay, &needle), Some(0));
+    }
+
+    #[test]
+    fn find_subseq_needle_longer_than_hay_returns_none() {
+        let hay = vec![1];
+        let needle = vec![1, 2, 3, 4, 5];
+        assert_eq!(find_subseq(&hay, &needle), None);
+    }
+
+    // -- EAGLE-3 / ProposalMode tests --------------------------------------------------
+
+    #[test]
+    fn propose_eagle3_with_known_logits_produces_valid_tree() {
+        let e = SpecDecodeEngine::new(
+            SpecDecodeConfig::default(),
+            Box::new(ConstantTarget(1)),
+            None,
+        );
+        let logits = vec![
+            vec![(10, 0.6), (20, 0.3), (30, 0.1)],
+            vec![(100, 0.5), (110, 0.4)],
+        ];
+        let config = tree_proposal::ParallelTreeConfig {
+            num_parallel_branches: 2,
+            max_depth: 2,
+            max_branches_per_node: 2,
+            probability_threshold: 0.01,
+        };
+        let tree = e.propose_eagle3(logits, &config);
+        assert!(tree.depth >= 1);
+        assert!(tree.total_leaves >= 1);
+        assert_eq!(tree.root.token_id, 0);
+    }
+
+    #[test]
+    fn propose_eagle3_empty_logits_returns_single_node() {
+        let e = SpecDecodeEngine::new(
+            SpecDecodeConfig::default(),
+            Box::new(ConstantTarget(1)),
+            None,
+        );
+        let config = tree_proposal::ParallelTreeConfig::default();
+        let tree = e.propose_eagle3(vec![], &config);
+        assert_eq!(tree.depth, 0);
+        assert_eq!(tree.total_leaves, 1);
+        assert_eq!(tree.root.token_id, 0);
+    }
+
+    #[test]
+    fn propose_eagle3_with_history_uses_last_token_as_root() {
+        let mut e = SpecDecodeEngine::new(
+            SpecDecodeConfig::default(),
+            Box::new(ConstantTarget(1)),
+            None,
+        );
+        e.state.push_accepted(42);
+        let logits = vec![vec![(10, 0.9)]];
+        let config = tree_proposal::ParallelTreeConfig {
+            num_parallel_branches: 1,
+            max_depth: 1,
+            max_branches_per_node: 1,
+            probability_threshold: 0.01,
+        };
+        let tree = e.propose_eagle3(logits, &config);
+        assert_eq!(tree.root.token_id, 42);
+        assert_eq!(tree.root.children.len(), 1);
+        assert_eq!(tree.root.children[0].token_id, 10);
+    }
+
+    #[test]
+    fn proposal_mode_medusa_is_default() {
+        let mode = ProposalMode::default();
+        assert!(matches!(mode, ProposalMode::Medusa));
+    }
+
+    #[test]
+    fn proposal_mode_eagle3_custom_config() {
+        let config = tree_proposal::ParallelTreeConfig {
+            num_parallel_branches: 8,
+            max_depth: 16,
+            max_branches_per_node: 4,
+            probability_threshold: 0.001,
+        };
+        let mode = ProposalMode::Eagle3(config.clone());
+        match mode {
+            ProposalMode::Eagle3(cfg) => {
+                assert_eq!(cfg.num_parallel_branches, 8);
+                assert_eq!(cfg.max_depth, 16);
+                assert_eq!(cfg.max_branches_per_node, 4);
+                assert_eq!(cfg.probability_threshold, 0.001);
+            }
+            _ => panic!("expected Eagle3 variant"),
+        }
+    }
+
+    #[test]
+    fn engine_with_proposal_mode_eagle3() {
+        let e = SpecDecodeEngine::new(
+            SpecDecodeConfig::default(),
+            Box::new(ConstantTarget(1)),
+            None,
+        )
+        .with_proposal_mode(ProposalMode::Eagle3(
+            tree_proposal::ParallelTreeConfig::default(),
+        ));
+        match &e.proposal_mode {
+            ProposalMode::Eagle3(_) => {}
+            _ => panic!("expected Eagle3"),
+        }
+    }
+
+    #[tokio::test]
+    async fn step_eagle3_with_matching_target_accepts_tokens() {
+        let mut e = SpecDecodeEngine::new(
+            SpecDecodeConfig::default(),
+            Box::new(ConstantTarget(5)),
+            None,
+        )
+        .with_proposal_mode(ProposalMode::Eagle3(
+            tree_proposal::ParallelTreeConfig {
+                num_parallel_branches: 1,
+                max_depth: 2,
+                max_branches_per_node: 2,
+                probability_threshold: 0.01,
+            },
+        ));
+        // ConstantTarget(5) accepts any candidate whose first token == 5.
+        let logits = vec![
+            vec![(5, 0.9), (3, 0.1)],
+            vec![(5, 0.8), (7, 0.2)],
+        ];
+        let result = e.step_eagle3(&[1, 2, 3], logits).await.unwrap();
+        assert!(!result.accepted.is_empty());
+        assert_eq!(result.accepted[0].token_id, 5);
+        assert!(result.accepted[0].was_drafted);
+    }
+
+    #[tokio::test]
+    async fn step_eagle3_empty_logits_returns_empty() {
+        let mut e = SpecDecodeEngine::new(
+            SpecDecodeConfig::default(),
+            Box::new(ConstantTarget(5)),
+            None,
+        );
+        let result = e.step_eagle3(&[1, 2], vec![]).await.unwrap();
+        assert!(result.accepted.is_empty());
+        assert_eq!(result.drafted, 0);
     }
 }

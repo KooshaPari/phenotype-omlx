@@ -49,7 +49,7 @@ impl DeviceCaps {
 /// In-memory registry of candidates and tuning evidence.
 #[derive(Debug, Default)]
 pub struct KernelRegistry {
-    pub(crate) candidates: HashMap<CandidateId, Candidate>,
+    pub(crate) candidates: HashMap<CandidateId, Vec<Candidate>>,
     pub(crate) tuning: HashMap<KernelKey, Vec<TuningRecord>>,
 }
 
@@ -62,14 +62,23 @@ impl KernelRegistry {
     /// exists it is overwritten — callers that need to detect collisions
     /// can use [`KernelRegistry::register_candidate_checked`].
     pub fn register_candidate(&mut self, candidate: Candidate) {
-        self.candidates.insert(candidate.id, candidate);
+        self.candidates
+            .entry(candidate.id)
+            .or_default()
+            .push(candidate);
     }
 
     /// Register a candidate only if no candidate with the same id exists
     /// yet. Returns the existing candidate on collision so callers can log
     /// provenance.
     pub fn register_candidate_checked(&mut self, candidate: Candidate) -> Option<Candidate> {
-        self.candidates.insert(candidate.id, candidate)
+        match self.candidates.entry(candidate.id) {
+            std::collections::hash_map::Entry::Occupied(e) => e.into_mut().first().cloned(),
+            std::collections::hash_map::Entry::Vacant(e) => {
+                e.insert(vec![candidate]);
+                None
+            }
+        }
     }
 
     /// Attach a tuning record for `key`. Records are appended in the order
@@ -80,7 +89,11 @@ impl KernelRegistry {
 
     /// All candidates, sorted by id for deterministic callers.
     pub fn list_candidates(&self) -> Vec<Candidate> {
-        let mut v: Vec<Candidate> = self.candidates.values().cloned().collect();
+        let mut v: Vec<Candidate> = self
+            .candidates
+            .values()
+            .flat_map(|v| v.iter().cloned())
+            .collect();
         v.sort_by_key(|c| c.id);
         v
     }
@@ -90,7 +103,8 @@ impl KernelRegistry {
     pub fn list_candidates_for_ids(&self, keys: &[CandidateId]) -> Vec<Candidate> {
         let mut out: Vec<Candidate> = keys
             .iter()
-            .filter_map(|id| self.candidates.get(id).cloned())
+            .filter_map(|id| self.candidates.get(id))
+            .flat_map(|v| v.iter().cloned())
             .collect();
         out.sort_by_key(|c| c.id);
         out
@@ -102,8 +116,8 @@ impl KernelRegistry {
         let mut v: Vec<Candidate> = self
             .candidates
             .values()
+            .flat_map(|v| v.iter().cloned())
             .filter(|c| c.supports_shape(&key.shape_signature))
-            .cloned()
             .collect();
         v.sort_by_key(|c| c.id);
         v
@@ -132,11 +146,14 @@ impl KernelRegistry {
         caps: &DeviceCaps,
         now_unix_ms: u64,
     ) -> SelectionDecision {
-        // 1. Collect every candidate id, sorted ascending. We use id order
-        //    as the canonical iteration order so deterministic ties and
-        //    considered-list order are reproducible.
-        let mut all_ids: Vec<CandidateId> = self.candidates.keys().copied().collect();
-        all_ids.sort();
+        // 1. Collect every candidate, sorted by (id, index) for deterministic
+        //    iteration order across multi-candidate ids.
+        let mut all_candidates: Vec<(CandidateId, Candidate)> = self
+            .candidates
+            .iter()
+            .flat_map(|(id, vec)| vec.iter().cloned().map(move |c| (*id, c)))
+            .collect();
+        all_candidates.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.id.cmp(&b.1.id)));
 
         // 2. Filter and accumulate rejections.
         let mut rejections: Vec<RejectionRecord> = Vec::new();
@@ -144,11 +161,7 @@ impl KernelRegistry {
         let mut tuned: Vec<(Candidate, TuningRecord)> = Vec::new();
         let mut reference_fallback: Option<Candidate> = None;
 
-        for id in &all_ids {
-            let cand = match self.candidates.get(id) {
-                Some(c) => c.clone(),
-                None => continue,
-            };
+        for (id, cand) in &all_candidates {
             considered.push(*id);
 
             // 2a. Capability filter.
@@ -203,7 +216,7 @@ impl KernelRegistry {
             });
 
             if let Some(r) = rec {
-                tuned.push((cand, r));
+                tuned.push((cand.clone(), r));
                 continue;
             }
 
@@ -236,7 +249,7 @@ impl KernelRegistry {
             if cand.backend.is_reference() {
                 // Hold the reference candidate for fallback after the
                 // tuned short-circuit.
-                reference_fallback.get_or_insert(cand);
+                reference_fallback.get_or_insert(cand.clone());
             } else {
                 rejections.push(RejectionRecord::new(*id, RejectionReason::NoTuningEvidence));
             }
@@ -326,6 +339,41 @@ impl KernelRegistry {
         SelectionDecision::Rejected {
             rejections,
             considered,
+        }
+    }
+
+    /// Select the best candidate for `task` considering KV cache state.
+    ///
+    /// When KV utilization (`kv_cache_size / kv_max_size`) exceeds 80 %,
+    /// candidates that advertise `dynamic_eviction = "true"` in their
+    /// [`properties`](Candidate::properties) map are preferred because
+    /// they integrate with [`turbo_quant::echokv::EchoKVCache`] for
+    /// on-the-fly eviction. For lower utilization the first (default)
+    /// candidate is returned.
+    ///
+    /// Returns `None` when `task` has no registered candidates.
+    pub fn select_with_kv_state(
+        &self,
+        task: &CandidateId,
+        kv_cache_size: usize,
+        kv_max_size: usize,
+    ) -> Option<&Candidate> {
+        let candidates = self.candidates.get(task)?;
+
+        // Guard against division by zero.
+        if kv_max_size == 0 {
+            return candidates.first();
+        }
+
+        let utilization = kv_cache_size as f32 / kv_max_size as f32;
+        if utilization > 0.8 {
+            // High utilization: prefer evictable kernels.
+            candidates
+                .iter()
+                .find(|c| c.has_property("dynamic_eviction"))
+                .or_else(|| candidates.first())
+        } else {
+            candidates.first()
         }
     }
 }
@@ -481,7 +529,7 @@ mod tests {
     // --- Task 1: register / overwrite ------------------------------------------------
 
     #[test]
-    fn register_duplicate_name_overwrites_existing_candidate() {
+    fn register_duplicate_name_appends_candidate() {
         let mut reg = KernelRegistry::new();
         let c1 = make_candidate("my-kernel");
         let c2 = make_candidate("my-kernel"); // same (name, backend) → same id
@@ -489,13 +537,13 @@ mod tests {
         reg.register_candidate(c1);
         assert_eq!(reg.list_candidates().len(), 1);
 
-        // Overwrite: second registration with same id replaces the first.
+        // Appending: second registration with same id adds to the vec.
         reg.register_candidate(c2);
         let listed = reg.list_candidates();
         assert_eq!(
             listed.len(),
-            1,
-            "duplicate insert must not create a second entry"
+            2,
+            "duplicate insert appends to the candidate vec"
         );
     }
 
@@ -512,10 +560,14 @@ mod tests {
         let returned = reg.register_candidate_checked(c2);
         assert!(
             returned.is_some(),
-            "collision must return the displaced candidate"
+            "collision must return the existing candidate"
         );
         assert_eq!(returned.unwrap().name, "alpha");
-        assert_eq!(reg.list_candidates().len(), 1);
+        assert_eq!(
+            reg.list_candidates().len(),
+            1,
+            "checked insert must not add duplicate"
+        );
     }
 
     #[test]
@@ -589,7 +641,11 @@ mod tests {
         assert_eq!(reg.list_candidates().len(), 1);
 
         let removed = reg.candidates.remove(&id);
-        assert!(removed.is_some(), "remove must return the candidate");
+        assert!(removed.is_some(), "remove must return the candidate vec");
+        assert!(
+            !removed.unwrap().is_empty(),
+            "removed vec must be non-empty"
+        );
         assert!(reg.list_candidates().is_empty());
     }
 
@@ -635,7 +691,9 @@ mod tests {
         let got = reg
             .candidates
             .get(&id)
-            .expect("candidate must be retrievable by id");
+            .expect("candidate must be retrievable by id")
+            .first()
+            .expect("candidate vec must be non-empty");
         assert_eq!(got.name, "round-trip");
         assert_eq!(got.id, id);
     }
@@ -671,11 +729,156 @@ mod tests {
         assert_eq!(reg.list_candidates().len(), 1);
 
         let removed = reg.candidates.remove(&id);
-        assert!(removed.is_some(), "removal must return the candidate");
+        assert!(removed.is_some(), "removal must return the candidate vec");
+        assert!(
+            !removed.unwrap().is_empty(),
+            "removed vec must be non-empty"
+        );
         assert_eq!(
             reg.list_candidates().len(),
             0,
             "registry must be empty after removal"
+        );
+    }
+
+    // --- select_with_kv_state ---------------------------------------------------
+
+    fn make_candidate_with_property(name: &str, prop_key: &str, prop_val: &str) -> Candidate {
+        Candidate::new(
+            name,
+            BackendKind::Cpu,
+            "src-hash",
+            vec![],
+            ShapeSignature {
+                m: 0,
+                n: 0,
+                k: 0,
+                batch: 0,
+                seq: 0,
+                group: 0,
+            },
+            wide_shape(),
+            vec![DType::Fp16],
+            true,
+        )
+        .with_property(prop_key, prop_val)
+    }
+
+    #[test]
+    fn select_with_kv_state_returns_evictable_when_utilization_high() {
+        let mut reg = KernelRegistry::new();
+
+        // Register two candidates under the same id.
+        let shared_id = CandidateId::derive("multi-cand", BackendKind::Cpu);
+        reg.candidates.insert(
+            shared_id,
+            vec![
+                make_candidate("standard"),
+                make_candidate_with_property("echokv", "dynamic_eviction", "true"),
+            ],
+        );
+
+        // 90 % utilization → should prefer evictable.
+        let chosen = reg.select_with_kv_state(&shared_id, 90, 100);
+        assert!(chosen.is_some(), "must return a candidate");
+        assert!(
+            chosen.unwrap().has_property("dynamic_eviction"),
+            "must prefer evictable candidate at high utilization"
+        );
+    }
+
+    #[test]
+    fn select_with_kv_state_returns_first_when_utilization_low() {
+        let mut reg = KernelRegistry::new();
+        let shared_id = CandidateId::derive("low-util", BackendKind::Cpu);
+        reg.candidates.insert(
+            shared_id,
+            vec![
+                make_candidate("first"),
+                make_candidate_with_property("echokv", "dynamic_eviction", "true"),
+            ],
+        );
+
+        // 50 % utilization → should return first candidate.
+        let chosen = reg.select_with_kv_state(&shared_id, 50, 100);
+        assert!(chosen.is_some(), "must return a candidate");
+        assert_eq!(
+            chosen.unwrap().name,
+            "first",
+            "must return first candidate at low utilization"
+        );
+    }
+
+    #[test]
+    fn select_with_kv_state_returns_none_for_unknown_task() {
+        let reg = KernelRegistry::new();
+        let unknown = CandidateId(0xDEAD_BEEF);
+        assert!(
+            reg.select_with_kv_state(&unknown, 50, 100).is_none(),
+            "unknown task must return None"
+        );
+    }
+
+    #[test]
+    fn select_with_kv_state_handles_zero_max_size() {
+        let mut reg = KernelRegistry::new();
+        let id = CandidateId::derive("zero-max", BackendKind::Cpu);
+        reg.candidates.insert(id, vec![make_candidate("only-one")]);
+
+        // kv_max_size == 0 → division-by-zero guard returns the candidate.
+        let chosen = reg.select_with_kv_state(&id, 0, 0);
+        assert!(chosen.is_some(), "zero max_size must not panic");
+    }
+
+    #[test]
+    fn select_with_kv_state_falls_back_when_no_evictable_candidate() {
+        let mut reg = KernelRegistry::new();
+        let id = CandidateId::derive("no-evict", BackendKind::Cpu);
+        reg.candidates
+            .insert(id, vec![make_candidate("no-eviction-prop")]);
+
+        // High utilization but no evictable candidate → returns first.
+        let chosen = reg.select_with_kv_state(&id, 95, 100);
+        assert!(chosen.is_some());
+        assert_eq!(chosen.unwrap().name, "no-eviction-prop");
+    }
+
+    #[test]
+    fn select_with_kv_state_boundary_exactly_80_percent() {
+        let mut reg = KernelRegistry::new();
+        let id = CandidateId::derive("boundary", BackendKind::Cpu);
+        reg.candidates.insert(
+            id,
+            vec![
+                make_candidate("first"),
+                make_candidate_with_property("echokv", "dynamic_eviction", "true"),
+            ],
+        );
+
+        // Exactly 80 % → not > 0.8, so first candidate.
+        let chosen = reg.select_with_kv_state(&id, 80, 100);
+        assert!(chosen.is_some());
+        assert_eq!(chosen.unwrap().name, "first");
+    }
+
+    #[test]
+    fn select_with_kv_state_boundary_just_over_80_percent() {
+        let mut reg = KernelRegistry::new();
+        let id = CandidateId::derive("boundary-over", BackendKind::Cpu);
+        reg.candidates.insert(
+            id,
+            vec![
+                make_candidate("first"),
+                make_candidate_with_property("echokv", "dynamic_eviction", "true"),
+            ],
+        );
+
+        // 81 / 100 = 0.81 > 0.8 → evictable.
+        let chosen = reg.select_with_kv_state(&id, 81, 100);
+        assert!(chosen.is_some());
+        assert!(
+            chosen.unwrap().has_property("dynamic_eviction"),
+            "just over 80% must prefer evictable"
         );
     }
 }
