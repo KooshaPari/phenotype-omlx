@@ -47,7 +47,8 @@ pub mod trace;
 pub mod tuner;
 
 pub use builders::{
-    deltanet_batched_key, deltanet_key, mamba_scan_key, retnet_key, sliding_window_key,
+    deltanet_batched_key, deltanet_key, mamba_scan_key, moe_grouped_gemm_key, retnet_key,
+    sliding_window_key, ternary_gemm_key,
 };
 pub use candidate::{BackendKind, Candidate, CandidateId, Capability};
 pub use compat::{AttentionKind, DType, OperatorKind, QuantizationPolicy};

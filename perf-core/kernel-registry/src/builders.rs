@@ -252,6 +252,84 @@ pub fn mamba_scan_key(
     }
 }
 
+/// Build a [`KernelKey`] for a Mixture-of-Experts grouped GEMM layer.
+#[allow(clippy::too_many_arguments)]
+pub fn moe_grouped_gemm_key(
+    m: usize,
+    n: usize,
+    k: usize,
+    batch_size: usize,
+    seq_len: usize,
+    num_experts: usize,
+    dtype: DType,
+    device_fingerprint: &str,
+    policy_version: u32,
+) -> KernelKey {
+    assert!(m > 0, "moe_grouped_gemm_key: m must be > 0");
+    assert!(n > 0, "moe_grouped_gemm_key: n must be > 0");
+    assert!(k > 0, "moe_grouped_gemm_key: k must be > 0");
+    assert!(batch_size > 0, "moe_grouped_gemm_key: batch_size must be > 0");
+    assert!(seq_len > 0, "moe_grouped_gemm_key: seq_len must be > 0");
+    assert!(num_experts > 0, "moe_grouped_gemm_key: num_experts must be > 0");
+
+    KernelKey {
+        operator_kind: OperatorKind::Moe,
+        attention_kind: None,
+        shape_signature: ShapeSignature {
+            m,
+            n,
+            k,
+            batch: batch_size,
+            seq: seq_len,
+            group: num_experts,
+        },
+        dtype,
+        quantization: QuantizationPolicy::None,
+        state_layout_version: 1,
+        device_fingerprint: device_fingerprint.to_string(),
+        policy_version,
+    }
+}
+
+/// Build a [`KernelKey`] for a packed ternary GEMM (Bonsai layout).
+#[allow(clippy::too_many_arguments)]
+pub fn ternary_gemm_key(
+    m: usize,
+    n: usize,
+    k: usize,
+    batch_size: usize,
+    seq_len: usize,
+    group_size: usize,
+    dtype: DType,
+    device_fingerprint: &str,
+    policy_version: u32,
+) -> KernelKey {
+    assert!(m > 0, "ternary_gemm_key: m must be > 0");
+    assert!(n > 0, "ternary_gemm_key: n must be > 0");
+    assert!(k > 0, "ternary_gemm_key: k must be > 0");
+    assert!(batch_size > 0, "ternary_gemm_key: batch_size must be > 0");
+    assert!(seq_len > 0, "ternary_gemm_key: seq_len must be > 0");
+    assert!(group_size > 0, "ternary_gemm_key: group_size must be > 0");
+
+    KernelKey {
+        operator_kind: OperatorKind::Quantized,
+        attention_kind: None,
+        shape_signature: ShapeSignature {
+            m,
+            n,
+            k,
+            batch: batch_size,
+            seq: seq_len,
+            group: group_size,
+        },
+        dtype,
+        quantization: QuantizationPolicy::Ternary,
+        state_layout_version: 1,
+        device_fingerprint: device_fingerprint.to_string(),
+        policy_version,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
