@@ -44,3 +44,6 @@ rust_out
 
 # Quarantined NIAH scratch (out of envelope)
 research/.archive/*.json
+
+# Harbor run artifacts
+.runs/

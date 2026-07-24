@@ -1,0 +1,282 @@
+name: perf-core CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "perf-core/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - "perf-core/**"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: Check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            perf-core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('perf-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Zig (macOS)
+        if: runner.os == 'macOS'
+        run: brew install zig
+
+      - name: Install Zig (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo snap install zig --classic --channel=latest/stable || {
+            ZIG_VERSION="0.14.1"
+            curl -sL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+            sudo tar -xf /tmp/zig.tar.xz -C /usr/local --strip-components=1
+            rm /tmp/zig.tar.xz
+          }
+
+      - name: Verify Zig
+        run: zig version
+
+      - name: Verify Nim
+        if: runner.os == 'macOS'
+        run: nim --version || brew install nim
+
+      - name: Verify Nim (Ubuntu)
+        if: runner.os == 'Linux'
+        run: nim --version || { curl https://nim-lang.org/choosenim/init.sh -sSf | bash -s -- -y && echo "$HOME/.nimble/bin" >> "$GITHUB_PATH"; }
+
+      - name: cargo check (exclude mojo + cuda)
+        working-directory: perf-core
+        run: cargo check --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
+
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            perf-core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('perf-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Zig (macOS)
+        if: runner.os == 'macOS'
+        run: brew install zig
+
+      - name: Install Zig (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo snap install zig --classic --channel=latest/stable || {
+            ZIG_VERSION="0.14.1"
+            curl -sL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+            sudo tar -xf /tmp/zig.tar.xz -C /usr/local --strip-components=1
+            rm /tmp/zig.tar.xz
+          }
+
+      - name: Verify Zig
+        run: zig version
+
+      - name: Verify Nim
+        if: runner.os == 'macOS'
+        run: nim --version || brew install nim
+
+      - name: Verify Nim (Ubuntu)
+        if: runner.os == 'Linux'
+        run: nim --version || { curl https://nim-lang.org/choosenim/init.sh -sSf | bash -s -- -y && echo "$HOME/.nimble/bin" >> "$GITHUB_PATH"; }
+
+      - name: cargo test (exclude mojo + cuda)
+        working-directory: perf-core
+        run: cargo test --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
+
+  clippy:
+    name: Clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: clippy
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            perf-core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('perf-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Zig (macOS)
+        if: runner.os == 'macOS'
+        run: brew install zig
+
+      - name: Install Zig (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo snap install zig --classic --channel=latest/stable || {
+            ZIG_VERSION="0.14.1"
+            curl -sL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+            sudo tar -xf /tmp/zig.tar.xz -C /usr/local --strip-components=1
+            rm /tmp/zig.tar.xz
+          }
+
+      - name: Verify Zig
+        run: zig version
+
+      - name: Verify Nim
+        if: runner.os == 'macOS'
+        run: nim --version || brew install nim
+
+      - name: Verify Nim (Ubuntu)
+        if: runner.os == 'Linux'
+        run: nim --version || { curl https://nim-lang.org/choosenim/init.sh -sSf | bash -s -- -y && echo "$HOME/.nimble/bin" >> "$GITHUB_PATH"; }
+
+      - name: cargo clippy (exclude mojo + cuda)
+        working-directory: perf-core
+        run: cargo clippy --workspace --all-targets --exclude turbo-quant-mojo --exclude concurrent-exec-cuda -- -D warnings
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - name: cargo fmt --check
+        working-directory: perf-core
+        run: cargo fmt --all -- --check
+
+  # ---------- Windows (experimental) ----------
+  windows-check:
+    name: Windows check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            perf-core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('perf-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: cargo check (exclude mojo + cuda)
+        working-directory: perf-core
+        run: cargo check --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
+
+      - name: cargo test (exclude mojo + cuda)
+        working-directory: perf-core
+        run: cargo test --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
+
+  # ---------- Platform-specific optional jobs ----------
+  # NOTE: turbo-quant-zig is NOT in the workspace members list yet.
+  # Build it standalone via --manifest-path when Zig is available.
+  # NOTE: Mojo SDK is not installable on GitHub Actions runners.
+  # turbo-quant-mojo is excluded from all workspace commands above.
+  # NOTE: CUDA tests are skipped — concurrent-exec-cuda requires NVIDIA
+  # hardware and the `cuda` feature flag, neither available on standard
+  # GitHub Actions runners.
+
+  zig-crate:
+    name: Zig crate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            perf-core/target
+          key: ${{ runner.os }}-cargo-zig-${{ hashFiles('perf-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-zig-
+
+      - name: Install Zig (macOS)
+        if: runner.os == 'macOS'
+        run: brew install zig
+
+      - name: Install Zig (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo snap install zig --classic --channel=latest/stable || {
+            ZIG_VERSION="0.14.1"
+            curl -sL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
+            sudo tar -xf /tmp/zig.tar.xz -C /usr/local --strip-components=1
+            rm /tmp/zig.tar.xz
+          }
+
+      - name: Verify Zig
+        run: zig version
+
+      - name: cargo check -p turbo-quant-zig
+        working-directory: perf-core
+        run: cargo check --manifest-path turbo-quant-zig/Cargo.toml
+
+      - name: cargo test -p turbo-quant-zig
+        working-directory: perf-core
+        run: cargo test --manifest-path turbo-quant-zig/Cargo.toml

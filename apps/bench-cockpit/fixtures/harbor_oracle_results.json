@@ -1,0 +1,82 @@
+{
+  "summary": {
+    "meta": {
+      "model": "oracle",
+      "mlx_url": "",
+      "n_suites": 1,
+      "n_tasks_per_suite": 1,
+      "variants": [
+        "oracle"
+      ],
+      "n_cells": 1,
+      "difficulty_mix": {
+        "medium": 1
+      }
+    },
+    "by_variant": {
+      "oracle": {
+        "n_cells": 1,
+        "pass_at_1": 1.0,
+        "mean_wall_clock_s": 46.535,
+        "mean_partial_credit": 1.0,
+        "mean_format_compliance": 1.0,
+        "mean_intent_preservation": 0.0,
+        "n_hallucinations": 0,
+        "ok_count": 1
+      }
+    }
+  },
+  "cells": [
+    {
+      "suite": "omlx/qwen35-policy",
+      "task_id": "omlx-qwen35-policy__gS8UVyk",
+      "task_title": "omlx/qwen35-policy",
+      "difficulty": "medium",
+      "variant": "oracle",
+      "ok": true,
+      "wall_clock_s": 46.535,
+      "tokens_per_second": 0.0,
+      "first_token_latency_ms": 0.0,
+      "peak_rss_mb": 0.0,
+      "peak_gpu_mem_mb": 0.0,
+      "energy_proxy_joules": 0.0,
+      "pass_at_1": 1.0,
+      "gen_ok": 1.0,
+      "partial_credit": 1.0,
+      "judge_score": 1.0,
+      "intent_preservation_rate": 0.0,
+      "hallucination_count": 0,
+      "tool_call_success_rate": 1.0,
+      "retry_count": 0,
+      "format_compliance_rate": 1.0,
+      "reply": "",
+      "reply_full": "",
+      "prompt": "",
+      "expected_answer": "",
+      "scoring_method": "harbor_verifier",
+      "total_tokens_in": 0,
+      "total_tokens_out": 0,
+      "cost_usd": 0.0,
+      "progress_trace": [],
+      "chat_trace": [],
+      "failure_analysis": {
+        "primary_factor": "ok"
+      },
+      "assignment": {
+        "title": "omlx/qwen35-policy",
+        "description": "Harbor eval `omlx/qwen35-policy` via `oracle`.",
+        "acceptance": "Harbor verifier reward > 0.",
+        "rubric": "Harbor verifier reward > 0."
+      },
+      "model_name": "oracle",
+      "model_version": "1.0.0",
+      "metadata": {
+        "source": "harbor",
+        "trial_name": "omlx-qwen35-policy__gS8UVyk",
+        "job_id": "31676495-b460-4753-98a8-14ba5776a7f2"
+      },
+      "created_at": "2026-07-23T05:39:43.270305Z",
+      "completed_at": "2026-07-23T05:40:29.805562Z"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+[package]
+name = "turbo-quant-bench"
+version = "0.1.0"
+edition = "2021"
+description = "Microbenchmark harness for turbo-quant polyglot backends"
+
+[lib]
+name = "turbo_quant_bench"
+path = "src/lib.rs"
+
+[[bench]]
+name = "polyglot_encode"
+harness = false
+
+[[bench]]
+name = "polyglot_decode"
+harness = false
+
+[[bench]]
+name = "energy_proxy"
+harness = false
+
+[dependencies]
+turbo-quant = { path = "../turbo-quant" }
+turbo-quant-c = { path = "../turbo-quant-c" }
+turbo-quant-zig = { path = "../turbo-quant-zig", optional = true }
+turbo-quant-mojo = { path = "../turbo-quant-mojo", optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+rand = "0.8"
+
+[features]
+default = ["rust", "c"]
+rust = []
+c = []
+zig = ["turbo-quant-zig"]
+mojo = ["turbo-quant-mojo"]
+all = ["zig", "mojo"]
