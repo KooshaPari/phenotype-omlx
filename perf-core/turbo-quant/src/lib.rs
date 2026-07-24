@@ -6,11 +6,14 @@
 //! in `shaders/turbo_quant.metallib` and consumed by `perf-core/spec-decode`'s
 //! optional `metal` feature.
 
+mod backend;
 pub mod candidates;
+mod decode;
 pub mod echokv;
+mod encode;
 mod minmax;
 
-use minmax::min_max;
+pub use backend::PolyglotBackend;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurboMode {
@@ -87,66 +90,7 @@ impl QuantizedTensor {
     ///
     /// Panics on violation rather than silently corrupting the output.
     pub fn encode_uniform(data: &[f32], bits: u8, group_size: usize) -> Self {
-        assert!(
-            (2..=4).contains(&bits),
-            "turbo-quant: bits must be in 2..=4, got {bits}"
-        );
-        assert!(
-            group_size > 0,
-            "turbo-quant: group_size must be greater than zero"
-        );
-        assert!(
-            !data.is_empty(),
-            "turbo-quant: encode_uniform requires non-empty input"
-        );
-        assert!(
-            data.iter().all(|v| v.is_finite()),
-            "turbo-quant: encode_uniform requires finite input data"
-        );
-
-        let qmax = ((1u32 << bits) - 1) as f32;
-        let n_packed = (data.len() * bits as usize).div_ceil(8);
-        let mut packed = vec![0u8; n_packed];
-        let mut scales = Vec::new();
-        let mut zeros = Vec::new();
-
-        let mut bit_cursor = 0usize;
-        for chunk in data.chunks(group_size) {
-            // SIMD-dispatched min/max: NEON on aarch64, scalar fallback elsewhere.
-            let (min, max) = min_max(chunk);
-            let scale = (max - min) / qmax;
-            let zero = min;
-            scales.push(scale.max(1e-12));
-            zeros.push(zero);
-
-            for &v in chunk {
-                let q = ((v - zero) / scale).round().clamp(0.0, qmax) as u32;
-                let bp = bits as usize;
-                // Write `bp` bits into packed[], LSB-first within each byte.
-                let mut val = q;
-                let mut remaining = bp;
-                while remaining > 0 {
-                    let byte_idx = bit_cursor / 8;
-                    let bit_off = bit_cursor % 8;
-                    let room = 8 - bit_off;
-                    let take = remaining.min(room);
-                    let mask = (1u32 << take) - 1;
-                    packed[byte_idx] |= ((val & mask) as u8) << bit_off;
-                    val >>= take;
-                    bit_cursor += take;
-                    remaining -= take;
-                }
-            }
-        }
-
-        Self {
-            shape: vec![data.len()],
-            bits,
-            group_size,
-            packed,
-            scales,
-            zeros,
-        }
+        encode::encode_uniform(data, bits, group_size)
     }
 
     /// Decode packed bytes back to f32 — symmetric recovery.
@@ -156,54 +100,7 @@ impl QuantizedTensor {
     /// metadata or mismatched output length panics with a descriptive
     /// message instead of silently producing wrong numbers.
     pub fn decode_uniform(&self, out: &mut [f32]) {
-        assert!(
-            (2..=4).contains(&self.bits),
-            "turbo-quant: stored bits must be in 2..=4, got {}",
-            self.bits
-        );
-        assert!(
-            self.group_size > 0,
-            "turbo-quant: stored group_size must be > 0, got {}",
-            self.group_size
-        );
-        let expected = self.shape.iter().product::<usize>();
-        assert!(
-            out.len() == expected,
-            "turbo-quant: decode_uniform output length mismatch — expected \
-                 {expected}, got {}",
-            out.len()
-        );
-
-        let bits = self.bits;
-        let qmax = ((1u32 << bits) - 1) as f32;
-        let bp = bits as usize;
-
-        for (i, v) in out.iter_mut().enumerate() {
-            let g = i / self.group_size;
-            let s = self.scales.get(g).copied().unwrap_or(1e-12);
-            let z = self.zeros.get(g).copied().unwrap_or(0.0);
-
-            // Read `bp` bits from packed[], LSB-first within each byte.
-            let mut bc = i * bp;
-            let mut raw = 0u32;
-            let mut remaining = bp;
-            let mut shift = 0;
-            while remaining > 0 {
-                let byte_idx = bc / 8;
-                let bit_off = bc % 8;
-                let room = 8 - bit_off;
-                let take = remaining.min(room);
-                let mask = (1u32 << take) - 1;
-                let byte = self.packed.get(byte_idx).copied().unwrap_or(0) as u32;
-                raw |= ((byte >> bit_off) & mask) << shift;
-                shift += take;
-                bc += take;
-                remaining -= take;
-            }
-
-            let q = (raw as f32).min(qmax);
-            *v = q * s + z;
-        }
+        decode::decode_uniform(self, out)
     }
 }
 
@@ -219,195 +116,6 @@ pub trait PolyglotQuantizer {
 
     /// Decode a quantized tensor into the caller-provided output slice `out`.
     fn decode(&self, tensor: &QuantizedTensor, out: &mut [f32]) -> Result<(), String>;
-}
-
-/// Dispatcher across polyglot FFI backend implementations (Cpu, C, Zig, Nim, Mojo).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PolyglotBackend {
-    Cpu,
-    C,
-    Zig,
-    Nim,
-    Mojo,
-}
-
-impl PolyglotBackend {
-    pub fn all() -> &'static [PolyglotBackend] {
-        &[
-            PolyglotBackend::Cpu,
-            PolyglotBackend::C,
-            PolyglotBackend::Zig,
-            PolyglotBackend::Nim,
-            PolyglotBackend::Mojo,
-        ]
-    }
-
-    pub fn name(&self) -> &'static str {
-        match self {
-            PolyglotBackend::Cpu => "Cpu",
-            PolyglotBackend::C => "C",
-            PolyglotBackend::Zig => "Zig",
-            PolyglotBackend::Nim => "Nim",
-            PolyglotBackend::Mojo => "Mojo",
-        }
-    }
-}
-
-impl PolyglotQuantizer for PolyglotBackend {
-    fn encode(&self, data: &[f32], bits: u8, group_size: usize) -> Result<QuantizedTensor, String> {
-        match self {
-            PolyglotBackend::Cpu => {
-                if data.is_empty() {
-                    return Err("turbo-quant: data must be non-empty".to_string());
-                }
-                if !(2..=4).contains(&bits) {
-                    return Err(format!("turbo-quant: bits must be 2..=4, got {bits}"));
-                }
-                if group_size == 0 {
-                    return Err("turbo-quant: group_size must be > 0".to_string());
-                }
-                if data.iter().any(|v| !v.is_finite()) {
-                    return Err("turbo-quant: data contains non-finite values".to_string());
-                }
-                Ok(QuantizedTensor::encode_uniform(data, bits, group_size))
-            }
-            PolyglotBackend::C => {
-                let c_res = turbo_quant_c::encode_v1(data, bits, group_size);
-                match c_res {
-                    Ok(ct) => Ok(QuantizedTensor {
-                        shape: ct.shape,
-                        bits,
-                        group_size,
-                        packed: ct.packed,
-                        scales: ct.scales,
-                        zeros: ct.zeros,
-                    }),
-                    Err(st) => Err(format!("C backend encode failed with status {:?}", st)),
-                }
-            }
-            PolyglotBackend::Zig => {
-                let z_res = turbo_quant_zig::ZigQuantizedTensor::encode_v1(data, bits, group_size);
-                match z_res {
-                    Ok(zt) => Ok(QuantizedTensor {
-                        shape: zt.shape,
-                        bits,
-                        group_size,
-                        packed: zt.packed,
-                        scales: zt.scales,
-                        zeros: zt.zeros,
-                    }),
-                    Err(st) => Err(format!("Zig backend encode failed with status {:?}", st)),
-                }
-            }
-            PolyglotBackend::Nim => {
-                let n_res = turbo_quant_nim::NimQuantizedTensor::encode(data, bits, group_size);
-                match n_res {
-                    Ok(nt) => Ok(QuantizedTensor {
-                        shape: nt.shape,
-                        bits,
-                        group_size,
-                        packed: nt.packed,
-                        scales: nt.scales,
-                        zeros: nt.zeros,
-                    }),
-                    Err(err) => Err(format!("Nim backend encode failed: {err}")),
-                }
-            }
-            PolyglotBackend::Mojo => {
-                let m_res = turbo_quant_mojo::MojoQuantizedTensor::encode(data, bits, group_size);
-                match m_res {
-                    Ok(mt) => Ok(QuantizedTensor {
-                        shape: mt.shape,
-                        bits,
-                        group_size,
-                        packed: mt.packed,
-                        scales: mt.scales,
-                        zeros: mt.zeros,
-                    }),
-                    Err(err) => Err(format!("Mojo backend encode failed: {err}")),
-                }
-            }
-        }
-    }
-
-    fn decode(&self, tensor: &QuantizedTensor, out: &mut [f32]) -> Result<(), String> {
-        let expected_len = tensor.shape.iter().product::<usize>();
-        if out.len() != expected_len {
-            return Err(format!(
-                "output slice length ({}) does not match tensor element count ({})",
-                out.len(),
-                expected_len
-            ));
-        }
-
-        match self {
-            PolyglotBackend::Cpu => {
-                tensor.decode_uniform(out);
-                Ok(())
-            }
-            PolyglotBackend::C => {
-                let status = turbo_quant_c::decode_v1(
-                    &tensor.packed,
-                    &tensor.scales,
-                    &tensor.zeros,
-                    expected_len,
-                    tensor.group_size,
-                    tensor.bits,
-                    out,
-                );
-                if status == native_abi::Status::Ok {
-                    Ok(())
-                } else {
-                    Err(format!("C backend decode failed with status {:?}", status))
-                }
-            }
-            PolyglotBackend::Zig => {
-                let zt = turbo_quant_zig::ZigQuantizedTensor {
-                    shape: tensor.shape.clone(),
-                    packed: tensor.packed.clone(),
-                    scales: tensor.scales.clone(),
-                    zeros: tensor.zeros.clone(),
-                };
-                let status = zt.decode_v1(expected_len, tensor.group_size, tensor.bits, out);
-                if status == native_abi::Status::Ok {
-                    Ok(())
-                } else {
-                    Err(format!("Zig backend decode failed with status {:?}", status))
-                }
-            }
-            PolyglotBackend::Nim => {
-                let status = turbo_quant_nim::decode_v1(
-                    &tensor.packed,
-                    &tensor.scales,
-                    &tensor.zeros,
-                    expected_len,
-                    tensor.group_size,
-                    tensor.bits,
-                    out,
-                );
-                if status == native_abi::Status::Ok {
-                    Ok(())
-                } else {
-                    Err(format!("Nim backend decode failed with status {:?}", status))
-                }
-            }
-            PolyglotBackend::Mojo => {
-                let mt = turbo_quant_mojo::MojoQuantizedTensor {
-                    shape: tensor.shape.clone(),
-                    packed: tensor.packed.clone(),
-                    scales: tensor.scales.clone(),
-                    zeros: tensor.zeros.clone(),
-                };
-                match mt.try_decode(expected_len, tensor.group_size, tensor.bits) {
-                    Ok(decoded) => {
-                        out.copy_from_slice(&decoded);
-                        Ok(())
-                    }
-                    Err(err) => Err(format!("Mojo backend decode failed: {err}")),
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -532,7 +240,6 @@ mod tests {
                 "group_size mismatch for ({}, {})",
                 bits, group_size
             );
-            // scale/zero length must equal ceil(n / group_size)
             let expected_groups = data.len().div_ceil(group_size);
             assert_eq!(q.scales.len(), expected_groups);
             assert_eq!(q.zeros.len(), expected_groups);
@@ -541,7 +248,6 @@ mod tests {
 
     #[test]
     fn roundtrip_partial_trailing_group() {
-        // 10 elements, group_size=3 → groups of [3,3,3,1] — last is partial.
         let data: Vec<f32> = (0..10).map(|i| i as f32 * 0.25 - 1.0).collect();
         let q = QuantizedTensor::encode_uniform(&data, 4, 3);
         assert_eq!(q.group_size, 3);
@@ -560,18 +266,15 @@ mod tests {
 
     #[test]
     fn encode_validates_programmer_inputs() {
-        // bits out of range — panic, do not silently corrupt.
         let data = vec![1.0f32, 2.0, 3.0];
         let result = std::panic::catch_unwind(|| {
             QuantizedTensor::encode_uniform(&data, 5, 4);
         });
         assert!(result.is_err(), "bits=5 should panic");
-        // group_size == 0 — panic.
         let result = std::panic::catch_unwind(|| {
             QuantizedTensor::encode_uniform(&data, 4, 0);
         });
         assert!(result.is_err(), "group_size=0 should panic");
-        // Non-finite input — panic.
         let bad = vec![1.0f32, f32::NAN, 3.0];
         let result = std::panic::catch_unwind(|| {
             QuantizedTensor::encode_uniform(&bad, 4, 2);
