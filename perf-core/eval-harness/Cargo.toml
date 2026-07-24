@@ -16,7 +16,7 @@ serde_yaml = "0.9"
 thiserror = "1"
 
 [features]
-default = ["pyo3"]
+default = []
 pyo3 = ["dep:pyo3"]
 extension-module = ["pyo3/extension-module"]
 python = ["dep:pyo3"]
