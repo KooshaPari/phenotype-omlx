@@ -81,7 +81,10 @@ fn pipeline_respects_operator_dep_ordering_topo_sort() {
     inputs.insert("a_in".to_string(), vec![10.0, 20.0]);
     let out = pipeline.step(&inputs).expect("step ok");
     assert_eq!(out.values.get("c_out"), Some(&vec![10.0, 20.0]));
-    assert_eq!(out.execution_order, vec![OperatorId(1), OperatorId(2), OperatorId(3)]);
+    assert_eq!(
+        out.execution_order,
+        vec![OperatorId(1), OperatorId(2), OperatorId(3)]
+    );
 }
 
 #[test]
@@ -121,7 +124,10 @@ fn pipeline_reuses_cached_compiled_pipeline_for_same_plan_and_fingerprint() {
 
     let _ = Pipeline::compile(&plan, &fp, &compiler, &mut cache).expect("second compile");
     let hits_after = cache.stats().hits;
-    assert!(hits_after > hits_before, "second compile must produce a cache hit");
+    assert!(
+        hits_after > hits_before,
+        "second compile must produce a cache hit"
+    );
 }
 
 #[test]
@@ -138,7 +144,10 @@ fn pipeline_recomputes_when_fingerprint_changes() {
     Pipeline::compile(&plan, &fp_a, &compiler, &mut cache).expect("compile fp_a");
     Pipeline::compile(&plan, &fp_b, &compiler, &mut cache).expect("compile fp_b");
     let stats = cache.stats();
-    assert_eq!(stats.size, 2, "two distinct fingerprint hashes -> two entries");
+    assert_eq!(
+        stats.size, 2,
+        "two distinct fingerprint hashes -> two entries"
+    );
 }
 
 #[test]
@@ -180,7 +189,11 @@ fn pipeline_returns_err_for_plan_with_self_cycle_in_deps() {
     let mut cache = PipelineCache::new(EvictionPolicy::Lru, 4);
     let res = Pipeline::compile(&plan, &fp, &compiler, &mut cache);
     let err = res.expect_err("compile must reject self-cycle");
-    assert!(matches!(err, PipelineError::TopoSortFailed { .. }), "got {:?}", err);
+    assert!(
+        matches!(err, PipelineError::TopoSortFailed { .. }),
+        "got {:?}",
+        err
+    );
 }
 
 #[test]
@@ -194,7 +207,11 @@ fn pipeline_returns_err_for_plan_referencing_missing_operator() {
     let mut cache = PipelineCache::new(EvictionPolicy::Lru, 4);
     let res = Pipeline::compile(&plan, &fp, &compiler, &mut cache);
     let err = res.expect_err("compile must reject missing-op plan");
-    assert!(matches!(err, PipelineError::InvalidPlan { .. }), "got {:?}", err);
+    assert!(
+        matches!(err, PipelineError::InvalidPlan { .. }),
+        "got {:?}",
+        err
+    );
 }
 
 #[test]

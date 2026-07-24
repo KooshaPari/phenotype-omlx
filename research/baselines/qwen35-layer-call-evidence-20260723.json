@@ -1,0 +1,19 @@
+{
+  "schema": "qwen35-layer-call-evidence/v1",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "prompt": "Reply with one word: ready",
+  "max_tokens": 1,
+  "runtime": "mlx_lm.generate",
+  "model_class": "mlx_lm.models.qwen3_5.Model",
+  "layer_class": "mlx_lm.models.qwen3_5.DecoderLayer",
+  "layer_count": 24,
+  "model_calls": 3,
+  "layer_calls": 72,
+  "calls_per_layer": 3,
+  "generated_text": "\n\n",
+  "native_layer_execution_observed": true,
+  "custom_kernel_dispatches": 0,
+  "custom_kernel_execution_verified": false,
+  "verification_scope": "native-layer-call-observation",
+  "notes": "Class-level call instrumentation observed all 24 Qwen3.5 decoder layers during a real one-token MLX generation. This proves native layer execution only; it does not prove custom Metal replacement."
+}

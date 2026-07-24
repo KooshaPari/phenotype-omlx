@@ -8,9 +8,9 @@
   "shapes": ["qwen_moe_canonical", "moe_stress"],
   "paths": ["scalar", "tiled"],
   "rows": [
-    {"shape": "qwen_moe_canonical", "path": "scalar", "median_ns": 298042, "bytes": 32768},
-    {"shape": "qwen_moe_canonical", "path": "tiled", "median_ns": 302875, "bytes": 32768},
-    {"shape": "moe_stress", "path": "scalar", "median_ns": 5307333, "bytes": 262144},
-    {"shape": "moe_stress", "path": "tiled", "median_ns": 4866458, "bytes": 262144}
+    {"shape": "qwen_moe_canonical", "path": "scalar", "median_ns": 480125, "bytes": 32768},
+    {"shape": "qwen_moe_canonical", "path": "tiled", "median_ns": 551458, "bytes": 32768},
+    {"shape": "moe_stress", "path": "scalar", "median_ns": 9339875, "bytes": 262144},
+    {"shape": "moe_stress", "path": "tiled", "median_ns": 7886750, "bytes": 262144}
   ]
 }

@@ -82,7 +82,7 @@ def cmd_inference(args: argparse.Namespace) -> int:
         out = b.generate(req)
         print(out.text)
     elif pol == DispatchPolicy.METAL:
-        b = MetalKernelBackend()
+        b = MetalKernelBackend(model_path=args.model)
         out = b.generate(req)
         print(out.text)
     else:

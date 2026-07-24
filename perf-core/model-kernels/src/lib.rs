@@ -34,6 +34,7 @@
 //! - [`common`]: tolerances, deterministic PRNG, softmax.
 
 #![deny(unsafe_code)]
+#![feature(portable_simd)]
 #![deny(rust_2018_idioms)]
 
 pub mod attention;
@@ -98,11 +99,13 @@ pub enum KernelOp {
     /// Multi-channel selective state-space scan (Mamba-1/Mamba-2 SSM with
     /// per-channel `a_log`, selective Δ, `b`, `c`, `d`).
     MambaSelectiveScan,
+    /// RetNet retention-state update.
+    RetNet,
     /// RWKV time-mixing update (3-channel `[k, v, r]`).
     RwkvTimeMix,
     /// RWKV-7 4-channel `[k, v, r, w]` time-mix with learned decay + gate.
     Rwkv7TimeMix,
-    /// LLaDA / Dream parallel denoise step.
+    /// Diffusion language-model parallel denoise step (DiffusionGemma target).
     Denoise,
     /// Remask scheduling (pure).
     Remask,
@@ -136,6 +139,7 @@ impl KernelOp {
             KernelOp::ShortConv => "short_conv",
             KernelOp::MambaScan => "mamba_scan",
             KernelOp::MambaSelectiveScan => "mamba_selective_scan",
+            KernelOp::RetNet => "retnet",
             KernelOp::RwkvTimeMix => "rwkv_time_mix",
             KernelOp::Rwkv7TimeMix => "rwkv7_time_mix",
             KernelOp::Denoise => "denoise",

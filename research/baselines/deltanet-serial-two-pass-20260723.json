@@ -1,0 +1,18 @@
+{
+  "schema": "metal-runtime.deltanet-serial-two-pass.v1",
+  "captured_at_utc": "2026-07-23T01:43:42Z",
+  "samples": 21,
+  "shape": [1, 8, 8],
+  "parity_max_abs_error": 0.0,
+  "serial": {
+    "median_us": 472.208,
+    "p95_us": 741.75
+  },
+  "two_pass": {
+    "median_us": 569.958,
+    "p95_us": 942.083
+  },
+  "artifact_sha256": "75a36f780daa3fa5534052dc7420cf1aa8a87548725f393ecd9bce890e4a3bbd",
+  "decision": "retain_serial",
+  "decision_reason": "two-pass is parity exact but slower at this production-style binding shape"
+}

@@ -58,8 +58,12 @@ impl ShapeSignature {
     /// Selectors that probe an operator with `Zero` must fall back to a
     /// reference kernel because no tuned record will exist.
     pub fn is_zero(&self) -> bool {
-        self.m == 0 && self.n == 0 && self.k == 0
-            && self.batch == 0 && self.seq == 0 && self.group == 0
+        self.m == 0
+            && self.n == 0
+            && self.k == 0
+            && self.batch == 0
+            && self.seq == 0
+            && self.group == 0
     }
 }
 

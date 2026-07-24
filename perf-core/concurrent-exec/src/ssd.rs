@@ -11,20 +11,22 @@ pub struct SsdBackend {
 
 impl SsdBackend {
     pub fn new(gamma: usize, device: impl Into<Arc<str>>) -> Self {
-        Self { gamma, device: device.into() }
+        Self {
+            gamma,
+            device: device.into(),
+        }
     }
 }
 
 #[async_trait]
 impl ExecBackend for SsdBackend {
-    async fn run(
-        &self,
-        id: AgentId,
-        req: ExecRequest,
-    ) -> Result<ExecResult, JobError> {
+    async fn run(&self, id: AgentId, req: ExecRequest) -> Result<ExecResult, JobError> {
         Ok(ExecResult::ok_with_text(format!(
             "[ssd:{} gamma={} device={} chars={}]",
-            id, self.gamma, self.device, req.prompt.len(),
+            id,
+            self.gamma,
+            self.device,
+            req.prompt.len(),
         )))
     }
 }

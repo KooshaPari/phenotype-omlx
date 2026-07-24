@@ -1,0 +1,34 @@
+[
+  {
+    "tasks": 5,
+    "sequential_ms": 255.3,
+    "parallel_ms": 50.6,
+    "speedup": 5.05,
+    "sequential_rps": 19.6,
+    "parallel_rps": 98.8
+  },
+  {
+    "tasks": 10,
+    "sequential_ms": 509.0,
+    "parallel_ms": 51.3,
+    "speedup": 9.92,
+    "sequential_rps": 19.6,
+    "parallel_rps": 195.0
+  },
+  {
+    "tasks": 20,
+    "sequential_ms": 1021.0,
+    "parallel_ms": 51.3,
+    "speedup": 19.88,
+    "sequential_rps": 19.6,
+    "parallel_rps": 389.5
+  },
+  {
+    "tasks": 50,
+    "sequential_ms": 2549.7,
+    "parallel_ms": 50.8,
+    "speedup": 50.22,
+    "sequential_rps": 19.6,
+    "parallel_rps": 984.8
+  }
+]

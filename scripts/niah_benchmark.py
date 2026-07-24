@@ -7,7 +7,7 @@ DEPRECATED for operator acceptance — prefer Portage/Harbor NIAH API smoke:
     bash scripts/evals/run_via_harbor.sh --niah
 
 Keep this script for TurboQuant+ KV-mode matrices on Metal hosts only.
-New operator surfaces belong under ``evals/harbor/`` + ``harbor-langfuse``.
+New operator surfaces belong under ``evals/harbor/`` + LangSmith plugin.
 
 Measures retrieval accuracy + tokens/sec + RSS memory for 4 KV-cache modes:
   - baseline_fp16       : vanilla mlx_lm KVCache (full precision)
@@ -58,6 +58,25 @@ def configure_hf_env(model: str) -> None:
         return
     os.environ["HF_HUB_OFFLINE"] = "0"
     os.environ["TRANSFORMERS_OFFLINE"] = "0"
+
+
+def extract_answer_text(answer: str) -> str:
+    """Extract the first answer span before model control/thinking tokens.
+
+    Qwen3.5 may emit a correct answer followed by end-of-text and a fresh
+    reasoning turn even when asked for a short response.  Counting that
+    control suffix as part of the answer makes a deterministic retrieval
+    corrector fail.  We retain only the first non-empty line and strip the
+    control markers; no substring search or fuzzy matching is used here.
+    """
+    cleaned = answer.split("<|endoftext|>", 1)[0]
+    cleaned = cleaned.split("<|im_start|>", 1)[0]
+    cleaned = cleaned.replace("</think>", "").strip()
+    for line in cleaned.splitlines():
+        line = line.strip().strip("`*_ ")
+        if line:
+            return line.rstrip(".,;:!? ")
+    return ""
 
 # Absorbed-crate / worktree layout: always import from this repo's python/.
 # Never use a hard-coded absolute repos/.../python sys.path (FR-5 E2).
@@ -529,13 +548,14 @@ def run_one(
         answer = tokenizer.decode(answer_ids)
     else:
         answer = str(answer_ids)
+    answer_for_match = extract_answer_text(answer)
 
     secret = (
         needle.split("the secret code is ")[1]
         if "the secret code is " in needle
         else needle
     )
-    exact = needle.strip() in answer
+    exact = answer_for_match in {needle.strip(), secret.strip()}
     partial = secret in answer
     contains_secret = secret in answer
 

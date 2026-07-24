@@ -49,7 +49,10 @@ fn abi_version_is_compatible_only_when_major_matches() {
         AbiVersion { major: 2, minor: 0 },
     ));
     assert!(!native_abi::is_compatible(
-        AbiVersion { major: 0, minor: 99 },
+        AbiVersion {
+            major: 0,
+            minor: 99
+        },
         AbiVersion { major: 1, minor: 0 },
     ));
 }
@@ -417,7 +420,10 @@ fn dispatch_decode_rejects_when_abi_version_mismatches() {
         3,
         out.as_mut_ptr(),
     );
-    req.abi = AbiVersion { major: 99, minor: 0 };
+    req.abi = AbiVersion {
+        major: 99,
+        minor: 0,
+    };
     let status = unsafe { native_abi::decode_v1(&req) };
     assert_eq!(status, Status::ErrVersionMismatch);
     for v in &out {

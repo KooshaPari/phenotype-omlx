@@ -16,7 +16,20 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
+turbo-quant = { path = "../turbo-quant" }
 metal = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "find_subseq_bench"
+harness = false
+
+[[bench]]
+name = "pipeline_breakdown"
+harness = false
+
 
 [features]
 default = []

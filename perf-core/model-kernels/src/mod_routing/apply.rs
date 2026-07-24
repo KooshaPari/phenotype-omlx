@@ -1,5 +1,5 @@
-use crate::error::{KernelError, Result};
 use super::route::ModRoutePlan;
+use crate::error::{KernelError, Result};
 
 /// Materialize the surviving rows of `full_hidden_states` as a
 /// contiguous `[k, dim]` buffer.
@@ -10,13 +10,12 @@ use super::route::ModRoutePlan;
 /// rows that have not been read — we validate by ensuring the plan's
 /// every selected index is in-range and that the buffer length is
 /// consistent with the largest referenced index.
-pub fn mod_apply(
-    plan: &ModRoutePlan,
-    full_hidden_states: &[f32],
-    dim: usize,
-) -> Result<Vec<f32>> {
+pub fn mod_apply(plan: &ModRoutePlan, full_hidden_states: &[f32], dim: usize) -> Result<Vec<f32>> {
     if dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "dim",
+            got: 0,
+        });
     }
     let k = plan.selected_tokens.len();
     let mut out = Vec::with_capacity(k.saturating_mul(dim));
@@ -59,7 +58,10 @@ pub fn mod_scatter_back(
     fill: f32,
 ) -> Result<Vec<f32>> {
     if dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "dim",
+            got: 0,
+        });
     }
     if selected.len() != plan.selected_tokens.len() * dim {
         return Err(KernelError::BadBufferLength {
@@ -80,8 +82,7 @@ pub fn mod_scatter_back(
         }
         let src_start = slot * dim;
         let dst_start = row * dim;
-        out[dst_start..dst_start + dim]
-            .copy_from_slice(&selected[src_start..src_start + dim]);
+        out[dst_start..dst_start + dim].copy_from_slice(&selected[src_start..src_start + dim]);
     }
     Ok(out)
 }

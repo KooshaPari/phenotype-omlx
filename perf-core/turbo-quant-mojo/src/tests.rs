@@ -86,9 +86,7 @@ fn mojo_encode_decode_roundtrip_ffi_owned_outputs() {
             }
         }
         Err(e) if e.contains("null output pointers") => {
-            panic!(
-                "Mojo @export out-pointer ABI returned null after ABI hardening — {e}"
-            );
+            panic!("Mojo @export out-pointer ABI returned null after ABI hardening — {e}");
         }
         Err(e) => panic!("Mojo encode failed unexpectedly: {e}"),
     }

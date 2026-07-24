@@ -62,3 +62,47 @@ fn metal_matches_scalar_reference() {
         );
     }
 }
+
+#[test]
+fn metal_matches_edge_shape_with_all_packed_codes() {
+    let path = std::env::var("TERNARY_GEMM_METALLIB").expect("TERNARY_GEMM_METALLIB test artifact");
+    let bytes = std::fs::read(&path).unwrap();
+    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+    let root = std::path::Path::new(&path).parent().unwrap();
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let artifact = MetallibLoader::new(root, ArtifactAllowlist::new([(name.to_owned(), digest)]))
+        .load(name)
+        .unwrap();
+
+    // K=127 exercises the partial final packed byte; code 3 is reserved and must decode as 0.
+    let (m, k, n) = (1, 127, 256);
+    let activations: Vec<f32> = (0..m * k)
+        .map(|i| ((i * 17 % 101) as f32 - 50.0) / 13.0)
+        .collect();
+    let codes: Vec<u8> = (0..n * k).map(|i| (i % 4) as u8).collect();
+    let scales: Vec<f32> = (0..n).map(|i| 0.25 + (i % 11) as f32 / 17.0).collect();
+    let packed = pack(&codes, k, n);
+    let actual = ternary_gemm_metal(&activations, &packed, &scales, m, k, n, &artifact).unwrap();
+    for col in 0..n {
+        let expected: f32 = (0..k)
+            .map(|d| {
+                let weight = match codes[col * k + d] {
+                    1 => 1.0,
+                    2 => -1.0,
+                    _ => 0.0,
+                };
+                activations[d] * weight
+            })
+            .sum::<f32>()
+            * scales[col];
+        assert!(
+            (actual[col] - expected).abs() < 1e-5,
+            "col {col}: {} vs {expected}",
+            actual[col]
+        );
+    }
+}

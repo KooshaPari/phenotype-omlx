@@ -60,7 +60,11 @@ pub struct TreePlan {
 
 impl TreePlan {
     pub fn new(width: usize, depth: usize) -> Self {
-        Self { width, depth, root: Vec::new() }
+        Self {
+            width,
+            depth,
+            root: Vec::new(),
+        }
     }
 
     /// Total nodes in the explicit tree (full expansion).
@@ -171,19 +175,89 @@ pub fn tree_causal_mask(
                 // always lie at or after `offset`, so a tree node can
                 // attend to any prefix key at or before it.
                 (Some(_), None) => {
-                    if r >= c { 1 } else { 0 }
+                    if r >= c {
+                        1
+                    } else {
+                        0
+                    }
                 }
                 // Query is in the prefix; key is in the tree. Prefix queries
                 // never see tree keys.
                 (None, Some(_)) => 0,
                 // Both in the prefix: standard causal.
                 (None, None) => {
-                    if r >= c { 1 } else { 0 }
+                    if r >= c {
+                        1
+                    } else {
+                        0
+                    }
                 }
             };
         }
     }
     mask
+}
+
+/// Sparse representation of the tree causal mask.
+///
+/// Stores only the `(row, col)` pairs where `mask[row][col] == 1`.
+/// For a tree of width `W` and depth `D` with prefix `P`, this is
+/// `O(P*D*W + P²)` entries instead of `O((P + D*W)²)` for the dense form.
+#[derive(Debug, Clone)]
+pub struct SparseTreeMask {
+    pub seq_len: usize,
+    pub entries: Vec<(usize, usize)>,
+}
+
+impl SparseTreeMask {
+    /// Convert to dense `Vec<Vec<u8>>` for verification or Metal kernel fallback.
+    pub fn to_dense(&self) -> Vec<Vec<u8>> {
+        let mut mask = vec![vec![0u8; self.seq_len]; self.seq_len];
+        for &(r, c) in &self.entries {
+            mask[r][c] = 1;
+        }
+        mask
+    }
+
+    /// Number of non-zero entries (useful for benchmarking).
+    pub fn nnz(&self) -> usize {
+        self.entries.len()
+    }
+}
+
+/// Build a sparse tree causal mask that stores only the set entries.
+///
+/// The rule is identical to [`tree_causal_mask`]: `mask[r][c] == 1` iff
+/// query position `r` may attend to key position `c`. Positions in the
+/// prefix obey standard causal (`r >= c`); positions in the tree obey
+/// ancestor-or-self via [`TreePlan`].
+pub fn tree_causal_mask_sparse(
+    seq_len: usize,
+    tree_width: usize,
+    tree_depth: usize,
+    offset: usize,
+) -> SparseTreeMask {
+    let plan = TreePlan::new(tree_width, tree_depth);
+    let total_tree_nodes = plan.total_nodes();
+    let mut entries = Vec::new();
+
+    for r in 0..seq_len {
+        let r_in_tree = in_tree_index(r, offset, total_tree_nodes);
+        for c in 0..seq_len {
+            let c_in_tree = in_tree_index(c, offset, total_tree_nodes);
+            let allowed = match (r_in_tree, c_in_tree) {
+                (Some(r_idx), Some(c_idx)) => is_ancestor_or_self(c_idx, r_idx, tree_width),
+                (Some(_), None) => r >= c,
+                (None, Some(_)) => false,
+                (None, None) => r >= c,
+            };
+            if allowed {
+                entries.push((r, c));
+            }
+        }
+    }
+
+    SparseTreeMask { seq_len, entries }
 }
 
 #[cfg(test)]
@@ -203,5 +277,47 @@ mod tests {
         assert_eq!(TreePlan::new(1, 3).total_nodes(), 4);
         // width=2 depth=2 -> 1 + 2 + 4 = 7
         assert_eq!(TreePlan::new(2, 2).total_nodes(), 7);
+    }
+
+    #[test]
+    fn sparse_mask_matches_dense() {
+        for (seq_len, width, depth, offset) in
+            [(8, 2, 2, 0), (16, 4, 3, 0), (12, 2, 3, 4), (32, 4, 4, 8)]
+        {
+            let dense = tree_causal_mask(seq_len, width, depth, offset);
+            let sparse = tree_causal_mask_sparse(seq_len, width, depth, offset);
+            let sparse_dense = sparse.to_dense();
+            assert_eq!(
+                dense, sparse_dense,
+                "Mismatch at ({seq_len}, {width}, {depth}, {offset})"
+            );
+        }
+    }
+
+    #[test]
+    fn sparse_mask_fewer_entries_than_dense() {
+        let seq_len = 16;
+        let dense = tree_causal_mask(seq_len, 4, 3, 0);
+        let sparse = tree_causal_mask_sparse(seq_len, 4, 3, 0);
+        let dense_nnz = dense.iter().flatten().filter(|&&x| x == 1).count();
+        assert_eq!(sparse.nnz(), dense_nnz);
+    }
+
+    #[test]
+    fn sparse_mask_memory_comparison() {
+        let seq_len = 32;
+        let dense = tree_causal_mask(seq_len, 4, 4, 8);
+        let sparse = tree_causal_mask_sparse(seq_len, 4, 4, 8);
+        let dense_nnz = dense.iter().flatten().filter(|&&x| x == 1).count();
+        let dense_cells = seq_len * seq_len;
+        eprintln!(
+            "seq_len={seq_len}: dense cells={dense_cells}, dense nnz={dense_nnz}, sparse nnz={}",
+            sparse.nnz()
+        );
+        eprintln!(
+            "  sparse/dense ratio = {:.2}%",
+            sparse.nnz() as f64 / dense_cells as f64 * 100.0
+        );
+        assert_eq!(sparse.nnz(), dense_nnz);
     }
 }

@@ -63,9 +63,27 @@ struct WritebackRow {
 }
 
 const WB_SHAPES: &[WbShape] = &[
-    WbShape { name: "moe_writeback_small",  num_tokens:   64, num_experts:  8, top_k: 2, hidden:  128 },
-    WbShape { name: "moe_writeback_medium", num_tokens:  256, num_experts: 16, top_k: 2, hidden:  512 },
-    WbShape { name: "moe_writeback_large",  num_tokens: 1024, num_experts: 32, top_k: 4, hidden: 1024 },
+    WbShape {
+        name: "moe_writeback_small",
+        num_tokens: 64,
+        num_experts: 8,
+        top_k: 2,
+        hidden: 128,
+    },
+    WbShape {
+        name: "moe_writeback_medium",
+        num_tokens: 256,
+        num_experts: 16,
+        top_k: 2,
+        hidden: 512,
+    },
+    WbShape {
+        name: "moe_writeback_large",
+        num_tokens: 1024,
+        num_experts: 32,
+        top_k: 4,
+        hidden: 1024,
+    },
 ];
 
 /// Build a deterministic `[num_tokens * top_k, hidden]` expert-output
@@ -73,7 +91,9 @@ const WB_SHAPES: &[WbShape] = &[
 /// "stage" function treats this as `[num_tokens, top_k, hidden]`.
 fn expert_outs(num_tokens: usize, top_k: usize, hidden: usize, salt: u64) -> Vec<f32> {
     let mut rng = Lcg::new(0x57A6_BA11 ^ salt);
-    (0..num_tokens * top_k * hidden).map(|_| rng.next_signed()).collect()
+    (0..num_tokens * top_k * hidden)
+        .map(|_| rng.next_signed())
+        .collect()
 }
 
 /// Top-k round-robin assignment. Because `moe_dispatch` is
@@ -205,11 +225,7 @@ fn moe_writeback_pipeline_bench() {
         let (median, _out) = time_writeback(shape, salt);
         eprintln!(
             "{:<24} {:>10} {:>10} {:>10} {:>12}",
-            shape.name,
-            shape.num_tokens,
-            shape.num_experts,
-            shape.top_k,
-            median,
+            shape.name, shape.num_tokens, shape.num_experts, shape.top_k, median,
         );
         rows.push(WritebackRow {
             shape: shape.name,
@@ -220,22 +236,27 @@ fn moe_writeback_pipeline_bench() {
     }
     eprintln!();
 
-    if env::var("OMLX_BENCH_DUMP").map(|v| v == "1").unwrap_or(false) {
+    if env::var("OMLX_BENCH_DUMP")
+        .map(|v| v == "1")
+        .unwrap_or(false)
+    {
         let out_path = resolve_writeback_baseline_path();
         let json = render_writeback_baseline_json(&rows);
         if let Some(parent) = out_path.parent() {
             fs::create_dir_all(parent).expect("create research/baselines/");
         }
         fs::write(&out_path, json).expect("write baseline JSON");
-        eprintln!("[moe_writeback_bench] wrote baseline to {}", out_path.display());
+        eprintln!(
+            "[moe_writeback_bench] wrote baseline to {}",
+            out_path.display()
+        );
     }
 }
 
 /// Resolve the writeback baseline JSON path:
 /// `research/baselines/moe_writeback_<UTC-YYYYMMDD>.json`.
 fn resolve_writeback_baseline_path() -> PathBuf {
-    let manifest_dir = env::var("CARGO_MANIFEST_DIR")
-        .unwrap_or_else(|_| ".".to_string());
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     let mut p = PathBuf::from(manifest_dir);
     p.pop(); // model-kernels
     p.pop(); // perf-core
@@ -268,7 +289,9 @@ fn render_writeback_baseline_json(rows: &[WritebackRow]) -> String {
             "    {{\"shape\": \"{}\", \"path\": \"{}\", \"median_ns\": {}, \"bytes\": {}}}",
             r.shape, r.path, r.median_ns, r.bytes
         );
-        if i + 1 < rows.len() { s.push(','); }
+        if i + 1 < rows.len() {
+            s.push(',');
+        }
         s.push('\n');
     }
     s.push_str("  ]\n");

@@ -186,10 +186,7 @@ impl DecodeRequest {
         if self.group_size == 0 {
             return Err(Status::ErrInvalidGroupSize);
         }
-        if self.packed_ptr.is_null()
-            || self.scales_ptr.is_null()
-            || self.zeros_ptr.is_null()
-        {
+        if self.packed_ptr.is_null() || self.scales_ptr.is_null() || self.zeros_ptr.is_null() {
             return Err(Status::ErrNullArg);
         }
         // Packed length must match the contract for `n * bits`.

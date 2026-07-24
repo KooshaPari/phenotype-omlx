@@ -213,6 +213,36 @@ apple_inject_service_endpoints() {
   done
 }
 
+apple_guard_database_url() {
+  # Stale gateway IPs (e.g. 192.168.64.6 from an older bridge) make langfuse-web
+  # exit on Prisma P1001 while deps look "up". Loud-fail before create.
+  local url host gw
+  url="$(/usr/bin/grep -E '^DATABASE_URL=' "$ENV_FILE" 2>/dev/null | /usr/bin/tail -1 | /usr/bin/sed 's/^DATABASE_URL=//')"
+  [[ -n "$url" ]] || die "DATABASE_URL missing in $ENV_FILE"
+  host="$(printf '%s' "$url" | /usr/bin/sed -E 's|^[a-zA-Z0-9+.-]+://[^@]+@||; s|[:/].*||')"
+  gw="$(container inspect "${PROJECT_NAME}-redis" 2>/dev/null | /usr/bin/python3 -c '
+import json,sys
+try:
+  d=json.load(sys.stdin); c=d[0] if isinstance(d,list) else d
+  nets=(c.get("status") or {}).get("networks") or []
+  print(nets[0].get("ipv4Gateway","") if nets else "")
+except Exception:
+  print("")
+' 2>/dev/null || true)"
+  [[ -n "$gw" ]] || gw="192.168.65.1"
+  case "$host" in
+    "$gw"|localhost|127.0.0.1|postgres) return 0 ;;
+  esac
+  if [[ "$host" == 192.168.64.* ]]; then
+    die "stale DATABASE_URL host '$host' (old Apple bridge). Set:
+  DATABASE_URL=postgresql://langfuse:langfuse@${gw}:5432/langfuse
+in $ENV_FILE (current langfuse network gateway is ${gw})."
+  fi
+  if [[ "$host" == 192.168.* && "$host" != "$gw" ]]; then
+    die "DATABASE_URL host '$host' != current Apple gateway '$gw'. Update $ENV_FILE."
+  fi
+}
+
 compose() {
   local rt="$1"
   shift
@@ -388,6 +418,7 @@ Pinned ClickHouse: clickhouse/clickhouse-server:24.8 (not :latest)."
         sleep "$settle"
       done
       apple_inject_service_endpoints
+      apple_guard_database_url
       # Drop stale app containers so recreate picks fresh .env IPs; deps stay up.
       container delete --force "${PROJECT_NAME}-langfuse-web" 2>/dev/null || true
       container delete --force "${PROJECT_NAME}-langfuse-worker" 2>/dev/null || true

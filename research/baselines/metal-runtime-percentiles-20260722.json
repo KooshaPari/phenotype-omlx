@@ -1,0 +1,55 @@
+{
+  "schema": "metal-runtime.percentiles.v1",
+  "workload": "binding-smoke",
+  "warmups": 2,
+  "samples": 9,
+  "measurements": {
+    "adaln_rms_f32": {
+      "median_us": 410.708,
+      "p95_us": 709.75
+    },
+    "diffusion_argmax_confidence_f32": {
+      "median_us": 535.291,
+      "p95_us": 993.959
+    },
+    "flow_cfg_step_f32": {
+      "median_us": 445.542,
+      "p95_us": 866.542
+    },
+    "joint_attention_f32": {
+      "median_us": 484.583,
+      "p95_us": 1356.3329999999999
+    },
+    "moe_grouped_gemm_f32": {
+      "median_us": 530.625,
+      "p95_us": 1444.083
+    },
+    "rope_3d_f32": {
+      "median_us": 552.292,
+      "p95_us": 1610.0
+    },
+    "short_conv1d_step_f32": {
+      "median_us": 691.667,
+      "p95_us": 1018.4580000000001
+    },
+    "temporal_window_attention_f32": {
+      "median_us": 439.45799999999997,
+      "p95_us": 1942.5
+    },
+    "ternary_gemm_f32": {
+      "median_us": 544.625,
+      "p95_us": 2022.125
+    }
+  },
+  "artifacts": {
+    "ADALN_METALLIB": "6f571a99a5df74ae3e0dcb2b3c6d95114ee19c850e9491a0214292f482c762b1",
+    "DIFFUSION_CONFIDENCE_METALLIB": "07ca5451f91bba30ecce118a41b39c40221c8f6e30f7bb9fdb28ea54da2e3d42",
+    "FLOW_STEP_METALLIB": "4e0686dfa3ec0df87036556bccb365ef1153e55b74eff52366e04300f1a30846",
+    "JOINT_ATTENTION_METALLIB": "3aa65052bc8191bf9d239fc2431e1a75fd82dea0b395a5423777c2ebd054d3c1",
+    "MOE_GROUPED_GEMM_METALLIB": "de8e81b66d7a51ed9293d15f00845d3253b5307061013c32e192c4acfe7473a3",
+    "ROPE_3D_METALLIB": "26486751ee9f65b54a25439a119d474cad1e606d779bcd5ee1b9096f1013a4a0",
+    "SHORT_CONV_METALLIB": "52f3acdcd61f24f564b49eaefc236c4af618b8d2a82ab40b5192ca860ba4478d",
+    "TEMPORAL_ATTN_METALLIB": "fbe0e9f1044335cac109c92aac68763ed43dfc5393831312d303a894b677f1be",
+    "TERNARY_GEMM_METALLIB": "9f115c62bf9ac39f606affb0ec5728e5158b7e8ab860b210ed482d70994863dd"
+  }
+}

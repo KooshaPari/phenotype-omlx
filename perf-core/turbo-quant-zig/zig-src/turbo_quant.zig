@@ -156,30 +156,30 @@ const TqAbiVersion = extern struct {
 
 pub const TqAbiEncodeRequest = extern struct {
     abi: TqAbiVersion,
-    data_ptr: [*]const f32,
+    data_ptr: ?[*]const f32,
     n: usize,
     bits: u8,
     group_size: usize,
-    out_shape: [*]*usize,
+    out_shape: [*]?[*]usize,
     out_shape_capacity: usize,
-    out_packed: [*]*u8,
+    out_packed: [*]?[*]u8,
     out_packed_capacity: usize,
-    out_scales: [*]*f32,
+    out_scales: [*]?[*]f32,
     out_scales_capacity: usize,
-    out_zeros: [*]*f32,
+    out_zeros: [*]?[*]f32,
     out_zeros_capacity: usize,
 };
 
 pub const TqAbiDecodeRequest = extern struct {
     abi: TqAbiVersion,
-    packed_ptr: [*]const u8,
+    packed_ptr: ?[*]const u8,
     packed_len: usize,
-    scales_ptr: [*]const f32,
-    zeros_ptr: [*]const f32,
+    scales_ptr: ?[*]const f32,
+    zeros_ptr: ?[*]const f32,
     n: usize,
     group_size: usize,
     bits: u8,
-    out_ptr: [*]f32,
+    out_ptr: ?[*]f32,
 };
 
 pub const TqAbiEncodeResult = extern struct {
@@ -229,9 +229,10 @@ fn validate_encode(req: *const TqAbiEncodeRequest, out_packed_len: *usize, out_n
         return .ErrOverflow;
     }
 
+    const data = req.data_ptr.?;
     var i: usize = 0;
     while (i < req.n) : (i += 1) {
-        if (!std.math.isFinite(req.data_ptr[i])) return .ErrNonFiniteInput;
+        if (!std.math.isFinite(data[i])) return .ErrNonFiniteInput;
     }
 
     out_packed_len.* = packed_len;
@@ -260,6 +261,7 @@ pub fn tq_abi_encode(req: *const TqAbiEncodeRequest) TqAbiEncodeResult {
         return res;
     }
 
+    const data = req.data_ptr.?;
     const levels_f: f32 = @as(f32, @floatFromInt((@as(u32, 1) << @intCast(req.bits)) - 1));
     @as([*]usize, @ptrCast(mreq.out_shape[0]))[0] = req.n;
 
@@ -268,12 +270,12 @@ pub fn tq_abi_encode(req: *const TqAbiEncodeRequest) TqAbiEncodeResult {
         const start = g * req.group_size;
         const end = @min(start + req.group_size, req.n);
 
-        var lo: f32 = req.data_ptr[start];
-        var hi: f32 = req.data_ptr[start];
+        var lo: f32 = data[start];
+        var hi: f32 = data[start];
         var i: usize = start + 1;
         while (i < end) : (i += 1) {
-            if (req.data_ptr[i] < lo) lo = req.data_ptr[i];
-            if (req.data_ptr[i] > hi) hi = req.data_ptr[i];
+            if (data[i] < lo) lo = data[i];
+            if (data[i] > hi) hi = data[i];
         }
         const span = hi - lo;
         var scale: f32 = span / levels_f;
@@ -285,7 +287,7 @@ pub fn tq_abi_encode(req: *const TqAbiEncodeRequest) TqAbiEncodeResult {
         var bit_off: usize = 0;
         i = start;
         while (i < end) : (i += 1) {
-            const qf = (req.data_ptr[i] - lo) / scale;
+            const qf = (data[i] - lo) / scale;
             const clamped = @max(0.0, @min(levels_f, @round(qf)));
             const q: u32 = @intFromFloat(clamped);
             const slot = @as([*]u8, @ptrCast(mreq.out_packed[0]));
@@ -337,19 +339,22 @@ pub fn tq_abi_decode(req: *const TqAbiDecodeRequest) c_int {
     if (req.packed_len != expected) return @intFromEnum(TqAbiStatus.ErrInvalidBits);
 
     const n_groups: usize = (req.n + req.group_size - 1) / req.group_size;
-    const out: [*]f32 = @constCast(req.out_ptr);
+    const out: [*]f32 = req.out_ptr.?;
+    const packed_ptr = req.packed_ptr.?;
+    const scales_ptr = req.scales_ptr.?;
+    const zeros_ptr = req.zeros_ptr.?;
 
     var g: usize = 0;
     while (g < n_groups) : (g += 1) {
-        const scale = req.scales_ptr[g];
-        const zero = req.zeros_ptr[g];
+        const scale = scales_ptr[g];
+        const zero = zeros_ptr[g];
         const start = g * req.group_size;
         const end = @min(start + req.group_size, req.n);
 
         var bit_off: usize = 0;
         var i: usize = start;
         while (i < end) : (i += 1) {
-            const q = read_bits_zig(req.packed_ptr, bit_off, req.bits);
+            const q = read_bits_zig(packed_ptr, bit_off, req.bits);
             out[i] = zero + @as(f32, @floatFromInt(q)) * scale;
             bit_off += req.bits;
         }

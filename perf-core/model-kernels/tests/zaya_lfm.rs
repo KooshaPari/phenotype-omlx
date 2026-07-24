@@ -102,12 +102,12 @@ fn zaya_block_parallel_three_blocks_matches_explicit_reference() {
         },
         CcaBlock {
             block_summary: vec![0.5f32, 1.0, 0.25, -0.75, 1.5, -0.5, 0.0, 0.5],
-            block_summary_scale: 0.5, // different scale per block
+            block_summary_scale: 0.5,        // different scale per block
             block_indices: (0..2).collect(), // size 2
         },
         CcaBlock {
             block_summary: vec![-0.25f32, 0.75, 1.0, -0.5, 0.5, 0.25, -1.0, 1.5],
-            block_summary_scale: 1.25, // yet another scale
+            block_summary_scale: 1.25,       // yet another scale
             block_indices: (0..6).collect(), // size 6
         },
     ];
@@ -186,7 +186,10 @@ fn lfm2_gated_short_conv_16_steps_matches_elementwise_product() {
     // gate branch and the value branch carry independent filter
     // histories of the same shape.
     assert_eq!(state, ref_state, "value state must match reference");
-    assert_eq!(gate_state, ref_gate_state, "gate state must match reference");
+    assert_eq!(
+        gate_state, ref_gate_state,
+        "gate state must match reference"
+    );
 }
 
 #[test]

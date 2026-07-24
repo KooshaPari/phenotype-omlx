@@ -5,10 +5,10 @@
 //! width at three configurations: min group_size, max group_size, and
 //! packed-length invariant), plus the ABI version pinning properties.
 
-use super::{
-    assert_fencepost_packed_len, assert_fencepost_round_trip, well_formed_request, V1,
+use super::{assert_fencepost_packed_len, assert_fencepost_round_trip, well_formed_request, V1};
+use native_abi::{
+    encode_v1, AbiVersion, DecodeRequest, EncodeRequest, EncodeResult, Status, ABI_VERSION_CURRENT,
 };
-use native_abi::{encode_v1, AbiVersion, DecodeRequest, EncodeRequest, EncodeResult, Status, ABI_VERSION_CURRENT};
 use proptest::prelude::*;
 
 proptest! {

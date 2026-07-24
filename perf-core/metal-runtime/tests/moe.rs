@@ -220,9 +220,63 @@ fn metal_grouped_gemm_matches_assignment_oracle() {
     }
 }
 
+#[cfg(all(feature = "metal", target_os = "macos"))]
+#[test]
+fn metal_grouped_gemm_handles_realistic_prefill_shape() {
+    use metal_runtime::{grouped_gemm_metal, ArtifactAllowlist, MetallibLoader};
+    use sha2::{Digest, Sha256};
+
+    let path = std::env::var("MOE_GROUPED_GEMM_METALLIB")
+        .expect("MOE_GROUPED_GEMM_METALLIB test artifact");
+    let path = std::path::PathBuf::from(path);
+    let bytes = std::fs::read(&path).expect("read grouped-gemm metallib");
+    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+    let root = path.parent().expect("metallib parent");
+    let name = path.file_name().and_then(|value| value.to_str()).unwrap();
+    let artifact = MetallibLoader::new(root, ArtifactAllowlist::new([(name.to_owned(), digest)]))
+        .load(name)
+        .expect("verified grouped-gemm metallib");
+
+    let (tokens, experts, assignments, k, n) = (8usize, 16usize, 8usize, 64usize, 256usize);
+    let activations: Vec<f32> = (0..tokens * k)
+        .map(|i| ((i * 13 % 97) as f32 - 48.0) / 31.0)
+        .collect();
+    let weights: Vec<f32> = (0..experts * k * n)
+        .map(|i| ((i * 7 % 53) as f32 - 26.0) / 29.0)
+        .collect();
+    let assignment_tokens: Vec<u32> = (0..assignments as u32).map(|i| (i * 3) % 8).collect();
+    let assignment_experts: Vec<u32> = (0..assignments as u32).map(|i| (i * 5) % 16).collect();
+    let actual = grouped_gemm_metal(
+        &activations,
+        &weights,
+        &assignment_tokens,
+        &assignment_experts,
+        k,
+        n,
+        &artifact,
+    )
+    .expect("Metal grouped GEMM");
+    for assignment in 0..assignments {
+        let token = assignment_tokens[assignment] as usize;
+        let expert = assignment_experts[assignment] as usize;
+        for col in 0..n {
+            let expected: f32 = (0..k)
+                .map(|kk| activations[token * k + kk] * weights[(expert * k + kk) * n + col])
+                .sum();
+            let got = actual[assignment * n + col];
+            assert!(
+                (got - expected).abs() <= 1e-4,
+                "assignment {assignment}, col {col}: {got} vs {expected}"
+            );
+        }
+    }
+}
+
 #[test]
 fn production_router_source_contains_no_runtime_source_compilation() {
     let source = include_str!("../src/moe.rs");
+    let cache_source = include_str!("../src/metal_cache.rs");
     assert!(!source.contains("new_library_with_source"));
-    assert!(source.contains("new_library_with_data"));
+    assert!(!cache_source.contains("new_library_with_source"));
+    assert!(cache_source.contains("new_library_with_data"));
 }

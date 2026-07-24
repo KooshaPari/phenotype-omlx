@@ -4,11 +4,16 @@
 //! state in an [`EngineState`](crate::EngineState) that callers can observe
 //! and reset through dedicated accessors.
 
+mod propose;
+mod verify;
+
 use crate::backend::{DraftBackend, TargetBackend};
-use crate::proposal::{MedusaHead, MedusaProposal, TreeTopology};
+use crate::proposal::MedusaHead;
 use crate::state::EngineState;
-use crate::verify::{verify as verify_draft, verify_linear, verify_tree, VerifyResult};
-use crate::{AcceptedToken, DraftMode, SpecDecodeConfig, SpecError, StepResult};
+use crate::tree_proposal;
+use crate::verify::{verify_tree, verify_linear};
+use crate::{AcceptedToken, DraftMode, ProposalMode, SpecDecodeConfig, SpecError, StepResult};
+use turbo_quant::echokv::{EchoKVCache, EchoKVConfig};
 
 /// Cancellation token: returns `true` when the caller wants to abort.
 pub type CancelFn = dyn Fn() -> bool;
@@ -47,8 +52,14 @@ pub struct SpecDecodeEngine {
     pub stats: SpecStats,
     /// Per-call state: most recent KV-cache content for SameModel drafting.
     pub seen_tokens: Vec<u32>,
+    /// Proposal strategy — Medusa or EAGLE-3 tree-based.
+    pub proposal_mode: ProposalMode,
     /// Observable engine state — KV length, drafted/accepted counters, history.
-    state: EngineState,
+    pub(crate) state: EngineState,
+    /// EchoKV cache for adaptive eviction during decode.
+    kv_cache: Option<EchoKVCache>,
+    /// Configuration for the EchoKV cache.
+    kv_config: EchoKVConfig,
 }
 
 impl SpecDecodeEngine {
@@ -57,14 +68,32 @@ impl SpecDecodeEngine {
         target: Box<dyn TargetBackend>,
         draft: Option<Box<dyn DraftBackend>>,
     ) -> Self {
+        let kv_config = EchoKVConfig::default();
         Self {
             config,
             target,
             draft,
             stats: SpecStats::default(),
             seen_tokens: Vec::new(),
+            proposal_mode: ProposalMode::default(),
             state: EngineState::new(),
+            kv_cache: None,
+            kv_config,
         }
+    }
+
+    pub fn with_proposal_mode(mut self, mode: ProposalMode) -> Self {
+        self.proposal_mode = mode;
+        self
+    }
+
+    pub fn with_echokv(mut self, max_cache_size: usize) -> Self {
+        self.kv_config = EchoKVConfig {
+            max_cache_size,
+            ..self.kv_config
+        };
+        self.kv_cache = Some(EchoKVCache::new(self.kv_config.clone()));
+        self
     }
 
     /// Snapshot of the current engine state — pure data, no locks required.
@@ -78,40 +107,6 @@ impl SpecDecodeEngine {
         self.state.reset();
         self.stats = SpecStats::default();
         self.seen_tokens.clear();
-    }
-
-    /// Submit a single prompt and generate up to `max_new_tokens` accepted tokens.
-    pub async fn generate(
-        &mut self,
-        prompt: &[u32],
-        max_new_tokens: usize,
-    ) -> Result<Vec<u32>, SpecError> {
-        let mut generated: Vec<u32> = Vec::with_capacity(max_new_tokens);
-        let mut history = prompt.to_vec();
-        self.seen_tokens.extend_from_slice(prompt);
-        self.state.extend_kv(prompt.len());
-
-        while generated.len() < max_new_tokens {
-            let step = self.step(&history).await?;
-            let n = step.accepted.len();
-            for t in &step.accepted {
-                generated.push(t.token_id);
-                history.push(t.token_id);
-                self.seen_tokens.push(t.token_id);
-                self.state.push_accepted(t.token_id);
-                self.state.extend_kv(1);
-            }
-            self.stats.drafted += step.drafted;
-            self.stats.accepted += n;
-            self.stats.steps += 1;
-            self.state.record_step(step.drafted, n);
-            if step.finished || n == 0 {
-                break;
-            }
-        }
-
-        self.stats.rejection_rate = 1.0 - self.stats.acceptance_rate();
-        Ok(generated)
     }
 
     /// Run one draft-then-verify step.
@@ -197,7 +192,13 @@ impl SpecDecodeEngine {
 
         let finished = candidates
             .first()
-            .and_then(|c| if c.tokens.is_empty() { Some(true) } else { None })
+            .and_then(|c| {
+                if c.tokens.is_empty() {
+                    Some(true)
+                } else {
+                    None
+                }
+            })
             .unwrap_or(false);
 
         for t in &accepted_tokens {
@@ -215,18 +216,19 @@ impl SpecDecodeEngine {
 
     /// Run a Medusa-mode step using the supplied draft heads.
     ///
-    /// Builds a [`MedusaProposal`] from `heads`, then defers verification to
-    /// the configured target backend's tree-attention path.
+    /// Builds a [`MedusaProposal`](crate::proposal::MedusaProposal) from
+    /// `heads`, then defers verification to the configured target backend's
+    /// tree-attention path.
     pub async fn step_medusa(
         &mut self,
         prompt: &[u32],
         heads: &[Box<dyn MedusaHead>],
     ) -> Result<StepResult, SpecError> {
-        let topology = TreeTopology {
+        let topology = crate::proposal::TreeTopology {
             width: self.config.tree_width.max(1),
             depth: self.config.tree_depth.max(1),
         };
-        let proposal = MedusaProposal::from_heads(
+        let proposal = crate::proposal::MedusaProposal::from_heads(
             heads,
             prompt,
             &topology,
@@ -283,89 +285,104 @@ impl SpecDecodeEngine {
         })
     }
 
-    /// Run a deterministic verification pass against the target's logits
-    /// without performing any draft step — exposed so external callers
-    /// (Python, FFI) can plug in custom draft proposals.
-    pub fn verify_only(
-        &self,
-        target_logits: &[f32],
-        draft_tokens: &[u32],
-        draft_probs: &[f32],
-    ) -> Result<VerifyResult, SpecError> {
-        verify_draft(target_logits, draft_tokens, draft_probs, &self.config)
-    }
-
-    /// Produce draft candidates appropriate for the configured mode.
-    async fn propose(
+    /// Run an EAGLE-3 / P-EAGLE step using tree-based draft proposals.
+    ///
+    /// `branch_logits` are the per-depth candidate lists from the EAGLE-3
+    /// draft head. The engine builds parallel trees, flattens every
+    /// root-to-leaf path into a `DraftCandidate`, and verifies via tree
+    /// attention.
+    pub async fn step_eagle3(
         &mut self,
         prefix: &[u32],
-        _heads: &[Box<dyn MedusaHead>],
-    ) -> Result<Vec<DraftCandidate>, SpecError> {
-        match self.config.mode {
-            DraftMode::SameModel => Ok(prompt_lookup(prefix, &self.seen_tokens, self.config.max_draft_tokens)
-                .into_iter()
-                .map(|tokens| DraftCandidate { tokens, tree_path: None })
-                .collect()),
-            DraftMode::DraftModel => {
-                let draft = self.draft.as_ref().ok_or(SpecError::DraftNotLoaded)?;
-                let tokens = draft
-                    .draft(prefix, self.config.max_draft_tokens)
-                    .await
-                    .map_err(SpecError::Backend)?;
-                Ok(vec![DraftCandidate { tokens, tree_path: None }])
-            }
-            DraftMode::Medusa => {
-                // Medusa is driven through `step_medusa`; `propose` here is
-                // only called from the linear / SameModel paths and must
-                // not synthesize candidates it didn't observe.
-                Ok(Vec::new())
+        branch_logits: Vec<Vec<(u32, f32)>>,
+    ) -> Result<StepResult, SpecError> {
+        let eagle_config = match &self.proposal_mode {
+            ProposalMode::Eagle3(cfg) => cfg.clone(),
+            _ => tree_proposal::ParallelTreeConfig::default(),
+        };
+
+        let root_token = self.state.history.back().copied().unwrap_or(0);
+        let trees =
+            tree_proposal::create_parallel_trees(root_token, branch_logits, &eagle_config);
+
+        let mut candidates: Vec<DraftCandidate> = Vec::new();
+        for tree in &trees {
+            for path in tree.leaf_paths() {
+                if !path.is_empty() {
+                    candidates.push(DraftCandidate {
+                        tokens: path,
+                        tree_path: None,
+                    });
+                }
             }
         }
+
+        if candidates.is_empty() {
+            return Ok(StepResult {
+                accepted: Vec::new(),
+                drafted: 0,
+                finished: false,
+            });
+        }
+
+        let drafted = candidates.first().map(|c| c.tokens.len()).unwrap_or(0);
+
+        // Evict low-scoring KV entries before verification.
+        if let Some(ref mut cache) = self.kv_cache {
+            for &tok in &self.seen_tokens {
+                cache.insert(tok as usize, 1.0);
+            }
+            let evicted = cache.evict();
+            if !evicted.is_empty() {
+                tracing::debug!(
+                    evicted_count = evicted.len(),
+                    remaining = cache.len(),
+                    "echokv: evicted entries before verification"
+                );
+            }
+        }
+
+        let accepted = verify_tree(&*self.target, prefix, &candidates).await?;
+
+        let mut accepted_tokens: Vec<AcceptedToken> = Vec::new();
+        for (i, &ok) in accepted.iter().enumerate() {
+            if ok {
+                if let Some(c) = candidates.get(i) {
+                    if let Some(&tok) = c.tokens.first() {
+                        accepted_tokens.push(AcceptedToken {
+                            token_id: tok,
+                            was_drafted: true,
+                        });
+                    }
+                }
+            }
+        }
+
+        for t in &accepted_tokens {
+            self.state.push_accepted(t.token_id);
+            self.state.extend_kv(1);
+        }
+        self.state.record_step(drafted, accepted_tokens.len());
+        self.seen_tokens.extend(prefix);
+        for t in &accepted_tokens {
+            self.seen_tokens.push(t.token_id);
+        }
+
+        Ok(StepResult {
+            accepted: accepted_tokens,
+            drafted,
+            finished: false,
+        })
     }
 }
 
-fn greedy(logits: &[f32]) -> u32 {
+pub(crate) fn greedy(logits: &[f32]) -> u32 {
     logits
         .iter()
         .enumerate()
         .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
         .map(|(i, _)| i as u32)
         .unwrap_or(0)
-}
-
-/// Prompt-lookup / n-gram match: scan `seen` for the longest suffix of
-/// `prefix` and emit the next `k` tokens from any matching continuation.
-fn prompt_lookup(prefix: &[u32], seen: &[u32], k: usize) -> Vec<Vec<u32>> {
-    if prefix.is_empty() || seen.len() <= prefix.len() {
-        return vec![Vec::new()];
-    }
-    // Walk back the longest suffix that appears earlier in `seen`.
-    for n in (1..=prefix.len().min(64)).rev() {
-        let needle = &prefix[prefix.len() - n..];
-        if let Some(pos) = find_subseq(seen[..seen.len() - prefix.len()].as_ref(), needle) {
-            let start = pos + n;
-            let end = (start + k).min(seen.len());
-            if start < seen.len() && start < end {
-                return vec![seen[start..end].to_vec()];
-            }
-        }
-    }
-    vec![Vec::new()]
-}
-
-fn find_subseq(hay: &[u32], needle: &[u32]) -> Option<usize> {
-    if needle.is_empty() || hay.len() < needle.len() {
-        return None;
-    }
-    'outer: for i in 0..=hay.len() - needle.len() {
-        for j in 0..needle.len() {
-            if hay[i + j] != needle[j] {
-                continue 'outer;
-            }
-        }
-        return Some(i);
-    }
-    None
 }
 
 #[cfg(test)]
@@ -391,7 +408,6 @@ mod tests {
             _: &[u32],
             candidates: &[Vec<u32>],
         ) -> Result<Vec<bool>, String> {
-            // accept candidates whose first token == our constant
             Ok(candidates
                 .iter()
                 .map(|c| c.first().copied() == Some(self.0))
@@ -445,7 +461,10 @@ mod tests {
             Box::new(ConstantTarget(2)),
             None,
         );
-        let r = e.step_cancellable(&[1, 2, 3], &[], || false).await.unwrap();
+        let r = e
+            .step_cancellable(&[1, 2, 3], &[], || false)
+            .await
+            .unwrap();
         // accept at least 0 tokens; do not panic.
         let _ = r;
     }
@@ -458,25 +477,13 @@ mod tests {
             None,
         );
         let before = e.state();
-        let r = e.step_cancellable(&[1, 2, 3], &[], || true).await.unwrap();
+        let r = e
+            .step_cancellable(&[1, 2, 3], &[], || true)
+            .await
+            .unwrap();
         assert!(r.accepted.is_empty());
         assert_eq!(r.drafted, 0);
         assert!(!r.finished);
         assert_eq!(e.state(), before);
-    }
-
-    #[test]
-    fn verify_only_is_deterministic() {
-        let e = SpecDecodeEngine::new(
-            SpecDecodeConfig::default(),
-            Box::new(ConstantTarget(5)),
-            None,
-        );
-        let mut logits = vec![0.0_f32; 16];
-        logits[5] = 10.0;
-        let r = e
-            .verify_only(&logits, &[5_u32, 5, 5], &[1.0; 16])
-            .unwrap();
-        assert_eq!(r.accepted_prefix.len(), 3);
     }
 }

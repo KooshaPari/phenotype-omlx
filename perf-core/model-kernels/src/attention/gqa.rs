@@ -22,7 +22,10 @@ pub fn gqa_attention(
     out: &mut [f32],
 ) -> Result<()> {
     if head_dim == 0 {
-        return Err(KernelError::ZeroDimension { what: "head_dim", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "head_dim",
+            got: 0,
+        });
     }
     if seq_q == 0 {
         return Err(KernelError::EmptySequence { what: "seq_q" });
@@ -31,10 +34,16 @@ pub fn gqa_attention(
         return Err(KernelError::EmptySequence { what: "seq_k" });
     }
     if kv_heads == 0 {
-        return Err(KernelError::ZeroDimension { what: "kv_heads", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "kv_heads",
+            got: 0,
+        });
     }
     if q_heads == 0 {
-        return Err(KernelError::ZeroDimension { what: "q_heads", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "q_heads",
+            got: 0,
+        });
     }
     if group_size == 0 {
         return Err(KernelError::ZeroDimension {
@@ -43,10 +52,7 @@ pub fn gqa_attention(
         });
     }
     if kv_heads != q_heads / group_size {
-        return Err(KernelError::BadGqaGrouping {
-            q_heads,
-            kv_heads,
-        });
+        return Err(KernelError::BadGqaGrouping { q_heads, kv_heads });
     }
     let q_len = seq_q * q_heads * head_dim;
     let k_len = seq_k * kv_heads * head_dim;
@@ -72,16 +78,7 @@ pub fn gqa_attention(
         });
     }
     gqa_attention_unchecked(
-        q,
-        k,
-        v,
-        q_heads,
-        kv_heads,
-        head_dim,
-        seq_q,
-        seq_k,
-        group_size,
-        out,
+        q, k, v, q_heads, kv_heads, head_dim, seq_q, seq_k, group_size, out,
     );
     Ok(())
 }
@@ -113,12 +110,12 @@ fn gqa_attention_unchecked(
                 for t in 0..seq_k {
                     let k_row = &k[t * kv_heads * head_dim + kh * head_dim
                         ..t * kv_heads * head_dim + kh * head_dim + head_dim];
-                let mut dot = 0.0;
-                for d in 0..head_dim {
-                    dot += q_row[d] * k_row[d];
+                    let mut dot = 0.0;
+                    for d in 0..head_dim {
+                        dot += q_row[d] * k_row[d];
+                    }
+                    scores[t] = dot;
                 }
-                scores[t] = dot;
-            }
                 softmax(&mut scores);
                 let out_row = &mut out[s * q_heads * head_dim + qh * head_dim
                     ..s * q_heads * head_dim + qh * head_dim + head_dim];

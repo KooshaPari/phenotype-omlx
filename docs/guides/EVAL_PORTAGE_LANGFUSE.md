@@ -65,3 +65,8 @@ python3 scripts/evals/rlvr_af_smoke.py
 - Prefer Harbor JobConfig / tasks over growing `scripts/niah_*.py`.
 - LangSmith panel / `harbor-langsmith` / `config/langsmith_harbor_kpis.json` are
   **legacy** — do not extend. Use Langfuse only.
+
+## Self-host notes
+
+Default UI: `http://127.0.0.1:3000`. Host Homebrew Postgres via Apple Container gateway:
+`DATABASE_URL=postgresql://langfuse:langfuse@192.168.65.1:5432/langfuse` (do not reuse stale `192.168.64.*` IPs).

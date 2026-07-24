@@ -1,0 +1,122 @@
+[
+  {
+    "runner": "LatentMAS",
+    "n_tasks": 5,
+    "sequential_ms": 441.1,
+    "parallel_ms": 26.3,
+    "speedup": 16.8
+  },
+  {
+    "runner": "SSD",
+    "n_tasks": 5,
+    "sequential_ms": 158.0,
+    "parallel_ms": 58.8,
+    "speedup": 2.69
+  },
+  {
+    "runner": "TiDAR",
+    "n_tasks": 5,
+    "sequential_ms": 109.4,
+    "parallel_ms": 88.2,
+    "speedup": 1.24
+  },
+  {
+    "runner": "JetSpec",
+    "n_tasks": 5,
+    "sequential_ms": 116.6,
+    "parallel_ms": 163.7,
+    "speedup": 0.71
+  },
+  {
+    "runner": "LatentMAS",
+    "n_tasks": 10,
+    "sequential_ms": 228.3,
+    "parallel_ms": 26.4,
+    "speedup": 8.63
+  },
+  {
+    "runner": "SSD",
+    "n_tasks": 10,
+    "sequential_ms": 267.3,
+    "parallel_ms": 94.2,
+    "speedup": 2.84
+  },
+  {
+    "runner": "TiDAR",
+    "n_tasks": 10,
+    "sequential_ms": 254.8,
+    "parallel_ms": 150.2,
+    "speedup": 1.7
+  },
+  {
+    "runner": "JetSpec",
+    "n_tasks": 10,
+    "sequential_ms": 263.6,
+    "parallel_ms": 304.5,
+    "speedup": 0.87
+  },
+  {
+    "runner": "LatentMAS",
+    "n_tasks": 25,
+    "sequential_ms": 630.2,
+    "parallel_ms": 39.0,
+    "speedup": 16.17
+  },
+  {
+    "runner": "SSD",
+    "n_tasks": 25,
+    "sequential_ms": 607.4,
+    "parallel_ms": 139.9,
+    "speedup": 4.34
+  },
+  {
+    "runner": "TiDAR",
+    "n_tasks": 25,
+    "sequential_ms": 626.1,
+    "parallel_ms": 354.2,
+    "speedup": 1.77
+  },
+  {
+    "runner": "JetSpec",
+    "n_tasks": 25,
+    "sequential_ms": 608.2,
+    "parallel_ms": 625.0,
+    "speedup": 0.97
+  },
+  {
+    "runner": "LatentMAS",
+    "n_tasks": 50,
+    "sequential_ms": 1167.8,
+    "parallel_ms": 34.8,
+    "speedup": 33.56
+  },
+  {
+    "runner": "SSD",
+    "n_tasks": 50,
+    "sequential_ms": 1211.8,
+    "parallel_ms": 289.7,
+    "speedup": 4.18
+  },
+  {
+    "runner": "TiDAR",
+    "n_tasks": 50,
+    "sequential_ms": 1168.3,
+    "parallel_ms": 636.9,
+    "speedup": 1.83
+  },
+  {
+    "runner": "JetSpec",
+    "n_tasks": 50,
+    "sequential_ms": 1275.6,
+    "parallel_ms": 1500.2,
+    "speedup": 0.85
+  },
+  {
+    "type": "scheduler_strategies",
+    "agents": 10,
+    "FANOUT": 30.5,
+    "CHAIN": 245.8,
+    "ROUNDROBIN": 21.4,
+    "FALLBACK": 21.3
+  }
+]

@@ -40,19 +40,25 @@ fn gqa_attention_matches_dense_when_group_size_is_one() {
     let mut dense_ref = vec![0.0f32; seq_q * q_heads * head_dim];
     for h in 0..q_heads {
         // Extract K/V for this head (since group_size==1, head == kv_head).
-        let k_head: Vec<f32> = (0..seq_k).flat_map(|s| {
-            let base = s * kv_heads * head_dim + h * head_dim;
-            k[base..base + head_dim].iter().copied()
-        }).collect();
-        let v_head: Vec<f32> = (0..seq_k).flat_map(|s| {
-            let base = s * kv_heads * head_dim + h * head_dim;
-            v[base..base + head_dim].iter().copied()
-        }).collect();
+        let k_head: Vec<f32> = (0..seq_k)
+            .flat_map(|s| {
+                let base = s * kv_heads * head_dim + h * head_dim;
+                k[base..base + head_dim].iter().copied()
+            })
+            .collect();
+        let v_head: Vec<f32> = (0..seq_k)
+            .flat_map(|s| {
+                let base = s * kv_heads * head_dim + h * head_dim;
+                v[base..base + head_dim].iter().copied()
+            })
+            .collect();
         // Extract Q for this head.
-        let q_head: Vec<f32> = (0..seq_q).flat_map(|s| {
-            let base = s * q_heads * head_dim + h * head_dim;
-            q[base..base + head_dim].iter().copied()
-        }).collect();
+        let q_head: Vec<f32> = (0..seq_q)
+            .flat_map(|s| {
+                let base = s * q_heads * head_dim + h * head_dim;
+                q[base..base + head_dim].iter().copied()
+            })
+            .collect();
         let mut per_head = vec![0.0f32; seq_q * head_dim];
         dense_attention(
             &q_head,
@@ -106,16 +112,7 @@ fn gqa_attention_groups_share_kv_per_q_head() {
 
     let mut out = vec![0.0f32; seq_q * q_heads * head_dim];
     gqa_attention(
-        &q,
-        &k,
-        &v,
-        q_heads,
-        kv_heads,
-        head_dim,
-        seq_q,
-        seq_k,
-        group_size,
-        &mut out,
+        &q, &k, &v, q_heads, kv_heads, head_dim, seq_q, seq_k, group_size, &mut out,
     )
     .unwrap();
 
@@ -164,16 +161,7 @@ fn gqa_attention_rejects_inconsistent_group_size() {
     let mut out = vec![0.0f32; seq_q * q_heads * head_dim];
 
     let err = gqa_attention(
-        &q,
-        &k,
-        &v,
-        q_heads,
-        kv_heads,
-        head_dim,
-        seq_q,
-        seq_k,
-        group_size,
-        &mut out,
+        &q, &k, &v, q_heads, kv_heads, head_dim, seq_q, seq_k, group_size, &mut out,
     )
     .unwrap_err();
     assert!(matches!(err, KernelError::BadGqaGrouping { .. }));
@@ -197,16 +185,7 @@ fn mla_attention_compresses_to_latent_then_expands_correctly() {
 
     let mut out = vec![0.0f32; seq_q * (d_latent + d_rope)];
     mla_attention(
-        &q_latent,
-        &k_latent,
-        &v_latent,
-        &q_rope,
-        &k_rope,
-        d_latent,
-        d_rope,
-        seq_q,
-        seq_k,
-        &mut out,
+        &q_latent, &k_latent, &v_latent, &q_rope, &k_rope, d_latent, d_rope, seq_q, seq_k, &mut out,
     )
     .unwrap();
 
@@ -247,10 +226,7 @@ fn mla_attention_compresses_to_latent_then_expands_correctly() {
     assert_eq!(out.len(), d_latent + d_rope);
     for (i, (&g, &e)) in out.iter().zip(expected.iter()).enumerate() {
         if i < d_latent {
-            assert!(
-                approx_eq(g, e),
-                "latent channel {i}: got {g}, expected {e}"
-            );
+            assert!(approx_eq(g, e), "latent channel {i}: got {g}, expected {e}");
         } else {
             assert!(g.is_finite(), "rope output channel {i} not finite");
         }
@@ -272,16 +248,7 @@ fn mla_attention_matches_oracle_for_random_inputs() {
 
     let mut out = vec![0.0f32; seq_q * (d_latent + d_rope)];
     mla_attention(
-        &q_latent,
-        &k_latent,
-        &v_latent,
-        &q_rope,
-        &k_rope,
-        d_latent,
-        d_rope,
-        seq_q,
-        seq_k,
-        &mut out,
+        &q_latent, &k_latent, &v_latent, &q_rope, &k_rope, d_latent, d_rope, seq_q, seq_k, &mut out,
     )
     .unwrap();
 

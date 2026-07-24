@@ -44,17 +44,36 @@ func cellQualityPass(c Cell) float64 {
 
 // UnmarshalJSON dual-reads gen_ok from pass_at_1 when the new field is absent,
 // and assignment/transcript aliases (nested assignment, chat_trace, reply_full, rubric).
+//
+// pheno-harness emits rlvr_reward_breakdown with mixed value types (floats plus
+// strings like heuristic_reason / motion). encoding/json rejects map[string]float64
+// for that shape, so we strip breakdown keys before the strict wire decode and
+// rehydrate numeric entries via ensureRlvrFromRaw → floatMapOr.
 func (c *Cell) UnmarshalJSON(data []byte) error {
 	type cellWire Cell
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
+	breakdownPrimary := raw["rlvr_reward_breakdown"]
+	breakdownAlias := raw["RLVRRewardBreakdown"]
+	delete(raw, "rlvr_reward_breakdown")
+	delete(raw, "RLVRRewardBreakdown")
+	stripped, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
 	var wire cellWire
-	if err := json.Unmarshal(data, &wire); err != nil {
+	if err := json.Unmarshal(stripped, &wire); err != nil {
 		return err
 	}
 	*c = Cell(wire)
+	if breakdownPrimary != nil {
+		raw["rlvr_reward_breakdown"] = breakdownPrimary
+	}
+	if breakdownAlias != nil {
+		raw["RLVRRewardBreakdown"] = breakdownAlias
+	}
 	if _, ok := raw["gen_ok"]; !ok {
 		c.GenOk = c.PassAt1
 	} else {

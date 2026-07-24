@@ -8,7 +8,9 @@
 
 use serde_json::json;
 
-use super::super::{assert_close_envelope, checked_in_baselines_dir, BaselineRecorder, VerifyResult};
+use super::super::{
+    assert_close_envelope, checked_in_baselines_dir, BaselineRecorder, VerifyResult,
+};
 
 const OLMOE_NUM_TOKENS: usize = 4;
 const OLMOE_NUM_EXPERTS: usize = 64;
@@ -61,8 +63,13 @@ fn compute_olmoe_moe_end_to_end_output() -> (Vec<usize>, Vec<f32>, Vec<f32>, Vec
         top_picks.push(picks[0].0);
         picks_per_token.push(picks);
     }
-    let plan = moe_dispatch(&(0..n_t).collect::<Vec<_>>(), &assignments, n_e, OLMOE_CAPACITY_FACTOR)
-        .expect("dispatch must accept well-formed inputs");
+    let plan = moe_dispatch(
+        &(0..n_t).collect::<Vec<_>>(),
+        &assignments,
+        n_e,
+        OLMOE_CAPACITY_FACTOR,
+    )
+    .expect("dispatch must accept well-formed inputs");
 
     // Activations + shared-expert weight + per-expert routed weights.
     let a = olmoe_det(n_t * k, 0xA_CE);
@@ -108,7 +115,13 @@ fn compute_olmoe_moe_end_to_end_output() -> (Vec<usize>, Vec<f32>, Vec<f32>, Vec
     coalesced_writeback(&stage, n_t, h, &mut writeback_out)
         .expect("coalesced_writeback must accept well-formed inputs");
 
-    (top_picks, router_logits, shared_out, reduced_out, writeback_out)
+    (
+        top_picks,
+        router_logits,
+        shared_out,
+        reduced_out,
+        writeback_out,
+    )
 }
 
 /// `olmoe_moe_end_to_end` baseline round-trip.
@@ -117,8 +130,8 @@ fn olmoe_moe_end_to_end_baseline_round_trip() {
     let (top_picks, router_logits, shared_out, reduced_out, writeback_out) =
         compute_olmoe_moe_end_to_end_output();
     let to_f64 = |v: &[f32]| -> Vec<f64> { v.iter().map(|&x| x as f64).collect() };
-    let capacity = (OLMOE_CAPACITY_FACTOR * OLMOE_NUM_TOKENS as f32 / OLMOE_NUM_EXPERTS as f32)
-        .ceil() as u64;
+    let capacity =
+        (OLMOE_CAPACITY_FACTOR * OLMOE_NUM_TOKENS as f32 / OLMOE_NUM_EXPERTS as f32).ceil() as u64;
     let inputs = json!({
         "kernel": "olmoe_moe_end_to_end",
         "num_tokens": OLMOE_NUM_TOKENS,

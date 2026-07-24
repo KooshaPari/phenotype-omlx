@@ -29,11 +29,7 @@ impl LatentMasBackend {
 
 #[async_trait]
 impl ExecBackend for LatentMasBackend {
-    async fn run(
-        &self,
-        id: AgentId,
-        req: ExecRequest,
-    ) -> Result<ExecResult, JobError> {
+    async fn run(&self, id: AgentId, req: ExecRequest) -> Result<ExecResult, JobError> {
         // In real LatentMAS, this would:
         //   1. run each latent agent's forward pass under MPS/CPU
         //   2. merge their hidden states through the configured reducer

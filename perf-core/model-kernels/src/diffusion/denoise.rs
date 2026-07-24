@@ -1,11 +1,11 @@
-//! Denoise step kernels: LLaDA / Dream parallel denoising.
+//! Denoise step kernels for diffusion language models.
 //!
 //! The pure remask scheduler lives in [`super::remask`]; this module
 //! only owns [`denoise_step_sequential`] (the per-row argmax decode)
 //! and the fused [`denoise_step`] that calls it and then applies a
 //! remask strategy.
 
-use crate::common::softmax_row;
+use crate::common::softmax_max;
 use crate::error::{KernelError, Result};
 
 use super::remask::remask;
@@ -41,7 +41,8 @@ pub struct DenoiseUpdate {
     pub accepted_count: usize,
 }
 
-/// Sequential scalar reference. One row at a time, picks the argmax
+/// Sequential scalar reference used for DiffusionGemma parity and
+/// retained for LLaDA/Dream regression fixtures. One row at a time, picks the argmax
 /// for any position currently in `mask`, fills it into `next_x`,
 /// leaves other positions alone.
 pub fn denoise_step_sequential(
@@ -111,9 +112,7 @@ pub fn denoise_step(
     let mut scores = Vec::with_capacity(n);
     for i in 0..n {
         let row = &model_logits[i * vocab..(i + 1) * vocab];
-        let mut copy = row.to_vec();
-        softmax_row(&mut copy);
-        scores.push(copy.iter().copied().fold(f32::NEG_INFINITY, f32::max));
+        scores.push(softmax_max(row));
     }
     // 3. Confidence threshold: anything below is forced back to masked.
     if !(0.0..=1.0).contains(&confidence_threshold) {
@@ -166,9 +165,9 @@ mod tests {
         let mask = vec![true, false, true, false];
         let logits = vec![
             0.0, 0.0, 10.0, 0.0, // -> 2
-            0.0, 0.0, 0.0, 0.0,    // unused
-            0.0, 5.0, 0.0, 0.0,    // -> 1
-            0.0, 0.0, 0.0, 0.0,    // unused
+            0.0, 0.0, 0.0, 0.0, // unused
+            0.0, 5.0, 0.0, 0.0, // -> 1
+            0.0, 0.0, 0.0, 0.0, // unused
         ];
         let out = denoise_step_sequential(&x_t, &mask, &logits, 4).unwrap();
         assert_eq!(out.next_x, vec![2, 0, 1, 0]);
@@ -200,19 +199,10 @@ mod tests {
         let mask = vec![true, false, true];
         let logits = vec![
             0.0, 1.0, 2.0, 5.0, 0.0, // -> 3
-            0.0, 0.0, 0.0, 0.0, 0.0,
-            1.0, 1.0, 1.0, 1.0, 1.0, // tie -> first wins = 0
+            0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, // tie -> first wins = 0
         ];
         let seq = denoise_step_sequential(&x_t, &mask, &logits, 5).unwrap();
-        let par = denoise_step(
-            &x_t,
-            &mask,
-            &logits,
-            RemaskStrategy::None,
-            0.0,
-            5,
-        )
-        .unwrap();
+        let par = denoise_step(&x_t, &mask, &logits, RemaskStrategy::None, 0.0, 5).unwrap();
         assert_eq!(seq.next_x, par.next_x);
         assert_eq!(seq.next_mask, par.next_mask);
     }
@@ -223,15 +213,7 @@ mod tests {
         let x_t = vec![0u32, 0];
         let mask = vec![true, true];
         let logits = vec![0.0, 10.0, 0.0, 10.0];
-        let upd = denoise_step(
-            &x_t,
-            &mask,
-            &logits,
-            RemaskStrategy::None,
-            0.9,
-            vocab,
-        )
-        .unwrap();
+        let upd = denoise_step(&x_t, &mask, &logits, RemaskStrategy::None, 0.9, vocab).unwrap();
         // softmax([0,10]) -> max ≈ 1.0; both accepted.
         assert_eq!(upd.next_x, vec![1, 1]);
         assert_eq!(upd.accepted_count, 2);
@@ -243,15 +225,7 @@ mod tests {
         let x_t = vec![0u32, 0];
         let mask = vec![true, true];
         let logits = vec![0.0, 10.0, 0.0, 10.0];
-        let err = denoise_step(
-            &x_t,
-            &mask,
-            &logits,
-            RemaskStrategy::None,
-            1.5,
-            vocab,
-        )
-        .unwrap_err();
+        let err = denoise_step(&x_t, &mask, &logits, RemaskStrategy::None, 1.5, vocab).unwrap_err();
         assert!(matches!(err, KernelError::OutOfRange { .. }));
     }
 }

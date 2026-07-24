@@ -36,7 +36,7 @@
 use std::path::PathBuf;
 
 use regress_baseline::{
-    BaselineEntry, BaselineRecorder, BaselinesFile, SCHEMA_VERSION, VerifyResult,
+    BaselineEntry, BaselineRecorder, BaselinesFile, VerifyResult, SCHEMA_VERSION,
 };
 use serde_json::{json, Value};
 

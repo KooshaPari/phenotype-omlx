@@ -12,6 +12,7 @@ members = [
     "concurrent-exec-cuda",
     "turbo-quant",
     "turbo-quant-mojo",
+    "turbo-quant-zig",
     "eval-harness",
     "kernel-registry",
     "native-abi",
@@ -43,7 +44,9 @@ parking_lot = "0.12"
 async-trait = "0.1"
 dashmap = "6"
 metal = "0.27"
-pyo3 = { version = "0.29", features = ["extension-module"] }
+pyo3 = { version = "0.29", features = ["auto-initialize"] }
+
+
 
 [profile.release]
 opt-level = 3

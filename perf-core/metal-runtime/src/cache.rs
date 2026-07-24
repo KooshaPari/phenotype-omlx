@@ -225,8 +225,7 @@ impl PipelineCache {
         let access = inner.next_access;
 
         // Replace existing entry in-place — no eviction, no size change.
-        if let std::collections::hash_map::Entry::Occupied(mut occupied) =
-            inner.entries.entry(key)
+        if let std::collections::hash_map::Entry::Occupied(mut occupied) = inner.entries.entry(key)
         {
             occupied.insert(Entry {
                 value,
@@ -355,10 +354,7 @@ mod tests {
         cache.insert(ModelId(1), 0, 1, mk(1, 1, "second"));
         assert_eq!(cache.stats().size, 1);
         assert_eq!(cache.stats().evictions, evictions_before);
-        assert_eq!(
-            cache.get(ModelId(1), 0, 1).unwrap().shader_source,
-            "second"
-        );
+        assert_eq!(cache.get(ModelId(1), 0, 1).unwrap().shader_source, "second");
     }
 
     #[test]

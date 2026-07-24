@@ -15,8 +15,8 @@
 //! expectations match across runs.
 
 pub use crate::diffusion::confidence::confidence_scores;
-pub use crate::diffusion::flow::{classifier_free_guidance, flow_sigma_schedule};
 pub use crate::diffusion::denoise::{
     denoise_step, denoise_step_sequential, DenoiseUpdate, RemaskStrategy,
 };
+pub use crate::diffusion::flow::{classifier_free_guidance, flow_sigma_schedule};
 pub use crate::diffusion::remask::remask;

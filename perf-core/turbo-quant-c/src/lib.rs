@@ -175,11 +175,7 @@ mod turbo_quant_c_build {
 
     /// Versioned encode entry. Returns `Ok(CTensor)` on success; on failure
     /// returns the matching [`RustStatus`] and zeroes every output slot.
-    pub fn encode_v1(
-        data: &[f32],
-        bits: u8,
-        group_size: usize,
-    ) -> Result<CTensor, RustStatus> {
+    pub fn encode_v1(data: &[f32], bits: u8, group_size: usize) -> Result<CTensor, RustStatus> {
         let n_groups = native_abi::group_count(data.len(), group_size);
         let packed_len = native_abi::expected_packed_len(data.len(), bits);
 
@@ -227,7 +223,12 @@ mod turbo_quant_c_build {
         let scales = std::mem::take(&mut scales_storage);
         let zeros = std::mem::take(&mut zeros_storage);
 
-        Ok(CTensor { shape, packed, scales, zeros })
+        Ok(CTensor {
+            shape,
+            packed,
+            scales,
+            zeros,
+        })
     }
 
     /// Decode via the versioned ABI into a caller-owned buffer. Returns the
@@ -317,7 +318,10 @@ mod tests {
 
         for bits in [2u8, 3, 4] {
             let tensor = encode(&input, bits, 3).expect("supported encoding");
-            assert_eq!(tensor.packed.len(), (input.len() * bits as usize).div_ceil(8));
+            assert_eq!(
+                tensor.packed.len(),
+                (input.len() * bits as usize).div_ceil(8)
+            );
 
             let mut out = vec![f32::NAN; input.len()];
             decode_into(&tensor, input.len(), 3, bits, &mut out);

@@ -100,10 +100,11 @@ impl ModelPlan {
     /// [`ModelPlan::validate`] and exposed publicly so callers that build
     /// operator records incrementally can check before assembling the plan.
     pub fn validate_quant(q: &QuantizationPolicy) -> PlanResult<()> {
-        q.validate().map_err(|reason| PlanError::InvalidQuantPolicy {
-            operator: OperatorId(0),
-            reason,
-        })
+        q.validate()
+            .map_err(|reason| PlanError::InvalidQuantPolicy {
+                operator: OperatorId(0),
+                reason,
+            })
     }
 
     /// Validate the plan. Returns `Err(PlanError)` on the first defect
@@ -154,10 +155,11 @@ impl ModelPlan {
 
         // 4. State owner operators exist.
         for s in &self.states {
-            s.validate().map_err(|reason| PlanError::MalformedOperator {
-                operator: s.owner_operator,
-                reason: format!("state {} invalid: {}", s.id.0, reason),
-            })?;
+            s.validate()
+                .map_err(|reason| PlanError::MalformedOperator {
+                    operator: s.owner_operator,
+                    reason: format!("state {} invalid: {}", s.id.0, reason),
+                })?;
             if !seen_ops.contains(&s.owner_operator) {
                 return Err(PlanError::UnknownStateOwner {
                     state: s.id,
@@ -263,9 +265,7 @@ impl ModelPlan {
                     operator: op.id,
                     reason: format!(
                         "{:?} input dtypes must match, got {:?} and {:?}",
-                        op.kind,
-                        op.inputs[0].dtype,
-                        op.inputs[1].dtype
+                        op.kind, op.inputs[0].dtype, op.inputs[1].dtype
                     ),
                 });
             }
@@ -279,8 +279,11 @@ impl ModelPlan {
     /// is present. Stable: ties broken by [`OperatorId`] order.
     pub fn topo_sort(&self) -> PlanResult<Vec<&OperatorPlan>> {
         self.validate()?; // ensures deps are well-formed first
-        let mut in_degree: std::collections::HashMap<OperatorId, usize> =
-            self.operators.iter().map(|o| (o.id, o.deps.len())).collect();
+        let mut in_degree: std::collections::HashMap<OperatorId, usize> = self
+            .operators
+            .iter()
+            .map(|o| (o.id, o.deps.len()))
+            .collect();
         let mut reverse: std::collections::HashMap<OperatorId, Vec<OperatorId>> =
             std::collections::HashMap::new();
         for op in &self.operators {

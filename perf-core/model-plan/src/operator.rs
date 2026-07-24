@@ -16,9 +16,7 @@ use crate::tensor::TensorRef;
 ///
 /// Newtype around `u64` to keep room for future typed identifiers
 /// (uuids, namespaced ids) without changing call sites.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct OperatorId(pub u64);
 
@@ -69,6 +67,17 @@ pub enum OperatorKind {
         /// Number of selected experts per token.
         top_k: usize,
     },
+    /// Multi-channel selective state-space scan (Mamba-family linear recurrence).
+    MambaScan {
+        state_dim: usize,
+        chunk_size: usize,
+    },
+    /// RetNet retention-state update.
+    RetNet {
+        num_heads: usize,
+        head_dim: usize,
+        chunk_size: usize,
+    },
     /// Range construction (e.g. position ids).
     Arange,
     /// Elementwise / structural copy.
@@ -99,6 +108,8 @@ impl OperatorKind {
             OperatorKind::Embedding => "embedding",
             OperatorKind::Sampling => "sampling",
             OperatorKind::MoeRouter { .. } => "moe_router",
+            OperatorKind::MambaScan { .. } => "mamba_scan",
+            OperatorKind::RetNet { .. } => "retnet",
             OperatorKind::Arange => "arange",
             OperatorKind::Copy => "copy",
             OperatorKind::Add => "add",
@@ -166,6 +177,10 @@ mod tests {
             .tag(),
             "moe_router"
         );
+        assert_eq!(
+            OperatorKind::MambaScan { state_dim: 16, chunk_size: 64 }.tag(),
+            "mamba_scan"
+        );
     }
 
     #[test]
@@ -186,6 +201,8 @@ mod tests {
                 num_experts: 64,
                 top_k: 8,
             },
+            OperatorKind::MambaScan { state_dim: 16, chunk_size: 64 },
+            OperatorKind::RetNet { num_heads: 4, head_dim: 16, chunk_size: 64 },
             OperatorKind::Arange,
             OperatorKind::Copy,
             OperatorKind::Add,

@@ -15,9 +15,7 @@ use crate::operator::OperatorId;
 ///
 /// Newtype around `u64` so `serde` derives are ergonomic and to keep room
 /// for future typed identifiers (e.g. namespaced uuids).
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct StateId(pub u64);
 
@@ -102,10 +100,7 @@ impl StatePlan {
     /// presence in the plan — that's a plan-level check.
     pub fn validate(&self) -> Result<(), String> {
         if self.max_versions == 0 {
-            return Err(format!(
-                "state {} max_versions must be >= 1",
-                self.id.0
-            ));
+            return Err(format!("state {} max_versions must be >= 1", self.id.0));
         }
         for dim in &self.shape {
             if *dim >= (1usize << 40) {

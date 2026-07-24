@@ -42,8 +42,7 @@ impl ZigQuantizedTensor {
     }
 
     /// Encode via the versioned Native ABI v1 contract. Returns the matching
-    /// [`native_abi::Status`] on failure; without the `zig` feature this is a
-    /// compile-time stub returning `ErrAllocation`.
+    /// [`native_abi::Status`] on failure.
     pub fn encode_v1(
         data: &[f32],
         bits: u8,
@@ -62,8 +61,7 @@ impl ZigQuantizedTensor {
 
     /// Decode via the versioned Native ABI v1 contract. The status reported
     /// by the Zig side is returned; on success the buffer is overwritten, on
-    /// failure it is left untouched. Without the `zig` feature this returns
-    /// `ErrAllocation`.
+    /// failure it is left untouched.
     pub fn decode_v1(
         &self,
         n: usize,
@@ -103,7 +101,7 @@ mod native {
 
     #[cfg(feature = "zig")]
     extern "C" {
-        fn tq_zig_encode(
+        fn _tq_zig_encode(
             data_ptr: *const f32,
             n: usize,
             bits: c_uchar,
@@ -118,7 +116,7 @@ mod native {
             out_zeros_len: *mut usize,
         ) -> bool;
 
-        fn tq_zig_decode(
+        fn _tq_zig_decode(
             packed_ptr: *const u8,
             packed_len: usize,
             scales_ptr: *const f32,
@@ -129,7 +127,7 @@ mod native {
             out_ptr: *mut f32,
         );
 
-        fn tq_zig_free(ptr: *mut c_void, size: usize);
+        fn _tq_zig_free(ptr: *mut c_void, size: usize);
 
         // Native ABI v1 entries from the Zig kernel.
         fn tq_abi_encode(req: *const RustEncodeRequest) -> RustEncodeResult;
@@ -152,7 +150,7 @@ mod native {
         let mut zeros_len: usize = 0;
 
         let ok = unsafe {
-            tq_zig_encode(
+            _tq_zig_encode(
                 data.as_ptr(),
                 data.len(),
                 bits,
@@ -232,7 +230,7 @@ mod native {
             zeros.as_ptr()
         };
         unsafe {
-            tq_zig_decode(
+            _tq_zig_decode(
                 packed_ptr,
                 packed.len(),
                 scales_ptr,
@@ -345,17 +343,12 @@ mod tests {
     fn zig_encode_decode_roundtrip() {
         let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
         let r = ZigQuantizedTensor::encode(&data, 4, 32);
-        #[cfg(feature = "zig")]
-        {
-            assert!(r.is_ok(), "encode failed: {:?}", r.err());
-            let q = r.unwrap();
-            let decoded = q.decode(data.len(), 32, 4);
-            for (a, b) in data.iter().zip(decoded.iter()) {
-                assert!((a - b).abs() < 0.15, "{} vs {}", a, b);
-            }
+        assert!(r.is_ok(), "encode failed: {:?}", r.err());
+        let q = r.unwrap();
+        let decoded = q.decode(data.len(), 32, 4);
+        for (a, b) in data.iter().zip(decoded.iter()) {
+            assert!((a - b).abs() < 0.15, "{} vs {}", a, b);
         }
-        #[cfg(not(feature = "zig"))]
-        assert!(r.is_err(), "encode should fail without --features zig");
     }
 
     #[test]

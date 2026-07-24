@@ -1,0 +1,32 @@
+{
+  "schema": "metal-moe-ternary-runtime/v1",
+  "platform": "macos-arm64-metal",
+  "artifact_dir": "/tmp/omlx-metal-runtime-1784807534",
+  "artifacts": {
+    "moe_topk": {
+      "sha256": "516848f26f8b6f63e09a76cb6936c6c0db406155d06b10afe979b784379d25d7"
+    },
+    "moe_grouped_gemm": {
+      "sha256": "de8e81b66d7a51ed9293d15f00845d3253b5307061013c32e192c4acfe7473a3"
+    },
+    "ternary_gemm": {
+      "sha256": "c384997791b83f891eacb793c7415a932f8b669dd08dbc9c789a51ce1c2b5694"
+    }
+  },
+  "tests": {
+    "moe": {
+      "command": "cargo test -p metal-runtime --features metal --test moe",
+      "passed": 9,
+      "failed": 0,
+      "coverage": ["top-k 1/2/4/8", "experts 16/64/128/256", "grouped GEMM k=3,n=2", "prefill tokens=8,experts=16,k=64,n=256"]
+    },
+    "ternary": {
+      "command": "cargo test -p metal-runtime --features metal --test ternary",
+      "passed": 2,
+      "failed": 0,
+      "coverage": ["baseline k=5,m=2,n=3", "edge k=127,m=1,n=256", "all packed codes including 11"]
+    }
+  },
+  "decision": "runtime_parity_pass",
+  "notes": "All new MoE grouped-GEMM and ternary edge-shape tests passed against freshly compiled Metal artifacts. This is correctness evidence; throughput percentile benchmarks remain separate work."
+}

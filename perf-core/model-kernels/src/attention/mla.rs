@@ -33,7 +33,10 @@ pub fn mla_attention(
         });
     }
     if d_rope == 0 {
-        return Err(KernelError::ZeroDimension { what: "d_rope", got: 0 });
+        return Err(KernelError::ZeroDimension {
+            what: "d_rope",
+            got: 0,
+        });
     }
     if seq_q == 0 {
         return Err(KernelError::EmptySequence { what: "seq_q" });

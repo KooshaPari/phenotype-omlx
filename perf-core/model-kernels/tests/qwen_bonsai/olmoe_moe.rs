@@ -131,17 +131,12 @@ fn olmoe_pipeline_runs_end_to_end_with_tiled_kernels() {
     let (assignments, picks_per_token) = run_router(&router_logits);
 
     let token_indices: Vec<usize> = (0..NUM_TOKENS).collect();
-    let plan: DispatchPlan = moe_dispatch(
-        &token_indices,
-        &assignments,
-        NUM_EXPERTS,
-        CAPACITY_FACTOR,
-    )
-    .expect("dispatch must accept well-formed inputs");
+    let plan: DispatchPlan =
+        moe_dispatch(&token_indices, &assignments, NUM_EXPERTS, CAPACITY_FACTOR)
+            .expect("dispatch must accept well-formed inputs");
 
     // Sanity: no expert exceeds ceil(1.5 * 4 / 64) = 1.
-    let per_expert_cap =
-        (CAPACITY_FACTOR * NUM_TOKENS as f32 / NUM_EXPERTS as f32).ceil() as usize;
+    let per_expert_cap = (CAPACITY_FACTOR * NUM_TOKENS as f32 / NUM_EXPERTS as f32).ceil() as usize;
     for (e, used) in plan.capacity_used.iter().enumerate() {
         assert!(
             *used <= per_expert_cap,
@@ -161,8 +156,7 @@ fn olmoe_pipeline_runs_end_to_end_with_tiled_kernels() {
     // Shared-expert matmul (OLMoE: shared_experts=1 — single dense
     // projection, matches `shared_expert`'s `out = x @ w` contract).
     let mut shared_out = vec![0.0f32; NUM_TOKENS * HIDDEN];
-    shared_expert(&a, &w, &mut shared_out)
-        .expect("shared_expert must accept well-formed inputs");
+    shared_expert(&a, &w, &mut shared_out).expect("shared_expert must accept well-formed inputs");
     let mut shared_ref = vec![0.0f32; NUM_TOKENS * HIDDEN];
     for t in 0..NUM_TOKENS {
         for j in 0..HIDDEN {
@@ -222,8 +216,12 @@ fn olmoe_pipeline_runs_end_to_end_with_tiled_kernels() {
     // routed row. For dropped tokens the row is zero.
     let mut writeback_ref = [0.0f32; NUM_TOKENS * HIDDEN];
     for t in 0..NUM_TOKENS {
-        if plan.dropped.contains(&t) { continue; }
-        for j in 0..HIDDEN { writeback_ref[t * HIDDEN + j] = routed[t * HIDDEN + j]; }
+        if plan.dropped.contains(&t) {
+            continue;
+        }
+        for j in 0..HIDDEN {
+            writeback_ref[t * HIDDEN + j] = routed[t * HIDDEN + j];
+        }
     }
     for (i, (&x, &y)) in writeback.iter().zip(writeback_ref.iter()).enumerate() {
         assert_eq!(
@@ -237,11 +235,21 @@ fn olmoe_pipeline_runs_end_to_end_with_tiled_kernels() {
     // Per-token top-k weights must be finite-positive AND sum to 1
     // across the 8 picks per token (softmax-renormalized top-k).
     for (t, picks) in picks_per_token.iter().enumerate() {
-        assert_eq!(picks.len(), TOP_K, "token {t} must have exactly TOP_K picks");
+        assert_eq!(
+            picks.len(),
+            TOP_K,
+            "token {t} must have exactly TOP_K picks"
+        );
         let sum: f32 = picks.iter().map(|(_, w)| *w).sum();
-        assert!((sum - 1.0).abs() < 1e-5, "token {t} top-k weights must softmax-renormalize to 1, got sum={sum}");
+        assert!(
+            (sum - 1.0).abs() < 1e-5,
+            "token {t} top-k weights must softmax-renormalize to 1, got sum={sum}"
+        );
         for (e, w_pick) in picks {
-            assert!(w_pick.is_finite() && *w_pick > 0.0, "token {t} pick {e} weight not finite/positive");
+            assert!(
+                w_pick.is_finite() && *w_pick > 0.0,
+                "token {t} pick {e} weight not finite/positive"
+            );
         }
     }
 }
@@ -255,13 +263,9 @@ fn olmoe_grouped_gemm_tiled_matches_scalar_grouped_gemm() {
     let (assignments, _picks_per_token) = run_router(&router_logits);
 
     let token_indices: Vec<usize> = (0..NUM_TOKENS).collect();
-    let plan: DispatchPlan = moe_dispatch(
-        &token_indices,
-        &assignments,
-        NUM_EXPERTS,
-        CAPACITY_FACTOR,
-    )
-    .expect("dispatch must accept well-formed inputs");
+    let plan: DispatchPlan =
+        moe_dispatch(&token_indices, &assignments, NUM_EXPERTS, CAPACITY_FACTOR)
+            .expect("dispatch must accept well-formed inputs");
 
     let a = deterministic_vec(NUM_TOKENS * K_INTERMEDIATE, 0xA_CE);
     let b: Vec<f32> = (0..NUM_EXPERTS)
@@ -311,13 +315,9 @@ fn olmoe_weighted_reduce_tiled_matches_scalar_weighted_reduce() {
     let (assignments, picks_per_token) = run_router(&router_logits);
 
     let token_indices: Vec<usize> = (0..NUM_TOKENS).collect();
-    let plan: DispatchPlan = moe_dispatch(
-        &token_indices,
-        &assignments,
-        NUM_EXPERTS,
-        CAPACITY_FACTOR,
-    )
-    .expect("dispatch must accept well-formed inputs");
+    let plan: DispatchPlan =
+        moe_dispatch(&token_indices, &assignments, NUM_EXPERTS, CAPACITY_FACTOR)
+            .expect("dispatch must accept well-formed inputs");
 
     let a = deterministic_vec(NUM_TOKENS * K_INTERMEDIATE, 0xA_CE);
     let b: Vec<f32> = (0..NUM_EXPERTS)

@@ -30,7 +30,9 @@ fn qwen_agentic_mini_trace_runs_and_is_finite() {
     let initial_states: Vec<Vec<f32>> = (0..num_heads)
         .map(|h| {
             let mut rng = Lcg::new(SEED ^ (0xCC_E0u64 + h as u64));
-            (0..head_dim * head_dim).map(|_| rng.next_signed() * 0.25).collect()
+            (0..head_dim * head_dim)
+                .map(|_| rng.next_signed() * 0.25)
+                .collect()
         })
         .collect();
     let (deltanet_outs, deltanet_states) = run_qwen_deltanet_trace(
@@ -75,7 +77,13 @@ fn qwen_agentic_mini_trace_runs_and_is_finite() {
         let picks = router_topk(logits, num_experts, top_k, 0).unwrap();
         assignments.push(picks[0]);
     }
-    let plan = moe_dispatch(&(0..num_tokens).collect::<Vec<_>>(), &assignments, num_experts, 1.0).unwrap();
+    let plan = moe_dispatch(
+        &(0..num_tokens).collect::<Vec<_>>(),
+        &assignments,
+        num_experts,
+        1.0,
+    )
+    .unwrap();
 
     // Shared expert: project token_x through a [hidden, hidden]
     // weight matrix.
@@ -91,8 +99,8 @@ fn qwen_agentic_mini_trace_runs_and_is_finite() {
     for t in 0..num_tokens {
         for e_idx in 0..top_k {
             for j in 0..hidden {
-                expert_outs[(t * top_k + e_idx) * hidden + j] = shared_out[t * hidden + j]
-                    * (1.0 + 0.1 * (e_idx as f32));
+                expert_outs[(t * top_k + e_idx) * hidden + j] =
+                    shared_out[t * hidden + j] * (1.0 + 0.1 * (e_idx as f32));
             }
             weights[t * top_k + e_idx] = 1.0 / top_k as f32;
         }

@@ -42,7 +42,9 @@ use crate::record::TuningRecord;
 /// by `metric` and defaults to `Metric::P95`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SelectionPolicy {
-    Deterministic { prefer_lower_p95: bool },
+    Deterministic {
+        prefer_lower_p95: bool,
+    },
     ExperimentalOnly,
     Production {
         gates: Vec<QualityGate>,
@@ -174,7 +176,10 @@ impl RejectionReason {
                 format!("unsupported dtype: {:?}", d)
             }
             RejectionReason::ShapeOutOfRange => "shape out of range".to_string(),
-            RejectionReason::StaleTuning { expires_at_unix_ms, now_unix_ms } => format!(
+            RejectionReason::StaleTuning {
+                expires_at_unix_ms,
+                now_unix_ms,
+            } => format!(
                 "stale tuning record (expired at {}, now {})",
                 expires_at_unix_ms, now_unix_ms
             ),
@@ -183,7 +188,11 @@ impl RejectionReason {
             RejectionReason::MissingQualityEvidence(why) => {
                 format!("missing quality evidence: {}", why)
             }
-            RejectionReason::QualityGateFailed { gate, observed, threshold } => format!(
+            RejectionReason::QualityGateFailed {
+                gate,
+                observed,
+                threshold,
+            } => format!(
                 "quality gate '{}' failed (observed={:.4}, threshold={:.4})",
                 gate, observed, threshold
             ),
@@ -200,6 +209,7 @@ impl RejectionRecord {
 
 /// The outcome of a single [`crate::KernelRegistry::select_with_caps`] call.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum SelectionDecision {
     Chosen {
         candidate: Candidate,

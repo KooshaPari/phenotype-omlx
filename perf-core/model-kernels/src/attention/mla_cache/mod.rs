@@ -73,13 +73,8 @@ mod tests {
         let mut cache: Vec<MlaCacheEntry> = Vec::new();
         mla_cache_append_with_capacity(&mut cache, &[1.0, 2.0], &[3.0, 4.0], 2).unwrap();
         mla_cache_append_with_capacity(&mut cache, &[5.0, 6.0], &[7.0, 8.0], 2).unwrap();
-        let err = mla_cache_append_with_capacity(
-            &mut cache,
-            &[9.0, 10.0],
-            &[11.0, 12.0],
-            2,
-        )
-        .unwrap_err();
+        let err =
+            mla_cache_append_with_capacity(&mut cache, &[9.0, 10.0], &[11.0, 12.0], 2).unwrap_err();
         assert!(matches!(err, KernelError::BadBufferLength { .. }));
         assert_eq!(cache.len(), 2);
     }
@@ -101,10 +96,8 @@ mod tests {
     /// equivalent). Uses two random seeds for breadth.
     #[test]
     fn mla_cache_equivalence_against_oracle() {
-        for (d_latent, d_rope, seq_k, salt) in [
-            (4usize, 4usize, 6usize, 0xA1u64),
-            (6, 4, 8, 0xB1),
-        ] {
+        for (d_latent, d_rope, seq_k, salt) in [(4usize, 4usize, 6usize, 0xA1u64), (6, 4, 8, 0xB1)]
+        {
             let k_latent_full = det(seq_k * d_latent, salt);
             let v_latent_full = k_latent_full.clone();
             let q_latent = det(d_latent, salt.wrapping_add(1));
@@ -134,25 +127,12 @@ mod tests {
             }
 
             let mut cache_out = vec![0.0f32; d_latent];
-            mla_cache_attend(
-                &q_latent,
-                &q_rope,
-                &cache,
-                d_latent,
-                d_rope,
-                &mut cache_out,
-            )
-            .unwrap();
+            mla_cache_attend(&q_latent, &q_rope, &cache, d_latent, d_rope, &mut cache_out).unwrap();
 
             assert_eq!(cache_out.len(), d_latent);
             for d in 0..d_latent {
                 assert!(
-                    crate::common::approx_eq_tol(
-                        cache_out[d],
-                        full_out[d],
-                        1e-5,
-                        1e-4,
-                    ),
+                    crate::common::approx_eq_tol(cache_out[d], full_out[d], 1e-5, 1e-4,),
                     "salt=0x{salt:x} channel {d}: cache {} vs oracle {}",
                     cache_out[d],
                     full_out[d]

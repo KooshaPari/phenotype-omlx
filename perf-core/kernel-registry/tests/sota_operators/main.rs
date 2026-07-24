@@ -106,6 +106,7 @@ pub(crate) fn make_candidate(
         supports_dtypes,
         tunable,
         engine_name: None,
+        properties: std::collections::HashMap::new(),
     }
 }
 

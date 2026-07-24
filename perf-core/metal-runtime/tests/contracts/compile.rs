@@ -30,7 +30,9 @@ fn compile_budget_exceeded_when_shader_source_exceeds_max_shader_bytes() {
     });
     let fp = identity_fp(GpuFamily::Software);
     let plan = two_op_plan();
-    let err = compiler.compile(&plan, &fp).expect_err("must exceed budget");
+    let err = compiler
+        .compile(&plan, &fp)
+        .expect_err("must exceed budget");
     match err {
         CompileError::BudgetExceeded {
             max_shader_bytes,
@@ -52,12 +54,12 @@ fn compile_budget_exceeded_when_compile_ms_exceeds_max_ms() {
     });
     let fp = identity_fp(GpuFamily::Software);
     let plan = two_op_plan();
-    let err = compiler.compile(&plan, &fp).expect_err("must exceed budget");
+    let err = compiler
+        .compile(&plan, &fp)
+        .expect_err("must exceed budget");
     match err {
         CompileError::BudgetExceeded {
-            max_ms,
-            compile_ms,
-            ..
+            max_ms, compile_ms, ..
         } => {
             assert!(compile_ms > max_ms);
             assert_eq!(max_ms, 0);
@@ -77,5 +79,9 @@ fn compile_error_message_includes_both_budget_dimensions_when_both_violated() {
     let err = compiler.compile(&plan, &fp).expect_err("must exceed both");
     let msg = err.to_string();
     assert!(msg.contains("ms"), "error msg must mention ms: {}", msg);
-    assert!(msg.contains("bytes"), "error msg must mention bytes: {}", msg);
+    assert!(
+        msg.contains("bytes"),
+        "error msg must mention bytes: {}",
+        msg
+    );
 }

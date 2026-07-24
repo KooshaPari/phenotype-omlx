@@ -1,0 +1,17 @@
+{
+  "schema": "qwen35-custom-gated-delta-long-parity/v1",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "prompt": "In one short sentence, explain why deterministic routing matters for a coding agent.",
+  "max_tokens": 128,
+  "temperature": 0.0,
+  "exact_text_match": true,
+  "native_chars": 671,
+  "custom_chars": 671,
+  "native_sha256": "217db442f3a47de1ac765119c46cf8e2c5f4b878764e66397a7d3d5561854838",
+  "custom_sha256": "217db442f3a47de1ac765119c46cf8e2c5f4b878764e66397a7d3d5561854838",
+  "custom_kernel_dispatches": 2340,
+  "custom_kernel_fallbacks": 0,
+  "kernel_kinds": {"scalar": 2340},
+  "decision": "parity_pass_reference_only",
+  "notes": "Local MLX/Metal generation parity at 128 max tokens. This is stronger than the short smoke but is not a Harbor/Portage NIAH or 8192-token acceptance run."
+}

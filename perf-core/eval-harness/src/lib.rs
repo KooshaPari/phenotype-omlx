@@ -33,6 +33,9 @@ pub mod provenance;
 pub mod report;
 pub mod runner;
 pub mod terminal_bench;
+#[cfg(feature = "pyo3")]
+pub mod pyo3_bindings;
+
 
 #[cfg(feature = "python")]
 pub mod python;

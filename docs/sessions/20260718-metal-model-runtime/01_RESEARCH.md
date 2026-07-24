@@ -97,3 +97,83 @@ Decision: benchmark and optimize shared Metal execution infrastructure before ad
 family-specific shader. The six-kernel artifact-backed baseline now records median/p95 and exact
 artifact hashes, allowing setup-reuse changes to be measured without conflating model-family
 correctness with compiler variance.
+
+## ToMoE, diffusion, ternary, and agent-serving extensions (2026-07-22)
+
+- [ToMoE](https://arxiv.org/html/2501.15316v1) motivates deterministic top-k/MLP top-1
+  routing, fixed-capacity buckets, active-budget telemetry, and explicit overflow/drop
+  accounting for dense-to-MoE conversion experiments.
+- [EPS-MoE](https://arxiv.org/abs/2410.12247), [expert sharding](https://arxiv.org/abs/2503.08467),
+  and [Speculative MoE](https://arxiv.org/abs/2503.04398) motivate load-based dense-vs-grouped
+  dispatch, shard-aware tiles, and next-expert prefetch hints.
+- [TerDiT](https://arxiv.org/abs/2405.14854), the [diffusion quantization survey](https://arxiv.org/abs/2505.05215),
+  and [BitNet.cpp](https://arxiv.org/abs/2502.11880) motivate packed {-1,0,+1} arithmetic,
+  zero-elision, fused scales, and per-timestep calibration/error reporting.
+- [INFERCEPT](https://arxiv.org/abs/2402.01869) and [Preble](https://arxiv.org/abs/2407.00023)
+  motivate pause/resume tool-call traces, KV tiering, prefix-cache hit metrics, and queue
+  fairness in agent-serving benchmarks.
+
+Implementation consequence: persistent Metal pipeline caching now covers the MoE grouped-GEMM
+and top-k paths. Assignment indices are validated before GPU dispatch; empty assignments return
+without issuing a zero-thread dispatch. Next tranche: capacity-aware routing, dense/grouped
+selection, timestep-aware diffusion calibration, and packed ternary/W4A8 kernels.
+
+## Additional 2025-2026 kernel candidates (2026-07-22)
+
+- [TriRun / Spectra 1.1](https://aclanthology.org/2025.acl-long.1294/) reports packed low-bit
+  inference kernels; this is a direct follow-up for the Bonsai ternary path and motivates
+  comparing bit-plane packing against the current scalar unpack loop.
+- [LLaDA-MoE](https://arxiv.org/abs/2509.24389) combines masked diffusion with sparse MoE;
+  prioritize a fused confidence/remask plus capacity-aware expert dispatch benchmark.
+- [dInfer](https://arxiv.org/abs/2510.08666) separates diffusion iteration, decoding, and KV
+  cache management; use those boundaries to benchmark Metal pipeline reuse instead of treating
+  each denoise step as an isolated launch.
+- [TC-MoE](https://proceedings.iclr.cc/paper_files/paper/2025/hash/bda8f7ac4c3ccc494b5206ee3fd92771-Abstract-Conference.html)
+  suggests ternary expert-choice routing, a candidate for a fused route-and-packed-GEMM kernel.
+- [Diff-MoE](https://proceedings.mlr.press/v267/cheng25d.html) and
+  [Dense2MoE](https://openaccess.thecvf.com/content/ICCV2025/html/Zheng_Dense2MoE_Restructuring_Diffusion_Transformer_to_MoE_for_Efficient_Text-to-Image_Generation_ICCV_2025_paper.html)
+  motivate timestep-aware expert masks and spatial/token locality metrics.
+- [RetNet survey](https://aclanthology.org/2026.findings-acl.256/) reinforces RetNet as a
+  candidate recurrent/retention family; after DeltaNet parity, evaluate retention-state update
+  and chunk-parallel kernels against RWKV/Mamba baselines.
+- [LLaDA](https://arxiv.org/abs/2502.09992) and [DiffusionGemma](https://deepmind.google/models/gemma/diffusiongemma/)
+  make parallel denoise/remask a first-class workload: fuse confidence extraction, active-mask
+  compaction, and remask scheduling while recording denoise-step count and quality parity.
+- [Scaling Laws and Efficient Inference for Ternary Language Models](https://aclanthology.org/2025.acl-long.1294/)
+  and the released [Ternary Bonsai 8B](https://huggingface.co/prism-ml/Ternary-Bonsai-8B-mlx-2bit)
+  support a dedicated {-1,0,+1} bit-plane kernel with group scales, zero-elision, and packed
+  accumulation rather than routing ternary weights through ordinary int8 GEMM.
+- [BaseRT](https://huggingface.co/blog/basecompute/basert-release) is a relevant Apple-Silicon
+  native-Metal baseline: compare launch overhead, tile shape, memory bandwidth, and small-batch
+  decode against MLX-native dispatch before claiming custom-kernel wins.
+- [MoE-Lens](https://huggingface.co/papers/2504.09345) and [SliceMoE](https://doi.org/10.18653/v1/2025.emnlp-main.807)
+  motivate capacity-aware routing, expert-load histograms, and slice-level grouped-GEMM metrics;
+  the existing MoE artifacts should add those measurements before model promotion.
+### Qwen3.5 native MLX Metal path (2026-07-23)
+
+The installed `mlx-lm` Qwen3.5 implementation (`models/qwen3_5.py`) routes linear
+layers through `GatedDeltaNet`, which calls `gated_delta_update`. Its implementation
+in `models/gated_delta.py` constructs `mx.fast.metal_kernel` variants
+(`gated_delta_step`, masked, and vectorized forms) and selects them when the model is
+not training. This is authoritative evidence that Qwen3.5 already has a native fused
+Metal recurrent kernel in the MLX runtime.
+
+This does **not** prove that phenotype-omlx's separate `deltanet_step.metal` or
+`mamba_selective_scan.metal` artifacts replace the MLX implementation. Runtime
+provenance therefore keeps those artifacts at `custom_kernel_execution_verified=false`
+until an explicit layer hook dispatches them and records a counter.
+
+Synthetic native-kernel benchmark on 2026-07-23 measured median 223.417 us and p95
+298.542 us for `[B=1,T=8,Hk=2,Hv=4,Dk=32,Dv=16]`. A smaller synthetic `Dk=16`
+failed upstream Metal compilation because its `Dk / 32` tile count becomes zero;
+kernel selection must enforce `Dk >= 32` (Qwen3.5 production dimensions satisfy this).
+Against MLX's compiled ops reference on the same tensors, the native kernel measured
+`max_abs_error=5.72e-6` and `state_max_abs_error=0.0` across eight recurrent tokens.
+### 2026-07-23 — Qwen3.5 gated-delta replacement
+
+The isolated MLX-LM 0.31.2 runtime exposes `mlx_lm.models.gated_delta.gated_delta_kernel` as a
+vector-gated `mx.fast.metal_kernel` with the shape contract `[B,T,Hk,Dk]`, `[B,T,Hv,Dv]`, and
+`Dk % 32 == 0`. A real Qwen3.5-0.8B-OptiQ-4bit generation observed 54 native gated-delta
+dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirrors that kernel
+behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
+clean native-vs-custom parity run.

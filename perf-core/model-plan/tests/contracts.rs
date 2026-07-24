@@ -11,8 +11,8 @@
 
 use model_plan::{
     AttentionKind, DType, InterpreterError, ModelId, ModelPlan, OperatorId, OperatorKind,
-    OperatorPlan, Precision, QuantizationPolicy, ReferenceInterpreter, SchedulerPolicy,
-    StateId, StateKind, StatePlan, TensorRef,
+    OperatorPlan, Precision, QuantizationPolicy, ReferenceInterpreter, SchedulerPolicy, StateId,
+    StateKind, StatePlan, TensorRef,
 };
 use serde_json::{json, Value};
 
@@ -136,7 +136,10 @@ fn quantization_policy_rejects_invalid_group_size() {
         bits: 2,
     };
     let err = ModelPlan::validate_quant(&bad).unwrap_err();
-    assert!(matches!(err, model_plan::PlanError::InvalidQuantPolicy { .. }));
+    assert!(matches!(
+        err,
+        model_plan::PlanError::InvalidQuantPolicy { .. }
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -185,10 +188,7 @@ fn model_plan_rejects_state_owner_pointing_to_missing_operator() {
     });
     let err = plan.validate().unwrap_err();
     match err {
-        model_plan::PlanError::UnknownStateOwner {
-            state,
-            operator,
-        } => {
+        model_plan::PlanError::UnknownStateOwner { state, operator } => {
             assert_eq!(state, StateId(7));
             assert_eq!(operator, OperatorId(42));
         }
@@ -519,13 +519,15 @@ fn reference_interpreter_odd_dimension_is_well_defined() {
 fn attention_kind_variants_serialize() {
     let variants = [
         AttentionKind::Gqa { kv_heads: 4 },
-        AttentionKind::Mla { d_latent: 64, d_rope: 16 },
-        AttentionKind::Cca { compressed_factor: 4 },
-        AttentionKind::Paged { block_size: 16 },
-        AttentionKind::Tree {
-            width: 4,
-            depth: 3,
+        AttentionKind::Mla {
+            d_latent: 64,
+            d_rope: 16,
         },
+        AttentionKind::Cca {
+            compressed_factor: 4,
+        },
+        AttentionKind::Paged { block_size: 16 },
+        AttentionKind::Tree { width: 4, depth: 3 },
         AttentionKind::Dense,
     ];
     for v in variants {

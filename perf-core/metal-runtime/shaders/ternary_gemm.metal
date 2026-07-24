@@ -18,10 +18,21 @@ kernel void ternary_gemm_f32(
     if (row >= m || col >= n) return;
     float sum = 0.0f;
     const uint packed_stride = (k + 3u) / 4u;
-    for (uint d = 0; d < k; ++d) {
-        const uchar code = (packed_weights[col * packed_stride + d / 4u] >> ((d & 3u) * 2u)) & 3u;
-        const float weight = code == 1u ? 1.0f : code == 2u ? -1.0f : 0.0f;
-        sum += activations[row * k + d] * weight;
+    const uint weight_base = col * packed_stride;
+    const uint activation_base = row * k;
+    // Decode four 2-bit ternary weights per byte. Keeping the packed byte in
+    // a register avoids a division and global-memory address calculation for
+    // every weight; the compiler can fully unroll this fixed four-lane loop.
+    for (uint byte_idx = 0; byte_idx < packed_stride; ++byte_idx) {
+        const uchar packed = packed_weights[weight_base + byte_idx];
+        const uint d0 = byte_idx * 4u;
+        for (uint lane = 0; lane < 4u; ++lane) {
+            const uint d = d0 + lane;
+            if (d >= k) break;
+            const uchar code = (packed >> (lane * 2u)) & 3u;
+            const float weight = code == 1u ? 1.0f : code == 2u ? -1.0f : 0.0f;
+            sum += activations[activation_base + d] * weight;
+        }
     }
     out[row * n + col] = sum * scales[col];
 }

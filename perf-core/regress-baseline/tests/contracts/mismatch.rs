@@ -31,10 +31,10 @@ fn verify_fails_on_different_input_hash() {
         .expect("record");
     // Tweak the input by changing the seed.
     let mut other = inputs.clone();
-    other.as_object_mut().unwrap().insert(
-        "tie_break_seed".to_string(),
-        serde_json::Value::from(1u64),
-    );
+    other
+        .as_object_mut()
+        .unwrap()
+        .insert("tie_break_seed".to_string(), serde_json::Value::from(1u64));
     let result = recorder
         .verify("k", &other, &outputs)
         .expect("verify must run");
@@ -65,7 +65,11 @@ fn verify_returns_mismatch_with_field_path() {
     drifted["out"][1][0] = json!(3.5_f32);
     let r = recorder.verify("swa", &inputs, &drifted).expect("verify");
     match r {
-        VerifyResult::Mismatch { field, expected, actual } => {
+        VerifyResult::Mismatch {
+            field,
+            expected,
+            actual,
+        } => {
             assert_eq!(field, "out.1.0");
             assert_eq!(expected, json!(3.0_f32));
             assert_eq!(actual, json!(3.5_f32));

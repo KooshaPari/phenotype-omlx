@@ -7,7 +7,6 @@
 
 use super::*;
 
-
 #[test]
 fn deltanet_step_updates_state_correctly() {
     // state shape = (head_dim, head_dim).
@@ -26,7 +25,8 @@ fn deltanet_step_updates_state_correctly() {
             for p in 0..head_dim {
                 kk += k[p] * state[p * head_dim + j];
             }
-            s_new[i * head_dim + j] = state[i * head_dim + j] - beta * k[i] * kk + beta * v[i] * k[j];
+            s_new[i * head_dim + j] =
+                state[i * head_dim + j] - beta * k[i] * kk + beta * v[i] * k[j];
         }
     }
     let mut expected = vec![0.0f32; head_dim];
@@ -63,8 +63,15 @@ fn deltanet_chunk_matches_repeated_step() {
         outs_step.extend_from_slice(&o);
     }
 
-    let (outs_chunk, state_chunk) =
-        deltanet_chunk(&q, &k, &v, chunk_size, head_dim, &vec![0.0; head_dim * head_dim]).unwrap();
+    let (outs_chunk, state_chunk) = deltanet_chunk(
+        &q,
+        &k,
+        &v,
+        chunk_size,
+        head_dim,
+        &vec![0.0; head_dim * head_dim],
+    )
+    .unwrap();
     assert_buf_close(&outs_step, &outs_chunk, 1e-4, 1e-3);
     assert_buf_close(&state_step, &state_chunk, 1e-5, 1e-4);
 }
@@ -147,4 +154,3 @@ fn rwkv_time_mix_matches_recurrent_definition() {
     }
     assert_buf_close(&outs, &exp, 1e-5, 1e-4);
 }
-

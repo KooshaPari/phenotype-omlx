@@ -4,7 +4,7 @@
 //! rejection semantics, and the version-mismatch path. They run in addition
 //! to the legacy surface tests in `src/lib.rs::tests`.
 
-use native_abi::{ABI_VERSION_CURRENT, Status};
+use native_abi::{Status, ABI_VERSION_CURRENT};
 use turbo_quant_c::{abi_version, decode_v1, encode, encode_v1};
 
 #[test]
@@ -111,8 +111,7 @@ fn c_abi_v1_round_trips_within_tolerance_for_uniform_input() {
         assert_eq!(status, Status::Ok);
 
         for (actual, expected) in out.iter().zip(input) {
-            let tolerance =
-                tensor.scales.iter().copied().fold(0.0_f32, f32::max);
+            let tolerance = tensor.scales.iter().copied().fold(0.0_f32, f32::max);
             assert!(
                 (actual - expected).abs() <= tolerance + 1e-5,
                 "bits={bits}: decoded {actual} vs expected {expected}"

@@ -151,8 +151,8 @@ mod tests {
     fn gated_propagates_inner_kernel_error() {
         let mut state: Vec<f32> = Vec::new();
         let mut gate_state: Vec<f32> = Vec::new();
-        let err = gated_short_conv1d_step(&[1.0], &[], &[1.0], &mut state, &mut gate_state)
-            .unwrap_err();
+        let err =
+            gated_short_conv1d_step(&[1.0], &[], &[1.0], &mut state, &mut gate_state).unwrap_err();
         assert!(matches!(err, KernelError::ZeroDimension { .. }));
     }
 
@@ -160,8 +160,8 @@ mod tests {
     fn gated_state_initialised_lazily() {
         let mut state: Vec<f32> = Vec::new();
         let mut gate_state: Vec<f32> = Vec::new();
-        let y = gated_short_conv1d_step(&[2.0], &[3.0], &[4.0], &mut state, &mut gate_state)
-            .unwrap();
+        let y =
+            gated_short_conv1d_step(&[2.0], &[3.0], &[4.0], &mut state, &mut gate_state).unwrap();
         // single-tap: y_conv = 3 * 2 = 6, y_gate = 4 * 2 = 8, gated = 48.
         assert_eq!(y, 48.0);
         assert!(state.is_empty()); // single-tap → no carry state.

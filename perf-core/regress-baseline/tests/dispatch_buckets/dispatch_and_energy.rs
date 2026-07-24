@@ -38,6 +38,10 @@ fn dispatch_and_energy_guard_is_active_by_default() {
 }
 
 #[test]
+#[cfg_attr(
+    debug_assertions,
+    ignore = "synthetic dispatch/energy envelope is a release performance gate"
+)]
 fn dispatch_and_energy_within_per_bucket_envelope() {
     // Hold the process-global perf window for the duration of all
     // bucket observations so concurrent test binaries cannot inflate
