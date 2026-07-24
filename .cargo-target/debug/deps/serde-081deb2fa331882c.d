@@ -1,0 +1,12 @@
+/Users/kooshapari/CodeProjects/Phenotype/repos/worktrees/phenotype-omlx/feat-eagle3-echokv-pr4/.cargo-target/debug/deps/serde-081deb2fa331882c.d: /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/kooshapari/CodeProjects/Phenotype/repos/worktrees/phenotype-omlx/feat-eagle3-echokv-pr4/.cargo-target/debug/build/serde-98acfcc476fba3cb/out/private.rs
+
+/Users/kooshapari/CodeProjects/Phenotype/repos/worktrees/phenotype-omlx/feat-eagle3-echokv-pr4/.cargo-target/debug/deps/libserde-081deb2fa331882c.rmeta: /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/kooshapari/CodeProjects/Phenotype/repos/worktrees/phenotype-omlx/feat-eagle3-echokv-pr4/.cargo-target/debug/build/serde-98acfcc476fba3cb/out/private.rs
+
+/Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/kooshapari/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/kooshapari/CodeProjects/Phenotype/repos/worktrees/phenotype-omlx/feat-eagle3-echokv-pr4/.cargo-target/debug/build/serde-98acfcc476fba3cb/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/kooshapari/CodeProjects/Phenotype/repos/worktrees/phenotype-omlx/feat-eagle3-echokv-pr4/.cargo-target/debug/build/serde-98acfcc476fba3cb/out
