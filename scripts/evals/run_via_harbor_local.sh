@@ -21,7 +21,8 @@ if [[ "$HARBOR_ENV" != "apple-container" ]]; then
   echo "ERROR: HARBOR_ENV must be apple-container" >&2
   exit 2
 fi
-if [[ -z "${OMLX_READY_MODEL:-}" || "${OMLX_READY_MODEL,,}" != *qwen3.5* ]]; then
+MODEL_LOWER="$(printf '%s' "${OMLX_READY_MODEL:-}" | tr '[:upper:]' '[:lower:]')"
+if [[ -z "${OMLX_READY_MODEL:-}" || "$MODEL_LOWER" != *qwen3.5* ]]; then
   echo "ERROR: OMLX_READY_MODEL must be an explicit Qwen3.5 model" >&2
   exit 2
 fi

@@ -193,3 +193,14 @@ unchanged, and emits a separately named validated EvaluationReport. Its provenan
 explicit: `telemetry.mode=local_only` and `telemetry.remote_exported=false`; it must
 not contain Langfuse trace/session identifiers. The evidence label is
 `live_verified` only for a completed Harbor result, never for a fabricated report.
+
+### macOS Bash portability (2026-07-26)
+
+`/bin/bash` on the macOS host is Bash 3.2, whereas Homebrew supplies a newer Bash
+on `PATH`. Bash 4's `${parameter,,}` lowercasing expansion therefore cannot be used
+in the local Harbor runner: it fails with `bad substitution` under the shebang's
+system interpreter. The model-policy comparison instead normalizes with portable
+`tr '[:upper:]' '[:lower:]'`. The shell contract test invokes `/bin/bash`
+explicitly, so CI or developer shells that resolve `bash` to Homebrew Bash cannot
+mask a regression. This preserves the Qwen3.5-only policy without adding an
+alternate runtime, plugin, endpoint, or telemetry path.
