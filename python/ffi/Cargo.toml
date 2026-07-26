@@ -13,11 +13,13 @@ name = "_perf"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
+# Wheels use Python's extension-module link mode, keeping the abi3 artifact
+# independent of the build host's libpython version.
+default = ["extension-module"]
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-pyo3 = { version = "0.29", features = ["abi3-py311", "auto-initialize"] }
+pyo3 = { version = "0.22", features = ["abi3-py311", "auto-initialize"] }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 spec-decode = { path = "../../perf-core/spec-decode" }
@@ -30,4 +32,6 @@ fleet-proto = { path = "../../perf-core/fleet-proto" }
 opt-level = 3
 lto = true
 codegen-units = 1
-strip = true
+# The available toolchain lacks rust-objcopy's libLLVM runtime; let the wheel
+# build preserve symbols rather than fail after compilation.
+strip = "none"
