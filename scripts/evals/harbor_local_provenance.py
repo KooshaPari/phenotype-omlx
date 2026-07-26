@@ -39,6 +39,30 @@ def _qwen35_only(model: str) -> None:
         raise ValueError("local Harbor provenance requires a Qwen3.5 model")
 
 
+def resolve_harbor_job_dir(output_path: Path) -> Path:
+    """Resolve one completed Harbor job directory from an output root.
+
+    Harbor writes a timestamped job directory beneath the path supplied with
+    ``harbor run -o``.  Accept an already-resolved job directory as well, but
+    never recursively search: a root with multiple completed jobs is ambiguous
+    and must be selected explicitly by the operator.
+    """
+    direct_result = output_path / "result.json"
+    if direct_result.is_file():
+        return output_path
+
+    candidates = sorted(
+        child for child in output_path.iterdir()
+        if child.is_dir() and (child / "result.json").is_file()
+    ) if output_path.is_dir() else []
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise FileNotFoundError(f"Harbor result.json not found below: {output_path}")
+    names = ", ".join(candidate.name for candidate in candidates)
+    raise ValueError(f"multiple Harbor job directories below {output_path}: {names}")
+
+
 def _report_from_cockpit(cockpit: dict[str, Any], *, model: str, commit_sha: str) -> dict[str, Any]:
     cells = cockpit["cells"]
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -85,9 +109,8 @@ def convert_local_harbor_run(
 ) -> tuple[dict[str, Any], Any]:
     """Convert a completed local Harbor job and validate its EvalReport."""
     _qwen35_only(model)
-    if not (run_dir / "result.json").is_file():
-        raise FileNotFoundError(f"Harbor result.json not found: {run_dir / 'result.json'}")
-    report = _report_from_cockpit(convert_job(run_dir), model=model, commit_sha=commit_sha)
+    job_dir = resolve_harbor_job_dir(run_dir)
+    report = _report_from_cockpit(convert_job(job_dir), model=model, commit_sha=commit_sha)
     _, validation = load_report_from_dict(report)
     if not validation.valid:
         raise ValueError("invalid local EvalReport: " + "; ".join(validation.errors))
