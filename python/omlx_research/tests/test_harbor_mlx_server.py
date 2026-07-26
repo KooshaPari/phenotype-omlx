@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import types
 import unittest
+from pathlib import Path
 
 from omlx_research.harbor_mlx_server import (
     HarborMlxServerError,
@@ -27,6 +28,16 @@ class _FakeMlx:
 
 
 class TestHarborMlxServer(unittest.TestCase):
+    def test_niah_operator_hint_uses_thread_safe_adapter(self) -> None:
+        """The no-endpoint path directs Harbor to the dedicated adapter, not vanilla mlx-lm."""
+        repo_root = Path(__file__).resolve().parents[3]
+        script = repo_root / "scripts" / "evals" / "run_via_harbor.sh"
+        source = script.read_text(encoding="utf-8")
+
+        self.assertIn("python3 -m omlx_research.harbor_mlx_server", source)
+        self.assertIn("--port 8766", source)
+        self.assertNotIn("mlx_lm server --model", source)
+
     def test_worker_rebinds_generation_stream_with_thread_local_mlx_stream(self) -> None:
         """FR-5: the MLX generation worker owns the stream it evaluates on."""
         mlx = _FakeMlx()
