@@ -1,0 +1,41 @@
+{
+  "contract_version": "1.0",
+  "artifact_kind": "EvaluationReport",
+  "producer": {
+    "name": "harbor_local_provenance",
+    "version": "1.0.0",
+    "commit_sha": "c35ca83c395d03661860a46133cddcdd8b613654"
+  },
+  "run": {
+    "run_id": "local-d440967a146f0813",
+    "started_at": "2026-07-26T06:18:31.917454Z",
+    "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+    "variant": "ours",
+    "judge_mode": "deterministic"
+  },
+  "suites": [
+    {
+      "suite": "omlx/niah-api-smoke",
+      "n": 1,
+      "passed": 1,
+      "pass_at_1": 1.0,
+      "evidence_label": "live_verified",
+      "task_ids": [
+        "omlx-niah-api-smoke__dY6wRyo"
+      ]
+    }
+  ],
+  "totals": {
+    "cells": 1,
+    "passed": 1,
+    "pass_at_1": 1.0
+  },
+  "telemetry": {
+    "mode": "local_only",
+    "remote_exported": false
+  },
+  "hash_chain": {
+    "top_level_sha256": "5f1344d76a3cb21088f99694241154dbbc86e2df921b40fa0ddfeee74249ea32",
+    "task_ids_sorted_sha256": "d440967a146f0813eaec6d8b33829fa9ab175980d72d8b9ccf2cfe2e26cd7e15"
+  }
+}
