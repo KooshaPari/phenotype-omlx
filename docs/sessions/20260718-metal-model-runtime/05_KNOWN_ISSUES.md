@@ -65,3 +65,27 @@ token budget. A follow-up run dispatched the custom kernel for all 108 gated-del
 fallbacks) and still diverged. The experimental path is now disabled by default and requires
 `PHENOTYPE_OMLX_ENABLE_CUSTOM_QWEN_KERNEL=1`; see
 `research/baselines/qwen35-custom-gated-delta-parity-20260723.json`.
+
+Update 2026-07-25: isolated Qwen3.5-0.8B-OptiQ-4bit validation was rerun after the gating
+fix. Short generation and a 128-token run matched native MLX exactly, with custom dispatches
+and zero fallbacks; see `research/baselines/qwen35-custom-gated-delta-parity-20260723.json`
+and `research/baselines/qwen35-custom-gated-delta-long-parity-20260723.json`. Promotion is
+still reference-only until the 8192-token Harbor/Portage evidence envelope and a refreshed
+candidate manifest are available.
+
+Harbor execution update 2026-07-26: the cached Qwen3.5 model was served locally from
+`mlx_lm.server` and `/v1/models` exposed `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`. Apple
+Container initially failed with an XPC service error and succeeded after `container system
+start`. A localhost URL was unreachable from the container; the host LAN URL was reachable,
+but the request timed out during MLX batched generation. The server logged
+`There is no Stream(gpu, 0) in current thread` from `BatchGenerator.prompt`, so Harbor produced
+a real trial with reward `0.0`, not a pass. Langfuse credentials were accepted by the runner;
+the remaining blocker is the MLX server stream/thread failure under the container workload.
+
+Update 2026-07-26: Apple Container lifecycle handling is now explicit in the Harbor operator.
+`scripts/evals/apple_container_preflight.sh` checks `container system status`, starts the
+service when stopped, rechecks that it is `running`, and fails with the official
+`container system logs` diagnostic when startup does not converge. The focused contract test
+`scripts/tests/test_apple_container_preflight.sh` passes with a fake stopped-then-running
+service. This addresses the initial XPC prerequisite only; it does not mask or resolve the
+separate MLX `Stream(gpu, 0)` generation failure.

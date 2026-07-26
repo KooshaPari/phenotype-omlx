@@ -87,7 +87,7 @@ impl MlxTargetBackend {
     /// Build a new MlxTargetBackend from a model id / local path.
     fn build(model_id: &str, kv_cache_kind: Option<String>) -> PyResult<Self> {
         Python::with_gil(|py| {
-            let mlx_lm = py.import_bound("mlx_lm")?;
+            let mlx_lm = py.import("mlx_lm")?;
             let load = mlx_lm.getattr("load")?;
             let pair = load.call1((model_id,))?;
             let model: PyObject = pair.get_item(0)?.into();
@@ -137,9 +137,9 @@ impl TargetBackend for MlxTargetBackend {
 
         tokio::task::spawn_blocking(move || -> Result<TargetOutput, String> {
             Python::with_gil(|py| -> Result<TargetOutput, String> {
-                let mx = py.import_bound("mlx.core")
+                let mx = py.import("mlx.core")
                     .map_err(|e| format!("import mlx.core: {e}"))?;
-                let ids_py = PyList::new_bound(py, ids.iter().copied());
+                let ids_py = PyList::new(py, ids.iter().copied());
                 // mx.array(ids) -> shape [seq]
                 let prompt = mx.call_method1("array", (ids_py,))
                     .map_err(|e| format!("mx.array: {e}"))?;
@@ -154,7 +154,7 @@ impl TargetBackend for MlxTargetBackend {
                     .bind(py)
                     .call1((batched,))
                     .map_err(|e| format!("model forward: {e}"))?;
-                let index = PyTuple::new_bound(py, [0_i32, -1_i32]);
+                let index = PyTuple::new(py, [0_i32, -1_i32]);
                 let last = logits
                     .call_method1("__getitem__", (index,))
                     .map_err(|e| format!("logits[0, -1]: {e}"))?;
@@ -364,9 +364,9 @@ fn tree_attn_causal_mask(
     offset: usize,
 ) -> PyResult<PyObject> {
     let m = tree_causal_mask(seq_len, tree_width, tree_depth, offset);
-    let outer = pyo3::types::PyList::empty_bound(py);
+    let outer = pyo3::types::PyList::empty(py);
     for row in m {
-        let inner = pyo3::types::PyList::new_bound(py, row.iter().copied());
+        let inner = pyo3::types::PyList::new(py, row.iter().copied());
         outer.append(inner)?;
     }
     Ok(outer.into())
@@ -392,7 +392,7 @@ fn py_to_exec_request(req: &Bound<'_, PyDict>) -> PyResult<RustExecRequest> {
 }
 
 fn exec_result_to_py(py: Python, r: RustExecResult) -> PyResult<PyObject> {
-    let d = PyDict::new_bound(py);
+    let d = PyDict::new(py);
     d.set_item("text", r.text)?;
     d.set_item("tokens", r.tokens)?;
     d.set_item("elapsed_ms", r.elapsed_ms)?;

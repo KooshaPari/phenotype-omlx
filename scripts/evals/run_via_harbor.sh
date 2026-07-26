@@ -72,6 +72,11 @@ if [[ ! -d "$PORTAGE_ROOT/packages/harbor-langfuse/src" ]]; then
   echo "  Fix Portage — LangSmith is not an allowed fallback." >&2
   exit 2
 fi
+# Apple Container's apiserver is an explicit user service, not a daemon that
+# Harbor may assume is present. Start/verify it before creating any trials so
+# XPC failures are diagnosed at the boundary.
+source "$ROOT/scripts/evals/apple_container_preflight.sh"
+ensure_apple_container_service
 
 mkdir -p "$OUT"
 case "$MODE" in

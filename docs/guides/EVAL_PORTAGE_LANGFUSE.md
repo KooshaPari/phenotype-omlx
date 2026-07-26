@@ -30,8 +30,11 @@ bash scripts/evals/run_via_harbor.sh
 # OMLX Qwen3.5 policy Harbor task
 bash scripts/evals/run_via_harbor.sh --policy
 
-# NIAH via OpenAI-compatible omlx/MLX server (Qwen3.5 SSOT)
-export OPENAI_BASE_URL=http://127.0.0.1:8766/v1
+# NIAH via OpenAI-compatible omlx/MLX server (Qwen3.5 SSOT).
+# Apple Container runs in a VM/network namespace: do not use host localhost.
+# Bind MLX to 0.0.0.0 and use the host's LAN address (the runner auto-detects
+# en0/en1 when OPENAI_BASE_URL is omitted).
+export OPENAI_BASE_URL=http://$(ipconfig getifaddr en0):8766/v1
 bash scripts/evals/run_via_harbor.sh --niah
 
 # TurboQuant SSOT gate
@@ -67,6 +70,12 @@ python3 scripts/evals/rlvr_af_smoke.py
   **legacy** — do not extend. Use Langfuse only.
 
 ## Self-host notes
+
+Before Harbor runs, the operator verifies `container system status` and starts
+the service with `container system start` when needed. If it still does not
+reach `running`, inspect `container system logs`. The public Apple Container
+runtime intentionally isolates guest localhost; use a routable host LAN IP or
+another host-reachable endpoint for the OpenAI-compatible server.
 
 Default UI: `http://127.0.0.1:3000`. Host Homebrew Postgres via Apple Container gateway:
 `DATABASE_URL=postgresql://langfuse:langfuse@192.168.65.1:5432/langfuse` (do not reuse stale `192.168.64.*` IPs).
