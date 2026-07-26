@@ -24,6 +24,9 @@ from omlx_research.benchmarks.qwen35_e3_runner import (  # noqa: E402
     PairedPrefillDeps,
     run_paired_prefill,
 )
+from omlx_research.benchmarks.qwen35_turbokv_overlay import (  # noqa: E402
+    make_qwen35_e3_turbokv_cache,
+)
 from omlx_research.benchmarks.qwen35_state_compression import (  # noqa: E402
     CompressionContractError,
 )
@@ -94,7 +97,6 @@ def main(argv: list[str] | None = None) -> int:
         from mlx_lm.models.cache import make_prompt_cache  # type: ignore
         from mlx.nn.layers.turbo_kv_cache import (  # type: ignore
             compact_turbo_cache,
-            make_turbo_cache,
         )
 
         loaded: tuple[Any, Any] | None = None
@@ -114,8 +116,8 @@ def main(argv: list[str] | None = None) -> int:
             deps=PairedPrefillDeps(
                 load_model=load_once,
                 make_fp16_cache=make_prompt_cache,
-                make_turbo_cache=lambda model: make_turbo_cache(
-                    model, bits=args.bits, key_bits=args.key_bits, boundary=0
+                make_turbo_cache=lambda model: make_qwen35_e3_turbokv_cache(
+                    model, bits=args.bits, key_bits=args.key_bits
                 ),
                 generate=mlx_lm.generate,
                 compact_turbo_cache=compact_turbo_cache,

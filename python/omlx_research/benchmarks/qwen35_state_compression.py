@@ -28,6 +28,10 @@ _PACKED_ATTRS = (
     "_turbo_packed_values",
     "_turbo_key_norms",
     "_turbo_value_norms",
+    "_turbo_packed_k",
+    "_turbo_packed_v",
+    "_turbo_k_norms",
+    "_turbo_v_norms",
 )
 
 

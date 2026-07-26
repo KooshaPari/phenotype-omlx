@@ -49,6 +49,27 @@ class TurboKVCacheLite:
         return self._resident
 
 
+class VendorTurboKVCacheLite:
+    """Mirror the persistent layer's singular packed-field names."""
+
+    def __init__(self, *, packed: int, norms: int, resident: int) -> None:
+        self._compacted = True
+        self._turbo_packed_v = _Array(packed // 2)
+        self._turbo_packed_k = _Array(packed // 2)
+        self._turbo_v_norms = _Array(norms // 2)
+        self._turbo_k_norms = _Array(norms // 2)
+        self._resident = resident
+
+    @property
+    def nbytes(self) -> int:
+        return self._resident
+
+
+# The extractor correctly identifies runtime cache types by their public class
+# name, as the persistent layer is optional and is not imported by these tests.
+VendorTurboKVCacheLite.__name__ = "TurboKVCacheLite"
+
+
 def test_measures_only_real_full_attention_cache_state() -> None:
     """E3 values derive from paired post-prefill cache objects, never input scalars."""
 
@@ -70,6 +91,21 @@ def test_measures_only_real_full_attention_cache_state() -> None:
     assert metrics["resident_state_bytes"] == 1_700
     assert metrics["byte_reduction"] == pytest.approx(1 - 1_700 / 3_000)
     assert metrics["e3_compression_qualifying"] is True
+
+
+def test_measures_vendor_lite_singular_packed_fields() -> None:
+    metrics = measure_qwen35_runtime_state_compression(
+        model_id="mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+        model=_Model(),
+        fp16_cache=[KVCache(80), KVCache(1_000), KVCache(2_000)],
+        compacted_cache=[
+            KVCache(80),
+            VendorTurboKVCacheLite(packed=400, norms=80, resident=600),
+            VendorTurboKVCacheLite(packed=800, norms=120, resident=1_100),
+        ],
+    )
+
+    assert metrics["packed_state_bytes"] == 1_400
 
 
 def test_rejects_qwen2_and_scalar_or_missing_cache_contracts() -> None:

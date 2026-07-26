@@ -177,3 +177,15 @@ vector-gated `mx.fast.metal_kernel` with the shape contract `[B,T,Hk,Dk]`, `[B,T
 dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirrors that kernel
 behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
 clean native-vs-custom parity run.
+
+### Qwen3.5 E3 mixed-cache TurboKV boundary (2026-07-26)
+
+The persistent TurboQuant layer's generic `make_turbo_cache` first calls
+`mlx_lm.models.cache.make_prompt_cache` and then wraps only objects that satisfy its runtime
+`KVCache` type check. Qwen3.5 can return a mixed list containing linear-recurrent state plus
+full-attention KV entries, so E3 uses a local, injectable factory that repeats only that narrow
+type-tested transformation. It preserves every non-KV entry by identity and raises when the
+binding cannot be imported or no true KV entry exists. The Miniforge startup contract was
+verified without a model load using `OMLX_TURBOQUANT_LAYER` plus `python/sitecustomize.py`:
+`TurboKVCacheLite` and `compact_turbo_cache` import from the persistent layer. This establishes
+wiring only; it is not an inference or E3 compression result.
