@@ -208,7 +208,8 @@ def c_turboquant_plus_production_path():
         )
     return (
         f"model={model_id}, {n_compressed}/{n_lite} lite compressed, "
-        f"bytes_freed={bytes_freed}, encode_path={turbo.get('encode_path')}, "
+        f"bytes_freed={bytes_freed}, provenance="
+        f"{turbo.get('quantization_provenance', {}).get('execution_source')}, "
         f"backend={resp.backend}"
     )
 

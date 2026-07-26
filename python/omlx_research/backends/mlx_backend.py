@@ -10,6 +10,23 @@ from .base import BackendBase, BackendCapabilities, GenerateRequest, GenerateRes
 logger = logging.getLogger(__name__)
 
 
+def quantization_execution_provenance(compressed_layers: int = 0) -> dict[str, object]:
+    """Report only quantization that touched the active MLX prompt cache.
+
+    Rust FFI quantization can be smoke-tested independently, but a synthetic
+    tensor never proves model-layer execution or KV-cache compaction.  Only
+    observed ``TurboKVCacheLite`` compaction on this request's cache may carry
+    compression provenance.
+    """
+    cache_compression_verified = compressed_layers > 0
+    return {
+        "execution_source": "turbo_kv_cache" if cache_compression_verified else "not_executed",
+        "rust_quantization_executed": False,
+        "cache_compression_verified": cache_compression_verified,
+        "evidence_scope": "turbo_kv_cache_state" if cache_compression_verified else "none",
+    }
+
+
 class MlxBackend(BackendBase):
     capabilities = BackendCapabilities(
         name="mlx",
@@ -378,40 +395,9 @@ class MlxBackend(BackendBase):
                 n_compressed = -1
                 bytes_freed = 0
 
-        # ── Production-path Rust encode A/B ──
-        # When self._use_python_turboquant is True, the user explicitly
-        # requested the Python reference (PHENOTYPE_OMLX_USE_PYTHON_TQ=1).
-        # Encode the chosen token's hidden state vector through the
-        # requested path and surface the encoded shape — this is the metric
-        # the perf_turboquant.py script reports on.
-        rust_encode_shape = None
-        python_encode_shape = None
-        try:
-            perf = self._rust_perf()
-            if perf is not None and not self._use_python_turboquant:
-                q = self.turbo_quant_encode_array(
-                    [0.0] * 64,
-                    group_size=64,
-                    bits=turbo_bits,
-                )
-                rust_encode_shape = (
-                    len(q["packed"]),
-                    len(q["scales"]),
-                    len(q["zeros"]),
-                )
-            elif self._use_python_turboquant:
-                q = self.turbo_quant_encode_array(
-                    [0.0] * 64,
-                    group_size=64,
-                    bits=turbo_bits,
-                )
-                python_encode_shape = (
-                    len(q["packed"]),
-                    len(q["scales"]),
-                    len(q["zeros"]),
-                )
-        except Exception:
-            pass
+        quantization_provenance = quantization_execution_provenance(
+            max(n_compressed, 0)
+        )
 
         return GenerateResponse(
             text=text,
@@ -429,13 +415,7 @@ class MlxBackend(BackendBase):
                     "baseline_layers": n_baseline,
                     "compressed": n_compressed,
                     "bytes_freed": bytes_freed,
-                    "rust_encode_shape": rust_encode_shape,
-                    "python_encode_shape": python_encode_shape,
-                    "encode_path": (
-                        "python"
-                        if self._use_python_turboquant
-                        else ("rust" if rust_encode_shape else "unavailable")
-                    ),
+                    "quantization_provenance": quantization_provenance,
                     "cache_applicability": cache_applicability,
                     "cache_applicability_reason": cache_applicability_reason,
                 },
