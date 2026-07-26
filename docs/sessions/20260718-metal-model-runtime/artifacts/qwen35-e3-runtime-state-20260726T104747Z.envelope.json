@@ -1,0 +1,43 @@
+{
+  "schema_version": "0.3",
+  "evidence_label": "live_verified",
+  "recorded_at": "2026-07-26T10:47:47Z",
+  "evidence_scope": "qwen35_full_attention_runtime_state_plus_local_e4_link",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "synthetic": false,
+  "e3": {
+    "paired_prefill": true,
+    "prefill_prompt_tokens": 512,
+    "full_attention_layers": [3, 7, 11, 15, 19, 23],
+    "fp16_baseline_bytes": 9437184,
+    "resident_state_bytes": 1625184,
+    "packed_state_bytes": 1625184,
+    "byte_reduction": 0.827789306640625,
+    "state_contract": "qwen35_full_attention_turbokv_post_prefill_v1",
+    "qualifying": true
+  },
+  "e4_link": {
+    "evidence_scope": "local_only_qwen35_niah_api_retrieval",
+    "telemetry": {"mode": "local_only", "remote_exported": false},
+    "retrieval_observed": true,
+    "release_evidence": false
+  },
+  "artifacts": [
+    {"path": "qwen35-e3-runtime-state-20260726T104747Z/source-e3-envelope.json", "sha256": "c4c976f45d464d7cbf215ab9325f002bdf6c6246be44465dc3ae1d41b7b6b4eb"},
+    {"path": "qwen35-e3-runtime-state-20260726T104747Z/source-e3-manifest.json", "sha256": "e6e3cab8e72fc5ff9103b9d11fc309356ce0d3267a0699b3b1e5decd1cbf9f62"},
+    {"path": "qwen35-e3-runtime-state-20260726T104747Z/candidate-manifest.json", "sha256": "55b0e071ca687294c37ea66d3c599bdf9a8620325f9cb5e0df7d4bdc38604140"},
+    {"path": "harbor-qwen35-local-20260726T061831Z.envelope.json", "sha256": "48843570dc8f7e4a59b99c968376ad937289dc08399fd36e316f3acee2884c63"}
+  ],
+  "release_gate_boundaries": {
+    "e3_compression_qualifying": true,
+    "e4_local_retrieval_observed": true,
+    "e4_remote_telemetry_verified": false,
+    "release_eligible": false
+  },
+  "non_claims": [
+    "Does not prove linear-recurrent state compression.",
+    "Does not upgrade local_only telemetry to remote evidence.",
+    "Does not establish release readiness."
+  ],
+  "integrity": {"canonical_sha256": "066d88b33cfade08911bada9cf7280ec7ce7aea9c55d2209e99901f6ba97e8b5"}
+}
