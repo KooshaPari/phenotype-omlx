@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "kind": "qwen35_e3_runtime_state_candidate_manifest",
+  "evidence_label": "live_verified",
+  "synthetic": false,
+  "candidate": {
+    "git_head": "4a6ebeb1f41111ff4f9378923941a7aeaa707dee",
+    "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+    "backend": "mlx_lm_inprocess_paired_prefill",
+    "context_tokens": 512,
+    "full_attention_layers": [3, 7, 11, 15, 19, 23]
+  },
+  "measurement": {
+    "envelope_path": "research/fr5_niah_qwen35_e3_runtime_state_20260726.json",
+    "envelope_sha256": "c4c976f45d464d7cbf215ab9325f002bdf6c6246be44465dc3ae1d41b7b6b4eb",
+    "state_contract": "qwen35_full_attention_turbokv_post_prefill_v1",
+    "fp16_baseline_bytes": 9437184,
+    "resident_state_bytes": 1625184,
+    "packed_state_bytes": 1625184,
+    "byte_reduction": 0.827789306640625,
+    "paired_prefill": true
+  },
+  "provenance": {
+    "runner_sha256": "9e60beb30341d0ab09fc78c72e95d011e32ac1cd8e2d6972622d8a747710101c",
+    "paired_runner_sha256": "72fea208879f50762de9e8cd605df89a6061f199cf29c85f7fe721c82f3f57e3",
+    "state_extractor_sha256": "388c6c61d1dde81ddde11619d31bbc0247e05bed0805c25ca6c29c7826a6f2c8",
+    "qwen35_overlay_sha256": "2460526023fdd195bedb3b9774ebaabaa1ad3c64211704264246c04c0bf412e9",
+    "persistent_turboquant_layer_sha256": "1a0f8748eb3e423691f1e738d39d158a63f1e0606d246d1f29363a6a1db6e365"
+  },
+  "qualifies_for": [
+    "FR-5 E3 Qwen3.5 full-attention TurboKV post-prefill runtime-state evidence"
+  ],
+  "does_not_establish": [
+    "linear-recurrent state compression",
+    "Harbor or OpenAI server cache visibility",
+    "full FR-5 E3/E4 release readiness",
+    "quality or exact-retrieval evidence"
+  ]
+}

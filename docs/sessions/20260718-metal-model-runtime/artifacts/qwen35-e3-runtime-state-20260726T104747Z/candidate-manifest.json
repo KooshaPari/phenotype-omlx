@@ -1,0 +1,39 @@
+{
+  "schema_version": "phenotype-omlx.fr5-e3-candidate-manifest.v1",
+  "candidate": {
+    "repository": "phenotype-omlx",
+    "source_revision": "4a6ebeb1f41111ff4f9378923941a7aeaa707dee",
+    "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+    "backend": "mlx_lm_inprocess_paired_prefill",
+    "prefill_prompt_tokens": 512,
+    "full_attention_layers": [3, 7, 11, 15, 19, 23],
+    "evidence_complete": false,
+    "release_eligible": false
+  },
+  "artifacts": {
+    "e3_source_envelope": {
+      "path": "source-e3-envelope.json",
+      "sha256": "c4c976f45d464d7cbf215ab9325f002bdf6c6246be44465dc3ae1d41b7b6b4eb"
+    },
+    "e3_source_manifest": {
+      "path": "source-e3-manifest.json",
+      "sha256": "e6e3cab8e72fc5ff9103b9d11fc309356ce0d3267a0699b3b1e5decd1cbf9f62"
+    },
+    "e4_local_retrieval_envelope": {
+      "path": "../harbor-qwen35-local-20260726T061831Z.envelope.json",
+      "sha256": "48843570dc8f7e4a59b99c968376ad937289dc08399fd36e316f3acee2884c63"
+    }
+  },
+  "release_gate_boundaries": {
+    "e3_full_attention_runtime_state_verified": true,
+    "e4_local_retrieval_observed": true,
+    "e4_remote_telemetry_verified": false,
+    "remote_exported": false,
+    "release_eligible": false
+  },
+  "non_claims": [
+    "Does not prove linear-recurrent state compression.",
+    "Does not upgrade local_only E4 telemetry to remote evidence.",
+    "Does not establish full FR-5 E3/E4 release readiness."
+  ]
+}
