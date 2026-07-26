@@ -26,9 +26,9 @@ EOF
 chmod +x "$TMP/bin/uv"
 
 PATH="$TMP/bin:$PATH" HARBOR_PYTHON_BIN="$(command -v python3)" HARBOR_UV_BIN="$TMP/bin/uv" PORTAGE_ROOT="$TMP/portage" HARBOR_LOCAL_OUT="$TMP/out" \
-  HARBOR_COMMAND_LOG="$TMP/command" OMLX_READY_MODEL="Qwen3.5-0.8B" \
+  HARBOR_COMMAND_LOG="$TMP/command" OMLX_READY_MODEL="qWeN3.5-0.8B" \
   OPENAI_BASE_URL="http://127.0.0.1:8766/v1" \
-  bash "$ROOT/scripts/evals/run_via_harbor_local.sh" --niah >/dev/null
+  /bin/bash "$ROOT/scripts/evals/run_via_harbor_local.sh" --niah >/dev/null
 
 grep -q -- 'harbor run' "$TMP/command"
 grep -q -- ':8766/v1' "$TMP/command"
