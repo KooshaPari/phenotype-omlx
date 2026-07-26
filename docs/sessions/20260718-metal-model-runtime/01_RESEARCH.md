@@ -177,3 +177,19 @@ vector-gated `mx.fast.metal_kernel` with the shape contract `[B,T,Hk,Dk]`, `[B,T
 dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirrors that kernel
 behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
 clean native-vs-custom parity run.
+
+### Local-only Harbor provenance (2026-07-26)
+
+The canonical `scripts/evals/run_via_harbor.sh` remains the remote-observability
+operator path: it requires both Langfuse credentials and installs the
+`harbor_langfuse:LangfusePlugin`. A separately named local runner is appropriate
+only for evidence collection when remote telemetry must not be emitted. It is not
+a fallback for the canonical path.
+
+The local runner therefore accepts only the Qwen3.5 NIAH task, requires an explicit
+Qwen3.5 model and an OpenAI endpoint on dedicated `:8766/v1`, invokes Harbor with
+no plugin argument, unsets inherited Langfuse variables, leaves Harbor's `result.json`
+unchanged, and emits a separately named validated EvaluationReport. Its provenance is
+explicit: `telemetry.mode=local_only` and `telemetry.remote_exported=false`; it must
+not contain Langfuse trace/session identifiers. The evidence label is
+`live_verified` only for a completed Harbor result, never for a fabricated report.
