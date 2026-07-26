@@ -68,6 +68,35 @@ def test_local_conversion_preserves_source_and_validates(tmp_path: Path) -> None
     ).hexdigest()
 
 
+def test_local_conversion_discovers_single_timestamped_job_directory(tmp_path: Path) -> None:
+    output_root = tmp_path / "harbor-output"
+    run = _run_dir(tmp_path)
+    timestamped_run = output_root / "2026-07-26__06-25-42"
+    timestamped_run.parent.mkdir()
+    run.rename(timestamped_run)
+    run = timestamped_run
+    source = (run / "result.json").read_bytes()
+
+    report, validation = convert_local_harbor_run(
+        output_root, model="Qwen3.5-0.8B", commit_sha="abc123"
+    )
+
+    assert validation.valid, validation.errors
+    assert report["telemetry"] == {"mode": "local_only", "remote_exported": False}
+    assert (run / "result.json").read_bytes() == source
+
+
+def test_local_conversion_rejects_ambiguous_output_root(tmp_path: Path) -> None:
+    output_root = tmp_path / "harbor-output"
+    for name in ("2026-07-26__06-25-42", "2026-07-26__06-30-00"):
+        run = _run_dir(tmp_path / name)
+        output_root.mkdir(exist_ok=True)
+        run.rename(output_root / name)
+
+    with pytest.raises(ValueError, match="multiple Harbor job directories"):
+        convert_local_harbor_run(output_root, model="Qwen3.5-0.8B", commit_sha="abc123")
+
+
 def test_local_report_has_no_remote_trace_or_session_fields(tmp_path: Path) -> None:
     report, _ = convert_local_harbor_run(
         _run_dir(tmp_path), model="Qwen3.5-0.8B", commit_sha="abc123"

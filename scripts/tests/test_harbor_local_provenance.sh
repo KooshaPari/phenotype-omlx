@@ -15,11 +15,12 @@ while [[ $# -gt 0 ]]; do
   if [[ "$1" == "-o" ]]; then OUT="$2"; shift 2; continue; fi
   shift
 done
-mkdir -p "$OUT/trial"
-cat > "$OUT/result.json" <<'JSON'
+RUN="$OUT/2026-07-26__06-25-42"
+mkdir -p "$RUN/trial"
+cat > "$RUN/result.json" <<'JSON'
 {"id":"local-job","started_at":"2026-07-26T00:00:00Z","finished_at":"2026-07-26T00:01:00Z","stats":{"evals":{"oracle__omlx-niah-api-smoke":{"n_trials":1,"metrics":[{"mean":1.0}]}}}}
 JSON
-cat > "$OUT/trial/result.json" <<'JSON'
+cat > "$RUN/trial/result.json" <<'JSON'
 {"id":"trial","trial_name":"trial","task_name":"omlx-niah-api-smoke","agent_info":{"name":"oracle","version":"1"},"agent_result":{"n_input_tokens":1,"n_output_tokens":1},"verifier_result":{"rewards":{"reward":1.0}},"started_at":"2026-07-26T00:00:00Z","finished_at":"2026-07-26T00:01:00Z","config":{"job_id":"local-job"}}
 JSON
 EOF

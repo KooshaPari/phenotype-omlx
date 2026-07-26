@@ -204,3 +204,16 @@ system interpreter. The model-policy comparison instead normalizes with portable
 explicitly, so CI or developer shells that resolve `bash` to Homebrew Bash cannot
 mask a regression. This preserves the Qwen3.5-only policy without adding an
 alternate runtime, plugin, endpoint, or telemetry path.
+
+### Harbor timestamped output discovery (2026-07-26)
+
+Harbor treats `-o` as an output root and writes the completed job under a
+timestamped child directory. The local wrapper originally passed that root
+directly to the provenance converter, which expects a job-level `result.json`.
+That caused an exit status of 2 after a completed Harbor evaluation, without
+altering the underlying result. `resolve_harbor_job_dir` now accepts either a
+job directory or an output root with exactly one immediate completed job. It
+does not recursively scan, and rejects multiple candidates so an operator
+cannot accidentally convert a stale or unrelated result. Python and shell
+contracts cover the actual timestamped shape; the shell contract still proves
+the no-plugin, Qwen3.5-only, dedicated-`:8766`, local-only telemetry path.
