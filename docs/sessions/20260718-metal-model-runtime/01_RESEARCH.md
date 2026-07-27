@@ -177,3 +177,17 @@ vector-gated `mx.fast.metal_kernel` with the shape contract `[B,T,Hk,Dk]`, `[B,T
 dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirrors that kernel
 behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
 clean native-vs-custom parity run.
+
+### 2026-07-27 - exact Harbor NIAH generation contract
+
+Qwen's deployment guidance documents `chat_template_kwargs: {"enable_thinking": false}` as the
+hard switch for direct responses, and the Qwen3.5 model card explicitly says `/think` and
+`/nothink` are not the supported control surface. The Harbor smoke therefore sends the hard
+switch and records `thinking_enabled=false` in its oracle envelope. With mlx-lm 0.31.3 this
+switch adds 27 chat-template tokens; the prompt builder subtracts that measured overhead so the
+API reports exactly 8192 prompt tokens. Live Apple Container evidence is recorded in
+`artifacts/harbor-qwen35-20260727-8192.json`: reward 1.0, exact needle match, no errors or
+retries, and `context_tokens_exact=true`.
+
+References: https://github.com/QwenLM/Qwen3/blob/main/docs/source/deployment/vllm.md and
+https://huggingface.co/Qwen/Qwen3.5-35B-A3B-GPTQ-Int4.
