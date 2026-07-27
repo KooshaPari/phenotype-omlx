@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).parents[2]
 REVIEW = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-review-20260726.json"
 MANIFEST = ROOT / "docs/sessions/20260718-metal-model-runtime/candidate-manifest.json"
+HARBOR_LATEST = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727.json"
 
 
 def test_review_preserves_stale_manifest_and_blocks_promotion() -> None:
@@ -43,3 +44,11 @@ def test_current_manifest_is_exact_head_and_holds_8192_gate() -> None:
     payload = {key: value for key, value in document.items() if key != "integrity"}
     canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
     assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
+
+
+def test_latest_harbor_evidence_is_positive_but_not_8192_completion() -> None:
+    document = json.loads(HARBOR_LATEST.read_text(encoding="utf-8"))
+    assert document["evidence_label"] == "live_verified"
+    assert document["harbor"]["reward"] == 1.0
+    assert document["harbor"]["n_errors"] == 0
+    assert "8192-token" in " ".join(document["promotion"]["remaining_gates"])
