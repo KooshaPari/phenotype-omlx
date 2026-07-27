@@ -5,7 +5,7 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "head": "c71bc6228d0c2e5b7ebb392e7e36ee620a8974f8",
-    "branch": "recovery/phenotype-omlx-local-20260726",
+    "branch": "main",
     "working_tree": "dirty; evidence records only the tested source paths"
   },
   "contract": {
