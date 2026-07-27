@@ -120,7 +120,9 @@ the current HEAD, independent FFI evidence, and candidate review.
 Update 2026-07-27: the authorized exact Harbor gate is now live-verified with Qwen3.5
 (`prompt_tokens=8192`, `context_tokens_exact=true`, thinking disabled, reward 1.0). The host
 NIAH matrix also runs baseline/asymmetric/symmetric TurboKV modes at 4096 and 8192 tokens with
-6/24 compressed full-attention layers and effective byte reduction. The 16384-token TurboKV
-run was interrupted during generation, so it remains an explicit promotion gate. The first
+6/24 compressed full-attention layers and effective byte reduction. A paired 16384-token
+baseline/TurboKV run then completed with 6/24 compressed layers and effective byte reduction
+(ratio 0.6317); the earlier interrupted attempt is retained only as historical stability
+evidence. The first
 matrix attempt without explicit `sitecustomize` loading is retained as `live_failed`; the
 benchmark now imports the audited layer explicitly.
