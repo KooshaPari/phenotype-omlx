@@ -71,7 +71,9 @@ pub(crate) enum Schedule {
     /// Mirrors `ContinuousScheduleKind::Sigmoid { k }` from the oracle
     /// file byte-for-byte, including the `t == 0` and `t == num_steps`
     /// boundary special-cases that force alpha exactly to 1.0 / 0.0.
-    Sigmoid { k: i32 },
+    Sigmoid {
+        k: i32,
+    },
 }
 
 impl Schedule {
@@ -89,8 +91,7 @@ impl Schedule {
         match self {
             Schedule::Linear => (1.0 - tn).clamp(0.0, 1.0),
             Schedule::Cosine => {
-                let c =
-                    (t as f64 * std::f64::consts::PI / (2.0 * num_steps as f64)).cos();
+                let c = (t as f64 * std::f64::consts::PI / (2.0 * num_steps as f64)).cos();
                 (c * c).clamp(0.0, 1.0)
             }
             Schedule::Sqrt => (1.0 - tn).max(0.0).sqrt(),
@@ -124,9 +125,7 @@ impl Schedule {
 /// collapsed to the clipping floor). The sweep is exposed as a
 /// `&[usize]` so [`sweep_t_values`] can hand a `Vec<usize>` to the
 /// caller without copying when ownership isn't needed.
-pub(crate) const DDM_T_SWEEP: &[usize] = &[
-    2, 4, 8, 16, 32, 64, 128, 256, 512,
-];
+pub(crate) const DDM_T_SWEEP: &[usize] = &[2, 4, 8, 16, 32, 64, 128, 256, 512];
 
 /// Return the canonical `T` sweep as an owned `Vec<usize>`.
 ///
@@ -347,8 +346,10 @@ fn discrete_diffusion_l2_error_below_clipping_floor_at_T_large() {
     // caught. (At `T > 200` the argmax outcome is identical for
     // both schedules, but the per-step re-mask probability still
     // differs — so we keep both as a defence-in-depth check.)
-    let l2_linear = reconstruction_l2_error(t_large, Schedule::Linear, &tokens, vocab, mask_id, seed);
-    let l2_cosine = reconstruction_l2_error(t_large, Schedule::Cosine, &tokens, vocab, mask_id, seed);
+    let l2_linear =
+        reconstruction_l2_error(t_large, Schedule::Linear, &tokens, vocab, mask_id, seed);
+    let l2_cosine =
+        reconstruction_l2_error(t_large, Schedule::Cosine, &tokens, vocab, mask_id, seed);
 
     assert!(
         l2_linear < 1e-9,

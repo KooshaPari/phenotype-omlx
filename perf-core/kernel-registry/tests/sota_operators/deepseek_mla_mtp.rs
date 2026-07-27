@@ -67,7 +67,11 @@ fn fill_unit(rng: &mut Lcg, out: &mut [f32]) {
 
 /// Per-element absolute-max deviation across two equal-length buffers.
 fn max_abs_diff(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "max_abs_diff requires equal-length slices");
+    assert_eq!(
+        a.len(),
+        b.len(),
+        "max_abs_diff requires equal-length slices"
+    );
     let mut m = 0.0f32;
     for (x, y) in a.iter().zip(b.iter()) {
         let d = (x - y).abs();
@@ -200,10 +204,10 @@ fn deepseek_mla_compressed_kv_byte_identical_to_uncompressed() {
     .expect("uncompressed MLA must accept the test's well-formed inputs");
 
     for s in 0..seq_q {
-        let latent_uncompressed = &out_uncompressed
-            [s * (D_FULL + D_ROPE)..s * (D_FULL + D_ROPE) + D_LATENT];
-        let latent_compressed = &out_compressed
-            [s * (D_LATENT + D_ROPE)..s * (D_LATENT + D_ROPE) + D_LATENT];
+        let latent_uncompressed =
+            &out_uncompressed[s * (D_FULL + D_ROPE)..s * (D_FULL + D_ROPE) + D_LATENT];
+        let latent_compressed =
+            &out_compressed[s * (D_LATENT + D_ROPE)..s * (D_LATENT + D_ROPE) + D_LATENT];
         assert_buf_close(
             latent_uncompressed,
             latent_compressed,

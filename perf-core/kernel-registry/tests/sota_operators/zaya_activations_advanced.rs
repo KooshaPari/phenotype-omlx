@@ -86,22 +86,31 @@ fn zaya_binary_act_metal_capability_required() {
     };
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &caps_no_ms3,
         NOW_UNIX_MS,
     );
     match decision {
-        SelectionDecision::Rejected { rejections, considered } => {
-            assert!(considered.contains(&id_metal_requires_ms3),
-                "the Metal (requires-Ms3) candidate must be considered before rejection");
-            assert!(rejections.iter().any(|r| {
-                matches!(
-                    &r.reason,
-                    kernel_registry::selector::RejectionReason::MissingCapability(s)
-                        if s == "metal-ms3"
-                )
-            }),
-                "expected MissingCapability(\"metal-ms3\") rejection, got {rejections:?}");
+        SelectionDecision::Rejected {
+            rejections,
+            considered,
+        } => {
+            assert!(
+                considered.contains(&id_metal_requires_ms3),
+                "the Metal (requires-Ms3) candidate must be considered before rejection"
+            );
+            assert!(
+                rejections.iter().any(|r| {
+                    matches!(
+                        &r.reason,
+                        kernel_registry::selector::RejectionReason::MissingCapability(s)
+                            if s == "metal-ms3"
+                    )
+                }),
+                "expected MissingCapability(\"metal-ms3\") rejection, got {rejections:?}"
+            );
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
@@ -112,8 +121,10 @@ fn zaya_binary_act_metal_capability_required() {
     //     together pin the symmetry "missing cap ⇒ reject; present
     //     cap ⇒ choose" without ambiguity.
     let fresh = fresh_capabilities();
-    assert!(fresh.capabilities.contains(&Capability::MetalMs3),
-        "fresh_capabilities() must include MetalMs3 — test 1's contract relies on it");
+    assert!(
+        fresh.capabilities.contains(&Capability::MetalMs3),
+        "fresh_capabilities() must include MetalMs3 — test 1's contract relies on it"
+    );
     let mut reg2 = KernelRegistry::new();
     let scalar2 = make_candidate(
         "BinaryActScalar",
@@ -121,7 +132,10 @@ fn zaya_binary_act_metal_capability_required() {
         vec![],
         min,
         max,
-        vec![kernel_registry::compat::DType::Int8, kernel_registry::compat::DType::Fp32],
+        vec![
+            kernel_registry::compat::DType::Int8,
+            kernel_registry::compat::DType::Fp32,
+        ],
         false,
     );
     let metal2 = make_candidate(
@@ -138,11 +152,18 @@ fn zaya_binary_act_metal_capability_required() {
     reg2.register_candidate(metal2);
     reg2.attach_tuning_record(
         key.clone(),
-        build_record(id_metal2, key.clone(), &samples_with_p95(1700), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal2,
+            key.clone(),
+            &samples_with_p95(1700),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let chosen = reg2.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh,
         NOW_UNIX_MS,
     );

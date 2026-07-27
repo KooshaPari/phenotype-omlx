@@ -4,9 +4,7 @@
 
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
 use kernel_registry::selector::SelectionDecision;
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy};
 
 use super::{
     build_record, fresh_capabilities, full_capabilities, make_candidate, samples_with_p95, shape,
@@ -69,26 +67,45 @@ fn bonsai_ternary_deterministic_picks_lowest_p95_metal_backend() {
     let key = bonsai_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(7000), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(7000),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_zmm, key.clone(), &samples_with_p95(2200), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_zmm,
+            key.clone(),
+            &samples_with_p95(2200),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &full_capabilities(),
         NOW_UNIX_MS,
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_metal,
-                "metal p95=1900 must beat zmm p95=2200 and scalar p95=7000");
+            assert_eq!(
+                candidate.id, id_metal,
+                "metal p95=1900 must beat zmm p95=2200 and scalar p95=7000"
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
@@ -123,11 +140,18 @@ fn bonsai_ternary_trace_lists_chosen_candidate() {
     let key = bonsai_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -181,22 +205,36 @@ fn lfm_gated_short_conv_deterministic_picks_lowest_p95_metal_backend() {
     let key = lfm_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(3500), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(3500),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_metal,
-                "metal p95=900 must beat scalar p95=3500");
+            assert_eq!(
+                candidate.id, id_metal,
+                "metal p95=900 must beat scalar p95=3500"
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
@@ -231,11 +269,18 @@ fn lfm_gated_short_conv_trace_lists_chosen_candidate() {
     let key = lfm_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -289,22 +334,36 @@ fn qwen_deltanet_deterministic_picks_lowest_p95_metal_backend() {
     let key = deltanet_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(4000), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(4000),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1400), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1400),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_metal,
-                "metal p95=1400 must beat scalar p95=4000");
+            assert_eq!(
+                candidate.id, id_metal,
+                "metal p95=1400 must beat scalar p95=4000"
+            );
         }
         other => panic!("expected Chosen, got {other:?}"),
     }
@@ -339,11 +398,18 @@ fn qwen_deltanet_trace_lists_chosen_candidate() {
     let key = deltanet_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1400), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1400),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );

@@ -10,8 +10,8 @@
 use kernel_registry::compat::DType;
 use kernel_registry::selector::SelectionDecision;
 use kernel_registry::{
-    deltanet_batched_key, deltanet_key, sliding_window_key,
-    BackendKind, Capability, KernelRegistry, SelectionPolicy,
+    deltanet_batched_key, deltanet_key, sliding_window_key, BackendKind, Capability,
+    KernelRegistry, SelectionPolicy,
 };
 
 use super::{
@@ -48,19 +48,23 @@ fn builder_sliding_window_selector_picks_tagged_metal_candidate() {
 
     // Build the key through the public builder rather than hand-rolling
     // the shape signature — that's the entire point of the bridge.
-    let key = sliding_window_key(
-        8, 2, 64, 1, 8, 4, 4,
-        DType::Bf16, TEST_FINGERPRINT, 1,
-    );
+    let key = sliding_window_key(8, 2, 64, 1, 8, 4, 4, DType::Bf16, TEST_FINGERPRINT, 1);
 
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
 
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -110,12 +114,19 @@ fn builder_deltanet_batched_selector_picks_tagged_metal_candidate() {
 
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1300), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1300),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
 
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -163,12 +174,19 @@ fn builder_deltanet_selector_picks_tagged_metal_candidate() {
 
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1500), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1500),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
 
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );

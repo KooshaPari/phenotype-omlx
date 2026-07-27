@@ -29,30 +29,69 @@ use model_kernels::KernelOp;
 const SOTA_OPERATORS_SOURCES: &[(&str, &str)] = &[
     ("main.rs", include_str!("main.rs")),
     ("attention.rs", include_str!("attention.rs")),
-    ("attention_sliding_window.rs", include_str!("attention_sliding_window.rs")),
+    (
+        "attention_sliding_window.rs",
+        include_str!("attention_sliding_window.rs"),
+    ),
     ("bonsai_qwen.rs", include_str!("bonsai_qwen.rs")),
-    ("builders_integration.rs", include_str!("builders_integration.rs")),
+    (
+        "builders_integration.rs",
+        include_str!("builders_integration.rs"),
+    ),
     ("coverage_matrix.rs", include_str!("coverage_matrix.rs")),
     ("dense_envelope.rs", include_str!("dense_envelope.rs")),
     ("deepseek_mla_mtp.rs", include_str!("deepseek_mla_mtp.rs")),
     ("diffusion.rs", include_str!("diffusion.rs")),
-    ("discrete_diffusion_sampler.rs", include_str!("discrete_diffusion_sampler.rs")),
-    ("discrete_diffusion_schedule.rs", include_str!("discrete_diffusion_schedule.rs")),
+    (
+        "discrete_diffusion_sampler.rs",
+        include_str!("discrete_diffusion_sampler.rs"),
+    ),
+    (
+        "discrete_diffusion_schedule.rs",
+        include_str!("discrete_diffusion_schedule.rs"),
+    ),
     ("grouped_gemm_moe.rs", include_str!("grouped_gemm_moe.rs")),
     ("lfm_routing.rs", include_str!("lfm_routing.rs")),
     ("mod_routing/mod.rs", include_str!("mod_routing/mod.rs")),
-    ("mod_routing/policy.rs", include_str!("mod_routing/policy.rs")),
-    ("multi_engine_metadata.rs", include_str!("multi_engine_metadata.rs")),
+    (
+        "mod_routing/policy.rs",
+        include_str!("mod_routing/policy.rs"),
+    ),
+    (
+        "multi_engine_metadata.rs",
+        include_str!("multi_engine_metadata.rs"),
+    ),
     ("qwen_agentic.rs", include_str!("qwen_agentic.rs")),
     ("recurrent/mod.rs", include_str!("recurrent/mod.rs")),
-    ("recurrent/dispatch_envelope.rs", include_str!("recurrent/dispatch_envelope.rs")),
-    ("recurrent/mamba_scan.rs", include_str!("recurrent/mamba_scan.rs")),
+    (
+        "recurrent/dispatch_envelope.rs",
+        include_str!("recurrent/dispatch_envelope.rs"),
+    ),
+    (
+        "recurrent/mamba_scan.rs",
+        include_str!("recurrent/mamba_scan.rs"),
+    ),
     ("recurrent/rwkv7.rs", include_str!("recurrent/rwkv7.rs")),
-    ("spec_decode_proposal_state.rs", include_str!("spec_decode_proposal_state.rs")),
-    ("weighted_reduce_moe.rs", include_str!("weighted_reduce_moe.rs")),
-    ("zaya_activations_basic.rs", include_str!("zaya_activations_basic.rs")),
-    ("zaya_activations_advanced.rs", include_str!("zaya_activations_advanced.rs")),
-    ("zaya_lfm_interaction.rs", include_str!("zaya_lfm_interaction.rs")),
+    (
+        "spec_decode_proposal_state.rs",
+        include_str!("spec_decode_proposal_state.rs"),
+    ),
+    (
+        "weighted_reduce_moe.rs",
+        include_str!("weighted_reduce_moe.rs"),
+    ),
+    (
+        "zaya_activations_basic.rs",
+        include_str!("zaya_activations_basic.rs"),
+    ),
+    (
+        "zaya_activations_advanced.rs",
+        include_str!("zaya_activations_advanced.rs"),
+    ),
+    (
+        "zaya_lfm_interaction.rs",
+        include_str!("zaya_lfm_interaction.rs"),
+    ),
 ];
 
 /// Spec-mandated families from
@@ -65,13 +104,19 @@ const MATRIX_FAMILIES: &[(&str, &[&str])] = &[
     ("RWKV", &["rwkv"]),
     ("ZAYA", &["cca"]),
     ("LFM", &["lfm"]),
-    ("LfmDynamicCompute", &["lfm_dynamic_compute", "lfm_gate_signal"]),
+    (
+        "LfmDynamicCompute",
+        &["lfm_dynamic_compute", "lfm_gate_signal"],
+    ),
     ("DeepSeek", &["mla", "mtp"]),
     ("DeepSeekMla", &["mla_compressed_kv", "mla_cache_size"]),
     ("DeepSeekMtp", &["mtp_speculative", "mtp_acceptance"]),
     ("Bonsai", &["bonsai"]),
     ("Qwen", &["qwen", "deltanet"]),
-    ("QwenAgentic", &["qwen3_coder", "qwen3_instruct", "qwen2_5_coder"]),
+    (
+        "QwenAgentic",
+        &["qwen3_coder", "qwen3_instruct", "qwen2_5_coder"],
+    ),
     ("LLaDA", &["diffusion", "llama_dream"]),
     ("Dream", &["diffusion", "llama_dream"]),
     ("MoD", &["mod_routing", "mod_"]),

@@ -20,18 +20,22 @@ fn selector_experimental_only_skips_tunable_candidates_without_evidence() {
     let id_tunable = tunable_no_evidence.id;
     reg.register_candidate(tunable_no_evidence);
     let key = key_with(OperatorKind::DenseMatmul, TEST_DEVICE_FINGERPRINT, 1);
-    let caps = DeviceCaps { capabilities: vec![Capability::MetalGpu] };
-    let decision = reg.select_with_caps(
-        &key,
-        SelectionPolicy::ExperimentalOnly,
-        &caps,
-        now,
-    );
+    let caps = DeviceCaps {
+        capabilities: vec![Capability::MetalGpu],
+    };
+    let decision = reg.select_with_caps(&key, SelectionPolicy::ExperimentalOnly, &caps, now);
     match decision {
-        SelectionDecision::Rejected { rejections, considered } => {
+        SelectionDecision::Rejected {
+            rejections,
+            considered,
+        } => {
             assert!(considered.contains(&id_tunable));
-            assert!(rejections.iter().any(|r| matches!(r.reason, RejectionReason::NoTuningEvidence)),
-                "tunable candidates without tuning must be excluded under ExperimentalOnly");
+            assert!(
+                rejections
+                    .iter()
+                    .any(|r| matches!(r.reason, RejectionReason::NoTuningEvidence)),
+                "tunable candidates without tuning must be excluded under ExperimentalOnly"
+            );
         }
         other => panic!("expected Rejected under ExperimentalOnly, got {other:?}"),
     }

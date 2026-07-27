@@ -8,9 +8,7 @@ use kernel_registry::{
     CandidateId, KernelKey, QualityAttachment, QualityEvidence, QualityGate, TuningRecord,
 };
 
-use super::{
-    build_record, NOW_UNIX_MS, TEST_FINGERPRINT,
-};
+use super::{build_record, NOW_UNIX_MS, TEST_FINGERPRINT};
 
 pub(super) fn mod_key() -> KernelKey {
     // m = dim (hidden size), seq = full-token count (32), batch = 1.

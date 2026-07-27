@@ -82,7 +82,9 @@ fn ddm_step_respects_schedule() {
         let n: usize = 32;
         let x_t: Vec<u32> = vec![oracle.mask_token_id; n];
         let mask: Vec<bool> = vec![true; n];
-        let clean: Vec<u32> = (0..n).map(|i| ((i + 1) % (oracle.vocab_size as usize - 1)) as u32).collect();
+        let clean: Vec<u32> = (0..n)
+            .map(|i| ((i + 1) % (oracle.vocab_size as usize - 1)) as u32)
+            .collect();
 
         let out = oracle.step(&x_t, &mask, &clean, num_steps - 1, 1);
         assert_eq!(
@@ -135,10 +137,18 @@ fn ddm_cosine_vs_linear_schedule_differs() {
 /// below.
 fn every_continuous_kind() -> [ContinuousSchedule; 4] {
     [
-        ContinuousSchedule { kind: ContinuousScheduleKind::Linear },
-        ContinuousSchedule { kind: ContinuousScheduleKind::Cosine },
-        ContinuousSchedule { kind: ContinuousScheduleKind::Sqrt },
-        ContinuousSchedule { kind: ContinuousScheduleKind::Sigmoid { k: 10 } },
+        ContinuousSchedule {
+            kind: ContinuousScheduleKind::Linear,
+        },
+        ContinuousSchedule {
+            kind: ContinuousScheduleKind::Cosine,
+        },
+        ContinuousSchedule {
+            kind: ContinuousScheduleKind::Sqrt,
+        },
+        ContinuousSchedule {
+            kind: ContinuousScheduleKind::Sigmoid { k: 10 },
+        },
     ]
 }
 
@@ -170,7 +180,9 @@ fn ddm_alpha_at_boundaries_for_every_variant() {
 #[test]
 fn ddm_sqrt_alpha_monotonic_decreasing() {
     let num_steps: usize = 16;
-    let cs = ContinuousSchedule { kind: ContinuousScheduleKind::Sqrt };
+    let cs = ContinuousSchedule {
+        kind: ContinuousScheduleKind::Sqrt,
+    };
 
     // Mid-step must remain positive (slower than linear).
     let mid = cs.alpha_at(num_steps / 2, num_steps);
@@ -208,7 +220,9 @@ fn ddm_sqrt_alpha_monotonic_decreasing() {
 #[test]
 fn ddm_sigmoid_alpha_decays_then_steepens() {
     let num_steps: usize = 40;
-    let cs = ContinuousSchedule { kind: ContinuousScheduleKind::Sigmoid { k: 10 } };
+    let cs = ContinuousSchedule {
+        kind: ContinuousScheduleKind::Sigmoid { k: 10 },
+    };
 
     let at_quarter = cs.alpha_at(num_steps / 4, num_steps);
     let at_three_quarters = cs.alpha_at(3 * num_steps / 4, num_steps);
@@ -245,7 +259,9 @@ fn ddm_sigmoid_alpha_decays_then_steepens() {
 /// contract for the new `Sqrt` variant.
 #[test]
 fn ddm_step_byte_identical_oracle_with_sqrt_schedule() {
-    let cs = ContinuousSchedule { kind: ContinuousScheduleKind::Sqrt };
+    let cs = ContinuousSchedule {
+        kind: ContinuousScheduleKind::Sqrt,
+    };
     let oracle = DiscreteDiffusionOracle::with_continuous(16, 4, 8, cs);
     let x_t: Vec<u32> = vec![4, 7, 4, 2, 4, 9, 4, 1]; // alternating mask + clean
     let mask: Vec<bool> = vec![true, false, true, false, true, false, true, false];
@@ -265,7 +281,9 @@ fn ddm_step_byte_identical_oracle_with_sqrt_schedule() {
 /// `ContinuousSchedule { kind: Sigmoid { k: 10 } }`.
 #[test]
 fn ddm_step_byte_identical_oracle_with_sigmoid_schedule() {
-    let cs = ContinuousSchedule { kind: ContinuousScheduleKind::Sigmoid { k: 10 } };
+    let cs = ContinuousSchedule {
+        kind: ContinuousScheduleKind::Sigmoid { k: 10 },
+    };
     let oracle = DiscreteDiffusionOracle::with_continuous(16, 4, 8, cs);
     let x_t: Vec<u32> = vec![4, 7, 4, 2, 4, 9, 4, 1];
     let mask: Vec<bool> = vec![true, false, true, false, true, false, true, false];

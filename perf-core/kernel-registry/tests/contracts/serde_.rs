@@ -1,7 +1,7 @@
 //! Serde round-trips for `TuningRecord` and `ExecutionTrace`.
 
-use kernel_registry::compat::OperatorKind;
 use kernel_registry::compat::AttentionKind;
+use kernel_registry::compat::OperatorKind;
 use kernel_registry::{CandidateId, ExecutionTrace, KernelKey, TraceRejection, TuningRecord};
 
 use super::{key_with, tuning_record, TEST_DEVICE_FINGERPRINT};
@@ -58,8 +58,17 @@ fn execution_trace_serde_round_trips_and_includes_rejection_reasons() {
     let decoded: ExecutionTrace = serde_json::from_str(&json).expect("deserialize");
     assert_eq!(trace, decoded);
     assert_eq!(decoded.considered.len(), 2);
-    assert!(decoded.considered[0].reason.to_lowercase().contains("stale"));
-    assert!(decoded.considered[1].reason.to_lowercase().contains("metal"));
+    assert!(decoded.considered[0]
+        .reason
+        .to_lowercase()
+        .contains("stale"));
+    assert!(decoded.considered[1]
+        .reason
+        .to_lowercase()
+        .contains("metal"));
     assert!(decoded.fallback_used);
-    assert_eq!(decoded.tuning_record_id.as_deref(), Some("tuning-evidence-1"));
+    assert_eq!(
+        decoded.tuning_record_id.as_deref(),
+        Some("tuning-evidence-1")
+    );
 }

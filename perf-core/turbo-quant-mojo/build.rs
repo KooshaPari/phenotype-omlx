@@ -52,7 +52,10 @@ fn main() {
             let target_path = PathBuf::from(target_dir);
             if let Some(debug_dir) = target_path.ancestors().nth(3) {
                 let _ = std::fs::copy(found, debug_dir.join("libturbo_quant_mojo.dylib"));
-                let _ = std::fs::copy(found, debug_dir.join("deps").join("libturbo_quant_mojo.dylib"));
+                let _ = std::fs::copy(
+                    found,
+                    debug_dir.join("deps").join("libturbo_quant_mojo.dylib"),
+                );
             }
         }
         println!("cargo:info=mojo staticlib found at {}", found.display());
