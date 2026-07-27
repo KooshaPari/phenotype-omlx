@@ -37,7 +37,8 @@ def build_prompt(context_tokens: int) -> str:
     intro = "Read the following passage and reply with ONLY the secret code.\n\n"
     needle = f"Important context: {NEEDLE}. This fact is critical."
     fixed_tokens = 26
-    filler_tokens = context_tokens - fixed_tokens
+    chat_template_overhead = 25
+    filler_tokens = context_tokens - fixed_tokens - chat_template_overhead
     if filler_tokens <= 0:
         raise SystemExit(f"error: NIAH_CONTEXT_TOKENS too small: {context_tokens}")
     before = (filler_tokens * 3) // 4
@@ -154,6 +155,7 @@ def run_niah() -> dict:
         "openai_base_url": base,
         "needle": NEEDLE,
         "requested_context_tokens": requested_tokens or None,
+        "chat_template_overhead_tokens": 25 if requested_tokens else None,
         "prompt_tokens": prompt_tokens,
         "context_tokens_exact": requested_tokens > 0 and prompt_tokens == requested_tokens,
         "prompt_sha256": __import__("hashlib").sha256(prompt.encode()).hexdigest(),

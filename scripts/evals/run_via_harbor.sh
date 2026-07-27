@@ -128,6 +128,7 @@ if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
   )
 fi
 if [[ "$MODE" == "niah_8192" ]]; then
+  export NIAH_CONTEXT_TOKENS=8192
   AGENT_ENV_ARGS+=(--ae "NIAH_CONTEXT_TOKENS=8192")
 fi
 
