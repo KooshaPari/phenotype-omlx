@@ -13,6 +13,7 @@ MANIFEST = ROOT / "docs/sessions/20260718-metal-model-runtime/candidate-manifest
 HARBOR_LATEST = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727.json"
 HARBOR_8192 = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727-8192.json"
 NIAH_MATRIX = ROOT / "research/baselines/qwen35-niah-20260727-4k8k.json"
+NIAH_16K = ROOT / "research/baselines/qwen35-niah-20260727-16k-paired.json"
 
 
 def test_review_preserves_stale_manifest_and_blocks_promotion() -> None:
@@ -75,3 +76,13 @@ def test_qwen35_native_matrix_has_real_turbo_rows() -> None:
     assert len(turbo) == 4
     assert all(row["turbo_layers"] == 6 for row in turbo)
     assert all(row["compression_effective"] for row in turbo)
+
+
+def test_qwen35_16k_paired_matrix_has_byte_reduction() -> None:
+    document = json.loads(NIAH_16K.read_text(encoding="utf-8"))
+    assert document["lengths"] == [16384]
+    rows = {row["mode"]: row for row in document["results"]}
+    assert rows["baseline_fp16"]["actual_len"] == 16384
+    assert rows["turbo_asymmetric"]["actual_len"] == 16384
+    assert rows["turbo_asymmetric"]["compression_effective"] is True
+    assert rows["turbo_asymmetric"]["byte_reduction_effective"] is True
