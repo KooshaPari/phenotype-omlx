@@ -116,3 +116,11 @@ must be corrected in the new evidence envelope (explicit `live_verified` provena
 not invalidate the task-level live Harbor result. The stale `candidate-manifest.json` remains
 unchanged with `evidence_complete=false`; promotion additionally needs a new manifest tied to
 the current HEAD, independent FFI evidence, and candidate review.
+
+Update 2026-07-27: the authorized exact Harbor gate is now live-verified with Qwen3.5
+(`prompt_tokens=8192`, `context_tokens_exact=true`, thinking disabled, reward 1.0). The host
+NIAH matrix also runs baseline/asymmetric/symmetric TurboKV modes at 4096 and 8192 tokens with
+6/24 compressed full-attention layers and effective byte reduction. The 16384-token TurboKV
+run was interrupted during generation, so it remains an explicit promotion gate. The first
+matrix attempt without explicit `sitecustomize` loading is retained as `live_failed`; the
+benchmark now imports the audited layer explicitly.

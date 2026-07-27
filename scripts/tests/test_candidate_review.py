@@ -12,6 +12,7 @@ REVIEW = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-
 MANIFEST = ROOT / "docs/sessions/20260718-metal-model-runtime/candidate-manifest.json"
 HARBOR_LATEST = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727.json"
 HARBOR_8192 = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727-8192.json"
+NIAH_MATRIX = ROOT / "research/baselines/qwen35-niah-20260727-4k8k.json"
 
 
 def test_review_preserves_stale_manifest_and_blocks_promotion() -> None:
@@ -62,3 +63,15 @@ def test_8192_harbor_evidence_is_exact_and_positive() -> None:
     assert document["harbor"]["prompt_tokens"] == 8192
     assert document["harbor"]["context_tokens_exact"] is True
     assert document["harbor"]["thinking_enabled"] is False
+
+
+def test_qwen35_native_matrix_has_real_turbo_rows() -> None:
+    document = json.loads(NIAH_MATRIX.read_text(encoding="utf-8"))
+    assert document["model"].lower().find("qwen3.5") >= 0
+    assert document["lengths"] == [4096, 8192]
+    rows = document["results"]
+    assert len(rows) == 6
+    turbo = [row for row in rows if row["mode"].startswith("turbo_")]
+    assert len(turbo) == 4
+    assert all(row["turbo_layers"] == 6 for row in turbo)
+    assert all(row["compression_effective"] for row in turbo)
