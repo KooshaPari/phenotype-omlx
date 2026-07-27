@@ -178,78 +178,16 @@ dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirro
 behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
 clean native-vs-custom parity run.
 
-### Local-only Harbor provenance (2026-07-26)
+### 2026-07-27 - exact Harbor NIAH generation contract
 
-The canonical `scripts/evals/run_via_harbor.sh` remains the remote-observability
-operator path: it requires both Langfuse credentials and installs the
-`harbor_langfuse:LangfusePlugin`. A separately named local runner is appropriate
-only for evidence collection when remote telemetry must not be emitted. It is not
-a fallback for the canonical path.
+Qwen's deployment guidance documents `chat_template_kwargs: {"enable_thinking": false}` as the
+hard switch for direct responses, and the Qwen3.5 model card explicitly says `/think` and
+`/nothink` are not the supported control surface. The Harbor smoke therefore sends the hard
+switch and records `thinking_enabled=false` in its oracle envelope. With mlx-lm 0.31.3 this
+switch adds 27 chat-template tokens; the prompt builder subtracts that measured overhead so the
+API reports exactly 8192 prompt tokens. Live Apple Container evidence is recorded in
+`artifacts/harbor-qwen35-20260727-8192.json`: reward 1.0, exact needle match, no errors or
+retries, and `context_tokens_exact=true`.
 
-<<<<<<< Updated upstream
-The local runner therefore accepts only the Qwen3.5 NIAH task, requires an explicit
-Qwen3.5 model and an OpenAI endpoint on dedicated `:8766/v1`, invokes Harbor with
-no plugin argument, unsets inherited Langfuse variables, leaves Harbor's `result.json`
-unchanged, and emits a separately named validated EvaluationReport. Its provenance is
-explicit: `telemetry.mode=local_only` and `telemetry.remote_exported=false`; it must
-not contain Langfuse trace/session identifiers. The evidence label is
-`live_verified` only for a completed Harbor result, never for a fabricated report.
-
-### macOS Bash portability (2026-07-26)
-
-`/bin/bash` on the macOS host is Bash 3.2, whereas Homebrew supplies a newer Bash
-on `PATH`. Bash 4's `${parameter,,}` lowercasing expansion therefore cannot be used
-in the local Harbor runner: it fails with `bad substitution` under the shebang's
-system interpreter. The model-policy comparison instead normalizes with portable
-`tr '[:upper:]' '[:lower:]'`. The shell contract test invokes `/bin/bash`
-explicitly, so CI or developer shells that resolve `bash` to Homebrew Bash cannot
-mask a regression. This preserves the Qwen3.5-only policy without adding an
-alternate runtime, plugin, endpoint, or telemetry path.
-
-### Harbor timestamped output discovery (2026-07-26)
-
-Harbor treats `-o` as an output root and writes the completed job under a
-timestamped child directory. The local wrapper originally passed that root
-directly to the provenance converter, which expects a job-level `result.json`.
-That caused an exit status of 2 after a completed Harbor evaluation, without
-altering the underlying result. `resolve_harbor_job_dir` now accepts either a
-job directory or an output root with exactly one immediate completed job. It
-does not recursively scan, and rejects multiple candidates so an operator
-cannot accidentally convert a stale or unrelated result. Python and shell
-contracts cover the actual timestamped shape; the shell contract still proves
-the no-plugin, Qwen3.5-only, dedicated-`:8766`, local-only telemetry path.
-=======
 References: https://github.com/QwenLM/Qwen3/blob/main/docs/source/deployment/vllm.md and
 https://huggingface.co/Qwen/Qwen3.5-35B-A3B-GPTQ-Int4.
-
-### 2026-07-28 - diffusion and recurrent kernel research
-
-The implementation should treat masked/discrete diffusion and continuous flow matching as
-different execution contracts. LLaDA (Large Language Diffusion Models,
-https://arxiv.org/abs/2502.09992), MDLM (https://arxiv.org/abs/2406.07524), and SEDD
-(https://arxiv.org/abs/2310.16834) all require a parallel token-state update plus a confidence or
-score-derived remask policy; a left-to-right attention kernel is not a substitute. LLaDA-MoE
-(https://arxiv.org/abs/2509.24389) combines this with sparse expert routing, so the future fused
-path should preserve an active-token mask into the router rather than materializing inactive
-rows.
-
-Block Diffusion (https://arxiv.org/abs/2503.09573) is the useful bridge for agent workloads: it
-allows block-parallel denoising while retaining an autoregressive boundary. The Metal runtime can
-reuse the existing confidence kernel for block acceptance, but needs a separate block mask and
-rollback contract before claiming lossless speculative decoding. DFlash's public MLX reference
-(https://github.com/bstnxbt/dflash-mlx) is an implementation lead only, not acceptance evidence.
-
-For image/video and other continuous models, DiT-style AdaLN and flow matching remain the native
-contract; the existing `adaln_rms` and `flow_cfg_step` kernels are the right primitives. For
-long-sequence state-space alternatives, Mamba (https://arxiv.org/abs/2312.00752), VMamba
-(https://arxiv.org/abs/2401.10166), and xLSTM-metal (https://github.com/MLXPorts/xLSTM-metal)
-motivate scan/chunk fusion and explicit recurrent-state continuity. Existing Mamba, DeltaNet,
-RWKV, RetNet, and short-convolution kernels cover those operators; future work should benchmark
-chunk sizes and state traffic rather than add another model-specific shader.
-
-Research conclusion: the immediate correctness gap was non-finite diffusion logits. The previous
-shader produced NaN confidence for an all-`-inf` masked row (`-inf - -inf`) and for rows containing
-NaN. The patched shader ignores NaNs, handles tied `+inf` maxima deterministically, and returns
-zero confidence for fully invalid rows. This matches the CPU `softmax_max` contract and gives the
-remask scheduler a deterministic low-confidence signal.
->>>>>>> Stashed changes
