@@ -102,6 +102,10 @@ def run_niah() -> dict:
             {"role": "user", "content": PROMPT},
         ],
         "temperature": 0,
+        # Force mlx-lm's deterministic sequential request path. Without a
+        # seed, mlx-lm 0.31.2 can enter BatchGenerator on a worker thread
+        # before its thread-local GPU stream exists.
+        "seed": 0,
         "max_tokens": 128,
     }
     req = urllib.request.Request(

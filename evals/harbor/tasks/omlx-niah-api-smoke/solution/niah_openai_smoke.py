@@ -102,6 +102,10 @@ def run_niah() -> dict:
             {"role": "user", "content": PROMPT},
         ],
         "temperature": 0,
+        # mlx-lm uses a request with a seed as the deterministic sequential
+        # path. This avoids the 0.31.2 BatchGenerator worker-stream crash and
+        # keeps this one-request NIAH oracle reproducible.
+        "seed": 0,
         "max_tokens": 128,
     }
     req = urllib.request.Request(

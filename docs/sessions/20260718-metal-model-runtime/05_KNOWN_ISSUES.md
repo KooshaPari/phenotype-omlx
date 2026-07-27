@@ -89,3 +89,30 @@ service when stopped, rechecks that it is `running`, and fails with the official
 `scripts/tests/test_apple_container_preflight.sh` passes with a fake stopped-then-running
 service. This addresses the initial XPC prerequisite only; it does not mask or resolve the
 separate MLX `Stream(gpu, 0)` generation failure.
+
+Update 2026-07-26 (forward fix): the Python package floor is now `mlx-lm>=0.31.3`, the
+first release verified to include the server's thread-local stream initialization. The
+one-request NIAH oracle also sends `seed=0`, which selects mlx-lm's deterministic sequential
+path instead of `BatchGenerator`; this is a containment measure for older installed runtimes,
+not Harbor evidence. `scripts/tests/test_niah_openai_smoke.py` asserts the request contract and
+passes. A fresh Harbor run is still required before promotion.
+
+Audit 2026-07-26 (artifact correction): the currently retained Harbor runs are
+`harbor-eval`, `harbor-eval-retry`, `harbor-eval-lan`, and `harbor-eval-patched`; each task
+artifact has `verifier/reward.txt` equal to `0`, and the agent oracle records connection refusal
+or timeout. No `harbor-eval-final` artifact or reward-`1` evidence is present in this checkout.
+Promotion and candidate-manifest refresh therefore remain blocked until a new run emits a
+task-level result with reward `1` and a successful oracle transcript.
+
+Follow-up audit 2026-07-26: the final artifact is present in the Portage worktree (the prior
+correction was scoped to this checkout and is superseded for evidence discovery). The run is
+`worktrees/portage/fix-langsmith-importerror/.runs/harbor-eval-final/2026-07-25__19-32-53`, job
+`c8e0d681-4754-4f94-8b00-7e82c92ee653`, trial `omlx-niah-api-smoke__ooX9Kjs`. It records one
+Apple Container trial using Qwen3.5-0.8B-OptiQ-4bit over the host LAN endpoint, reward `1.0`,
+zero errors, zero retries, and no fallback. `run_full_pipeline.sh` accepts the resulting
+EvalReport with `pass_at_1=1.0` and one `W-EVIDENCE` warning: the cockpit converter omits
+`evidence_label` and consequently defaults the synthesized suite to `reported`. This warning
+must be corrected in the new evidence envelope (explicit `live_verified` provenance); it does
+not invalidate the task-level live Harbor result. The stale `candidate-manifest.json` remains
+unchanged with `evidence_complete=false`; promotion additionally needs a new manifest tied to
+the current HEAD, independent FFI evidence, and candidate review.

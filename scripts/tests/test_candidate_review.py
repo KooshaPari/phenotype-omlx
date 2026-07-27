@@ -1,0 +1,33 @@
+"""Guardrails for the current-head candidate review artifact."""
+
+from __future__ import annotations
+
+import json
+import hashlib
+from pathlib import Path
+
+
+ROOT = Path(__file__).parents[2]
+REVIEW = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-review-20260726.json"
+
+
+def test_review_preserves_stale_manifest_and_blocks_promotion() -> None:
+    document = json.loads(REVIEW.read_text(encoding="utf-8"))
+    assert document["evidence_label"] == "reviewed"
+    assert document["candidate"]["manifest_is_stale"] is True
+    assert document["review"]["verdict"] == "blocked"
+    assert document["review"]["stale_manifest_untouched"] is True
+    assert document["candidate"]["manifest_head"] != document["candidate"]["current_head"]
+
+
+def test_review_records_all_native_evidence() -> None:
+    tests = json.loads(REVIEW.read_text(encoding="utf-8"))["independent_evidence"]["current_native_tests"]
+    assert set(tests) == {"c", "zig", "go", "nim", "mojo"}
+    assert all("passed" in result for result in tests.values())
+
+
+def test_review_canonical_digest_matches() -> None:
+    document = json.loads(REVIEW.read_text(encoding="utf-8"))
+    payload = {key: value for key, value in document.items() if key != "integrity"}
+    canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+    assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
