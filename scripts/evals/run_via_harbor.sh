@@ -96,7 +96,7 @@ case "$MODE" in
       else
         echo "ERROR: OPENAI_BASE_URL required for --niah" >&2
         echo "  Self-host any OpenAI-compatible server and point here, e.g.:" >&2
-        echo "    PYTHONPATH=\"$ROOT/python\${PYTHONPATH:+:\$PYTHONPATH}\" python3 -m omlx_research.harbor_mlx_server --model \$OMLX_READY_MODEL --host 0.0.0.0 --port 8766" >&2
+        echo "    mlx_lm server --model \$OMLX_READY_MODEL --host 0.0.0.0 --port 8766" >&2
         echo "    export OPENAI_BASE_URL=http://\$(ipconfig getifaddr en0):8766/v1" >&2
         exit 2
       fi
@@ -128,7 +128,6 @@ if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
   )
 fi
 if [[ "$MODE" == "niah_8192" ]]; then
-  export NIAH_CONTEXT_TOKENS=8192
   AGENT_ENV_ARGS+=(--ae "NIAH_CONTEXT_TOKENS=8192")
 fi
 

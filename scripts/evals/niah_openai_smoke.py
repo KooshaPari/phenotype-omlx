@@ -22,12 +22,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 NEEDLE = "42-alpha"
-PROMPT = (
+SHORT_PROMPT = (
     "Read the passage and reply with ONLY the secret code (no thinking, no quotes).\n\n"
     f"Passage: Notes about weather and tea. The secret code is {NEEDLE}. "
     "More filler about cats.\n\n"
     "Secret code:"
 )
+
+
+def build_prompt(context_tokens: int) -> str:
+    """Build the short smoke or an exact Qwen3.5-token 8192-token prompt."""
+    if context_tokens <= 0:
+        return SHORT_PROMPT
+    intro = "Read the following passage and reply with ONLY the secret code.\n\n"
+    needle = f"Important context: {NEEDLE}. This fact is critical."
+    fixed_tokens = 26
+    filler_tokens = context_tokens - fixed_tokens
+    if filler_tokens <= 0:
+        raise SystemExit(f"error: NIAH_CONTEXT_TOKENS too small: {context_tokens}")
+    before = (filler_tokens * 3) // 4
+    return intro + (" the" * before) + needle + (" the" * (filler_tokens - before))
 
 
 def _extract_reply(payload: dict) -> str:
@@ -92,6 +106,8 @@ def run_niah() -> dict:
         raise SystemExit(f"error: NIAH smoke requires Qwen3.5 model id (got {model!r})")
 
     key = os.environ.get("OPENAI_API_KEY", "omlx")
+    requested_tokens = int(os.environ.get("NIAH_CONTEXT_TOKENS", "0"))
+    prompt = build_prompt(requested_tokens)
     body = {
         "model": model,
         "messages": [
@@ -99,7 +115,7 @@ def run_niah() -> dict:
                 "role": "system",
                 "content": "Reply with only the secret code. No analysis.",
             },
-            {"role": "user", "content": PROMPT},
+            {"role": "user", "content": prompt},
         ],
         "temperature": 0,
         # Force mlx-lm's deterministic sequential request path. Without a
@@ -129,12 +145,18 @@ def run_niah() -> dict:
         text = json.dumps(payload)[:500]
 
     hit = NEEDLE in (text or "")
+    usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+    prompt_tokens = usage.get("prompt_tokens")
     result = {
         "kind": "omlx_niah_api_smoke",
         "ts": t0.isoformat(),
         "model": model,
         "openai_base_url": base,
         "needle": NEEDLE,
+        "requested_context_tokens": requested_tokens or None,
+        "prompt_tokens": prompt_tokens,
+        "context_tokens_exact": requested_tokens > 0 and prompt_tokens == requested_tokens,
+        "prompt_sha256": __import__("hashlib").sha256(prompt.encode()).hexdigest(),
         "reply": text,
         "exact_match": hit,
         "evidence_class": "live_api" if hit else "live_api_miss",
