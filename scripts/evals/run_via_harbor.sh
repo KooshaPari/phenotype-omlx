@@ -17,6 +17,7 @@
 #   bash scripts/evals/run_via_harbor.sh              # hello-world oracle + Langfuse
 #   bash scripts/evals/run_via_harbor.sh --policy
 #   bash scripts/evals/run_via_harbor.sh --niah
+#   bash scripts/evals/run_via_harbor.sh --niah-8192
 #   bash scripts/evals/run_via_harbor.sh --turbo
 set -euo pipefail
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:${PATH:-}"
@@ -39,6 +40,7 @@ for arg in "$@"; do
       ;;
     --policy) MODE="policy" ;;
     --niah) MODE="niah" ;;
+    --niah-8192) MODE="niah_8192" ;;
     --turbo) MODE="turbo" ;;
     --help|-h)
       sed -n '2,22p' "$0"
@@ -82,7 +84,7 @@ mkdir -p "$OUT"
 case "$MODE" in
   hello) TASK="$PORTAGE_ROOT/examples/tasks/hello-world" ;;
   policy) TASK="$ROOT/evals/harbor/tasks/omlx-qwen35-policy" ;;
-  niah)
+  niah|niah_8192)
     TASK="$ROOT/evals/harbor/tasks/omlx-niah-api-smoke"
     if [[ -z "${OPENAI_BASE_URL:-}" ]]; then
       # Apple Container often cannot resolve host.containers.internal.
@@ -117,13 +119,16 @@ export OPENAI_MODEL="${OPENAI_MODEL:-$OMLX_READY_MODEL}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-omlx}"
 
 AGENT_ENV_ARGS=()
-if [[ "$MODE" == "niah" ]]; then
+if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
   AGENT_ENV_ARGS+=(
     --ae "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
     --ae "OPENAI_API_KEY=${OPENAI_API_KEY}"
     --ae "OPENAI_MODEL=${OPENAI_MODEL}"
     --ae "OMLX_READY_MODEL=${OMLX_READY_MODEL}"
   )
+fi
+if [[ "$MODE" == "niah_8192" ]]; then
+  AGENT_ENV_ARGS+=(--ae "NIAH_CONTEXT_TOKENS=8192")
 fi
 
 cd "$PORTAGE_ROOT"

@@ -13,3 +13,5 @@ fi
 python3 "$SCRIPT"
 test -f /app/niah_answer.txt
 grep -q '42-alpha' /app/niah_answer.txt
+# Persist the structured request/usage contract in Harbor's oracle transcript.
+cat /app/niah_result.json
