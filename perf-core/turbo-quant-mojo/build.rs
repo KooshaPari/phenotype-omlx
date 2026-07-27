@@ -7,6 +7,7 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
+    println!("cargo:rustc-check-cfg=cfg(mojo_native)");
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     let mojo_src = manifest_dir.join("mojo-src").join("turbo_quant.mojo");
@@ -31,6 +32,7 @@ fn main() {
     ];
 
     if let Some(found) = candidates.iter().find(|p| p.exists()) {
+        println!("cargo:rustc-cfg=mojo_native");
         let parent = found.parent().unwrap();
         // Normalize prebuilt Mojo artifacts that were emitted with an absolute
         // temporary install name; otherwise dyld ignores the consumer rpath.
@@ -52,7 +54,10 @@ fn main() {
             let target_path = PathBuf::from(target_dir);
             if let Some(debug_dir) = target_path.ancestors().nth(3) {
                 let _ = std::fs::copy(found, debug_dir.join("libturbo_quant_mojo.dylib"));
-                let _ = std::fs::copy(found, debug_dir.join("deps").join("libturbo_quant_mojo.dylib"));
+                let _ = std::fs::copy(
+                    found,
+                    debug_dir.join("deps").join("libturbo_quant_mojo.dylib"),
+                );
             }
         }
         println!("cargo:info=mojo staticlib found at {}", found.display());

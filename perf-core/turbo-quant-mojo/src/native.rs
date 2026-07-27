@@ -5,11 +5,16 @@
 // and converts with checked arithmetic in `validation`.
 
 use super::MojoQuantizedTensor;
+#[cfg(mojo_native)]
 use crate::validation::{
     usize_to_isize, validate_decode_inputs, validate_encode_inputs, validate_encode_outputs,
 };
+#[cfg(not(mojo_native))]
+use crate::validation::{validate_decode_inputs, validate_encode_inputs};
+#[cfg(mojo_native)]
 use std::os::raw::c_uchar;
 
+#[cfg(mojo_native)]
 extern "C" {
     fn tq_mojo_encode(
         data_addr: isize,
@@ -40,7 +45,7 @@ extern "C" {
     fn tq_mojo_free(address: isize);
 }
 
-#[cfg(feature = "mojo-ffi")]
+#[cfg(all(feature = "mojo-ffi", mojo_native))]
 extern "C" {
     fn tq_gemv_decode(
         weights: *const f32,
@@ -64,6 +69,7 @@ extern "C" {
 /// 3. The successful encode path does NOT disarm or take the guard; the
 ///    Drop runs at end of scope and frees every Mojo buffer exactly once
 ///    after the Rust-owned vectors have been constructed.
+#[cfg(any(mojo_native, test))]
 struct EncodeOutputGuard {
     shape_addr: isize,
     packed_addr: isize,
@@ -71,6 +77,7 @@ struct EncodeOutputGuard {
     zeros_addr: isize,
 }
 
+#[cfg(any(mojo_native, test))]
 impl EncodeOutputGuard {
     fn empty() -> Self {
         Self {
@@ -99,11 +106,13 @@ impl EncodeOutputGuard {
     }
 }
 
+#[cfg(any(mojo_native, test))]
 impl Drop for EncodeOutputGuard {
     fn drop(&mut self) {
         // No early-return: the guard is built so that arming it is the only
         // way to populate addresses. Every drop releases the live positive
         // addresses exactly once.
+        #[cfg(mojo_native)]
         unsafe {
             if Self::addr_should_free(self.shape_addr) {
                 tq_mojo_free(self.shape_addr);
@@ -121,6 +130,7 @@ impl Drop for EncodeOutputGuard {
     }
 }
 
+#[cfg(mojo_native)]
 pub(super) fn mojo_encode(
     data: &[f32],
     bits: u8,
@@ -223,6 +233,7 @@ pub(super) fn mojo_encode(
     })
 }
 
+#[cfg(mojo_native)]
 pub(super) fn mojo_try_decode(
     shape: &[usize],
     packed: &[u8],
@@ -267,7 +278,39 @@ pub(super) fn mojo_try_decode(
     Ok(out)
 }
 
-#[cfg(feature = "mojo-ffi")]
+#[cfg(not(mojo_native))]
+pub(super) fn mojo_encode(
+    data: &[f32],
+    bits: u8,
+    group_size: usize,
+) -> Result<MojoQuantizedTensor, String> {
+    validate_encode_inputs(data.len(), bits, group_size)?;
+    Err("Mojo native library unavailable; build libturbo_quant_mojo.dylib first".to_string())
+}
+
+#[cfg(not(mojo_native))]
+pub(super) fn mojo_try_decode(
+    shape: &[usize],
+    packed: &[u8],
+    scales: &[f32],
+    zeros: &[f32],
+    n: usize,
+    group_size: usize,
+    bits: u8,
+) -> Result<Vec<f32>, String> {
+    validate_decode_inputs(
+        shape,
+        packed.len(),
+        scales.len(),
+        zeros.len(),
+        n,
+        group_size,
+        bits,
+    )?;
+    Err("Mojo native library unavailable; build libturbo_quant_mojo.dylib first".to_string())
+}
+
+#[cfg(all(feature = "mojo-ffi", mojo_native))]
 pub fn mojo_gemv_decode(
     weights: &[f32],
     input: &[f32],

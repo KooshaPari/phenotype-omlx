@@ -109,6 +109,7 @@ pub fn gemv_decode_rust_simd(
 }
 
 mod native;
+#[cfg_attr(not(mojo_native), allow(dead_code))]
 mod validation;
 
 #[cfg(test)]
