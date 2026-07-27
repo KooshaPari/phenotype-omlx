@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).parents[2]
 REVIEW = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-review-20260726.json"
+MANIFEST = ROOT / "docs/sessions/20260718-metal-model-runtime/candidate-manifest.json"
 
 
 def test_review_preserves_stale_manifest_and_blocks_promotion() -> None:
@@ -28,6 +29,17 @@ def test_review_records_all_native_evidence() -> None:
 
 def test_review_canonical_digest_matches() -> None:
     document = json.loads(REVIEW.read_text(encoding="utf-8"))
+    payload = {key: value for key, value in document.items() if key != "integrity"}
+    canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+    assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
+
+
+def test_current_manifest_is_exact_head_and_holds_8192_gate() -> None:
+    document = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    assert document["candidate"]["head"] == "25f0df6b87d0aaf0aab09e492fd2d1b5eb460e30"
+    assert document["candidate"]["freeze_status"] == "current-head-reviewed"
+    assert document["promotion"]["verdict"] == "hold"
+    assert "authorized Qwen3.5 8192-token Harbor run" in document["promotion"]["remaining_gates"]
     payload = {key: value for key, value in document.items() if key != "integrity"}
     canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
     assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
