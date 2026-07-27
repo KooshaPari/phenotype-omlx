@@ -48,18 +48,18 @@
     },
     "polyglot_ffi": "docs/sessions/20260718-metal-model-runtime/artifacts/polyglot-ffi-20260726.json",
     "qwen35_harbor": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727.json",
-    "focused_tests": "6 passed"
+    "qwen35_harbor_8192": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727-8192.json",
+    "focused_tests": "7 passed"
   },
   "promotion": {
-    "verdict": "hold",
-    "reason": "The current evidence proves the smoke/API path and native ABI paths, but not the authorized 8192-token Qwen3.5 run.",
+    "verdict": "review",
+    "reason": "The authorized 8192-token Qwen3.5 Harbor gate is live-verified; full benchmark evidence and final local promotion review remain.",
     "remaining_gates": [
-      "authorized Qwen3.5 8192-token Harbor run",
       "full benchmark evidence envelope with immutable artifact hashes",
       "final local promotion review"
     ]
   },
   "integrity": {
-    "canonical_sha256": "91dc5e74ed5cca45fc3fc12965009edd0b9ddfb00e57512d716b8d5954880330"
+    "canonical_sha256": "9238722e6fc06bf19409d88de4091786385ecf78425b0881f068531651b431bb"
   }
 }

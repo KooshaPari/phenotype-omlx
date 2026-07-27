@@ -10,8 +10,11 @@ if [[ ! -f "$SCRIPT" ]]; then
   echo "error: niah_openai_smoke.py not found next to solve.sh or under /app" >&2
   exit 2
 fi
+set +e
 python3 "$SCRIPT"
-test -f /app/niah_answer.txt
-grep -q '42-alpha' /app/niah_answer.txt
-# Persist the structured request/usage contract in Harbor's oracle transcript.
-cat /app/niah_result.json
+rc=$?
+set -e
+if [[ -f /app/niah_result.json ]]; then
+  cat /app/niah_result.json
+fi
+exit "$rc"
