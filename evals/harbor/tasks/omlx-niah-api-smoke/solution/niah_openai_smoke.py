@@ -37,7 +37,9 @@ def build_prompt(context_tokens: int) -> str:
     intro = "Read the following passage and reply with ONLY the secret code.\n\n"
     needle = f"Important context: {NEEDLE}. This fact is critical."
     fixed_tokens = 26
-    chat_template_overhead = 25
+    # With Qwen3.5 non-thinking chat-template kwargs, mlx-lm adds 27 tokens
+    # (the kwargs alter the generation marker by two tokens).
+    chat_template_overhead = 27
     filler_tokens = context_tokens - fixed_tokens - chat_template_overhead
     if filler_tokens <= 0:
         raise SystemExit(f"error: NIAH_CONTEXT_TOKENS too small: {context_tokens}")
@@ -119,11 +121,17 @@ def run_niah() -> dict:
             {"role": "user", "content": prompt},
         ],
         "temperature": 0,
+        # Qwen3.5's supported hard switch prevents a long reasoning trace
+        # from consuming the bounded completion before the needle answer.
+        "chat_template_kwargs": {"enable_thinking": False},
         # mlx-lm uses a request with a seed as the deterministic sequential
         # path. This avoids the 0.31.2 BatchGenerator worker-stream crash and
         # keeps this one-request NIAH oracle reproducible.
         "seed": 0,
-        "max_tokens": 128,
+        # Qwen3.5 may emit a short reasoning preamble before the answer on
+        # long-context requests; keep enough budget to reach the code while
+        # retaining a bounded deterministic completion.
+        "max_tokens": 512,
     }
     req = urllib.request.Request(
         url,
@@ -155,7 +163,8 @@ def run_niah() -> dict:
         "openai_base_url": base,
         "needle": NEEDLE,
         "requested_context_tokens": requested_tokens or None,
-        "chat_template_overhead_tokens": 25 if requested_tokens else None,
+        "chat_template_overhead_tokens": 27 if requested_tokens else None,
+        "thinking_enabled": False,
         "prompt_tokens": prompt_tokens,
         "context_tokens_exact": requested_tokens > 0 and prompt_tokens == requested_tokens,
         "prompt_sha256": __import__("hashlib").sha256(prompt.encode()).hexdigest(),

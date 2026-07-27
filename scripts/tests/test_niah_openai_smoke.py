@@ -37,6 +37,7 @@ def test_niah_request_forces_sequential_mlx_path(monkeypatch):
     assert result["exact_match"] is True
     assert captured["body"]["seed"] == 0
     assert captured["body"]["temperature"] == 0
+    assert captured["body"]["chat_template_kwargs"] == {"enable_thinking": False}
 
 
 def test_exact_8192_prompt_contract(monkeypatch):
