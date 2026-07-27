@@ -47,7 +47,7 @@
       }
     },
     "polyglot_ffi": "docs/sessions/20260718-metal-model-runtime/artifacts/polyglot-ffi-20260726.json",
-    "qwen35_harbor": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260726.json",
+    "qwen35_harbor": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727.json",
     "focused_tests": "6 passed"
   },
   "promotion": {
