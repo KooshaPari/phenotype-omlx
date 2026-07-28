@@ -211,3 +211,19 @@ Hardening decision: `router_topk` now rejects NaN and +/-infinity before sorting
 matching the Metal facade's finite-logit contract. This prevents non-finite weights from
 reaching grouped GEMM and is covered by a regression test. No benchmark or model-quality claim
 is made from this contract hardening alone.
+
+### 2026-07-28 - MLA and agentic decode kernel targets
+
+DeepSeek's official V2 implementation and FlashInfer's MLA API both treat latent-cache
+attention as a distinct path rather than dense GQA. The hardware-centric MLA study further
+motivates minimizing cache traversals and keeping latent/RoPE dimensions explicit:
+
+- https://github.com/deepseek-ai/DeepSeek-V2
+- https://docs.flashinfer.ai/api/attention.html
+- https://arxiv.org/abs/2506.02523
+
+The MLA Metal shader now uses a numerically stable online log-sum-exp recurrence. It computes
+each cache-entry score once, updates the running maximum/norm, and accumulates values in the
+same pass. A source contract test pins the one-traversal invariant. This is a kernel-level
+optimization only: native Metal compilation, device parity, and Qwen3.5 end-to-end dispatch
+remain separate evidence gates and must not be inferred from the source test.
