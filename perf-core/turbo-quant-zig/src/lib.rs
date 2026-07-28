@@ -101,7 +101,7 @@ mod native {
 
     #[cfg(feature = "zig")]
     extern "C" {
-        fn _tq_zig_encode(
+        fn tq_zig_encode(
             data_ptr: *const f32,
             n: usize,
             bits: c_uchar,
@@ -116,7 +116,7 @@ mod native {
             out_zeros_len: *mut usize,
         ) -> bool;
 
-        fn _tq_zig_decode(
+        fn tq_zig_decode(
             packed_ptr: *const u8,
             packed_len: usize,
             scales_ptr: *const f32,
@@ -127,7 +127,7 @@ mod native {
             out_ptr: *mut f32,
         );
 
-        fn _tq_zig_free(ptr: *mut c_void, size: usize);
+        fn tq_zig_free(ptr: *mut c_void, size: usize);
 
         // Native ABI v1 entries from the Zig kernel.
         fn tq_abi_encode(req: *const RustEncodeRequest) -> RustEncodeResult;
@@ -150,7 +150,7 @@ mod native {
         let mut zeros_len: usize = 0;
 
         let ok = unsafe {
-            _tq_zig_encode(
+            tq_zig_encode(
                 data.as_ptr(),
                 data.len(),
                 bits,
@@ -175,19 +175,19 @@ mod native {
         let zeros = unsafe { std::slice::from_raw_parts(zeros_ptr, zeros_len) }.to_vec();
 
         unsafe {
-            _tq_zig_free(
+            tq_zig_free(
                 shape_ptr as *mut c_void,
                 shape_len * std::mem::size_of::<usize>(),
             );
-            _tq_zig_free(
+            tq_zig_free(
                 packed_ptr as *mut c_void,
                 packed_len * std::mem::size_of::<u8>(),
             );
-            _tq_zig_free(
+            tq_zig_free(
                 scales_ptr as *mut c_void,
                 scales_len * std::mem::size_of::<f32>(),
             );
-            _tq_zig_free(
+            tq_zig_free(
                 zeros_ptr as *mut c_void,
                 zeros_len * std::mem::size_of::<f32>(),
             );
@@ -230,7 +230,7 @@ mod native {
             zeros.as_ptr()
         };
         unsafe {
-            _tq_zig_decode(
+            tq_zig_decode(
                 packed_ptr,
                 packed.len(),
                 scales_ptr,
