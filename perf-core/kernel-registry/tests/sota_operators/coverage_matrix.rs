@@ -71,7 +71,7 @@ const MATRIX_FAMILIES: &[(&str, &[&str])] = &[
     ("DeepSeekMtp", &["mtp_speculative", "mtp_acceptance"]),
     ("Bonsai", &["bonsai"]),
     ("Qwen", &["qwen", "deltanet"]),
-    ("QwenAgentic", &["qwen3_coder", "qwen3_instruct", "qwen2_5_coder"]),
+    ("QwenAgentic", &["qwen3_5_coder", "qwen3_instruct"]),
     ("LLaDA", &["diffusion", "llama_dream"]),
     ("Dream", &["diffusion", "llama_dream"]),
     ("MoD", &["mod_routing", "mod_"]),

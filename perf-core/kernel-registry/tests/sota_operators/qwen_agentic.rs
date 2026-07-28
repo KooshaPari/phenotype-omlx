@@ -1,6 +1,6 @@
 //! Qwen agentic operator suite — covers the agentic-coding variants of the
 //! Qwen model family: Qwen3-Coder tool calling, Qwen3-Instruct chat-template
-//! selection, and Qwen2.5-Coder edge-case prompts. Complements `bonsai_qwen.rs`
+//! selection, and Qwen3.5-Coder edge-case prompts. Complements `bonsai_qwen.rs`
 //! (which pins the *weight* and *recurrent* sides of Qwen) by exercising the
 //! *agentic* layer — the prompt-decoding and tool-binding surface the runtime
 //! relies on when Qwen drives a multi-step coding task.
@@ -15,7 +15,7 @@
 //!     — under ChatML/Base/Custom templates, the deterministic policy must
 //!     pick the candidate bound to the requested template, and the choice
 //!     must be stable across calls.
-//!   * `qwen2_5_coder_edge_case_prompts_select_stably` — register
+//!   * `qwen3_5_coder_edge_case_prompts_select_stably` — register
 //!     candidates for edge-case prompts (long context, multi-line code,
 //!     special tokens); verify the selector returns a stable Chosen
 //!     decision across runs.
@@ -256,7 +256,7 @@ fn qwen3_instruct_chat_template_deterministic_picks_correct_binding() {
 // ---- Edge-case prompts ---------------------------------------------------
 
 #[test]
-fn qwen2_5_coder_edge_case_prompts_select_stably() {
+fn qwen3_5_coder_edge_case_prompts_select_stably() {
     // (a) Long-context fixture: 2048 whitespace-separated identifiers.
     let long = (0..2048usize)
         .map(|i| if i > 0 { format!(" tok_{i:04}") } else { format!("tok_{i:04}") })
@@ -310,7 +310,7 @@ fn qwen2_5_coder_edge_case_prompts_select_stably() {
         &full_capabilities(), NOW_UNIX_MS);
     let first_id = match &decision {
         SelectionDecision::Chosen { candidate, .. } => candidate.id,
-        other => panic!("expected Chosen for Qwen2.5-Coder edge-case selector, got {other:?}"),
+        other => panic!("expected Chosen for Qwen3.5-Coder edge-case selector, got {other:?}"),
     };
 
     // (e) Stability: 3 repeated selector calls must return the same id.
@@ -319,13 +319,13 @@ fn qwen2_5_coder_edge_case_prompts_select_stably() {
             SelectionPolicy::Deterministic { prefer_lower_p95: true },
             &fresh_capabilities(), NOW_UNIX_MS);
         assert_eq!(d.selected(), Some(first_id),
-            "Qwen2.5-Coder edge-case selector must pick the same candidate across repeated runs");
+            "Qwen3.5-Coder edge-case selector must pick the same candidate across repeated runs");
     }
 
     // (f) Trace surfaces the chosen id.
     let trace = reg.explain(&decision);
     assert_eq!(trace.selected, Some(first_id),
-        "ExecutionTrace must surface the chosen Qwen2.5-Coder edge-case candidate");
+        "ExecutionTrace must surface the chosen Qwen3.5-Coder edge-case candidate");
 
     // (g) Prompt-byte independence: none of the three fixtures wrap a
     // `<tool_call>` envelope, so the tool-call parser must return None
