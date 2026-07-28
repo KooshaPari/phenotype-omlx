@@ -175,19 +175,19 @@ mod native {
         let zeros = unsafe { std::slice::from_raw_parts(zeros_ptr, zeros_len) }.to_vec();
 
         unsafe {
-            _tq_zig_free(
+            tq_zig_free(
                 shape_ptr as *mut c_void,
                 shape_len * std::mem::size_of::<usize>(),
             );
-            _tq_zig_free(
+            tq_zig_free(
                 packed_ptr as *mut c_void,
                 packed_len * std::mem::size_of::<u8>(),
             );
-            _tq_zig_free(
+            tq_zig_free(
                 scales_ptr as *mut c_void,
                 scales_len * std::mem::size_of::<f32>(),
             );
-            _tq_zig_free(
+            tq_zig_free(
                 zeros_ptr as *mut c_void,
                 zeros_len * std::mem::size_of::<f32>(),
             );
