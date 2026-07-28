@@ -40,7 +40,7 @@ def test_review_canonical_digest_matches() -> None:
 
 def test_current_manifest_is_exact_head_and_holds_8192_gate() -> None:
     document = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert document["candidate"]["head"] == "25f0df6b87d0aaf0aab09e492fd2d1b5eb460e30"
+    assert document["candidate"]["head"] == "0acc9e3d289dd45002d11e6ef1ae2a5224812d4f"
     assert document["candidate"]["freeze_status"] == "current-head-reviewed"
     assert document["promotion"]["verdict"] == "review"
     assert "authorized Qwen3.5 8192-token Harbor run" not in document["promotion"]["remaining_gates"]
