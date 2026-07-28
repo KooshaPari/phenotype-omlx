@@ -191,3 +191,23 @@ retries, and `context_tokens_exact=true`.
 
 References: https://github.com/QwenLM/Qwen3/blob/main/docs/source/deployment/vllm.md and
 https://huggingface.co/Qwen/Qwen3.5-35B-A3B-GPTQ-Int4.
+
+### 2026-07-28 - MoE, ternary, and non-Qwen reference gap matrix
+
+The current `model-kernels` and `metal-runtime` layers have scalar contracts plus optional
+Metal implementations for top-k routing, assignment-list grouped GEMM, and packed 2-bit
+ternary GEMM. The following references sharpen the optimization target without changing the
+Qwen3.5-only production model policy:
+
+| Family/reference | Useful systems implication | Current coverage | Gap / next experiment |
+|---|---|---|---|
+| [ToMoE](https://arxiv.org/html/2501.15316v1) | Fixed-budget top-1 MLP routing, deterministic structural selection, and load regularization | top-k router + capacity buckets | expose route/load histograms and benchmark top-1 dispatch separately from top-2 |
+| [LFM2](https://arxiv.org/abs/2511.23404) | Hardware-in-the-loop hybrid short-convolution/GQA and an 8.3B/1.5B-active MoE reference | recurrent and MoE kernel families exist | add decode-shaped grouped-GEMM measurements at one-token and short-prefill regimes |
+| [ZAYA1-8B](https://arxiv.org/abs/2605.05365) | 700M-active/8B-total MoE with bounded recurrent test-time state | ZAYA and LFM contracts/tests exist | keep bounded-state routing and expert-load telemetry separate from dense Qwen3.5 evidence |
+| [Ternary Bonsai 8B](https://huggingface.co/prism-ml/Ternary-Bonsai-8B-mlx-2bit) | 2-bit packed ternary weights with MLX/Metal deployment | packed CPU and Metal GEMM paths exist | verify group-scale layout parity; benchmark zero-elision and byte-aligned K tails |
+| [Scaling Laws and Efficient Inference for Ternary LMs](https://aclanthology.org/2025.acl-long.1294/) | Ternary quality/performance trade-offs must be measured, not inferred from byte reduction | byte-level pack/unpack tests | add quality/perplexity envelopes before promoting ternary kernels |
+
+Hardening decision: `router_topk` now rejects NaN and +/-infinity before sorting or softmax,
+matching the Metal facade's finite-logit contract. This prevents non-finite weights from
+reaching grouped GEMM and is covered by a regression test. No benchmark or model-quality claim
+is made from this contract hardening alone.

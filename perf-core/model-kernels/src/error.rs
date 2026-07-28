@@ -46,6 +46,12 @@ pub enum KernelError {
     #[error("capacity_factor must be > 0, got {got}")]
     BadCapacityFactor { got: f32 },
 
+    /// A routing or kernel input contained NaN or infinity.  Rejecting these
+    /// before sorting/softmax keeps the scalar router's contract aligned with
+    /// the Metal facade and prevents NaN weights from reaching expert GEMMs.
+    #[error("non-finite value in {what} at index {index}")]
+    NonFiniteValue { what: &'static str, index: usize },
+
     /// A row / column / index referenced inside a MoE dispatch plan was
     /// out of range.
     #[error("expert index {got} outside [0, {num_experts})")]
