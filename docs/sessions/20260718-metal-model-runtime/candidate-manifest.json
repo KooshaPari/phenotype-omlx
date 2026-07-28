@@ -3,7 +3,7 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "recovery/phenotype-omlx-local-20260726",
-    "head": "25f0df6b87d0aaf0aab09e492fd2d1b5eb460e30",
+    "head": "0acc9e3d289dd45002d11e6ef1ae2a5224812d4f",
     "base": "67ce0a03c1ee71e984f09225d50518fa81a21dd5",
     "freeze_status": "current-head-reviewed",
     "evidence_complete": false
@@ -28,7 +28,7 @@
     ],
     "todo_fr_omlx_poly_001": "removed",
     "working_tree_at_review": "clean",
-    "review_commit": "25f0df6b"
+    "review_commit": "0acc9e3d"
   },
   "verification": {
     "workspace": {
@@ -51,16 +51,17 @@
     "qwen35_harbor_8192": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727-8192.json",
     "qwen35_niah_matrix": "research/baselines/qwen35-niah-20260727-4k8k.json",
     "qwen35_niah_16k": "research/baselines/qwen35-niah-20260727-16k-paired.json",
-    "focused_tests": "7 passed"
+    "focused_tests": "12 passed; cargo test --workspace green"
   },
   "promotion": {
     "verdict": "review",
-    "reason": "The authorized 8192-token Qwen3.5 Harbor gate and 4K/8K/16K native cache matrices are live-verified; final local promotion review remains.",
+    "reason": "The authorized 8192-token Qwen3.5 Harbor gate and 4K/8K/16K native cache matrices are live-verified; the canonical full benchmark envelope is not yet positive, and final local promotion review remains.",
     "remaining_gates": [
+      "full benchmark evidence envelope",
       "final local promotion review"
     ]
   },
   "integrity": {
-    "canonical_sha256": "4a6dc0ae71d87940ab4cd9c58462dc47d537c4612e6aa500c4b2cd8c1a1081f8"
+    "canonical_sha256": "0d52c82f6d70af41a5cfc7afc88de96b56ccdee88fee014e00236d5dd353fa93"
   }
 }
