@@ -180,3 +180,7 @@ Qwen3.5 acceptance remain open; no live workload was run under the overload/cras
 Update 2026-07-29b (trajectory state): confidence/entropy/momentum/convergence state is now
 implemented and tested in Rust; `diffusion_trajectory_update_f32` is included in the 20/20
 Xcode-beta source bundle. This still does not prove device execution, parity, or model quality.
+
+Update 2026-07-29c (plan integration): `StateKind::DiffusionTrajectory` is now available for
+serialized model plans. Its focused Cargo validation was stopped when unrelated concurrent Rust
+builds saturated the host; this is a validation backlog item, not a promoted runtime result.
