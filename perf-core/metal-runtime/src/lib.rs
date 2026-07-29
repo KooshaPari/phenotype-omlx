@@ -44,6 +44,7 @@ pub mod deltanet;
 pub mod diffusion_confidence;
 pub mod diffusion_dispatch;
 pub mod diffusion_dispatch_metal;
+pub mod diffusion_parity;
 pub mod diffusion_state;
 pub mod dispatch;
 pub mod error;
@@ -89,6 +90,7 @@ pub use diffusion_dispatch_metal::DiffusionDispatchError;
 pub use diffusion_dispatch_metal::{
     diffusion_active_compact_metal, diffusion_remask_metal, diffusion_trajectory_metal,
 };
+pub use diffusion_parity::{compare_f32, compare_u32, compare_u8, DiffusionParityError};
 pub use diffusion_state::{DiffusionStateLayout, DiffusionStateLayoutError};
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};

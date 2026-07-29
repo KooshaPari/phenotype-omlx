@@ -196,3 +196,7 @@ buffer binding and device dispatch remain open.
 Update 2026-07-29f (Metal bindings): feature-gated bindings for active compaction, remask, and
 trajectory now compile with the Metal feature and fail closed on shape or command-buffer errors.
 They have not been invoked against a device; parity and Qwen3.5 evidence remain open.
+
+Update 2026-07-29g (parity oracle): host-side comparison helpers now reject shape drift and
+enforce explicit `f32` tolerances for native diffusion outputs. Focused tests pass 2/2; this is
+an oracle contract, not device evidence.

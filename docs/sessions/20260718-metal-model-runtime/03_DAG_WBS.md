@@ -142,6 +142,10 @@ Status update 2026-07-29f: feature-gated Metal bindings now expose all three cat
 with strict shape checks, shared buffer construction, thread-grid dispatch, and command-buffer
 status errors. `cargo check -p metal-runtime --features metal` passes; no device call was made.
 
+Status update 2026-07-29g: the host parity oracle now compares compacted values/positions, masks,
+and floating-point trajectory outputs with explicit shape and tolerance errors. Focused parity
+tests pass 2/2; device parity remains intentionally uninvoked.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep
