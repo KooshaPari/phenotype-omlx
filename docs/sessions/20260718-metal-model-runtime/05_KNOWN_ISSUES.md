@@ -188,3 +188,7 @@ dispatch remain open and are not implied by this plan-level test.
 Update 2026-07-29d (runtime layout): `DiffusionStateLayout` now makes the mixed `f32`/`uchar`
 trajectory allocation explicit and rejects zero-token and `usize` overflow cases. Focused tests
 pass 2/2; this is an allocation contract, not device execution evidence.
+
+Update 2026-07-29e (dispatch plan): `DiffusionDispatchPlan` now fixes stage ordering and the
+token-sized grid before any Metal command encoder is touched. Focused tests pass 2/2; actual
+buffer binding and device dispatch remain open.
