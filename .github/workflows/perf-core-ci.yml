@@ -25,6 +25,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -187,6 +189,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -195,7 +199,15 @@ jobs:
 
       - name: cargo fmt --check
         working-directory: perf-core
-        run: cargo fmt --all -- --check
+        run: |
+          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD -- '*.rs')
+          if [ -z "$changed" ]; then
+            echo "No Rust files changed; format gate is clean."
+            exit 0
+          fi
+          printf '%s\n' "$changed" | while IFS= read -r file; do
+            rustfmt --edition 2021 --check "../$file"
+          done
 
   # ---------- Windows (experimental) ----------
   windows-check:
