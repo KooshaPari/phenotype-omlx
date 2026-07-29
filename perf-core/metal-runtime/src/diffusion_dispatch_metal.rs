@@ -17,6 +17,7 @@ pub enum DiffusionDispatchError {
     Metal(String),
 }
 
+#[cfg(all(feature = "metal", target_os = "macos"))]
 fn validate_len(
     what: &'static str,
     got: usize,
