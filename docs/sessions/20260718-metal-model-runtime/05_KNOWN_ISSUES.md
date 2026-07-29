@@ -139,3 +139,9 @@ sources for registry-mapped operators in reference mode and tests that each cata
 non-empty and kernel-shaped. This removes the previous source-free stub as the only reference
 artifact, but does not claim device compilation or execution; production mode remains
 fail-closed until a real Metal compiler/artifact path is wired and verified.
+
+Update 2026-07-29 (toolchain verification): the installed Xcode-beta Metal toolchain compiled
+all 17 checked-in shaders and linked a combined `metal-runtime.metallib` through
+`scripts/build_metal_runtime_bundle.sh`. This proves source/toolchain compilation only; the
+artifact is not yet allowlisted or dispatched on a live model, and its temporary hash is not a
+promotion baseline.
