@@ -182,5 +182,5 @@ implemented and tested in Rust; `diffusion_trajectory_update_f32` is included in
 Xcode-beta source bundle. This still does not prove device execution, parity, or model quality.
 
 Update 2026-07-29c (plan integration): `StateKind::DiffusionTrajectory` is now available for
-serialized model plans. Its focused Cargo validation was stopped when unrelated concurrent Rust
-builds saturated the host; this is a validation backlog item, not a promoted runtime result.
+serialized model plans. Isolated Cargo validation passes (1/1); runtime allocation and device
+dispatch remain open and are not implied by this plan-level test.
