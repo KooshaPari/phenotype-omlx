@@ -4,9 +4,11 @@
 //! concrete function names. Keeping the mapping here makes the boundary
 //! auditable and prevents wrappers from silently drifting from checked-in MSL.
 
-use crate::compile::shader_catalog::source_for_tag;
 use crate::{ArtifactError, MetallibArtifact, MetallibLoader};
 use thiserror::Error;
+
+#[cfg(test)]
+use crate::compile::shader_catalog::source_for_tag;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeKernelSpec {

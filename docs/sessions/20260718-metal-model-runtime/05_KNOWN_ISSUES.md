@@ -166,3 +166,8 @@ device loaded or executed any function.
 Update 2026-07-29 (verified bundle binding): `NativeKernelBundle` now loads a manifest-approved
 `.metallib` and resolves only known tag/function pairs. Invalid manifests, unallowlisted files,
 and unknown tags fail before any Metal device call; native dispatch remains the next gate.
+
+Update 2026-07-29 (cache integration): the Bonsai ternary, MoE router/grouped GEMM, and
+diffusion-confidence wrappers now resolve Metal function names through the native catalog before
+entering the shared pipeline cache. `cargo check -p metal-runtime --features metal` passes;
+device command encoding remains unexercised.
