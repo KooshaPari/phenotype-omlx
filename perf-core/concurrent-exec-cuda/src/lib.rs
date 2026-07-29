@@ -141,7 +141,15 @@ pub mod loader {
 
     pub type KernelHandle = *mut std::ffi::c_void;
 
-    /// `libcudart.so` on Linux, `cudart64_12.dll` on Windows.
+    /// Windows CUDA runtime names in descending major-version order.
+    ///
+    /// CUDA 13 no longer bundles the display driver, and a host may retain a
+    /// CUDA 12 runtime for a separate build. Probe both names instead of
+    /// hard-coding one toolkit version; the selected library is still proven
+    /// by subsequent kernel-symbol resolution and device smoke tests.
+    pub const WINDOWS_CUDART_CANDIDATES: &[&str] = &["cudart64_13.dll", "cudart64_12.dll"];
+
+    /// `libcudart.so` on Linux, or the first available candidate on Windows.
     pub fn open_runtime() -> Result<libloading::Library, LoaderError> {
         #[cfg(target_os = "macos")]
         {
@@ -159,10 +167,16 @@ pub mod loader {
         }
         #[cfg(all(target_os = "windows", feature = "cuda"))]
         {
-            unsafe {
-                libloading::Library::new("cudart64_12.dll")
-                    .map_err(|e| LoaderError::DlOpen(e.to_string()))
+            let mut errors = Vec::new();
+            for name in WINDOWS_CUDART_CANDIDATES {
+                // SAFETY: each candidate is an OS-managed CUDA runtime name;
+                // the handle is kept alive by the returned Library.
+                match unsafe { libloading::Library::new(name) } {
+                    Ok(library) => return Ok(library),
+                    Err(error) => errors.push(format!("{name}: {error}")),
+                }
             }
+            Err(LoaderError::DlOpen(errors.join("; ")))
         }
     }
 
@@ -217,4 +231,17 @@ pub mod loader {
         KernelHandle,            // function handle
         *const std::ffi::c_void, // kernel args (packed by driver)
     ) -> i32;
+
+    #[cfg(test)]
+    mod tests {
+        use super::WINDOWS_CUDART_CANDIDATES;
+
+        #[test]
+        fn windows_runtime_probe_prefers_cuda_13_then_12() {
+            assert_eq!(
+                WINDOWS_CUDART_CANDIDATES,
+                &["cudart64_13.dll", "cudart64_12.dll"]
+            );
+        }
+    }
 }
