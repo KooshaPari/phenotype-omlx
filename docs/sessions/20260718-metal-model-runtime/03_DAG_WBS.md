@@ -96,3 +96,7 @@ the overload-safe lane.
 Selector reachability now covers the Bonsai ternary path and grouped-MoE matmul path, so these
 families can reach catalogued native source during reference compilation. Runtime execution is
 still gated on verified artifact loading and live device dispatch.
+
+The selector-to-function-name catalog is now explicit and tested for all currently catalogued
+native sources (MoE router/dispatch, Bonsai ternary, diffusion confidence, attention, and
+recurrent families). Unknown tags fail closed before a Metal lookup.

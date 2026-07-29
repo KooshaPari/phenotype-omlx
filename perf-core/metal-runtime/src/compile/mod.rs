@@ -30,7 +30,7 @@
 mod budget;
 mod compiler;
 mod msl_stub;
-mod shader_catalog;
+pub(crate) mod shader_catalog;
 
 #[cfg(test)]
 mod tests;
