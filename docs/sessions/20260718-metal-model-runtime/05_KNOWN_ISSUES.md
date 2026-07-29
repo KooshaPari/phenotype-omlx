@@ -192,3 +192,7 @@ pass 2/2; this is an allocation contract, not device execution evidence.
 Update 2026-07-29e (dispatch plan): `DiffusionDispatchPlan` now fixes stage ordering and the
 token-sized grid before any Metal command encoder is touched. Focused tests pass 2/2; actual
 buffer binding and device dispatch remain open.
+
+Update 2026-07-29f (Metal bindings): feature-gated bindings for active compaction, remask, and
+trajectory now compile with the Metal feature and fail closed on shape or command-buffer errors.
+They have not been invoked against a device; parity and Qwen3.5 evidence remain open.
