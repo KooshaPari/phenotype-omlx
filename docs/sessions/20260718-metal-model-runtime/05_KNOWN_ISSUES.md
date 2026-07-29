@@ -145,3 +145,10 @@ all 17 checked-in shaders and linked a combined `metal-runtime.metallib` through
 `scripts/build_metal_runtime_bundle.sh`. This proves source/toolchain compilation only; the
 artifact is not yet allowlisted or dispatched on a live model, and its temporary hash is not a
 promotion baseline.
+
+Update 2026-07-29 (artifact contract): `scripts/manifest_metal_runtime_artifacts.py` now emits
+sorted, compact JSON containing every compiled `.metallib` filename and SHA-256 digest. The
+Rust `ArtifactAllowlist::from_manifest_json` parser validates the strict basename/extension and
+64-hex digest contract before handing bytes to `MetallibLoader`. Focused artifact tests pass;
+the generated manifest is still build output, not promotion evidence, until it is stored in an
+immutable candidate envelope tied to a current commit and verified on-device.
