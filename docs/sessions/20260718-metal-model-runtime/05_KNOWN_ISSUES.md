@@ -200,3 +200,7 @@ They have not been invoked against a device; parity and Qwen3.5 evidence remain 
 Update 2026-07-29g (parity oracle): host-side comparison helpers now reject shape drift and
 enforce explicit `f32` tolerances for native diffusion outputs. Focused tests pass 2/2; this is
 an oracle contract, not device evidence.
+
+Update 2026-07-29h (device fixture): an ignored feature-gated integration test now exercises
+compaction, remask, and trajectory against a caller-supplied verified metallib/manifest. The
+test compiles but was not executed; live device parity remains open.
