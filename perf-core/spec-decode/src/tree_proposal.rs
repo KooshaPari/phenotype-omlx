@@ -464,7 +464,7 @@ mod tests {
             probability_threshold: 0.01,
         };
         let trees = create_parallel_trees(0, Vec::new(), &config);
-        assert!(trees.len() <= MAX_PARALLEL_BRANCHES);
+        assert_eq!(trees.len(), 1);
         assert_eq!(trees[0].depth, 0);
     }
 

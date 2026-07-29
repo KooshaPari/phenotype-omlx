@@ -1,6 +1,6 @@
 //! Concurrent execution plan for LatentMAS / TiDAR / JetSpec / SSD.
 
-use crate::{ExecBackend, ExecRequest, ExecResult, JobError};
+use crate::{ExecBackend, ExecRequest, ExecResult, GovernorConfig, JobError, ResourceGovernor};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -59,6 +59,7 @@ pub struct Scheduler {
     pub queue_capacity: usize,
     pub max_fanout: usize,
     pub job_timeout: Duration,
+    pub governor: ResourceGovernor,
     pub backends: HashMap<AgentId, Arc<dyn ExecBackend>>,
     tx: mpsc::Sender<Job>,
 }
@@ -85,12 +86,16 @@ impl Scheduler {
         let queue_capacity = queue_capacity.max(1);
         let max_fanout = max_fanout.max(1);
         let (tx, rx) = mpsc::channel(queue_capacity);
+        let mut governor_config = GovernorConfig::for_concurrency(max_concurrency);
+        governor_config.max_queue = queue_capacity;
+        governor_config.acquire_timeout = job_timeout.max(Duration::from_millis(1));
         let s = Self {
             strategy,
             max_concurrency: Arc::new(Semaphore::new(max_concurrency.max(1))),
             queue_capacity,
             max_fanout,
             job_timeout: job_timeout.max(Duration::from_millis(1)),
+            governor: ResourceGovernor::new(governor_config),
             backends: HashMap::new(),
             tx,
         };
@@ -140,11 +145,10 @@ pub async fn fan_out(
         let id = id.clone();
         let backend = backend.clone();
         let permit = scheduler
-            .max_concurrency
-            .clone()
-            .acquire_owned()
+            .governor
+            .acquire(&payload)
             .await
-            .map_err(|_| JobError::Backend("permit".into()))?;
+            .map_err(|error| JobError::Backend(error.to_string()))?;
         let p = payload.clone();
         let deadline = scheduler.job_timeout;
         let h = tokio::spawn(async move {
