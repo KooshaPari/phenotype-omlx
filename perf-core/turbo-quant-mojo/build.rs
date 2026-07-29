@@ -23,15 +23,53 @@ fn main() {
         return;
     }
 
-    // Search for pre-built Mojo shared library in common locations.
-    let candidates = [
-        manifest_dir.join("libturbo_quant_mojo.dylib"),
-        out_dir.join("libturbo_quant_mojo.dylib"),
-        PathBuf::from("/usr/local/lib/libturbo_quant_mojo.dylib"),
-        PathBuf::from("/opt/homebrew/lib/libturbo_quant_mojo.dylib"),
+    // Search for a pre-built Mojo shared library using the target's native
+    // filename.  The old implementation only looked for `.dylib`, which
+    // silently disabled the native path on Linux and Windows.  Worse, a
+    // stale artifact could enable `mojo_native` while not carrying the ABI
+    // expected by `native.rs`, producing unresolved `tq_mojo_*` symbols at
+    // link time.  Keep discovery conservative: no artifact means the
+    // fail-closed Rust stub remains active.
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let shared_names: &[&str] = match target_os.as_str() {
+        "macos" => &["libturbo_quant_mojo.dylib"],
+        "linux" => &["libturbo_quant_mojo.so"],
+        "windows" => &["turbo_quant_mojo.dll", "libturbo_quant_mojo.dll"],
+        _ => &[],
+    };
+    let search_dirs = [
+        manifest_dir.clone(),
+        out_dir,
+        PathBuf::from("/usr/local/lib"),
+        PathBuf::from("/opt/homebrew/lib"),
     ];
+    let candidates: Vec<PathBuf> = search_dirs
+        .iter()
+        .flat_map(|dir| shared_names.iter().map(move |name| dir.join(name)))
+        .collect();
 
-    if let Some(found) = candidates.iter().find(|p| p.exists()) {
+    // On Windows a DLL alone cannot satisfy the Rust linker.  Require the
+    // matching import library before enabling the native cfg; otherwise the
+    // package intentionally stays on its validated fail-closed path.
+    let import_library = if target_os == "windows" {
+        let import_names: &[&str] = if target_env == "msvc" {
+            &["turbo_quant_mojo.lib", "libturbo_quant_mojo.lib"]
+        } else {
+            &["libturbo_quant_mojo.dll.a", "turbo_quant_mojo.dll.a"]
+        };
+        search_dirs
+            .iter()
+            .flat_map(|dir| import_names.iter().map(move |name| dir.join(name)))
+            .find(|path| path.exists())
+    } else {
+        None
+    };
+
+    if let Some(found) = candidates
+        .iter()
+        .find(|p| p.exists() && (target_os != "windows" || import_library.is_some()))
+    {
         println!("cargo:rustc-cfg=mojo_native");
         let parent = found.parent().unwrap();
         // Normalize prebuilt Mojo artifacts that were emitted with an absolute
@@ -44,20 +82,33 @@ fn main() {
                 .status();
         }
         println!("cargo:rustc-link-search=native={}", parent.display());
+        if let Some(import) = import_library.as_ref() {
+            if let Some(import_parent) = import.parent() {
+                if import_parent != parent {
+                    println!("cargo:rustc-link-search=native={}", import_parent.display());
+                }
+            }
+        }
         println!("cargo:rustc-link-lib=dylib=turbo_quant_mojo");
         // Tests and downstream binaries must resolve the colocated Mojo ABI at runtime.
         // Keep this explicit and local rather than requiring a machine-global DYLD path.
-        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", parent.display());
+        if target_os != "windows" {
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", parent.display());
+        }
 
         // Copy dylib to target/debug and target/debug/deps so downstream test binaries find it.
         if let Ok(target_dir) = env::var("OUT_DIR") {
             let target_path = PathBuf::from(target_dir);
             if let Some(debug_dir) = target_path.ancestors().nth(3) {
-                let _ = std::fs::copy(found, debug_dir.join("libturbo_quant_mojo.dylib"));
-                let _ = std::fs::copy(
-                    found,
-                    debug_dir.join("deps").join("libturbo_quant_mojo.dylib"),
-                );
+                let file_name = found.file_name().unwrap();
+                let _ = std::fs::copy(found, debug_dir.join(file_name));
+                let _ = std::fs::copy(found, debug_dir.join("deps").join(file_name));
+                if let Some(import) = import_library.as_ref() {
+                    if let Some(import_name) = import.file_name() {
+                        let _ = std::fs::copy(import, debug_dir.join(import_name));
+                        let _ = std::fs::copy(import, debug_dir.join("deps").join(import_name));
+                    }
+                }
             }
         }
         println!("cargo:info=mojo staticlib found at {}", found.display());
