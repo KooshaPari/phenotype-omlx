@@ -101,7 +101,8 @@ pub use mla_cache::MlaCacheError;
 pub use moe::grouped_gemm_metal;
 pub use moe::{MoeRouter, MoeRouterError, MoeRouterOutput, MoeShape};
 pub use native_catalog::{
-    all_specs as native_kernel_specs, spec_for_tag as native_kernel_spec, NativeKernelSpec,
+    all_specs as native_kernel_specs, spec_for_tag as native_kernel_spec, NativeKernelBinding,
+    NativeKernelBundle, NativeKernelError, NativeKernelSpec,
 };
 pub use pipeline::{Pipeline, StepOutput};
 #[cfg(all(feature = "metal", target_os = "macos"))]

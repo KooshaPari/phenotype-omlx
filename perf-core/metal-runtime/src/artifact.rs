@@ -112,6 +112,17 @@ impl MetallibLoader {
         }
     }
 
+    /// Construct a loader directly from the canonical build manifest.
+    pub fn from_manifest_json(
+        root: impl Into<PathBuf>,
+        manifest: &[u8],
+    ) -> Result<Self, ArtifactError> {
+        Ok(Self::new(
+            root,
+            ArtifactAllowlist::from_manifest_json(manifest)?,
+        ))
+    }
+
     pub fn load(&self, name: &str) -> Result<MetallibArtifact, ArtifactError> {
         validate_name(name)?;
         let expected = self
