@@ -5,6 +5,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::native_catalog::spec_for_tag;
 use crate::MetallibArtifact;
 
 struct MetalCache {
@@ -75,4 +76,20 @@ pub(crate) fn with_pipeline<T>(
         let pipeline = cache.pipelines.get(&key).expect("pipeline initialized");
         operation(&device, &queue, pipeline)
     })
+}
+
+/// Resolve a stable selector tag to its checked-in Metal function name before
+/// entering the shared pipeline cache. This keeps high-value native wrappers
+/// (MoE, diffusion, Bonsai) on the same fail-closed catalog as the compiler.
+pub(crate) fn with_catalogued_pipeline<T>(
+    artifact: &MetallibArtifact,
+    tag: &str,
+    operation: impl FnOnce(
+        &metal::Device,
+        &metal::CommandQueue,
+        &metal::ComputePipelineState,
+    ) -> Result<T, String>,
+) -> Result<T, String> {
+    let spec = spec_for_tag(tag).ok_or_else(|| format!("unknown native kernel tag '{tag}'"))?;
+    with_pipeline(artifact, spec.function, operation)
 }

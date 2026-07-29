@@ -103,3 +103,7 @@ recurrent families). Unknown tags fail closed before a Metal lookup.
 
 `NativeKernelBundle` now joins the manifest-approved artifact to this catalog, producing a
 verified `(artifact, tag, function)` binding suitable for the eventual Metal command encoder.
+
+The three highest-leverage native leaves now consume that binding at cache lookup time: Bonsai
+ternary GEMM, MoE router/grouped GEMM, and diffusion confidence. This removes function-name
+drift at the final pre-dispatch boundary.
