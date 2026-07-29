@@ -51,7 +51,7 @@ jobs:
         run: |
           ZIG_VERSION="0.14.1"
           ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
-          curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
+          curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
           sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
           rm "${ZIG_ARCHIVE}"
 
@@ -103,7 +103,7 @@ jobs:
         run: |
           ZIG_VERSION="0.14.1"
           ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
-          curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
+          curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
           sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
           rm "${ZIG_ARCHIVE}"
 
@@ -157,7 +157,7 @@ jobs:
         run: |
           ZIG_VERSION="0.14.1"
           ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
-          curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
+          curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
           sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
           rm "${ZIG_ARCHIVE}"
 
@@ -260,12 +260,11 @@ jobs:
       - name: Install Zig (Ubuntu)
         if: runner.os == 'Linux'
         run: |
-          sudo snap install zig --classic --channel=latest/stable || {
-            ZIG_VERSION="0.14.1"
-            curl -sL "https://ziglang.org/download/${ZIG_VERSION}/zig-linux-x86_64-${ZIG_VERSION}.tar.xz" -o /tmp/zig.tar.xz
-            sudo tar -xf /tmp/zig.tar.xz -C /usr/local --strip-components=1
-            rm /tmp/zig.tar.xz
-          }
+          ZIG_VERSION="0.14.1"
+          ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+          curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
+          sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
+          rm "${ZIG_ARCHIVE}"
 
       - name: Verify Zig
         run: zig version
