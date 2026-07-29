@@ -100,8 +100,9 @@ pub use diffusion_self_verify::{
 };
 pub use diffusion_state::{DiffusionStateLayout, DiffusionStateLayoutError};
 pub use diffusion_telemetry::{
-    DiffusionDispatchReport, DiffusionDispatchTelemetry, DiffusionStageOutcome,
-    DiffusionStageTelemetry, DiffusionTelemetryError,
+    DiffusionDispatchDecision, DiffusionDispatchReport, DiffusionDispatchTelemetry,
+    DiffusionRollbackPolicy, DiffusionStageOutcome, DiffusionStageTelemetry,
+    DiffusionTelemetryError,
 };
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};

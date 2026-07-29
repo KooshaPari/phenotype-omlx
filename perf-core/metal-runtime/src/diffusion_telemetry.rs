@@ -113,6 +113,47 @@ pub struct DiffusionDispatchTelemetry {
 /// Report is the stable semantic name used by envelope producers.
 pub type DiffusionDispatchReport = DiffusionDispatchTelemetry;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffusionDispatchDecision {
+    Promote,
+    Fallback,
+    Rollback,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiffusionRollbackPolicy {
+    pub max_failed_stages: usize,
+    pub allow_fallback: bool,
+}
+
+impl DiffusionRollbackPolicy {
+    pub const fn bounded(max_failed_stages: usize, allow_fallback: bool) -> Option<Self> {
+        if max_failed_stages == 0 {
+            None
+        } else {
+            Some(Self {
+                max_failed_stages,
+                allow_fallback,
+            })
+        }
+    }
+
+    pub fn decide(&self, report: &DiffusionDispatchTelemetry) -> DiffusionDispatchDecision {
+        let failed = report
+            .stages
+            .iter()
+            .filter(|stage| !stage.completed)
+            .count();
+        if failed == 0 && !report.used_fallback() {
+            DiffusionDispatchDecision::Promote
+        } else if self.allow_fallback && failed <= self.max_failed_stages {
+            DiffusionDispatchDecision::Fallback
+        } else {
+            DiffusionDispatchDecision::Rollback
+        }
+    }
+}
+
 impl DiffusionDispatchTelemetry {
     /// Build telemetry for a dispatch plan without touching Metal.
     ///
@@ -286,6 +327,27 @@ mod tests {
         .unwrap();
         assert!(outcome.output.is_none());
         assert_eq!(outcome.telemetry.error.as_deref(), Some("native failure"));
+    }
+
+    #[test]
+    fn rollback_policy_is_bounded_and_explicit() {
+        assert!(DiffusionRollbackPolicy::bounded(0, true).is_none());
+        let policy = DiffusionRollbackPolicy::bounded(1, true).unwrap();
+        let report = DiffusionDispatchTelemetry::new([
+            stage(DiffusionStage::ActiveCompact, 0.1),
+            DiffusionStageTelemetry::from_result(
+                DiffusionStage::Remask,
+                0.2,
+                Err::<(), _>("native unavailable"),
+                true,
+            )
+            .unwrap(),
+            stage(DiffusionStage::Trajectory, 0.1),
+        ])
+        .unwrap();
+        assert_eq!(policy.decide(&report), DiffusionDispatchDecision::Fallback);
+        let strict = DiffusionRollbackPolicy::bounded(0 + 1, false).unwrap();
+        assert_eq!(strict.decide(&report), DiffusionDispatchDecision::Rollback);
     }
 
     #[test]

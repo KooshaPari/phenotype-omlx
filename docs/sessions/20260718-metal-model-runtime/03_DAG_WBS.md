@@ -174,6 +174,11 @@ remasking, and trajectory update. Each records elapsed time and preserves native
 telemetry envelope rather than silently converting it to success. Host telemetry tests pass 6/6;
 the Xcode-beta Metal fixture target compiles with `--no-run`; no command buffer was executed.
 
+Status update 2026-07-29n: the ignored fixture now consumes those outcome APIs and aggregates all
+three stage envelopes through the validated dispatch plan before parity checks. Added a bounded
+`Promote`/`Fallback`/`Rollback` policy with explicit failed-stage limits. Seven focused telemetry
+tests pass; fixture validation remains compile-only.
+
 Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
 validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
 `[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
