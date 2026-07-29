@@ -133,6 +133,11 @@ Status update 2026-07-29d: `metal-runtime::DiffusionStateLayout` now defines the
 allocation contract: three `f32` arrays plus mask/converged byte arrays, with checked arithmetic.
 Focused layout tests pass 2/2; command-encoder binding remains the next runtime boundary.
 
+Status update 2026-07-29e: `DiffusionDispatchPlan` now binds that layout to the ordered
+`active_compact -> remask -> trajectory` stages and exposes the token-sized thread grid. Focused
+dispatch-plan tests pass 2/2; it is a deterministic command-encoder input contract, not device
+execution evidence.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep
