@@ -204,3 +204,7 @@ an oracle contract, not device evidence.
 Update 2026-07-29h (device fixture): an ignored feature-gated integration test now exercises
 compaction, remask, and trajectory against a caller-supplied verified metallib/manifest. The
 test compiles but was not executed; live device parity remains open.
+
+Update 2026-07-29i (dispatch input hardening): the diffusion Metal entry points now reject
+non-finite or out-of-range confidence/remask thresholds before buffer allocation or command
+encoding. Two isolated host tests pass; device execution and Qwen3.5 acceptance remain open.
