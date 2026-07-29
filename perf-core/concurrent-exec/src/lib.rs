@@ -19,6 +19,10 @@ pub enum JobError {
     Timeout,
     #[error("cancelled")]
     Cancelled,
+    #[error("scheduler queue is full")]
+    QueueFull,
+    #[error("fan-out exceeds scheduler limit ({0})")]
+    FanoutLimit(usize),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

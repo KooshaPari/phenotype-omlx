@@ -126,3 +126,10 @@ baseline/TurboKV run then completed with 6/24 compressed layers and effective by
 evidence. The first
 matrix attempt without explicit `sitecustomize` loading is retained as `live_failed`; the
 benchmark now imports the audited layer explicitly.
+
+Update 2026-07-29 (safety hardening): no model, Harbor, NIAH, or evaluation workload was
+launched in this turn because the operator reported system overload/crashes. The
+`concurrent-exec` scheduler now uses bounded admission instead of an unbounded queue, rejects
+fan-out above a configured cap, and applies per-job deadlines. Focused deterministic unit tests
+cover queue overflow, timeout, and fan-out rejection. Native Metal/device parity remains a
+separate gate and was intentionally not exercised here.

@@ -4,7 +4,9 @@ use crate::{ExecBackend, ExecRequest, ExecResult, JobError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{mpsc, Semaphore};
+use tokio::time::timeout;
 
 /// Identifier for a single execution agent (e.g. "latentmas.solver").
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -54,16 +56,41 @@ pub enum ScheduleStrategy {
 pub struct Scheduler {
     pub strategy: ScheduleStrategy,
     pub max_concurrency: Arc<Semaphore>,
+    pub queue_capacity: usize,
+    pub max_fanout: usize,
+    pub job_timeout: Duration,
     pub backends: HashMap<AgentId, Arc<dyn ExecBackend>>,
-    tx: mpsc::UnboundedSender<Job>,
+    tx: mpsc::Sender<Job>,
 }
 
 impl Scheduler {
     pub fn new(strategy: ScheduleStrategy, max_concurrency: usize) -> (Self, JobReceiver) {
-        let (tx, rx) = mpsc::unbounded_channel();
+        let concurrency = max_concurrency.max(1);
+        Self::with_limits(
+            strategy,
+            concurrency,
+            concurrency.saturating_mul(4).max(1),
+            concurrency.saturating_mul(2).max(1),
+            Duration::from_secs(30),
+        )
+    }
+
+    pub fn with_limits(
+        strategy: ScheduleStrategy,
+        max_concurrency: usize,
+        queue_capacity: usize,
+        max_fanout: usize,
+        job_timeout: Duration,
+    ) -> (Self, JobReceiver) {
+        let queue_capacity = queue_capacity.max(1);
+        let max_fanout = max_fanout.max(1);
+        let (tx, rx) = mpsc::channel(queue_capacity);
         let s = Self {
             strategy,
             max_concurrency: Arc::new(Semaphore::new(max_concurrency.max(1))),
+            queue_capacity,
+            max_fanout,
+            job_timeout: job_timeout.max(Duration::from_millis(1)),
             backends: HashMap::new(),
             tx,
         };
@@ -77,15 +104,18 @@ impl Scheduler {
 
     /// Dispatch a job (returns immediately; results come through JobReceiver).
     pub fn dispatch(&self, job: Job) -> Result<(), JobError> {
-        self.tx
-            .send(job)
-            .map_err(|_| JobError::Backend("scheduler channel closed".into()))
+        self.tx.try_send(job).map_err(|error| match error {
+            mpsc::error::TrySendError::Full(_) => JobError::QueueFull,
+            mpsc::error::TrySendError::Closed(_) => {
+                JobError::Backend("scheduler channel closed".into())
+            }
+        })
     }
 }
 
 /// Pull-based job receiver.
 pub struct JobReceiver {
-    rx: mpsc::UnboundedReceiver<Job>,
+    rx: mpsc::Receiver<Job>,
 }
 
 impl JobReceiver {
@@ -102,6 +132,9 @@ pub async fn fan_out(
     scheduler: &Scheduler,
     payload: ExecRequest,
 ) -> Result<Vec<ExecResult>, JobError> {
+    if scheduler.backends.len() > scheduler.max_fanout {
+        return Err(JobError::FanoutLimit(scheduler.max_fanout));
+    }
     let mut handles = Vec::new();
     for (id, backend) in &scheduler.backends {
         let id = id.clone();
@@ -113,9 +146,12 @@ pub async fn fan_out(
             .await
             .map_err(|_| JobError::Backend("permit".into()))?;
         let p = payload.clone();
+        let deadline = scheduler.job_timeout;
         let h = tokio::spawn(async move {
             let _p = permit;
-            backend.run(id, p).await
+            timeout(deadline, backend.run(id, p))
+                .await
+                .map_err(|_| JobError::Timeout)?
         });
         handles.push(h);
     }
@@ -125,6 +161,73 @@ pub async fn fan_out(
         outs.push(r);
     }
     Ok(outs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use std::sync::Arc;
+    use tokio::time::sleep;
+
+    struct SlowBackend;
+
+    #[async_trait]
+    impl ExecBackend for SlowBackend {
+        async fn run(&self, _id: AgentId, _req: ExecRequest) -> Result<ExecResult, JobError> {
+            sleep(Duration::from_millis(20)).await;
+            Ok(ExecResult::empty())
+        }
+    }
+
+    fn request() -> ExecRequest {
+        ExecRequest {
+            prompt: "bounded".into(),
+            max_tokens: 1,
+            temperature: 0.0,
+            stop: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn dispatch_rejects_queue_overflow() {
+        let (scheduler, _receiver) = Scheduler::with_limits(
+            ScheduleStrategy::RoundRobin,
+            1,
+            1,
+            1,
+            Duration::from_secs(1),
+        );
+        let job = || Job {
+            id: 1,
+            agent: AgentId::new("a"),
+            payload: request(),
+        };
+        assert!(scheduler.dispatch(job()).is_ok());
+        assert!(matches!(
+            scheduler.dispatch(job()),
+            Err(JobError::QueueFull)
+        ));
+    }
+
+    #[tokio::test]
+    async fn fan_out_enforces_timeout_and_fanout_cap() {
+        let (mut scheduler, _receiver) =
+            Scheduler::with_limits(ScheduleStrategy::FanOut, 1, 2, 1, Duration::from_millis(1));
+        scheduler = scheduler.register(AgentId::new("a"), Arc::new(SlowBackend));
+        let result = fan_out(&scheduler, request()).await;
+        assert!(matches!(result, Err(JobError::Timeout)));
+
+        let (scheduler, _receiver) =
+            Scheduler::with_limits(ScheduleStrategy::FanOut, 2, 2, 1, Duration::from_secs(1));
+        let scheduler = scheduler
+            .register(AgentId::new("a"), Arc::new(SlowBackend))
+            .register(AgentId::new("b"), Arc::new(SlowBackend));
+        assert!(matches!(
+            fan_out(&scheduler, request()).await,
+            Err(JobError::FanoutLimit(1))
+        ));
+    }
 }
 
 /// Like `fan_out`, but returns the first `Some(...)` result.
