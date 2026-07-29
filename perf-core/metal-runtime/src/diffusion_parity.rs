@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum DiffusionParityError {
     #[error("{what} length mismatch: expected {expected}, got {got}")]
     Length {
