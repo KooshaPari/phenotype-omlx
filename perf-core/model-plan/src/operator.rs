@@ -68,10 +68,7 @@ pub enum OperatorKind {
         top_k: usize,
     },
     /// Multi-channel selective state-space scan (Mamba-family linear recurrence).
-    MambaScan {
-        state_dim: usize,
-        chunk_size: usize,
-    },
+    MambaScan { state_dim: usize, chunk_size: usize },
     /// RetNet retention-state update.
     RetNet {
         num_heads: usize,
@@ -178,7 +175,11 @@ mod tests {
             "moe_router"
         );
         assert_eq!(
-            OperatorKind::MambaScan { state_dim: 16, chunk_size: 64 }.tag(),
+            OperatorKind::MambaScan {
+                state_dim: 16,
+                chunk_size: 64
+            }
+            .tag(),
             "mamba_scan"
         );
     }
@@ -201,8 +202,15 @@ mod tests {
                 num_experts: 64,
                 top_k: 8,
             },
-            OperatorKind::MambaScan { state_dim: 16, chunk_size: 64 },
-            OperatorKind::RetNet { num_heads: 4, head_dim: 16, chunk_size: 64 },
+            OperatorKind::MambaScan {
+                state_dim: 16,
+                chunk_size: 64,
+            },
+            OperatorKind::RetNet {
+                num_heads: 4,
+                head_dim: 16,
+                chunk_size: 64,
+            },
             OperatorKind::Arange,
             OperatorKind::Copy,
             OperatorKind::Add,
