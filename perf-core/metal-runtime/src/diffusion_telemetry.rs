@@ -6,7 +6,7 @@
 
 use thiserror::Error;
 
-use crate::{DiffusionDispatchPlan, DiffusionStage};
+use crate::DiffusionStage;
 
 /// Outcome of one diffusion stage.
 #[derive(Debug, Clone, PartialEq)]
@@ -16,39 +16,6 @@ pub struct DiffusionStageTelemetry {
     pub completed: bool,
     pub error: Option<String>,
     pub fallback: bool,
-}
-
-/// A stage result paired with the validated telemetry needed for promotion.
-///
-/// `output` is absent when the native command failed; the failure remains in
-/// `telemetry.error` so callers cannot accidentally treat fallback as success.
-#[derive(Debug, Clone, PartialEq)]
-pub struct DiffusionStageOutcome<T> {
-    pub output: Option<T>,
-    pub telemetry: DiffusionStageTelemetry,
-}
-
-impl<T> DiffusionStageOutcome<T> {
-    pub fn from_result<E: std::fmt::Display>(
-        stage: DiffusionStage,
-        elapsed_ms: f64,
-        result: Result<T, E>,
-        fallback: bool,
-    ) -> Result<Self, DiffusionTelemetryError> {
-        let telemetry = DiffusionStageTelemetry::from_result(
-            stage,
-            elapsed_ms,
-            result
-                .as_ref()
-                .map(|_| ())
-                .map_err(|error| error.to_string()),
-            fallback,
-        )?;
-        Ok(Self {
-            output: result.ok(),
-            telemetry,
-        })
-    }
 }
 
 impl DiffusionStageTelemetry {
@@ -85,22 +52,6 @@ impl DiffusionStageTelemetry {
             fallback,
         })
     }
-
-    /// Convert a command result into a validated stage envelope.
-    ///
-    /// The conversion is deliberately independent of Metal so command
-    /// encoders and host-only tests share one failure/fallback policy.
-    pub fn from_result<E: std::fmt::Display>(
-        stage: DiffusionStage,
-        elapsed_ms: f64,
-        result: Result<(), E>,
-        fallback: bool,
-    ) -> Result<Self, DiffusionTelemetryError> {
-        match result {
-            Ok(()) => Self::new(stage, elapsed_ms, true, None, fallback),
-            Err(error) => Self::new(stage, elapsed_ms, false, Some(error.to_string()), fallback),
-        }
-    }
 }
 
 /// Validated report for the fixed three-stage diffusion dispatch plan.
@@ -113,71 +64,7 @@ pub struct DiffusionDispatchTelemetry {
 /// Report is the stable semantic name used by envelope producers.
 pub type DiffusionDispatchReport = DiffusionDispatchTelemetry;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiffusionDispatchDecision {
-    Promote,
-    Fallback,
-    Rollback,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DiffusionRollbackPolicy {
-    pub max_failed_stages: usize,
-    pub allow_fallback: bool,
-}
-
-impl DiffusionRollbackPolicy {
-    pub const fn bounded(max_failed_stages: usize, allow_fallback: bool) -> Option<Self> {
-        if max_failed_stages == 0 {
-            None
-        } else {
-            Some(Self {
-                max_failed_stages,
-                allow_fallback,
-            })
-        }
-    }
-
-    pub fn decide(&self, report: &DiffusionDispatchTelemetry) -> DiffusionDispatchDecision {
-        let failed = report
-            .stages
-            .iter()
-            .filter(|stage| !stage.completed)
-            .count();
-        if failed == 0 && !report.used_fallback() {
-            DiffusionDispatchDecision::Promote
-        } else if self.allow_fallback && failed <= self.max_failed_stages {
-            DiffusionDispatchDecision::Fallback
-        } else {
-            DiffusionDispatchDecision::Rollback
-        }
-    }
-}
-
 impl DiffusionDispatchTelemetry {
-    /// Build telemetry for a dispatch plan without touching Metal.
-    ///
-    /// The plan is treated as the source of truth for stage order and state
-    /// layout.  This keeps host-side reports honest: a caller cannot attach
-    /// timings to a hand-built or stale plan and accidentally emit a valid
-    /// looking envelope.
-    pub fn for_plan(
-        plan: &DiffusionDispatchPlan,
-        stages: [DiffusionStageTelemetry; 3],
-    ) -> Result<Self, DiffusionTelemetryError> {
-        let expected = DiffusionDispatchPlan::for_tokens(plan.tokens).map_err(|_| {
-            DiffusionTelemetryError::InvalidPlan {
-                tokens: plan.tokens,
-            }
-        })?;
-        if plan.layout != expected.layout || plan.stages != expected.stages {
-            return Err(DiffusionTelemetryError::InvalidPlan {
-                tokens: plan.tokens,
-            });
-        }
-        Self::new(stages)
-    }
-
     /// Build a report and derive its total duration from the stage durations.
     pub fn new(stages: [DiffusionStageTelemetry; 3]) -> Result<Self, DiffusionTelemetryError> {
         let expected = [
@@ -233,14 +120,11 @@ pub enum DiffusionTelemetryError {
     },
     #[error("total elapsed_ms must be finite, got {total_elapsed_ms}")]
     InvalidTotal { total_elapsed_ms: f64 },
-    #[error("dispatch plan is invalid for {tokens} tokens")]
-    InvalidPlan { tokens: usize },
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::DiffusionStateLayout;
 
     fn stage(stage: DiffusionStage, elapsed_ms: f64) -> DiffusionStageTelemetry {
         DiffusionStageTelemetry::completed(stage, elapsed_ms).unwrap()
@@ -293,93 +177,5 @@ mod tests {
         assert!(!failed.completed);
         assert!(failed.fallback);
         assert_eq!(failed.error.as_deref(), Some("native dispatch unavailable"));
-    }
-
-    #[test]
-    fn result_conversion_preserves_failure_and_fallback() {
-        let failed = DiffusionStageTelemetry::from_result(
-            DiffusionStage::Remask,
-            2.5,
-            Err("command buffer failed"),
-            true,
-        )
-        .unwrap();
-        assert!(!failed.completed);
-        assert!(failed.fallback);
-        assert_eq!(failed.error.as_deref(), Some("command buffer failed"));
-
-        let completed = DiffusionStageTelemetry::from_result(
-            DiffusionStage::Remask,
-            1.0,
-            Ok::<(), &str>(()),
-            false,
-        )
-        .unwrap();
-        assert!(completed.completed);
-        assert!(completed.error.is_none());
-
-        let outcome = DiffusionStageOutcome::from_result(
-            DiffusionStage::ActiveCompact,
-            0.5,
-            Err::<u32, _>("native failure"),
-            false,
-        )
-        .unwrap();
-        assert!(outcome.output.is_none());
-        assert_eq!(outcome.telemetry.error.as_deref(), Some("native failure"));
-    }
-
-    #[test]
-    fn rollback_policy_is_bounded_and_explicit() {
-        assert!(DiffusionRollbackPolicy::bounded(0, true).is_none());
-        let policy = DiffusionRollbackPolicy::bounded(1, true).unwrap();
-        let report = DiffusionDispatchTelemetry::new([
-            stage(DiffusionStage::ActiveCompact, 0.1),
-            DiffusionStageTelemetry::from_result(
-                DiffusionStage::Remask,
-                0.2,
-                Err::<(), _>("native unavailable"),
-                true,
-            )
-            .unwrap(),
-            stage(DiffusionStage::Trajectory, 0.1),
-        ])
-        .unwrap();
-        assert_eq!(policy.decide(&report), DiffusionDispatchDecision::Fallback);
-        let strict = DiffusionRollbackPolicy::bounded(0 + 1, false).unwrap();
-        assert_eq!(strict.decide(&report), DiffusionDispatchDecision::Rollback);
-    }
-
-    #[test]
-    fn plan_report_binds_layout_without_execution() {
-        let plan = DiffusionDispatchPlan::for_tokens(8).unwrap();
-        let report = DiffusionDispatchTelemetry::for_plan(
-            &plan,
-            [
-                stage(DiffusionStage::ActiveCompact, 0.25),
-                stage(DiffusionStage::Remask, 0.5),
-                stage(DiffusionStage::Trajectory, 0.75),
-            ],
-        )
-        .unwrap();
-        assert_eq!(report.total_elapsed_ms, 1.5);
-    }
-
-    #[test]
-    fn plan_report_rejects_stale_layout_or_stage_plan() {
-        let mut plan = DiffusionDispatchPlan::for_tokens(8).unwrap();
-        plan.layout = DiffusionStateLayout::for_tokens(16).unwrap();
-        let result = DiffusionDispatchTelemetry::for_plan(
-            &plan,
-            [
-                stage(DiffusionStage::ActiveCompact, 0.1),
-                stage(DiffusionStage::Remask, 0.1),
-                stage(DiffusionStage::Trajectory, 0.1),
-            ],
-        );
-        assert!(matches!(
-            result,
-            Err(DiffusionTelemetryError::InvalidPlan { tokens: 8 })
-        ));
     }
 }
