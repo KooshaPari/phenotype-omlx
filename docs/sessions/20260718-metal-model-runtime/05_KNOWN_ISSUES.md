@@ -184,3 +184,7 @@ Xcode-beta source bundle. This still does not prove device execution, parity, or
 Update 2026-07-29c (plan integration): `StateKind::DiffusionTrajectory` is now available for
 serialized model plans. Isolated Cargo validation passes (1/1); runtime allocation and device
 dispatch remain open and are not implied by this plan-level test.
+
+Update 2026-07-29d (runtime layout): `DiffusionStateLayout` now makes the mixed `f32`/`uchar`
+trajectory allocation explicit and rejects zero-token and `usize` overflow cases. Focused tests
+pass 2/2; this is an allocation contract, not device execution evidence.

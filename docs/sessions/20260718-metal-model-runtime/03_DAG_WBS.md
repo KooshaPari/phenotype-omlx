@@ -129,6 +129,10 @@ Status update 2026-07-29c: `StateKind::DiffusionTrajectory` now gives the plan l
 persistent slot for confidence/entropy/momentum/convergence metadata. Isolated validation now
 passes (`state_kind_tag_for_each_variant`, 1/1); no runtime workload was started.
 
+Status update 2026-07-29d: `metal-runtime::DiffusionStateLayout` now defines the mixed-dtype
+allocation contract: three `f32` arrays plus mask/converged byte arrays, with checked arithmetic.
+Focused layout tests pass 2/2; command-encoder binding remains the next runtime boundary.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep
