@@ -98,10 +98,18 @@ pub fn deltanet_step_metal_two_pass(
     {
         return Err(DeltaNetError::BadShape);
     }
-    let (next, out, qb) =
-        crate::metal_cache::with_pipeline(artifact, "deltanet_state_f32", |device, queue, pipeline| {
+    let (next, out, qb) = crate::metal_cache::with_pipeline(
+        artifact,
+        "deltanet_state_f32",
+        |device, queue, pipeline| {
             let sh = MTLResourceOptions::StorageModeShared;
-            let b = |d: &[f32]| device.new_buffer_with_data(d.as_ptr().cast::<c_void>(), std::mem::size_of_val(d) as u64, sh);
+            let b = |d: &[f32]| {
+                device.new_buffer_with_data(
+                    d.as_ptr().cast::<c_void>(),
+                    std::mem::size_of_val(d) as u64,
+                    sh,
+                )
+            };
             let qb = b(q);
             let kb = b(k);
             let vb = b(v);
@@ -121,7 +129,10 @@ pub fn deltanet_step_metal_two_pass(
             let n = head_dim as u32;
             e.set_bytes(5, 4, (&n as *const u32).cast());
             let total = (head_dim * head_dim) as u64;
-            e.dispatch_threads(MTLSize::new(total, 1, 1), MTLSize::new(total.min(1024), 1, 1));
+            e.dispatch_threads(
+                MTLSize::new(total, 1, 1),
+                MTLSize::new(total.min(1024), 1, 1),
+            );
             e.end_encoding();
             c.commit();
             c.wait_until_completed();
@@ -129,8 +140,9 @@ pub fn deltanet_step_metal_two_pass(
                 return Err(format!("state command buffer status {:?}", c.status()));
             }
             Ok((next, out, qb))
-        })
-        .map_err(DeltaNetError::Metal)?;
+        },
+    )
+    .map_err(DeltaNetError::Metal)?;
 
     crate::metal_cache::with_pipeline(artifact, "deltanet_output_f32", |_, queue, pipeline| {
         let c = queue.new_command_buffer();
@@ -142,7 +154,10 @@ pub fn deltanet_step_metal_two_pass(
         let n = head_dim as u32;
         e.set_bytes(3, 4, (&n as *const u32).cast());
         let threads = head_dim as u64;
-        e.dispatch_threads(MTLSize::new(threads, 1, 1), MTLSize::new(threads.min(1024), 1, 1));
+        e.dispatch_threads(
+            MTLSize::new(threads, 1, 1),
+            MTLSize::new(threads.min(1024), 1, 1),
+        );
         e.end_encoding();
         c.commit();
         c.wait_until_completed();
@@ -150,7 +165,10 @@ pub fn deltanet_step_metal_two_pass(
             return Err(format!("output command buffer status {:?}", c.status()));
         }
         unsafe {
-            state.copy_from_slice(std::slice::from_raw_parts(next.contents().cast(), state.len()));
+            state.copy_from_slice(std::slice::from_raw_parts(
+                next.contents().cast(),
+                state.len(),
+            ));
             Ok(std::slice::from_raw_parts(out.contents().cast(), head_dim).to_vec())
         }
     })
