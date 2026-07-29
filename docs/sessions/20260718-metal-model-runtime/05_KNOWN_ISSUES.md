@@ -133,3 +133,9 @@ launched in this turn because the operator reported system overload/crashes. The
 fan-out above a configured cap, and applies per-job deadlines. Focused deterministic unit tests
 cover queue overflow, timeout, and fan-out rejection. Native Metal/device parity remains a
 separate gate and was intentionally not exercised here.
+
+Update 2026-07-29 (source catalog): `metal-runtime` now assembles checked-in Metal shader
+sources for registry-mapped operators in reference mode and tests that each catalog entry is
+non-empty and kernel-shaped. This removes the previous source-free stub as the only reference
+artifact, but does not claim device compilation or execution; production mode remains
+fail-closed until a real Metal compiler/artifact path is wired and verified.
