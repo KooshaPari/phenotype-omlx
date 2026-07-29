@@ -116,6 +116,11 @@ drift at the final pre-dispatch boundary.
       -> remask scheduler
       -> bounded block-diffusion self-verification
 
+Status update 2026-07-29: active-position compaction and remask now have Rust oracle contracts,
+checked-in MSL, source-catalog entries, and native tag-to-symbol bindings. The next dependency is
+trajectory-state storage plus a real command-encoder dispatch path; no workload is launched until
+the overload governor and explicit Qwen3.5 acceptance window are satisfied.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep

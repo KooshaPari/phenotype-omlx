@@ -102,6 +102,14 @@ const SPECS: &[NativeKernelSpec] = &[
         function: "diffusion_argmax_confidence_f32",
     },
     NativeKernelSpec {
+        tag: "active_compact",
+        function: "diffusion_active_compact_u32",
+    },
+    NativeKernelSpec {
+        tag: "remask",
+        function: "diffusion_remask_confidence_f32",
+    },
+    NativeKernelSpec {
         tag: "moe_router",
         function: "moe_topk_f32",
     },
