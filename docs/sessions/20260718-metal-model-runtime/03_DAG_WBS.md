@@ -159,6 +159,11 @@ Status update 2026-07-29j: added `DiffusionDispatchTelemetry` / `DiffusionDispat
 rejects invalid timing, stage order, and incomplete-without-error envelopes while deriving total
 duration and fallback state. Three focused telemetry tests pass; no workload was launched.
 
+Status update 2026-07-29k: bound telemetry construction to `DiffusionDispatchPlan`, rejecting
+stale layouts or stage arrays before an envelope can be emitted. Five focused telemetry tests pass.
+The ignored Metal fixture now compiles successfully with Xcode-beta and `--features metal`
+(`--no-run`, isolated target); its device test remains unexecuted.
+
 Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
 validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
 `[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
