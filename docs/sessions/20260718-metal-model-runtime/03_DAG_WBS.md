@@ -78,3 +78,17 @@ rows) mirrored against the `grouped_gemm_moe` envelope so the two
 families are directly comparable. The turn-12 critical-path item
 (grouped expert GEMM) was completed at commit c735ea0 with
 `model-kernels::moe::gemm_tiled`.
+
+## Native artifact promotion sub-DAG (2026-07-29)
+
+    checked-in MSL sources
+      -> Xcode-beta AIR compilation (17/17)
+      -> combined metal-runtime.metallib
+      -> deterministic manifest + SHA-256 allowlist [current]
+      -> current-HEAD immutable candidate envelope
+      -> verified device load / dispatch
+      -> Qwen3.5 family acceptance (throttled, authorized)
+
+The manifest/allowlist step is now implemented and covered by focused Rust tests. The final
+two nodes remain intentionally open: no device dispatch or model/evaluation workload is run in
+the overload-safe lane.

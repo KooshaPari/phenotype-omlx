@@ -65,7 +65,8 @@ pub mod ternary;
 pub use adaln::adaln_rms_metal;
 pub use adaln::AdaLnError;
 pub use artifact::{
-    ArtifactAllowlist, ArtifactError, MetallibArtifact, MetallibLoader, RuntimeMode,
+    ArtifactAllowlist, ArtifactError, ArtifactManifest, ArtifactManifestEntry, MetallibArtifact,
+    MetallibLoader, RuntimeMode,
 };
 pub use cache::{CacheKey, CacheStats, CompiledPipeline, EvictionPolicy, PipelineCache};
 #[cfg(all(feature = "metal", target_os = "macos"))]
