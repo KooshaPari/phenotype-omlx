@@ -164,6 +164,11 @@ stale layouts or stage arrays before an envelope can be emitted. Five focused te
 The ignored Metal fixture now compiles successfully with Xcode-beta and `--features metal`
 (`--no-run`, isolated target); its device test remains unexecuted.
 
+Status update 2026-07-29l: added `DiffusionStageTelemetry::from_result`, a shared conversion from
+command success/error plus elapsed time into validated completion, error, and fallback fields.
+Six focused telemetry tests pass; this remains a host-side policy primitive until the live encoder
+is explicitly exercised.
+
 Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
 validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
 `[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
