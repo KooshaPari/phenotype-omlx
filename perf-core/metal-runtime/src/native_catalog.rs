@@ -110,6 +110,10 @@ const SPECS: &[NativeKernelSpec] = &[
         function: "diffusion_remask_confidence_f32",
     },
     NativeKernelSpec {
+        tag: "trajectory",
+        function: "diffusion_trajectory_update_f32",
+    },
+    NativeKernelSpec {
         tag: "moe_router",
         function: "moe_topk_f32",
     },

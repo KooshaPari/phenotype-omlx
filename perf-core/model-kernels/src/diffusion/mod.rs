@@ -6,16 +6,18 @@
 //! extensions in a future revision; for now the `RandomFraction`
 //! strategy uses a deterministic LCG so tests are reproducible.
 
+pub mod active;
 pub mod confidence;
 pub mod decoder;
 pub mod denoise;
 pub mod flow;
 pub mod remask;
-pub mod active;
+pub mod trajectory;
 
-pub use confidence::confidence_scores;
 pub use active::{active_positions, compact_active};
+pub use confidence::confidence_scores;
 pub use decoder::{DiffusionDecoder, DiffusionStepReport};
 pub use denoise::{denoise_step, denoise_step_sequential, DenoiseUpdate, RemaskStrategy};
 pub use flow::{classifier_free_guidance, flow_sigma_schedule};
 pub use remask::remask;
+pub use trajectory::{update_trajectory, TrajectoryState};

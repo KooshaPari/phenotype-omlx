@@ -176,3 +176,7 @@ Update 2026-07-29 (diffusion scheduler leaves): active-position compaction and c
 are now represented by deterministic Rust contracts and catalogued Metal kernels. The combined
 Xcode-beta bundle compiles 19/19 sources. Device dispatch, trajectory-state persistence, and
 Qwen3.5 acceptance remain open; no live workload was run under the overload/crash guard.
+
+Update 2026-07-29b (trajectory state): confidence/entropy/momentum/convergence state is now
+implemented and tested in Rust; `diffusion_trajectory_update_f32` is included in the 20/20
+Xcode-beta source bundle. This still does not prove device execution, parity, or model quality.
