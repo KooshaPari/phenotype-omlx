@@ -92,3 +92,7 @@ families are directly comparable. The turn-12 critical-path item
 The manifest/allowlist step is now implemented and covered by focused Rust tests. The final
 two nodes remain intentionally open: no device dispatch or model/evaluation workload is run in
 the overload-safe lane.
+
+Selector reachability now covers the Bonsai ternary path and grouped-MoE matmul path, so these
+families can reach catalogued native source during reference compilation. Runtime execution is
+still gated on verified artifact loading and live device dispatch.
