@@ -13,6 +13,7 @@ import logging
 import platform
 import shutil
 import subprocess
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -41,6 +42,19 @@ class HardwareProfile:
     accelerators: list[Accelerator] = field(default_factory=list)
     apple_silicon_model: str = ""                        # e.g. "M1 Pro" if detected
 
+    # Optional topology/telemetry fields. ``None`` means the platform did not
+    # provide evidence; it is deliberately different from ``False``.
+    cpu_performance_cores: int | None = None
+    cpu_efficiency_cores: int | None = None
+    metal_device_name: str | None = None
+    metal_gpu_cores: int | None = None
+    unified_memory_gb: float | None = None
+    thermal_state: str | None = None
+    memory_pressure: str | None = None
+    neural_engine_available: bool | None = None
+    npu_available: bool | None = None
+    capability_evidence: dict[str, str] = field(default_factory=dict)
+
     # Best backend for each candidate kind on this hardware, ordered by preference.
     backend_preference: dict[BackendKind, list[BackendKind]] = field(default_factory=dict)
 
@@ -59,6 +73,125 @@ class HardwareProfile:
             f"{self.memory_total_gb:.1f} GB RAM | accel=[{accs}]"
             + (f" | {self.apple_silicon_model}" if self.apple_silicon_model else "")
         )
+
+
+def _run_command(args: list[str]) -> str | None:
+    """Run a short, read-only platform probe and return stdout if available."""
+    try:
+        return subprocess.check_output(
+            args, text=True, timeout=2, stderr=subprocess.DEVNULL
+        ).strip()
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
+def _sysctl_int(name: str) -> int | None:
+    value = _run_command(["sysctl", "-n", name]) if platform.system() == "Darwin" else None
+    try:
+        return int(value) if value else None
+    except ValueError:
+        return None
+
+
+def _detect_cpu_topology() -> tuple[int | None, int | None, int | None, str | None]:
+    """Return physical, performance, efficiency counts and evidence source."""
+    system = platform.system()
+    if system == "Darwin":
+        physical = _sysctl_int("hw.physicalcpu")
+        # Apple exposes these on heterogeneous systems; absent keys are normal
+        # on Intel Macs and older macOS releases.
+        performance = _sysctl_int("hw.perflevel0.logicalcpu")
+        efficiency = _sysctl_int("hw.perflevel1.logicalcpu")
+        source = "sysctl" if any(v is not None for v in (physical, performance, efficiency)) else None
+        return physical, performance, efficiency, source
+    if system == "Linux":
+        physical = None
+        performance = efficiency = None
+        text = _run_command(["lscpu", "-J"])
+        if text:
+            try:
+                entries = json.loads(text).get("lscpu", [])
+                values = {e.get("field", "").rstrip(":"): e.get("data") for e in entries}
+                sockets = int(values.get("Socket(s)", 1))
+                cores = int(values["Core(s) per socket"]) if values.get("Core(s) per socket") else None
+                physical = sockets * cores if cores is not None else None
+            except (ValueError, TypeError, json.JSONDecodeError):
+                pass
+        # Linux hybrid topology is exposed per CPU on newer kernels. Count
+        # core_type values only when every value is readable and unambiguous.
+        try:
+            from pathlib import Path
+            types = [
+                Path(path).read_text().strip()
+                for path in sorted(Path("/sys/devices/system/cpu").glob("cpu[0-9]*/topology/core_type"))
+            ]
+            if types and all(types):
+                performance = types.count("1") or None
+                efficiency = types.count("2") or None
+        except (OSError, ValueError):
+            pass
+        return physical, performance, efficiency, "lscpu/sysfs" if physical or performance else None
+    return None, None, None, None
+
+
+def _detect_apple_metal() -> tuple[str | None, int | None, str | None]:
+    """Return Metal device name/core count only when system evidence exists."""
+    if platform.system() != "Darwin":
+        return None, None, None
+    text = _run_command(["system_profiler", "SPDisplaysDataType", "-json"])
+    if not text:
+        return None, None, None
+    try:
+        data = json.loads(text)
+        displays = data.get("SPDisplaysDataType", [])
+        if not displays:
+            return None, None, None
+        item = displays[0]
+        name = item.get("sppci_model") or item.get("_name")
+        cores = item.get("spdisplays_core_count")
+        try:
+            cores = int(cores) if cores is not None else None
+        except (TypeError, ValueError):
+            cores = None
+        return name, cores, "system_profiler"
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None, None, None
+
+
+def _detect_thermal_state() -> tuple[str | None, str | None]:
+    """Read a coarse thermal state; no temperature is invented when absent."""
+    system = platform.system()
+    if system == "Darwin":
+        text = _run_command(["pmset", "-g", "therm"])
+        if text:
+            lowered = text.lower()
+            if "critical" in lowered:
+                return "critical", "pmset"
+            if "warning" in lowered or "heavy" in lowered:
+                return "elevated", "pmset"
+            return "nominal", "pmset"
+    if system == "Linux":
+        try:
+            from pathlib import Path
+            states = [Path(p).read_text().strip().lower() for p in Path("/sys/class/thermal").glob("thermal_zone*/trip_point_*_type")]
+            if any("critical" in s for s in states):
+                return "critical", "sysfs"
+        except OSError:
+            pass
+    return None, None
+
+
+def _detect_memory_pressure() -> tuple[str | None, str | None]:
+    if platform.system() == "Darwin":
+        text = _run_command(["memory_pressure"])
+        if text:
+            lowered = text.lower()
+            if "critical" in lowered:
+                return "critical", "memory_pressure"
+            if "warn" in lowered:
+                return "warning", "memory_pressure"
+            return "nominal", "memory_pressure"
+    return None, None
 
 
 def _detect_apple_silicon() -> str:
@@ -141,14 +274,44 @@ def detect_hardware() -> HardwareProfile:
         if rocm:
             accels.append(Accelerator.ROCM)
 
+    physical, performance, efficiency, topology_source = _detect_cpu_topology()
+    metal_name, metal_cores, metal_source = _detect_apple_metal()
+    thermal, thermal_source = _detect_thermal_state()
+    pressure, pressure_source = _detect_memory_pressure()
+    evidence = {
+        key: value for key, value in {
+            "cpu_topology": topology_source,
+            "metal": metal_source,
+            "thermal": thermal_source,
+            "memory_pressure": pressure_source,
+        }.items() if value is not None
+    }
+    logical = _os.cpu_count() or 1
+    # A physical count is unknown when the platform probe failed. Preserve the
+    # historical integer field for callers, while exposing the evidence-backed
+    # value through the optional topology field only.
+    physical_compat = physical if physical is not None else logical
+
     profile = HardwareProfile(
         os=platform.system(),
         arch=platform.machine(),
-        cpu_count_logical=_os.cpu_count() or 1,
-        cpu_count_physical=_os.cpu_count() or 1,           # python doesn't expose phys easily
+        cpu_count_logical=logical,
+        cpu_count_physical=physical_compat,
         memory_total_gb=_memory_total_gb(),
         accelerators=accels,
         apple_silicon_model=apple_model if is_darwin and "Apple" in apple_model else "",
+        cpu_performance_cores=performance,
+        cpu_efficiency_cores=efficiency,
+        metal_device_name=metal_name,
+        metal_gpu_cores=metal_cores,
+        unified_memory_gb=_memory_total_gb() if is_darwin else None,
+        thermal_state=thermal,
+        memory_pressure=pressure,
+        # No generic API can prove ANE/XDNA availability. Leave both unknown;
+        # provider-specific runtime probes must set these after verification.
+        neural_engine_available=None,
+        npu_available=None,
+        capability_evidence=evidence,
     )
 
     # Build the backend preference table based on what we detected.
