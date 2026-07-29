@@ -169,6 +169,11 @@ command success/error plus elapsed time into validated completion, error, and fa
 Six focused telemetry tests pass; this remains a host-side policy primitive until the live encoder
 is explicitly exercised.
 
+Status update 2026-07-29m: added outcome-returning Metal entry points for active compaction,
+remasking, and trajectory update. Each records elapsed time and preserves native failure in the
+telemetry envelope rather than silently converting it to success. Host telemetry tests pass 6/6;
+the Xcode-beta Metal fixture target compiles with `--no-run`; no command buffer was executed.
+
 Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
 validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
 `[0,1]` fail closed before Metal allocation; focused tests pass 2/2.

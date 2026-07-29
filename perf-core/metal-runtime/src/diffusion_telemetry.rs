@@ -18,6 +18,39 @@ pub struct DiffusionStageTelemetry {
     pub fallback: bool,
 }
 
+/// A stage result paired with the validated telemetry needed for promotion.
+///
+/// `output` is absent when the native command failed; the failure remains in
+/// `telemetry.error` so callers cannot accidentally treat fallback as success.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiffusionStageOutcome<T> {
+    pub output: Option<T>,
+    pub telemetry: DiffusionStageTelemetry,
+}
+
+impl<T> DiffusionStageOutcome<T> {
+    pub fn from_result<E: std::fmt::Display>(
+        stage: DiffusionStage,
+        elapsed_ms: f64,
+        result: Result<T, E>,
+        fallback: bool,
+    ) -> Result<Self, DiffusionTelemetryError> {
+        let telemetry = DiffusionStageTelemetry::from_result(
+            stage,
+            elapsed_ms,
+            result
+                .as_ref()
+                .map(|_| ())
+                .map_err(|error| error.to_string()),
+            fallback,
+        )?;
+        Ok(Self {
+            output: result.ok(),
+            telemetry,
+        })
+    }
+}
+
 impl DiffusionStageTelemetry {
     /// Construct a completed stage outcome.
     pub fn completed(
@@ -243,6 +276,16 @@ mod tests {
         .unwrap();
         assert!(completed.completed);
         assert!(completed.error.is_none());
+
+        let outcome = DiffusionStageOutcome::from_result(
+            DiffusionStage::ActiveCompact,
+            0.5,
+            Err::<u32, _>("native failure"),
+            false,
+        )
+        .unwrap();
+        assert!(outcome.output.is_none());
+        assert_eq!(outcome.telemetry.error.as_deref(), Some("native failure"));
     }
 
     #[test]
