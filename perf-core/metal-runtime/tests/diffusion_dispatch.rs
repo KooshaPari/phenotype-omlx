@@ -6,8 +6,9 @@
 #![cfg(all(feature = "metal", target_os = "macos"))]
 
 use metal_runtime::{
-    compare_f32, compare_u32, compare_u8, diffusion_active_compact_metal, diffusion_remask_metal,
-    diffusion_trajectory_metal, ArtifactAllowlist, MetallibLoader,
+    compare_f32, compare_u32, compare_u8, diffusion_active_compact_metal_with_telemetry,
+    diffusion_remask_metal_with_telemetry, diffusion_trajectory_metal_with_telemetry,
+    ArtifactAllowlist, DiffusionDispatchPlan, DiffusionDispatchTelemetry, MetallibLoader,
 };
 
 #[test]
@@ -35,21 +36,50 @@ fn diffusion_three_stage_fixture_matches_oracle() {
 
     let values = [10_u32, 11, 12, 13, 14, 15, 16, 17];
     let active = [1_u8, 0, 1, 0, 1, 0, 0, 1];
-    let (compacted, positions) =
-        diffusion_active_compact_metal(&values, &active, &artifact).expect("compact dispatch");
+    let compacted_outcome =
+        diffusion_active_compact_metal_with_telemetry(&values, &active, &artifact)
+            .expect("compact telemetry");
+    assert!(compacted_outcome.telemetry.completed);
+    assert!(!compacted_outcome.telemetry.fallback);
+    let (compacted, positions) = compacted_outcome.output.expect("compact dispatch");
     compare_u32("compacted values", &[10, 12, 14, 17], &compacted).unwrap();
     compare_u32("positions", &[0, 2, 4, 7], &positions).unwrap();
 
     let confidence = [0.9_f32, 0.2, 0.8, 0.1, 0.7, 0.3, 0.6, 0.95];
-    let next_mask =
-        diffusion_remask_metal(&active, &confidence, 0.5, &artifact).expect("remask dispatch");
+    let remask_outcome =
+        diffusion_remask_metal_with_telemetry(&active, &confidence, 0.5, &artifact)
+            .expect("remask telemetry");
+    assert!(remask_outcome.telemetry.completed);
+    assert!(!remask_outcome.telemetry.fallback);
+    let next_mask = remask_outcome.output.expect("remask dispatch");
     compare_u8("next mask", &[1, 1, 1, 1, 1, 1, 1, 1], &next_mask).unwrap();
 
     let previous = [0.8_f32; 8];
     let entropy = [0.1_f32; 8];
-    let (momentum, converged) =
-        diffusion_trajectory_metal(&previous, &confidence, &entropy, 0.75, 0.15, &artifact)
-            .expect("trajectory dispatch");
+    let trajectory_outcome = diffusion_trajectory_metal_with_telemetry(
+        &previous,
+        &confidence,
+        &entropy,
+        0.75,
+        0.15,
+        &artifact,
+    )
+    .expect("trajectory telemetry");
+    assert!(trajectory_outcome.telemetry.completed);
+    assert!(!trajectory_outcome.telemetry.fallback);
+    let (momentum, converged) = trajectory_outcome.output.expect("trajectory dispatch");
+    let plan = DiffusionDispatchPlan::for_tokens(values.len()).expect("dispatch plan");
+    let report = DiffusionDispatchTelemetry::for_plan(
+        &plan,
+        [
+            compacted_outcome.telemetry,
+            remask_outcome.telemetry,
+            trajectory_outcome.telemetry,
+        ],
+    )
+    .expect("dispatch report");
+    assert!(report.all_completed());
+    assert!(!report.used_fallback());
     compare_f32(
         "momentum",
         &[0.1, 0.6, 0.0, 0.7, 0.1, 0.5, 0.2, 0.15],
