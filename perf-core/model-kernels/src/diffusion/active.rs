@@ -41,8 +41,8 @@ mod tests {
 
     #[test]
     fn compaction_preserves_values_and_scatter_indices() {
-        let (values, positions) = compact_active(&[10u32, 20, 30, 40], &[true, false, true, false])
-            .unwrap();
+        let (values, positions) =
+            compact_active(&[10u32, 20, 30, 40], &[true, false, true, false]).unwrap();
         assert_eq!(values, vec![10, 30]);
         assert_eq!(positions, vec![0, 2]);
     }
