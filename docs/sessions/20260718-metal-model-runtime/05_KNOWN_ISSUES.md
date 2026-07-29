@@ -157,3 +157,8 @@ Update 2026-07-29 (selector reachability): the dispatch bridge now routes canoni
 two-bit ternary operators to the checked-in `ternary_pack` Metal source and grouped matmuls to
 the MoE dispatch source. Selector coverage is deterministic and tested; this is routing proof,
 not device execution or model-quality evidence.
+
+Update 2026-07-29 (native function catalog): `native_catalog` now binds each routed tag to its
+concrete Metal `kernel void` symbol and asserts that every symbol exists in checked-in MSL.
+Unknown tags fail closed. This closes selector-to-function-name drift, but does not claim that a
+device loaded or executed any function.
