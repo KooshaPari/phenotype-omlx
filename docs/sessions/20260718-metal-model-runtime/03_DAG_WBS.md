@@ -150,6 +150,15 @@ Status update 2026-07-29h: added an ignored, explicit-env Metal integration fixt
 three stages and the parity oracle. The test target compiles with `--features metal`; execution
 requires an allowlisted artifact and is not part of ordinary CI.
 
+Status update 2026-07-29i: added a host-only `DiffusionVerificationPlan` that partitions token
+state into a finite block budget and validates each returned `f32` block through the existing
+parity oracle. Three focused tests pass; this is a bounded command-encoder contract, not device
+or Qwen3.5 execution evidence.
+
+Status update 2026-07-29j: added `DiffusionDispatchTelemetry` / `DiffusionDispatchReport`, which
+rejects invalid timing, stage order, and incomplete-without-error envelopes while deriving total
+duration and fallback state. Three focused telemetry tests pass; no workload was launched.
+
 Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
 validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
 `[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
