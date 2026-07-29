@@ -17,9 +17,9 @@ fn main() {
 
     // Gate the native link behind the `mojo` feature. Without it the crate
     // builds as a Rust-only stub that returns graceful no-ops.
-    let feature_mojo = env::var("CARGO_FEATURE_MOJO").is_ok();
-    if !feature_mojo {
-        println!("cargo:warning=turbo-quant-mojo built without `mojo` feature — stub only");
+    let feature_mojo_native = env::var("CARGO_FEATURE_MOJO_NATIVE").is_ok();
+    if !feature_mojo_native {
+        println!("cargo:warning=turbo-quant-mojo built without `mojo-native` feature — stub only");
         return;
     }
 

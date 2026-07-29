@@ -12,14 +12,17 @@ crate-type = ["staticlib", "rlib"]
 libc = "0.2"
 
 [features]
-# The candidate ships the Mojo shared library and the hardened Rust wrapper
-# references its ABI unconditionally, so the native path is the workspace
-# default. Disable it only when intentionally building a Rust-only fixture.
-default = ["mojo"]
-# Compile + link the Mojo kernel. Requires `mojo` in PATH and the generated
-# `libturbo_quant_mojo.dylib` beside this manifest.
+# Native Mojo is opt-in. The workspace depends on this crate for its portable
+# fail-closed Rust implementation; enabling native linkage without a matching
+# artifact is what previously caused unresolved tq_mojo_* symbols in CI.
+default = []
+# Marker retained for callers that need to describe a Mojo build. Native code
+# is enabled only by `mojo-native`, which also requires this marker.
 mojo = []
+# Compile + link the Mojo kernel. Requires the SDK and a target-appropriate
+# shared library/import library beside this manifest.
+mojo-native = ["mojo"]
 # Enable Mojo GEMV FFI path (falls back to Rust on panic or missing symbol).
-mojo-ffi = []
+mojo-ffi = ["mojo-native"]
 
 [build-dependencies]

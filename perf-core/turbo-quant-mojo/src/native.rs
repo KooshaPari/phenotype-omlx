@@ -5,16 +5,16 @@
 // and converts with checked arithmetic in `validation`.
 
 use super::MojoQuantizedTensor;
-#[cfg(mojo_native)]
+#[cfg(all(feature = "mojo-native", mojo_native))]
 use crate::validation::{
     usize_to_isize, validate_decode_inputs, validate_encode_inputs, validate_encode_outputs,
 };
-#[cfg(not(mojo_native))]
+#[cfg(not(all(feature = "mojo-native", mojo_native)))]
 use crate::validation::{validate_decode_inputs, validate_encode_inputs};
-#[cfg(mojo_native)]
+#[cfg(all(feature = "mojo-native", mojo_native))]
 use std::os::raw::c_uchar;
 
-#[cfg(mojo_native)]
+#[cfg(all(feature = "mojo-native", mojo_native))]
 extern "C" {
     fn tq_mojo_encode(
         data_addr: isize,
@@ -45,7 +45,7 @@ extern "C" {
     fn tq_mojo_free(address: isize);
 }
 
-#[cfg(all(feature = "mojo-ffi", mojo_native))]
+#[cfg(all(feature = "mojo-ffi", feature = "mojo-native", mojo_native))]
 extern "C" {
     fn tq_gemv_decode(
         weights: *const f32,
@@ -69,7 +69,7 @@ extern "C" {
 /// 3. The successful encode path does NOT disarm or take the guard; the
 ///    Drop runs at end of scope and frees every Mojo buffer exactly once
 ///    after the Rust-owned vectors have been constructed.
-#[cfg(any(mojo_native, test))]
+#[cfg(any(all(feature = "mojo-native", mojo_native), test))]
 struct EncodeOutputGuard {
     shape_addr: isize,
     packed_addr: isize,
@@ -77,7 +77,7 @@ struct EncodeOutputGuard {
     zeros_addr: isize,
 }
 
-#[cfg(any(mojo_native, test))]
+#[cfg(any(all(feature = "mojo-native", mojo_native), test))]
 impl EncodeOutputGuard {
     fn empty() -> Self {
         Self {
@@ -106,13 +106,13 @@ impl EncodeOutputGuard {
     }
 }
 
-#[cfg(any(mojo_native, test))]
+#[cfg(any(all(feature = "mojo-native", mojo_native), test))]
 impl Drop for EncodeOutputGuard {
     fn drop(&mut self) {
         // No early-return: the guard is built so that arming it is the only
         // way to populate addresses. Every drop releases the live positive
         // addresses exactly once.
-        #[cfg(mojo_native)]
+        #[cfg(all(feature = "mojo-native", mojo_native))]
         unsafe {
             if Self::addr_should_free(self.shape_addr) {
                 tq_mojo_free(self.shape_addr);
@@ -130,7 +130,7 @@ impl Drop for EncodeOutputGuard {
     }
 }
 
-#[cfg(mojo_native)]
+#[cfg(all(feature = "mojo-native", mojo_native))]
 pub(super) fn mojo_encode(
     data: &[f32],
     bits: u8,
@@ -233,7 +233,7 @@ pub(super) fn mojo_encode(
     })
 }
 
-#[cfg(mojo_native)]
+#[cfg(all(feature = "mojo-native", mojo_native))]
 pub(super) fn mojo_try_decode(
     shape: &[usize],
     packed: &[u8],
@@ -278,7 +278,7 @@ pub(super) fn mojo_try_decode(
     Ok(out)
 }
 
-#[cfg(not(mojo_native))]
+#[cfg(not(all(feature = "mojo-native", mojo_native)))]
 pub(super) fn mojo_encode(
     data: &[f32],
     bits: u8,
@@ -288,7 +288,7 @@ pub(super) fn mojo_encode(
     Err("Mojo native library unavailable; build libturbo_quant_mojo.dylib first".to_string())
 }
 
-#[cfg(not(mojo_native))]
+#[cfg(not(all(feature = "mojo-native", mojo_native)))]
 pub(super) fn mojo_try_decode(
     shape: &[usize],
     packed: &[u8],
@@ -310,7 +310,7 @@ pub(super) fn mojo_try_decode(
     Err("Mojo native library unavailable; build libturbo_quant_mojo.dylib first".to_string())
 }
 
-#[cfg(all(feature = "mojo-ffi", mojo_native))]
+#[cfg(all(feature = "mojo-ffi", feature = "mojo-native", mojo_native))]
 pub fn mojo_gemv_decode(
     weights: &[f32],
     input: &[f32],
