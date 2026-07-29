@@ -1,5 +1,9 @@
 //! Deterministic dispatch plan for the masked-diffusion state stages.
 
+use crate::{
+    DiffusionDispatchDecision, DiffusionDispatchTelemetry, DiffusionRollbackPolicy,
+    DiffusionTelemetryError,
+};
 use crate::{DiffusionStateLayout, DiffusionStateLayoutError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +54,20 @@ impl DiffusionDispatchPlan {
             self.stages[2].tag(),
         ]
     }
+
+    /// Evaluate a complete report against this plan and a bounded policy.
+    ///
+    /// Re-validating the report here prevents callers from making promotion
+    /// decisions from telemetry belonging to a different token layout or
+    /// stage order.
+    pub fn evaluate(
+        &self,
+        report: &DiffusionDispatchTelemetry,
+        policy: &DiffusionRollbackPolicy,
+    ) -> Result<DiffusionDispatchDecision, DiffusionTelemetryError> {
+        let validated = DiffusionDispatchTelemetry::for_plan(self, report.stages.clone())?;
+        Ok(policy.decide(&validated))
+    }
 }
 
 #[cfg(test)]
@@ -72,6 +90,26 @@ mod tests {
         assert_eq!(
             DiffusionDispatchPlan::for_tokens(0),
             Err(DiffusionStateLayoutError::ZeroTokens)
+        );
+    }
+
+    #[test]
+    fn plan_evaluates_only_plan_bound_reports() {
+        let plan = DiffusionDispatchPlan::for_tokens(8).unwrap();
+        let report = DiffusionDispatchTelemetry::for_plan(
+            &plan,
+            [
+                crate::DiffusionStageTelemetry::completed(DiffusionStage::ActiveCompact, 0.1)
+                    .unwrap(),
+                crate::DiffusionStageTelemetry::completed(DiffusionStage::Remask, 0.1).unwrap(),
+                crate::DiffusionStageTelemetry::completed(DiffusionStage::Trajectory, 0.1).unwrap(),
+            ],
+        )
+        .unwrap();
+        let policy = DiffusionRollbackPolicy::bounded(1, false).unwrap();
+        assert_eq!(
+            plan.evaluate(&report, &policy).unwrap(),
+            DiffusionDispatchDecision::Promote
         );
     }
 }
