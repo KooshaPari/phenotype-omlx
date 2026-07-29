@@ -152,3 +152,8 @@ Rust `ArtifactAllowlist::from_manifest_json` parser validates the strict basenam
 64-hex digest contract before handing bytes to `MetallibLoader`. Focused artifact tests pass;
 the generated manifest is still build output, not promotion evidence, until it is stored in an
 immutable candidate envelope tied to a current commit and verified on-device.
+
+Update 2026-07-29 (selector reachability): the dispatch bridge now routes canonical Bonsai
+two-bit ternary operators to the checked-in `ternary_pack` Metal source and grouped matmuls to
+the MoE dispatch source. Selector coverage is deterministic and tested; this is routing proof,
+not device execution or model-quality evidence.
