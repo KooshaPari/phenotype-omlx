@@ -126,8 +126,8 @@ kernel. The remaining diffusion source path is command-encoder wiring, then boun
 self-verification; source compilation is 20/20.
 
 Status update 2026-07-29c: `StateKind::DiffusionTrajectory` now gives the plan layer an explicit
-persistent slot for confidence/entropy/momentum/convergence metadata. Focused validation was
-deferred after the local Rust build queue saturated; no runtime workload was started.
+persistent slot for confidence/entropy/momentum/convergence metadata. Isolated validation now
+passes (`state_kind_tag_for_each_variant`, 1/1); no runtime workload was started.
 
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
