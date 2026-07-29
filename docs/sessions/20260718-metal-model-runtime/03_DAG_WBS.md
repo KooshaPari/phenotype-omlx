@@ -138,6 +138,10 @@ Status update 2026-07-29e: `DiffusionDispatchPlan` now binds that layout to the 
 dispatch-plan tests pass 2/2; it is a deterministic command-encoder input contract, not device
 execution evidence.
 
+Status update 2026-07-29f: feature-gated Metal bindings now expose all three catalogued stages
+with strict shape checks, shared buffer construction, thread-grid dispatch, and command-buffer
+status errors. `cargo check -p metal-runtime --features metal` passes; no device call was made.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep

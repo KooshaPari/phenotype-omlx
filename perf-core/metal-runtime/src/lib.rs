@@ -43,6 +43,7 @@ pub mod compile;
 pub mod deltanet;
 pub mod diffusion_confidence;
 pub mod diffusion_dispatch;
+pub mod diffusion_dispatch_metal;
 pub mod diffusion_state;
 pub mod dispatch;
 pub mod error;
@@ -83,6 +84,11 @@ pub use deltanet::{deltanet_step_metal, deltanet_step_metal_two_pass};
 pub use diffusion_confidence::diffusion_argmax_confidence_metal;
 pub use diffusion_confidence::DiffusionConfidenceError;
 pub use diffusion_dispatch::{DiffusionDispatchPlan, DiffusionStage};
+pub use diffusion_dispatch_metal::DiffusionDispatchError;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use diffusion_dispatch_metal::{
+    diffusion_active_compact_metal, diffusion_remask_metal, diffusion_trajectory_metal,
+};
 pub use diffusion_state::{DiffusionStateLayout, DiffusionStateLayoutError};
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};
