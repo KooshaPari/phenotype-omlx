@@ -150,6 +150,10 @@ Status update 2026-07-29h: added an ignored, explicit-env Metal integration fixt
 three stages and the parity oracle. The test target compiles with `--features metal`; execution
 requires an allowlisted artifact and is not part of ordinary CI.
 
+Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
+validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
+`[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep

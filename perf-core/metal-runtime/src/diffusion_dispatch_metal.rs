@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error, PartialEq)]
 pub enum DiffusionDispatchError {
     #[error("diffusion token buffers must be non-empty")]
     ZeroTokens,
@@ -12,9 +12,38 @@ pub enum DiffusionDispatchError {
         expected: usize,
         got: usize,
     },
+    #[error("diffusion threshold '{what}' must be finite and in [{min}, {max}], got {got}")]
+    InvalidThreshold {
+        what: &'static str,
+        min: f32,
+        max: f32,
+        got: f32,
+    },
     #[cfg(all(feature = "metal", target_os = "macos"))]
     #[error("Metal diffusion dispatch failed: {0}")]
     Metal(String),
+}
+
+/// Validate confidence/remask thresholds before they cross the FFI boundary.
+///
+/// Metal comparisons with NaN are well-defined but silently produce an all-zero
+/// convergence/remask result, which is not equivalent to the host oracle. Keep
+/// this check pure and shared by every device dispatch entry point.
+pub fn validate_diffusion_threshold(
+    what: &'static str,
+    value: f32,
+    min: f32,
+    max: f32,
+) -> Result<(), DiffusionDispatchError> {
+    if !value.is_finite() || value < min || value > max {
+        return Err(DiffusionDispatchError::InvalidThreshold {
+            what,
+            min,
+            max,
+            got: value,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(all(feature = "metal", target_os = "macos"))]
@@ -127,6 +156,7 @@ pub fn diffusion_remask_metal(
     if tokens == 0 {
         return Err(DiffusionDispatchError::ZeroTokens);
     }
+    validate_diffusion_threshold("remask", threshold, 0.0, 1.0)?;
     validate_len("confidence", confidence.len(), tokens)?;
     crate::metal_cache::with_catalogued_pipeline(artifact, "remask", |device, queue, pipeline| {
         let shared = MTLResourceOptions::StorageModeShared;
@@ -184,6 +214,8 @@ pub fn diffusion_trajectory_metal(
     if tokens == 0 {
         return Err(DiffusionDispatchError::ZeroTokens);
     }
+    validate_diffusion_threshold("confidence", confidence_threshold, 0.0, 1.0)?;
+    validate_diffusion_threshold("momentum", momentum_threshold, 0.0, f32::MAX)?;
     validate_len("previous_confidence", previous_confidence.len(), tokens)?;
     validate_len("entropy", entropy.len(), tokens)?;
     crate::metal_cache::with_catalogued_pipeline(
@@ -242,4 +274,26 @@ pub fn diffusion_trajectory_metal(
         },
     )
     .map_err(DiffusionDispatchError::Metal)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{validate_diffusion_threshold, DiffusionDispatchError};
+
+    #[test]
+    fn thresholds_accept_canonical_bounds() {
+        assert!(validate_diffusion_threshold("confidence", 0.0, 0.0, 1.0).is_ok());
+        assert!(validate_diffusion_threshold("confidence", 1.0, 0.0, 1.0).is_ok());
+        assert!(validate_diffusion_threshold("momentum", 0.0, 0.0, f32::MAX).is_ok());
+    }
+
+    #[test]
+    fn thresholds_reject_non_finite_and_out_of_range_values() {
+        for value in [f32::NAN, f32::NEG_INFINITY, f32::INFINITY, -0.01, 1.01] {
+            assert!(matches!(
+                validate_diffusion_threshold("confidence", value, 0.0, 1.0),
+                Err(DiffusionDispatchError::InvalidThreshold { .. })
+            ));
+        }
+    }
 }
