@@ -813,6 +813,7 @@ func main() {
 	mux.HandleFunc("/api/langfuse/setup", langfuseSetupHandler)
 	mux.HandleFunc("/api/langfuse/traces", langfuseTracesHandler)
 	mux.HandleFunc("/api/langfuse/evaluators", langfuseEvaluatorsHandler)
+	mux.HandleFunc("/api/capacity/fit", capacityFitHandler)
 	mux.HandleFunc("/api/eval/run", portageRunHandler)
 	mux.HandleFunc("/api/eval/runs/", portageRunStatusHandler)
 	mux.HandleFunc("/api/ws", wsHandler(hub))

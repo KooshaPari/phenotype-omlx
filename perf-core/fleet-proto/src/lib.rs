@@ -2,6 +2,13 @@
 //!
 //! Nodes can advertise over mDNS/DNS-SD, register themselves in a shared
 //! directory, and send heartbeats with capability tuples (vLLM, MLX, etc.).
+//!
+//! JSON-RPC 2.0 surface (`rpc` module): `capacity.fit`, `device.heartbeat`,
+//! `fleet.peers`, `ping` — see ADR-006 federated synthetic monolith.
+
+mod rpc;
+
+pub use rpc::{dispatch, dispatch_str, RpcRequest, RpcResponse, RpcState};
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;

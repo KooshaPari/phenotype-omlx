@@ -312,6 +312,7 @@ export function useBenchState() {
       const ts = entry.receivedAt;
       const s = entry.summary.by_variant.stock;
       const o = entry.summary.by_variant.ours;
+      if (!s || !o) continue;
       pushPoint('pass_at_1', s.pass_at_1, o.pass_at_1, ts);
       pushPoint('wall_clock', s.mean_wall_clock_s, o.mean_wall_clock_s, ts);
       pushPoint('partial_credit', s.mean_partial_credit, o.mean_partial_credit, ts);

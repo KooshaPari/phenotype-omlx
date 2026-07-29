@@ -426,7 +426,10 @@ export default function App() {
       <main className="main-panel">
         <div className="top-fixed">
           <VerdictStrip
-            summary={summary ? { stock: summary.by_variant.stock, ours: summary.by_variant.ours } : { stock: {}, ours: {} }}
+            summary={{
+              stock: (summary?.by_variant?.stock ?? {}) as Record<string, number>,
+              ours: (summary?.by_variant?.ours ?? {}) as Record<string, number>,
+            }}
             statusText={statusText}
             statusLevel={statusLevel}
             passAt1Untrusted={(state.payload?.warnings ?? []).some(
@@ -480,13 +483,13 @@ export default function App() {
       <Drawer
         cell={selected}
         paired={pairedCell}
+        metaModel={summary?.meta?.model}
         onClose={() => setSelected(null)}
         onAudit={(c) => {
           setSelected(c);
           dispatch({ type: 'SET_VIEW', view: 'audit' });
         }}
-      />
-      
+      />      
       <CommandPalette 
         isOpen={paletteOpen}
         views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit', 'langfuse', 'langsmith']}

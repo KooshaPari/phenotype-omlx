@@ -62,9 +62,11 @@ BENCH_EXTRA_DATA=/path/to/minimax-m3-full/matrix.json
 bash scripts/start-dev.sh
 ```
 
-Overview → **Suite coverage** table shows paired stock/ours vs partial/missing
-(catalog includes `ycbench` as unimplemented gap). Full stock+ours for every suite
-still requires extending `pheno-harness` `stock_vs_ours.SUITES` and re-running.
+Overview → **Suite coverage** table shows paired stock/ours vs partial/missing.
+`ycbench` was **deferred** out of `KnownSuiteCatalog` (2026-07-22) until a
+Portage/pheno-harness adapter exists — see `DeferredSuites` in `matrix_import.go`.
+Full stock+ours for every suite still requires extending `pheno-harness`
+`stock_vs_ours.SUITES` and re-running.
 
 Agents / MCP / self-host: `docs/guides/LANGFUSE_AGENTS_AND_SELFHOST.md`.
 

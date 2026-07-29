@@ -64,9 +64,15 @@ func TestMergeResultsAndCoverage_FR_SUITE_002(t *testing.T) {
 	if !byName["hle"].Present || byName["hle"].HasStock {
 		t.Fatalf("hle coverage %+v", byName["hle"])
 	}
-	if byName["ycbench"].Present {
-		t.Fatal("ycbench should be absent (catalog gap)")
+	if _, ok := byName["ycbench"]; ok {
+		t.Fatal("ycbench was deferred out of KnownSuiteCatalog")
 	}
+	for _, d := range DeferredSuites {
+		if d == "ycbench" {
+			return
+		}
+	}
+	t.Fatal("DeferredSuites should list ycbench")
 }
 
 func TestLoadResultsFileMatrix_FR_SUITE_003(t *testing.T) {

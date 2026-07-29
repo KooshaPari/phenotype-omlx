@@ -21,6 +21,8 @@ members = [
     "model-kernels",
     "metal-runtime",
     "regress-baseline",
+    "pheno-capacity",
+    "fleet-rpc",
 ]
 
 [workspace.package]

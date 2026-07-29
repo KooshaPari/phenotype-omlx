@@ -33,8 +33,12 @@ var KnownSuiteCatalog = []string{
 	"swe-bench-verified",
 	"terminal-bench",
 	"vending-bench",
-	// Not implemented in pheno-harness yet — kept for coverage visibility.
-	"ycbench",
+}
+
+// DeferredSuites are intentionally excluded from KnownSuiteCatalog until a
+// pheno-harness / Portage adapter exists. Do not re-add as silent gaps.
+var DeferredSuites = []string{
+	"ycbench", // dropped 2026-07-22 — no harness adapter; reintroduce with adapter
 }
 
 type suiteCoverageRow struct {
