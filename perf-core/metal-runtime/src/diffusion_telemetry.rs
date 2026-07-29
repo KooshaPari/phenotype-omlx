@@ -6,7 +6,7 @@
 
 use thiserror::Error;
 
-use crate::DiffusionStage;
+use crate::{DiffusionDispatchPlan, DiffusionStage};
 
 /// Outcome of one diffusion stage.
 #[derive(Debug, Clone, PartialEq)]
@@ -65,6 +65,29 @@ pub struct DiffusionDispatchTelemetry {
 pub type DiffusionDispatchReport = DiffusionDispatchTelemetry;
 
 impl DiffusionDispatchTelemetry {
+    /// Build telemetry for a dispatch plan without touching Metal.
+    ///
+    /// The plan is treated as the source of truth for stage order and state
+    /// layout.  This keeps host-side reports honest: a caller cannot attach
+    /// timings to a hand-built or stale plan and accidentally emit a valid
+    /// looking envelope.
+    pub fn for_plan(
+        plan: &DiffusionDispatchPlan,
+        stages: [DiffusionStageTelemetry; 3],
+    ) -> Result<Self, DiffusionTelemetryError> {
+        let expected = DiffusionDispatchPlan::for_tokens(plan.tokens).map_err(|_| {
+            DiffusionTelemetryError::InvalidPlan {
+                tokens: plan.tokens,
+            }
+        })?;
+        if plan.layout != expected.layout || plan.stages != expected.stages {
+            return Err(DiffusionTelemetryError::InvalidPlan {
+                tokens: plan.tokens,
+            });
+        }
+        Self::new(stages)
+    }
+
     /// Build a report and derive its total duration from the stage durations.
     pub fn new(stages: [DiffusionStageTelemetry; 3]) -> Result<Self, DiffusionTelemetryError> {
         let expected = [
@@ -120,11 +143,14 @@ pub enum DiffusionTelemetryError {
     },
     #[error("total elapsed_ms must be finite, got {total_elapsed_ms}")]
     InvalidTotal { total_elapsed_ms: f64 },
+    #[error("dispatch plan is invalid for {tokens} tokens")]
+    InvalidPlan { tokens: usize },
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DiffusionStateLayout;
 
     fn stage(stage: DiffusionStage, elapsed_ms: f64) -> DiffusionStageTelemetry {
         DiffusionStageTelemetry::completed(stage, elapsed_ms).unwrap()
@@ -177,5 +203,38 @@ mod tests {
         assert!(!failed.completed);
         assert!(failed.fallback);
         assert_eq!(failed.error.as_deref(), Some("native dispatch unavailable"));
+    }
+
+    #[test]
+    fn plan_report_binds_layout_without_execution() {
+        let plan = DiffusionDispatchPlan::for_tokens(8).unwrap();
+        let report = DiffusionDispatchTelemetry::for_plan(
+            &plan,
+            [
+                stage(DiffusionStage::ActiveCompact, 0.25),
+                stage(DiffusionStage::Remask, 0.5),
+                stage(DiffusionStage::Trajectory, 0.75),
+            ],
+        )
+        .unwrap();
+        assert_eq!(report.total_elapsed_ms, 1.5);
+    }
+
+    #[test]
+    fn plan_report_rejects_stale_layout_or_stage_plan() {
+        let mut plan = DiffusionDispatchPlan::for_tokens(8).unwrap();
+        plan.layout = DiffusionStateLayout::for_tokens(16).unwrap();
+        let result = DiffusionDispatchTelemetry::for_plan(
+            &plan,
+            [
+                stage(DiffusionStage::ActiveCompact, 0.1),
+                stage(DiffusionStage::Remask, 0.1),
+                stage(DiffusionStage::Trajectory, 0.1),
+            ],
+        );
+        assert!(matches!(
+            result,
+            Err(DiffusionTelemetryError::InvalidPlan { tokens: 8 })
+        ));
     }
 }
