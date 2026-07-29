@@ -107,3 +107,21 @@ verified `(artifact, tag, function)` binding suitable for the eventual Metal com
 The three highest-leverage native leaves now consume that binding at cache lookup time: Bonsai
 ternary GEMM, MoE router/grouped GEMM, and diffusion confidence. This removes function-name
 drift at the final pre-dispatch boundary.
+
+## Forward family expansion
+
+    diffusion confidence
+      -> confidence trajectory state
+      -> active-position compaction
+      -> remask scheduler
+      -> bounded block-diffusion self-verification
+
+    MoE router/grouped GEMM
+      -> top-1 vs top-2 load histogram envelope
+      -> expert locality / grouped-GEMM tile sweep
+      -> Qwen3.5/OLMoE/DeepSeek reference conformance
+
+    Bonsai ternary GEMM
+      -> group-scale and K-tail parity
+      -> zero-elision / byte-alignment tile sweep
+      -> quality/perplexity envelope before promotion
