@@ -36,6 +36,7 @@ pub use proposal_state::ProposalState;
 pub use state::{EngineState, HISTORY_CAP};
 pub use tree_proposal::{
     create_parallel_trees, merge_parallel_results, DraftNode, DraftTree, ParallelTreeConfig,
+    MAX_BRANCHES_PER_NODE, MAX_PARALLEL_BRANCHES, MAX_TREE_DEPTH,
 };
 
 /// Proposal strategy — selects which draft proposal path the engine uses.
