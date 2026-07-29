@@ -252,3 +252,9 @@ preserve ascending scatter indices and reject value/mask shape mismatches, while
 `diffusion_active_compact_u32` and `diffusion_remask_confidence_f32`. Both are catalogued by
 stable tag and concrete function symbol. The Xcode-beta source bundle compiles 19/19 shaders;
 this remains source/artifact evidence, not device or Qwen3.5 quality evidence.
+
+Trajectory state is now concrete as well: Rust tracks confidence, entropy, per-position
+confidence momentum, decode step, and convergence; the Metal leaf is
+`diffusion_trajectory_update_f32`. Focused oracle tests pass and the source bundle compiles
+20/20 shaders. The contract intentionally keeps trajectory metadata separate from token values
+so active compaction can scatter updates without losing uncertainty history.

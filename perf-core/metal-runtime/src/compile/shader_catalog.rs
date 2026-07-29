@@ -16,6 +16,7 @@ pub(crate) fn source_for_tag(tag: &str) -> Option<&'static str> {
         "denoise" => include_str!("../../shaders/diffusion_argmax_confidence.metal"),
         "active_compact" => include_str!("../../shaders/diffusion_active_compact.metal"),
         "remask" => include_str!("../../shaders/diffusion_remask.metal"),
+        "trajectory" => include_str!("../../shaders/diffusion_trajectory.metal"),
         "moe_router" => include_str!("../../shaders/moe_topk.metal"),
         "moe_dispatch" | "moe_reduce" | "moe_shared" => {
             include_str!("../../shaders/moe_grouped_gemm.metal")
@@ -42,6 +43,7 @@ mod tests {
             "denoise",
             "active_compact",
             "remask",
+            "trajectory",
             "moe_router",
             "moe_dispatch",
             "ternary_pack",

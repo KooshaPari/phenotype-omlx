@@ -121,6 +121,10 @@ checked-in MSL, source-catalog entries, and native tag-to-symbol bindings. The n
 trajectory-state storage plus a real command-encoder dispatch path; no workload is launched until
 the overload governor and explicit Qwen3.5 acceptance window are satisfied.
 
+Status update 2026-07-29b: trajectory state now has a Rust oracle and catalogued Metal update
+kernel. The remaining diffusion source path is command-encoder wiring, then bounded block
+self-verification; source compilation is 20/20.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep
