@@ -89,7 +89,9 @@ pub use diffusion_confidence::DiffusionConfidenceError;
 pub use diffusion_dispatch::{DiffusionDispatchPlan, DiffusionStage};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use diffusion_dispatch_metal::{
-    diffusion_active_compact_metal, diffusion_remask_metal, diffusion_trajectory_metal,
+    diffusion_active_compact_metal, diffusion_active_compact_metal_with_telemetry,
+    diffusion_remask_metal, diffusion_remask_metal_with_telemetry, diffusion_trajectory_metal,
+    diffusion_trajectory_metal_with_telemetry,
 };
 pub use diffusion_dispatch_metal::{validate_diffusion_threshold, DiffusionDispatchError};
 pub use diffusion_parity::{compare_f32, compare_u32, compare_u8, DiffusionParityError};
@@ -98,8 +100,8 @@ pub use diffusion_self_verify::{
 };
 pub use diffusion_state::{DiffusionStateLayout, DiffusionStateLayoutError};
 pub use diffusion_telemetry::{
-    DiffusionDispatchReport, DiffusionDispatchTelemetry, DiffusionStageTelemetry,
-    DiffusionTelemetryError,
+    DiffusionDispatchReport, DiffusionDispatchTelemetry, DiffusionStageOutcome,
+    DiffusionStageTelemetry, DiffusionTelemetryError,
 };
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};

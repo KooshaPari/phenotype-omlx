@@ -22,6 +22,8 @@ pub enum DiffusionDispatchError {
     #[cfg(all(feature = "metal", target_os = "macos"))]
     #[error("Metal diffusion dispatch failed: {0}")]
     Metal(String),
+    #[error("diffusion telemetry construction failed: {0}")]
+    Telemetry(String),
 }
 
 /// Validate confidence/remask thresholds before they cross the FFI boundary.
@@ -274,6 +276,71 @@ pub fn diffusion_trajectory_metal(
         },
     )
     .map_err(DiffusionDispatchError::Metal)
+}
+
+/// Execute active-position compaction and retain a promotion-grade outcome.
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub fn diffusion_active_compact_metal_with_telemetry(
+    values: &[u32],
+    active: &[u8],
+    artifact: &crate::MetallibArtifact,
+) -> Result<crate::DiffusionStageOutcome<(Vec<u32>, Vec<u32>)>, DiffusionDispatchError> {
+    let started = std::time::Instant::now();
+    let result = diffusion_active_compact_metal(values, active, artifact);
+    crate::DiffusionStageOutcome::from_result(
+        crate::DiffusionStage::ActiveCompact,
+        started.elapsed().as_secs_f64() * 1_000.0,
+        result,
+        false,
+    )
+    .map_err(|error| DiffusionDispatchError::Telemetry(error.to_string()))
+}
+
+/// Execute remasking and retain a promotion-grade outcome.
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub fn diffusion_remask_metal_with_telemetry(
+    candidate_mask: &[u8],
+    confidence: &[f32],
+    threshold: f32,
+    artifact: &crate::MetallibArtifact,
+) -> Result<crate::DiffusionStageOutcome<Vec<u8>>, DiffusionDispatchError> {
+    let started = std::time::Instant::now();
+    let result = diffusion_remask_metal(candidate_mask, confidence, threshold, artifact);
+    crate::DiffusionStageOutcome::from_result(
+        crate::DiffusionStage::Remask,
+        started.elapsed().as_secs_f64() * 1_000.0,
+        result,
+        false,
+    )
+    .map_err(|error| DiffusionDispatchError::Telemetry(error.to_string()))
+}
+
+/// Execute trajectory update and retain a promotion-grade outcome.
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub fn diffusion_trajectory_metal_with_telemetry(
+    previous_confidence: &[f32],
+    confidence: &[f32],
+    entropy: &[f32],
+    confidence_threshold: f32,
+    momentum_threshold: f32,
+    artifact: &crate::MetallibArtifact,
+) -> Result<crate::DiffusionStageOutcome<(Vec<f32>, Vec<u8>)>, DiffusionDispatchError> {
+    let started = std::time::Instant::now();
+    let result = diffusion_trajectory_metal(
+        previous_confidence,
+        confidence,
+        entropy,
+        confidence_threshold,
+        momentum_threshold,
+        artifact,
+    );
+    crate::DiffusionStageOutcome::from_result(
+        crate::DiffusionStage::Trajectory,
+        started.elapsed().as_secs_f64() * 1_000.0,
+        result,
+        false,
+    )
+    .map_err(|error| DiffusionDispatchError::Telemetry(error.to_string()))
 }
 
 #[cfg(test)]
