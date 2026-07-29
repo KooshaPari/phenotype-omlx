@@ -179,6 +179,10 @@ three stage envelopes through the validated dispatch plan before parity checks. 
 `Promote`/`Fallback`/`Rollback` policy with explicit failed-stage limits. Seven focused telemetry
 tests pass; fixture validation remains compile-only.
 
+Status update 2026-07-29o: `DiffusionDispatchPlan::evaluate` now re-validates report layout and
+stage order before applying the rollback policy. Five focused dispatch tests pass; promotion can no
+longer be decided from telemetry belonging to a stale plan.
+
 Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
 validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
 `[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
