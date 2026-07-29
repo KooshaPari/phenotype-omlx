@@ -227,3 +227,20 @@ each cache-entry score once, updates the running maximum/norm, and accumulates v
 same pass. A source contract test pins the one-traversal invariant. This is a kernel-level
 optimization only: native Metal compilation, device parity, and Qwen3.5 end-to-end dispatch
 remain separate evidence gates and must not be inferred from the source test.
+
+### 2026-07-29 - diffusion decoding acceleration targets
+
+Recent diffusion-language-model work changes the kernel target from a single argmax pass to a
+stateful denoising scheduler:
+
+| Reference | Kernel implication | Planned contract |
+|---|---|---|
+| [TSPD + Confidence Extrapolation](https://arxiv.org/abs/2605.30753) | Track per-token confidence, entropy, momentum, position, and convergence state | fused confidence/entropy reduction plus active-position compaction; preserve uncertainty metadata |
+| [S2D2](https://arxiv.org/abs/2603.25702) | Mix block-parallel diffusion proposals with autoregressive self-verification | remask/proposal buffers and bounded verifier dispatch, sharing the existing speculative governor |
+| [Not All Denoising Steps Are Equal](https://arxiv.org/abs/2604.02340) | Early/late steps can use a smaller denoiser while middle steps retain full capacity | step-class schedule in `StatePlan`; benchmark FLOP reduction separately from quality |
+| [Discrete Diffusion Survey](https://arxiv.org/abs/2506.13759) | Masked diffusion requires active-token masks and repeated full-sequence attention | keep remask, mask compaction, and denoise logits as separate Metal kernels |
+
+Implementation consequence: the existing `diffusion_argmax_confidence_f32` kernel is a useful
+leaf, but it is not a complete diffusion runtime. The next source-level additions should be
+confidence trajectory state, active-position compaction, and remask scheduling; none should be
+promoted from source tests without live parity and quality envelopes.
