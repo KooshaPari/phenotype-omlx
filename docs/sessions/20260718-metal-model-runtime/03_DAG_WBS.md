@@ -146,6 +146,10 @@ Status update 2026-07-29g: the host parity oracle now compares compacted values/
 and floating-point trajectory outputs with explicit shape and tolerance errors. Focused parity
 tests pass 2/2; device parity remains intentionally uninvoked.
 
+Status update 2026-07-29h: added an ignored, explicit-env Metal integration fixture covering all
+three stages and the parity oracle. The test target compiles with `--features metal`; execution
+requires an allowlisted artifact and is not part of ordinary CI.
+
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope
       -> expert locality / grouped-GEMM tile sweep
