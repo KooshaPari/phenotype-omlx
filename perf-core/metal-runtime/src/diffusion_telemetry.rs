@@ -52,6 +52,22 @@ impl DiffusionStageTelemetry {
             fallback,
         })
     }
+
+    /// Convert a command result into a validated stage envelope.
+    ///
+    /// The conversion is deliberately independent of Metal so command
+    /// encoders and host-only tests share one failure/fallback policy.
+    pub fn from_result<E: std::fmt::Display>(
+        stage: DiffusionStage,
+        elapsed_ms: f64,
+        result: Result<(), E>,
+        fallback: bool,
+    ) -> Result<Self, DiffusionTelemetryError> {
+        match result {
+            Ok(()) => Self::new(stage, elapsed_ms, true, None, fallback),
+            Err(error) => Self::new(stage, elapsed_ms, false, Some(error.to_string()), fallback),
+        }
+    }
 }
 
 /// Validated report for the fixed three-stage diffusion dispatch plan.
@@ -203,6 +219,30 @@ mod tests {
         assert!(!failed.completed);
         assert!(failed.fallback);
         assert_eq!(failed.error.as_deref(), Some("native dispatch unavailable"));
+    }
+
+    #[test]
+    fn result_conversion_preserves_failure_and_fallback() {
+        let failed = DiffusionStageTelemetry::from_result(
+            DiffusionStage::Remask,
+            2.5,
+            Err("command buffer failed"),
+            true,
+        )
+        .unwrap();
+        assert!(!failed.completed);
+        assert!(failed.fallback);
+        assert_eq!(failed.error.as_deref(), Some("command buffer failed"));
+
+        let completed = DiffusionStageTelemetry::from_result(
+            DiffusionStage::Remask,
+            1.0,
+            Ok::<(), &str>(()),
+            false,
+        )
+        .unwrap();
+        assert!(completed.completed);
+        assert!(completed.error.is_none());
     }
 
     #[test]
