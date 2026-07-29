@@ -15,6 +15,7 @@
 //! expectations match across runs.
 
 pub use crate::diffusion::confidence::confidence_scores;
+pub use crate::diffusion::active::{active_positions, compact_active};
 pub use crate::diffusion::denoise::{
     denoise_step, denoise_step_sequential, DenoiseUpdate, RemaskStrategy,
 };

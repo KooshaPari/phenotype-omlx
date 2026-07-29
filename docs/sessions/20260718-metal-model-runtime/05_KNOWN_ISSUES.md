@@ -171,3 +171,8 @@ Update 2026-07-29 (cache integration): the Bonsai ternary, MoE router/grouped GE
 diffusion-confidence wrappers now resolve Metal function names through the native catalog before
 entering the shared pipeline cache. `cargo check -p metal-runtime --features metal` passes;
 device command encoding remains unexercised.
+
+Update 2026-07-29 (diffusion scheduler leaves): active-position compaction and confidence remask
+are now represented by deterministic Rust contracts and catalogued Metal kernels. The combined
+Xcode-beta bundle compiles 19/19 sources. Device dispatch, trajectory-state persistence, and
+Qwen3.5 acceptance remain open; no live workload was run under the overload/crash guard.

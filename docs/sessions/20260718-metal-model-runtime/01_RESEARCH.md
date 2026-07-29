@@ -244,3 +244,11 @@ Implementation consequence: the existing `diffusion_argmax_confidence_f32` kerne
 leaf, but it is not a complete diffusion runtime. The next source-level additions should be
 confidence trajectory state, active-position compaction, and remask scheduling; none should be
 promoted from source tests without live parity and quality envelopes.
+
+### 2026-07-29 - active-position and remask source contracts
+
+The first two scheduler leaves are now concrete: Rust `active_positions`/`compact_active`
+preserve ascending scatter indices and reject value/mask shape mismatches, while Metal provides
+`diffusion_active_compact_u32` and `diffusion_remask_confidence_f32`. Both are catalogued by
+stable tag and concrete function symbol. The Xcode-beta source bundle compiles 19/19 shaders;
+this remains source/artifact evidence, not device or Qwen3.5 quality evidence.
