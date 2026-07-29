@@ -162,3 +162,7 @@ Update 2026-07-29 (native function catalog): `native_catalog` now binds each rou
 concrete Metal `kernel void` symbol and asserts that every symbol exists in checked-in MSL.
 Unknown tags fail closed. This closes selector-to-function-name drift, but does not claim that a
 device loaded or executed any function.
+
+Update 2026-07-29 (verified bundle binding): `NativeKernelBundle` now loads a manifest-approved
+`.metallib` and resolves only known tag/function pairs. Invalid manifests, unallowlisted files,
+and unknown tags fail before any Metal device call; native dispatch remains the next gate.

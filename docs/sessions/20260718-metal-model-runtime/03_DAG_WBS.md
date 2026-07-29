@@ -100,3 +100,6 @@ still gated on verified artifact loading and live device dispatch.
 The selector-to-function-name catalog is now explicit and tested for all currently catalogued
 native sources (MoE router/dispatch, Bonsai ternary, diffusion confidence, attention, and
 recurrent families). Unknown tags fail closed before a Metal lookup.
+
+`NativeKernelBundle` now joins the manifest-approved artifact to this catalog, producing a
+verified `(artifact, tag, function)` binding suitable for the eventual Metal command encoder.
