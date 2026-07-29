@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
     "turbo-quant-c",
+    "vpu/agents",
+    "vpu/dashboard",
     "turbo-quant-go",
     "turbo-quant-nim",
     "tree-attention-spirv",
