@@ -202,3 +202,13 @@ orchestration helper. It consumes typed active-compaction, remask, and trajector
 retains their outputs, derives a plan-bound report, and returns the bounded `Promote`, `Fallback`,
 or `Rollback` decision. Focused dispatch tests pass 7/7; no Metal, device, or Qwen3.5 workload
 was executed.
+
+Status update 2026-07-30b (P4 promotion gate): live promotion requires a fresh immutable
+candidate envelope tied to the current branch and exact HEAD, with the manifest and every
+`.metallib` SHA-256 recorded, the Xcode-beta/device fingerprint captured, and the Qwen3.5
+model identifier, Harbor job/trial, requested and observed context lengths, prompt hash,
+fallback/error counts, reward/pass@1, and oracle/result artifact hashes present. Existing
+Harbor/candidate records reference older heads and remain review-only; no stale manifest or
+prior successful trial may be re-used as current-HEAD evidence. The gate is held until the
+current-HEAD envelope is emitted and receives final local promotion review; no workload was
+run in this turn.
