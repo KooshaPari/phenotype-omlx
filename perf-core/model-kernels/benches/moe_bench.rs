@@ -24,7 +24,7 @@ fn bench_router_topk(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("router_topk", format!("{num_experts}e_{top_k}k")),
             &(num_experts, top_k, &logits),
-            |bench, &(ne, tk, ref lg)| {
+            |bench, &(ne, tk, lg)| {
                 bench.iter(|| black_box(router_topk(black_box(lg), ne, tk, 0).unwrap()))
             },
         );
@@ -51,7 +51,7 @@ fn bench_dispatch(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("dispatch", format!("{num_tokens}tok")),
             &(&token_indices, &assignments, num_experts),
-            |bench, &(ref ti, ref asgn, ne)| {
+            |bench, &(ti, asgn, ne)| {
                 bench.iter(|| {
                     black_box(moe_dispatch(black_box(ti), black_box(asgn), ne, 1.25).unwrap())
                 })
@@ -82,22 +82,21 @@ fn bench_grouped_gemm(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("scalar", &label),
             &(&act, &wt, &buckets, k_dim, n_dim, num_tokens),
-            |bench, &(ref a_ref, ref b_ref, ref bk, k, n, m)| {
+            |bench, &(a_ref, b_ref, bk, k, n, m)| {
                 let mut out = vec![0.0f32; num_tokens * n];
                 bench.iter(|| {
                     out.fill(0.0);
-                    black_box(
-                        grouped_gemm(
-                            black_box(a_ref),
-                            black_box(b_ref),
-                            black_box(bk),
-                            m,
-                            k,
-                            n,
-                            &mut out,
-                        )
-                        .unwrap(),
+                    grouped_gemm(
+                        black_box(a_ref),
+                        black_box(b_ref),
+                        black_box(bk),
+                        m,
+                        k,
+                        n,
+                        &mut out,
                     )
+                    .unwrap();
+                    black_box(&out);
                 })
             },
         );
@@ -105,22 +104,21 @@ fn bench_grouped_gemm(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("tiled", &label),
             &(&act, &wt, &buckets, k_dim, n_dim, num_tokens),
-            |bench, &(ref a_ref, ref b_ref, ref bk, k, n, m)| {
+            |bench, &(a_ref, b_ref, bk, k, n, m)| {
                 let mut out = vec![0.0f32; num_tokens * n];
                 bench.iter(|| {
                     out.fill(0.0);
-                    black_box(
-                        grouped_gemm_tiled(
-                            black_box(a_ref),
-                            black_box(b_ref),
-                            black_box(bk),
-                            m,
-                            k,
-                            n,
-                            &mut out,
-                        )
-                        .unwrap(),
+                    grouped_gemm_tiled(
+                        black_box(a_ref),
+                        black_box(b_ref),
+                        black_box(bk),
+                        m,
+                        k,
+                        n,
+                        &mut out,
                     )
+                    .unwrap();
+                    black_box(&out);
                 })
             },
         );
@@ -152,13 +150,12 @@ fn bench_weighted_reduce(c: &mut Criterion) {
                 hidden,
                 num_tokens,
             ),
-            |bench, &(ref eo, ref w, ept, h, nt)| {
+            |bench, &(eo, w, ept, h, nt)| {
                 let mut out = vec![0.0f32; nt * h];
                 bench.iter(|| {
                     out.fill(0.0);
-                    black_box(
-                        weighted_reduce(black_box(eo), black_box(w), ept, h, &mut out).unwrap(),
-                    )
+                    weighted_reduce(black_box(eo), black_box(w), ept, h, &mut out).unwrap();
+                    black_box(&out);
                 })
             },
         );
@@ -172,14 +169,12 @@ fn bench_weighted_reduce(c: &mut Criterion) {
                 hidden,
                 num_tokens,
             ),
-            |bench, &(ref eo, ref w, ept, h, nt)| {
+            |bench, &(eo, w, ept, h, nt)| {
                 let mut out = vec![0.0f32; nt * h];
                 bench.iter(|| {
                     out.fill(0.0);
-                    black_box(
-                        weighted_reduce_tiled(black_box(eo), black_box(w), ept, h, &mut out)
-                            .unwrap(),
-                    )
+                    weighted_reduce_tiled(black_box(eo), black_box(w), ept, h, &mut out).unwrap();
+                    black_box(&out);
                 })
             },
         );
@@ -203,11 +198,12 @@ fn bench_shared_expert(c: &mut Criterion) {
         group.bench_with_input(
             BenchmarkId::new("shared_expert", &label),
             &(&x, &w, m, n_dim),
-            |bench, &(ref x_ref, ref w_ref, m_val, n_val)| {
+            |bench, &(x_ref, w_ref, m_val, n_val)| {
                 let mut out = vec![0.0f32; m_val * n_val];
                 bench.iter(|| {
                     out.fill(0.0);
-                    black_box(shared_expert(black_box(x_ref), black_box(w_ref), &mut out).unwrap())
+                    shared_expert(black_box(x_ref), black_box(w_ref), &mut out).unwrap();
+                    black_box(&out);
                 })
             },
         );
