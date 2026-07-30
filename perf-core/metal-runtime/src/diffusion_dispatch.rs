@@ -1,5 +1,6 @@
 //! Deterministic dispatch plan for the masked-diffusion state stages.
 
+use crate::DiffusionStageOutcome;
 use crate::{
     DiffusionDispatchDecision, DiffusionDispatchTelemetry, DiffusionRollbackPolicy,
     DiffusionTelemetryError,
@@ -28,6 +29,23 @@ pub struct DiffusionDispatchPlan {
     pub tokens: usize,
     pub layout: DiffusionStateLayout,
     pub stages: [DiffusionStage; 3],
+}
+
+/// Host-only result of evaluating all three native stage outcomes.
+///
+/// The outcomes are retained so callers can still consume successful stage
+/// outputs after the promotion decision.  This helper deliberately performs
+/// no Metal work: it only binds telemetry to this plan and applies the bounded
+/// rollback policy.
+#[derive(Debug, PartialEq)]
+pub struct DiffusionDispatchEvaluation<A, B, C> {
+    pub outcomes: (
+        DiffusionStageOutcome<A>,
+        DiffusionStageOutcome<B>,
+        DiffusionStageOutcome<C>,
+    ),
+    pub report: DiffusionDispatchTelemetry,
+    pub decision: DiffusionDispatchDecision,
 }
 
 impl DiffusionDispatchPlan {
@@ -67,6 +85,35 @@ impl DiffusionDispatchPlan {
     ) -> Result<DiffusionDispatchDecision, DiffusionTelemetryError> {
         let validated = DiffusionDispatchTelemetry::for_plan(self, report.stages.clone())?;
         Ok(policy.decide(&validated))
+    }
+
+    /// Consume active-compaction, remask, and trajectory outcomes together.
+    ///
+    /// Keeping this orchestration at the plan boundary prevents a caller from
+    /// accidentally evaluating a partial or differently ordered stage tuple.
+    pub fn evaluate_outcomes<A, B, C>(
+        &self,
+        outcomes: (
+            DiffusionStageOutcome<A>,
+            DiffusionStageOutcome<B>,
+            DiffusionStageOutcome<C>,
+        ),
+        policy: &DiffusionRollbackPolicy,
+    ) -> Result<DiffusionDispatchEvaluation<A, B, C>, DiffusionTelemetryError> {
+        let report = DiffusionDispatchTelemetry::for_plan(
+            self,
+            [
+                outcomes.0.telemetry.clone(),
+                outcomes.1.telemetry.clone(),
+                outcomes.2.telemetry.clone(),
+            ],
+        )?;
+        let decision = self.evaluate(&report, policy)?;
+        Ok(DiffusionDispatchEvaluation {
+            outcomes,
+            report,
+            decision,
+        })
     }
 }
 
@@ -110,6 +157,112 @@ mod tests {
         assert_eq!(
             plan.evaluate(&report, &policy).unwrap(),
             DiffusionDispatchDecision::Promote
+        );
+    }
+
+    #[test]
+    fn evaluates_three_outcomes_and_retains_outputs() {
+        let plan = DiffusionDispatchPlan::for_tokens(4).unwrap();
+        let outcomes = (
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::ActiveCompact,
+                0.2,
+                Ok::<_, &str>(vec![1_u32, 2]),
+                false,
+            )
+            .unwrap(),
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::Remask,
+                0.3,
+                Ok::<_, &str>(vec![1_u8, 0]),
+                false,
+            )
+            .unwrap(),
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::Trajectory,
+                0.4,
+                Ok::<_, &str>(vec![0.25_f32, 0.5]),
+                false,
+            )
+            .unwrap(),
+        );
+        let policy = DiffusionRollbackPolicy::bounded(1, false).unwrap();
+        let evaluation = plan.evaluate_outcomes(outcomes, &policy).unwrap();
+        assert_eq!(evaluation.decision, DiffusionDispatchDecision::Promote);
+        assert_eq!(evaluation.report.total_elapsed_ms, 0.9);
+        assert_eq!(
+            evaluation.outcomes.0.output.as_deref(),
+            Some(&[1_u32, 2][..])
+        );
+        assert_eq!(
+            evaluation.outcomes.1.output.as_deref(),
+            Some(&[1_u8, 0][..])
+        );
+    }
+
+    #[test]
+    fn evaluates_failure_as_fallback_or_rollback_by_policy() {
+        let plan = DiffusionDispatchPlan::for_tokens(4).unwrap();
+        let outcomes = (
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::ActiveCompact,
+                0.2,
+                Ok::<_, &str>(vec![1_u32]),
+                false,
+            )
+            .unwrap(),
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::Remask,
+                0.3,
+                Err::<Vec<u8>, _>("remask unavailable"),
+                true,
+            )
+            .unwrap(),
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::Trajectory,
+                0.4,
+                Ok::<_, &str>(vec![0.25_f32]),
+                false,
+            )
+            .unwrap(),
+        );
+        let fallback = DiffusionRollbackPolicy::bounded(1, true).unwrap();
+        assert_eq!(
+            plan.evaluate_outcomes(outcomes, &fallback)
+                .unwrap()
+                .decision,
+            DiffusionDispatchDecision::Fallback
+        );
+
+        let rollback = DiffusionRollbackPolicy::bounded(1, false).unwrap();
+        let outcomes = (
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::ActiveCompact,
+                0.2,
+                Ok::<_, &str>(vec![1_u32]),
+                false,
+            )
+            .unwrap(),
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::Remask,
+                0.3,
+                Err::<Vec<u8>, _>("remask unavailable"),
+                false,
+            )
+            .unwrap(),
+            DiffusionStageOutcome::from_result(
+                DiffusionStage::Trajectory,
+                0.4,
+                Ok::<_, &str>(vec![0.25_f32]),
+                false,
+            )
+            .unwrap(),
+        );
+        assert_eq!(
+            plan.evaluate_outcomes(outcomes, &rollback)
+                .unwrap()
+                .decision,
+            DiffusionDispatchDecision::Rollback
         );
     }
 }
