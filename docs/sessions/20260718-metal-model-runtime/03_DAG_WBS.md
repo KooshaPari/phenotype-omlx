@@ -196,3 +196,9 @@ validator shared by remask and trajectory bindings. NaN/Inf and confidence value
       -> group-scale and K-tail parity
       -> zero-elision / byte-alignment tile sweep
       -> quality/perplexity envelope before promotion
+
+Status update 2026-07-30a: added the host-only `DiffusionDispatchPlan::evaluate_outcomes`
+orchestration helper. It consumes typed active-compaction, remask, and trajectory outcomes,
+retains their outputs, derives a plan-bound report, and returns the bounded `Promote`, `Fallback`,
+or `Rollback` decision. Focused dispatch tests pass 7/7; no Metal, device, or Qwen3.5 workload
+was executed.
