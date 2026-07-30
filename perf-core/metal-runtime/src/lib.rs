@@ -86,7 +86,7 @@ pub use deltanet::{deltanet_step_metal, deltanet_step_metal_two_pass};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use diffusion_confidence::diffusion_argmax_confidence_metal;
 pub use diffusion_confidence::DiffusionConfidenceError;
-pub use diffusion_dispatch::{DiffusionDispatchPlan, DiffusionStage};
+pub use diffusion_dispatch::{DiffusionDispatchEvaluation, DiffusionDispatchPlan, DiffusionStage};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use diffusion_dispatch_metal::{
     diffusion_active_compact_metal, diffusion_active_compact_metal_with_telemetry,
