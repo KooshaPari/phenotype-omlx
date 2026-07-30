@@ -212,3 +212,10 @@ Harbor/candidate records reference older heads and remain review-only; no stale 
 prior successful trial may be re-used as current-HEAD evidence. The gate is held until the
 current-HEAD envelope is emitted and receives final local promotion review; no workload was
 run in this turn.
+
+Status update 2026-07-30c (bounded artifact inventory): the current-head provenance envelope
+(`artifacts/candidate-provenance-20260730.json`) and the stale historical `candidate-manifest.json`
+were found under the session directory. A max-depth-six inventory of `phenotype-omlx/` and
+`Downloads/` found no `.metallib` artifact available for allowlist verification. G6 therefore
+remains held pending a fresh current-HEAD native artifact envelope; no source or workload action
+was performed.
