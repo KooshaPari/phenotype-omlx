@@ -41,6 +41,13 @@ jobs:
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/actionlint" -version
 
+      - name: Install Prettier
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global prettier@3.6.2
+          prettier --version
+
       - name: Trunk Check
         uses: trunk-io/trunk-action@04ba50e7658c81db7356da96657e6e77f220bfa3  # v1.3.1
 
