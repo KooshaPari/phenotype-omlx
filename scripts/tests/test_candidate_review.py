@@ -14,6 +14,10 @@ HARBOR_LATEST = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/har
 HARBOR_8192 = ROOT / "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727-8192.json"
 NIAH_MATRIX = ROOT / "research/baselines/qwen35-niah-20260727-4k8k.json"
 NIAH_16K = ROOT / "research/baselines/qwen35-niah-20260727-16k-paired.json"
+PROVENANCE = ROOT / (
+    "docs/sessions/20260718-metal-model-runtime/artifacts/"
+    "candidate-provenance-20260730.json"
+)
 
 
 def test_review_preserves_stale_manifest_and_blocks_promotion() -> None:
@@ -36,6 +40,21 @@ def test_review_canonical_digest_matches() -> None:
     payload = {key: value for key, value in document.items() if key != "integrity"}
     canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
     assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
+
+
+def test_current_head_provenance_is_explicitly_non_promotable() -> None:
+    document = json.loads(PROVENANCE.read_text(encoding="utf-8"))
+    candidate = document["candidate"]
+    assert document["evidence_label"] == "provenance_only"
+    assert candidate["branch"] == "feat/diffusion-trajectory-state"
+    assert candidate["head"] == candidate["provenance_commit"]
+    assert len(candidate["head"]) == 40
+    assert candidate["evidence_complete"] is False
+    assert document["artifacts"]["metallib_manifest"]["status"] == "pending"
+    assert document["artifacts"]["metallib_manifest"]["sha256"] is None
+    assert document["artifacts"]["device_fingerprint"]["status"] == "unknown"
+    assert document["qwen35_harbor"]["status"] == "pending"
+    assert document["promotion"]["verdict"] == "blocked"
 
 
 def test_current_manifest_is_exact_head_and_holds_8192_gate() -> None:
