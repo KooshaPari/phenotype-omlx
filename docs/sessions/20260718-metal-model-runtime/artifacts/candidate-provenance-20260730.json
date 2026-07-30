@@ -1,58 +1,23 @@
 {
   "schema_version": "0.1",
   "evidence_label": "provenance_only",
-  "recorded_at": "2026-07-31T23:28:48Z",
+  "recorded_at": "2026-07-30T10:06:00Z",
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "9bab1235b63cf0746acc9bd88bedb782c7449043",
-    "provenance_commit": "9bab1235b63cf0746acc9bd88bedb782c7449043",
-    "working_tree": "clean_at_compile",
-    "current_repository_head_at_recording": "58cd8768a7c0f94d6a189839b01f3980213b5db5",
+    "head": "8ada4ce5cf5006ccb08994c90fcdf7ae69027558",
+    "provenance_commit": "8ada4ce5cf5006ccb08994c90fcdf7ae69027558",
+    "working_tree": "clean_at_recording",
     "evidence_complete": false
   },
   "artifacts": {
     "metallib_manifest": {
-      "status": "compile_only",
-      "sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
-      "artifact_bound_to_head": true
+      "status": "pending",
+      "sha256": null
     },
     "native_artifacts": {
-      "status": "compile_only",
-      "entries": [
-        {
-          "path": "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/kernels/qwen3.5-0.8b/build/kernels.metallib",
-          "sha256": "d553dba4a622d1d8d9433d8378e552017361c2580573069fb7fe0ac12e70d897",
-          "artifact_bound_to_head": false
-        },
-        {
-          "path": "/tmp/phenotype-omlx-metal-current-20260731/metal-runtime.metallib",
-          "sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
-          "size_bytes": 111965,
-          "artifact_bound_to_head": true,
-          "source_equivalent_to": "f212709023dd786bb32317ce20d0fba74e77f0f2"
-        }
-      ]
-    },
-    "compile_provenance": {
-      "status": "verified_compile_only",
-      "script": "scripts/build_metal_runtime_bundle.sh",
-      "developer_dir": "/Users/kooshapari/Downloads/Xcode-beta.app/Contents/Developer",
-      "shader_count": 20,
-      "actual_repository_head": "9bab1235b63cf0746acc9bd88bedb782c7449043",
-      "output": "/tmp/phenotype-omlx-metal-exact-20260731/metal-runtime.metallib",
-      "sha256_reproduced": true
-    },
-    "model_snapshot_integrity": {
-      "status": "verified_with_sidecar_scope",
-      "report": "artifacts/qwen35-snapshot-integrity-20260731.json",
-      "error": null,
-      "model_load_or_download": false,
-      "optional_sidecars_present": {
-        "optiq/mtp.safetensors": true
-      },
-      "indexed_vision_sidecar_present": true,
-      "scope_warning": "index metadata total_size excludes the config-declared optiq/optiq_vision.safetensors sidecar; all indexed payloads are hashed and present"
+      "status": "pending",
+      "entries": []
     },
     "device_fingerprint": {
       "status": "unknown",
@@ -61,7 +26,7 @@
   },
   "qwen35_harbor": {
     "status": "pending",
-    "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+    "model": null,
     "job_id": null,
     "trial_name": null,
     "requested_context_tokens": null,
@@ -74,10 +39,9 @@
   },
   "promotion": {
     "verdict": "blocked",
-    "reason": "The cached Qwen3.5 snapshot is verified with an explicit config-declared sidecar scope; promotion remains blocked because the record is compile-only, the candidate source is historical rather than current, and no authorized Harbor/device evidence is present.",
+    "reason": "Current-head provenance is recorded without runtime evidence; stale candidate and Harbor records cannot be promoted for this HEAD.",
     "remaining_gates": [
-      "fresh allowlisted Metal artifact manifest and SHA-256 verification bound to current HEAD",
-      "current-head candidate provenance (the recorded compile source is 9bab1235)",
+      "fresh allowlisted Metal artifact manifest and SHA-256 verification",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
       "final local promotion review"
