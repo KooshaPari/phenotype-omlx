@@ -13,6 +13,10 @@ plugins:
 
 # Keep the repository's existing linter and formatter coverage enabled.
 lint:
+  ignore:
+    - linters: [prettier]
+      paths:
+        - .github/workflows/trunk-check.yml
   enabled:
     - actionlint
     - black

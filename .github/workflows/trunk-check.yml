@@ -34,8 +34,9 @@ jobs:
           set -euo pipefail
           version=1.7.7
           archive="actionlint_${version}_linux_amd64.tar.gz"
+          release_url="https://github.com/rhysd/actionlint/releases/download/v${version}"
           curl --fail --silent --show-error --location \
-            "https://github.com/rhysd/actionlint/releases/download/v${version}/${archive}" \
+            "${release_url}/${archive}" \
             | tar -xz -C "$RUNNER_TEMP" actionlint
           chmod +x "$RUNNER_TEMP/actionlint"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
