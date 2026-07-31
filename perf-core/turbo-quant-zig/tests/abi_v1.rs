@@ -7,7 +7,7 @@
 //! and the tests verify that its output agrees with the reference Rust
 //! implementation in `perf-core/native-abi`.
 
-#![cfg(feature = "zig")]
+#![cfg(all(feature = "zig", turbo_quant_zig_native))]
 
 use turbo_quant_zig::ZigQuantizedTensor;
 
@@ -22,7 +22,7 @@ fn zig_v1_encode_matches_reference_within_tolerance() {
         assert_eq!(q.shape, vec![input.len()]);
         assert_eq!(
             q.packed.len(),
-            (input.len() * bits as usize + 7) / 8,
+            (input.len() * bits as usize).div_ceil(8),
             "packed length must match the (n * bits + 7) / 8 contract"
         );
 

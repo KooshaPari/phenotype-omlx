@@ -3,7 +3,7 @@
 // Requires the Zig compiler in PATH (`brew install zig`). build.rs compiles
 // zig-src/turbo_quant.zig via `zig build-lib` and links it unconditionally.
 
-#[cfg(feature = "zig")]
+#[cfg(all(feature = "zig", turbo_quant_zig_native))]
 use native::{zig_decode, zig_decode_v1, zig_encode, zig_encode_v1};
 
 #[derive(Debug, Clone)]
@@ -17,11 +17,11 @@ pub struct ZigQuantizedTensor {
 impl ZigQuantizedTensor {
     /// Encode `data` to TurboQuant via the Zig kernel.
     pub fn encode(data: &[f32], bits: u8, group_size: usize) -> Result<Self, String> {
-        #[cfg(feature = "zig")]
+        #[cfg(all(feature = "zig", turbo_quant_zig_native))]
         {
             zig_encode(data, bits, group_size)
         }
-        #[cfg(not(feature = "zig"))]
+        #[cfg(not(all(feature = "zig", turbo_quant_zig_native)))]
         {
             let _ = (data, bits, group_size);
             Err("Zig feature not enabled".to_string())
@@ -30,11 +30,11 @@ impl ZigQuantizedTensor {
 
     /// Decode a TurboQuant tensor.
     pub fn decode(&self, n: usize, group_size: usize, bits: u8) -> Vec<f32> {
-        #[cfg(feature = "zig")]
+        #[cfg(all(feature = "zig", turbo_quant_zig_native))]
         {
             zig_decode(&self.packed, &self.scales, &self.zeros, n, group_size, bits)
         }
-        #[cfg(not(feature = "zig"))]
+        #[cfg(not(all(feature = "zig", turbo_quant_zig_native)))]
         {
             let _ = (n, group_size, bits);
             vec![]
@@ -48,11 +48,11 @@ impl ZigQuantizedTensor {
         bits: u8,
         group_size: usize,
     ) -> Result<Self, native_abi::Status> {
-        #[cfg(feature = "zig")]
+        #[cfg(all(feature = "zig", turbo_quant_zig_native))]
         {
             zig_encode_v1(data, bits, group_size)
         }
-        #[cfg(not(feature = "zig"))]
+        #[cfg(not(all(feature = "zig", turbo_quant_zig_native)))]
         {
             let _ = (data, bits, group_size);
             Err(native_abi::Status::ErrAllocation)
@@ -69,7 +69,7 @@ impl ZigQuantizedTensor {
         bits: u8,
         out: &mut [f32],
     ) -> native_abi::Status {
-        #[cfg(feature = "zig")]
+        #[cfg(all(feature = "zig", turbo_quant_zig_native))]
         {
             zig_decode_v1(
                 &self.packed,
@@ -81,7 +81,7 @@ impl ZigQuantizedTensor {
                 out,
             )
         }
-        #[cfg(not(feature = "zig"))]
+        #[cfg(not(all(feature = "zig", turbo_quant_zig_native)))]
         {
             let _ = (n, group_size, bits, out);
             native_abi::Status::ErrAllocation
@@ -89,7 +89,7 @@ impl ZigQuantizedTensor {
     }
 }
 
-#[cfg(feature = "zig")]
+#[cfg(all(feature = "zig", turbo_quant_zig_native))]
 mod native {
     use super::ZigQuantizedTensor;
     use std::os::raw::{c_uchar, c_void};
@@ -99,7 +99,7 @@ mod native {
         EncodeResult as RustEncodeResult, Status as RustStatus, ABI_VERSION_CURRENT,
     };
 
-    #[cfg(feature = "zig")]
+    #[cfg(all(feature = "zig", turbo_quant_zig_native))]
     extern "C" {
         fn tq_zig_encode(
             data_ptr: *const f32,
@@ -134,7 +134,7 @@ mod native {
         fn tq_abi_decode(req: *const RustDecodeRequest) -> i32;
     }
 
-    #[cfg(feature = "zig")]
+    #[cfg(all(feature = "zig", turbo_quant_zig_native))]
     pub(super) fn zig_encode(
         data: &[f32],
         bits: u8,
@@ -201,7 +201,7 @@ mod native {
         })
     }
 
-    #[cfg(feature = "zig")]
+    #[cfg(all(feature = "zig", turbo_quant_zig_native))]
     pub(super) fn zig_decode(
         packed: &[u8],
         scales: &[f32],
@@ -251,7 +251,7 @@ mod native {
     // the C side. Caller-owned buffers, contract identical to
     // `perf-core/native-abi/include/abi_v1.h`.
 
-    #[cfg(feature = "zig")]
+    #[cfg(all(feature = "zig", turbo_quant_zig_native))]
     pub(super) fn zig_encode_v1(
         data: &[f32],
         bits: u8,
@@ -302,7 +302,7 @@ mod native {
         })
     }
 
-    #[cfg(feature = "zig")]
+    #[cfg(all(feature = "zig", turbo_quant_zig_native))]
     pub(super) fn zig_decode_v1(
         packed: &[u8],
         scales: &[f32],
@@ -335,7 +335,7 @@ mod native {
 }
 
 #[cfg(test)]
-#[cfg(feature = "zig")]
+#[cfg(all(feature = "zig", turbo_quant_zig_native))]
 mod tests {
     use super::*;
 
@@ -359,13 +359,13 @@ mod tests {
             scales: vec![],
             zeros: vec![],
         };
-        #[cfg(feature = "zig")]
+        #[cfg(all(feature = "zig", turbo_quant_zig_native))]
         {
             // Avoid decoding an empty tensor in native Zig FFI during test to prevent any potential slicing/alignment crash
             let r = q.decode(0, 8, 4);
             assert!(r.is_empty());
         }
-        #[cfg(not(feature = "zig"))]
+        #[cfg(not(all(feature = "zig", turbo_quant_zig_native)))]
         {
             let r = q.decode(8, 8, 4);
             assert!(r.iter().all(|&x| x == 0.0));
