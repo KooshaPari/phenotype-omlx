@@ -249,7 +249,9 @@ jobs:
   # GitHub Actions runners.
 
   zig-crate-native:
-    name: Zig crate native (${{ matrix.os }})
+    # Preserve the existing required check context while making the feature
+    # explicit in the command below.
+    name: Zig crate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
