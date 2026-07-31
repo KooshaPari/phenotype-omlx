@@ -38,7 +38,9 @@
       "script": "scripts/build_metal_runtime_bundle.sh",
       "developer_dir": "/Users/kooshapari/Downloads/Xcode-beta.app/Contents/Developer",
       "shader_count": 20,
-      "actual_repository_head": "ba30267b5bc9a637cc30751a69a0accbbff527f9"
+      "actual_repository_head": "9bab1235b63cf0746acc9bd88bedb782c7449043",
+      "output": "/tmp/phenotype-omlx-metal-exact-20260731/metal-runtime.metallib",
+      "sha256_reproduced": true
     },
     "device_fingerprint": {
       "status": "unknown",
