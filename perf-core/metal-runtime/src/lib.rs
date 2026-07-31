@@ -42,6 +42,12 @@ pub mod cca;
 pub mod compile;
 pub mod deltanet;
 pub mod diffusion_confidence;
+pub mod diffusion_dispatch;
+pub mod diffusion_dispatch_metal;
+pub mod diffusion_parity;
+pub mod diffusion_self_verify;
+pub mod diffusion_state;
+pub mod diffusion_telemetry;
 pub mod dispatch;
 pub mod error;
 pub mod fingerprint;
@@ -80,6 +86,21 @@ pub use deltanet::{deltanet_step_metal, deltanet_step_metal_two_pass};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use diffusion_confidence::diffusion_argmax_confidence_metal;
 pub use diffusion_confidence::DiffusionConfidenceError;
+pub use diffusion_dispatch::{DiffusionDispatchPlan, DiffusionStage};
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use diffusion_dispatch_metal::{
+    diffusion_active_compact_metal, diffusion_remask_metal, diffusion_trajectory_metal,
+};
+pub use diffusion_dispatch_metal::{validate_diffusion_threshold, DiffusionDispatchError};
+pub use diffusion_parity::{compare_f32, compare_u32, compare_u8, DiffusionParityError};
+pub use diffusion_self_verify::{
+    DiffusionSelfVerifyError, DiffusionVerificationBlock, DiffusionVerificationPlan,
+};
+pub use diffusion_state::{DiffusionStateLayout, DiffusionStateLayoutError};
+pub use diffusion_telemetry::{
+    DiffusionDispatchReport, DiffusionDispatchTelemetry, DiffusionStageTelemetry,
+    DiffusionTelemetryError,
+};
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};
 #[cfg(all(feature = "metal", target_os = "macos"))]

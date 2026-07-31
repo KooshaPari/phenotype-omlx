@@ -126,8 +126,42 @@ kernel. The remaining diffusion source path is command-encoder wiring, then boun
 self-verification; source compilation is 20/20.
 
 Status update 2026-07-29c: `StateKind::DiffusionTrajectory` now gives the plan layer an explicit
-persistent slot for confidence/entropy/momentum/convergence metadata. Focused validation was
-deferred after the local Rust build queue saturated; no runtime workload was started.
+persistent slot for confidence/entropy/momentum/convergence metadata. Isolated validation now
+passes (`state_kind_tag_for_each_variant`, 1/1); no runtime workload was started.
+
+Status update 2026-07-29d: `metal-runtime::DiffusionStateLayout` now defines the mixed-dtype
+allocation contract: three `f32` arrays plus mask/converged byte arrays, with checked arithmetic.
+Focused layout tests pass 2/2; command-encoder binding remains the next runtime boundary.
+
+Status update 2026-07-29e: `DiffusionDispatchPlan` now binds that layout to the ordered
+`active_compact -> remask -> trajectory` stages and exposes the token-sized thread grid. Focused
+dispatch-plan tests pass 2/2; it is a deterministic command-encoder input contract, not device
+execution evidence.
+
+Status update 2026-07-29f: feature-gated Metal bindings now expose all three catalogued stages
+with strict shape checks, shared buffer construction, thread-grid dispatch, and command-buffer
+status errors. `cargo check -p metal-runtime --features metal` passes; no device call was made.
+
+Status update 2026-07-29g: the host parity oracle now compares compacted values/positions, masks,
+and floating-point trajectory outputs with explicit shape and tolerance errors. Focused parity
+tests pass 2/2; device parity remains intentionally uninvoked.
+
+Status update 2026-07-29h: added an ignored, explicit-env Metal integration fixture covering all
+three stages and the parity oracle. The test target compiles with `--features metal`; execution
+requires an allowlisted artifact and is not part of ordinary CI.
+
+Status update 2026-07-29i: added a host-only `DiffusionVerificationPlan` that partitions token
+state into a finite block budget and validates each returned `f32` block through the existing
+parity oracle. Three focused tests pass; this is a bounded command-encoder contract, not device
+or Qwen3.5 execution evidence.
+
+Status update 2026-07-29j: added `DiffusionDispatchTelemetry` / `DiffusionDispatchReport`, which
+rejects invalid timing, stage order, and incomplete-without-error envelopes while deriving total
+duration and fallback state. Three focused telemetry tests pass; no workload was launched.
+
+Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
+validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
+`[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
 
     MoE router/grouped GEMM
       -> top-1 vs top-2 load histogram envelope

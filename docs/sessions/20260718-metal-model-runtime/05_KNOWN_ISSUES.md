@@ -182,5 +182,29 @@ implemented and tested in Rust; `diffusion_trajectory_update_f32` is included in
 Xcode-beta source bundle. This still does not prove device execution, parity, or model quality.
 
 Update 2026-07-29c (plan integration): `StateKind::DiffusionTrajectory` is now available for
-serialized model plans. Its focused Cargo validation was stopped when unrelated concurrent Rust
-builds saturated the host; this is a validation backlog item, not a promoted runtime result.
+serialized model plans. Isolated Cargo validation passes (1/1); runtime allocation and device
+dispatch remain open and are not implied by this plan-level test.
+
+Update 2026-07-29d (runtime layout): `DiffusionStateLayout` now makes the mixed `f32`/`uchar`
+trajectory allocation explicit and rejects zero-token and `usize` overflow cases. Focused tests
+pass 2/2; this is an allocation contract, not device execution evidence.
+
+Update 2026-07-29e (dispatch plan): `DiffusionDispatchPlan` now fixes stage ordering and the
+token-sized grid before any Metal command encoder is touched. Focused tests pass 2/2; actual
+buffer binding and device dispatch remain open.
+
+Update 2026-07-29f (Metal bindings): feature-gated bindings for active compaction, remask, and
+trajectory now compile with the Metal feature and fail closed on shape or command-buffer errors.
+They have not been invoked against a device; parity and Qwen3.5 evidence remain open.
+
+Update 2026-07-29g (parity oracle): host-side comparison helpers now reject shape drift and
+enforce explicit `f32` tolerances for native diffusion outputs. Focused tests pass 2/2; this is
+an oracle contract, not device evidence.
+
+Update 2026-07-29h (device fixture): an ignored feature-gated integration test now exercises
+compaction, remask, and trajectory against a caller-supplied verified metallib/manifest. The
+test compiles but was not executed; live device parity remains open.
+
+Update 2026-07-29i (dispatch input hardening): the diffusion Metal entry points now reject
+non-finite or out-of-range confidence/remask thresholds before buffer allocation or command
+encoding. Two isolated host tests pass; device execution and Qwen3.5 acceptance remain open.
