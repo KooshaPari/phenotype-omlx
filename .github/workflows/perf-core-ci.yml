@@ -9,6 +9,8 @@ on:
     branches: [main]
     paths:
       - "perf-core/**"
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
 
 env:
@@ -199,8 +201,21 @@ jobs:
 
       - name: cargo fmt --check
         working-directory: perf-core
+        env:
+          # GITHUB_BASE_REF is populated for pull_request events only.  The
+          # merge queue, push, and manual-dispatch events require an explicit
+          # fallback so the diff never becomes origin/ (an invalid ref).
+          FORMAT_BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || 'main' }}
         run: |
-          changed=$(git diff --name-only "origin/${GITHUB_BASE_REF}"...HEAD -- '*.rs')
+          set -euo pipefail
+          base_ref="${FORMAT_BASE_REF:-main}"
+          case "$base_ref" in
+            refs/heads/*) base_ref="${base_ref#refs/heads/}" ;;
+          esac
+          if ! git show-ref --verify --quiet "refs/remotes/origin/${base_ref}"; then
+            git fetch --no-tags origin "+refs/heads/${base_ref}:refs/remotes/origin/${base_ref}"
+          fi
+          changed=$(git diff --name-only "origin/${base_ref}"...HEAD -- '*.rs')
           if [ -z "$changed" ]; then
             echo "No Rust files changed; format gate is clean."
             exit 0
