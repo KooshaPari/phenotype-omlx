@@ -1,23 +1,30 @@
 {
   "schema_version": "0.1",
   "evidence_label": "provenance_only",
-  "recorded_at": "2026-07-30T10:06:00Z",
+  "recorded_at": "2026-07-31T00:18:00Z",
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "8ada4ce5cf5006ccb08994c90fcdf7ae69027558",
-    "provenance_commit": "8ada4ce5cf5006ccb08994c90fcdf7ae69027558",
+    "head": "f212709023dd786bb32317ce20d0fba74e77f0f2",
+    "provenance_commit": "f212709023dd786bb32317ce20d0fba74e77f0f2",
     "working_tree": "clean_at_recording",
     "evidence_complete": false
   },
   "artifacts": {
     "metallib_manifest": {
       "status": "pending",
-      "sha256": null
+      "sha256": null,
+      "artifact_bound_to_head": false
     },
     "native_artifacts": {
-      "status": "pending",
-      "entries": []
+      "status": "discovered_unbound",
+      "entries": [
+        {
+          "path": "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/kernels/qwen3.5-0.8b/build/kernels.metallib",
+          "sha256": "d553dba4a622d1d8d9433d8378e552017361c2580573069fb7fe0ac12e70d897",
+          "artifact_bound_to_head": false
+        }
+      ]
     },
     "device_fingerprint": {
       "status": "unknown",
@@ -26,7 +33,7 @@
   },
   "qwen35_harbor": {
     "status": "pending",
-    "model": null,
+    "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
     "job_id": null,
     "trial_name": null,
     "requested_context_tokens": null,
@@ -41,7 +48,7 @@
     "verdict": "blocked",
     "reason": "Current-head provenance is recorded without runtime evidence; stale candidate and Harbor records cannot be promoted for this HEAD.",
     "remaining_gates": [
-      "fresh allowlisted Metal artifact manifest and SHA-256 verification",
+      "fresh allowlisted Metal artifact manifest and SHA-256 verification bound to current HEAD",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
       "final local promotion review"
