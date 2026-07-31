@@ -359,7 +359,8 @@ jobs:
                 echo "${name}: ${status}"
                 ;;
               *)
-                echo "${name}: ${status} (required lint/format prerequisite failed)" >&2
+                echo "${name}: ${status} (required lint/format" >&2
+                echo "prerequisite failed)" >&2
                 exit 1
                 ;;
             esac
@@ -401,7 +402,8 @@ jobs:
                 echo "${name}: ${status}"
                 ;;
               *)
-                echo "${name}: ${status} (required test prerequisite failed)" >&2
+                echo "${name}: ${status} (required test prerequisite" >&2
+                echo "failed)" >&2
                 exit 1
                 ;;
             esac
