@@ -1,7 +1,7 @@
 {
   "schema_version": "0.1",
   "evidence_label": "provenance_only",
-  "recorded_at": "2026-07-31T00:18:00Z",
+  "recorded_at": "2026-07-31T00:37:00Z",
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
@@ -12,19 +12,33 @@
   },
   "artifacts": {
     "metallib_manifest": {
-      "status": "pending",
-      "sha256": null,
-      "artifact_bound_to_head": false
+      "status": "compile_only",
+      "sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
+      "artifact_bound_to_head": true
     },
     "native_artifacts": {
-      "status": "discovered_unbound",
+      "status": "compile_only",
       "entries": [
         {
           "path": "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness/kernels/qwen3.5-0.8b/build/kernels.metallib",
           "sha256": "d553dba4a622d1d8d9433d8378e552017361c2580573069fb7fe0ac12e70d897",
           "artifact_bound_to_head": false
+        },
+        {
+          "path": "/tmp/phenotype-omlx-metal-current-20260731/metal-runtime.metallib",
+          "sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
+          "size_bytes": 111965,
+          "artifact_bound_to_head": true,
+          "source_equivalent_to": "f212709023dd786bb32317ce20d0fba74e77f0f2"
         }
       ]
+    },
+    "compile_provenance": {
+      "status": "verified_compile_only",
+      "script": "scripts/build_metal_runtime_bundle.sh",
+      "developer_dir": "/Users/kooshapari/Downloads/Xcode-beta.app/Contents/Developer",
+      "shader_count": 20,
+      "actual_repository_head": "ba30267b5bc9a637cc30751a69a0accbbff527f9"
     },
     "device_fingerprint": {
       "status": "unknown",
@@ -46,7 +60,7 @@
   },
   "promotion": {
     "verdict": "blocked",
-    "reason": "Current-head provenance is recorded without runtime evidence; stale candidate and Harbor records cannot be promoted for this HEAD.",
+    "reason": "Current-head provenance has compile-only artifact evidence; stale candidate and Harbor records cannot be promoted without device/runtime evidence.",
     "remaining_gates": [
       "fresh allowlisted Metal artifact manifest and SHA-256 verification bound to current HEAD",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
