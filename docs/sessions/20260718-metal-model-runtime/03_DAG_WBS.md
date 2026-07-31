@@ -219,3 +219,11 @@ were found under the session directory. A max-depth-six inventory of `phenotype-
 `Downloads/` found no `.metallib` artifact available for allowlist verification. G6 therefore
 remains held pending a fresh current-HEAD native artifact envelope; no source or workload action
 was performed.
+
+Status update 2026-07-31a (compile-only artifact reproduction):
+`scripts/build_metal_runtime_bundle.sh` compiled 20 checked-in shaders with Xcode-beta into
+`/tmp/phenotype-omlx-metal-current-20260731/metal-runtime.metallib` (111,965 bytes,
+SHA-256 `ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`). The actual
+repository HEAD was `ba30267b`; its only change after `f2127090` was provenance metadata, so
+the compiled shader inputs are source-equivalent to the requested `f2127090` candidate. This
+is compile-only evidence: device/runtime execution remains false, and promotion stays blocked.
