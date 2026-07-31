@@ -50,8 +50,15 @@ def test_current_head_provenance_is_explicitly_non_promotable() -> None:
     assert candidate["head"] == candidate["provenance_commit"]
     assert len(candidate["head"]) == 40
     assert candidate["evidence_complete"] is False
-    assert document["artifacts"]["metallib_manifest"]["status"] == "compile_only"
-    assert document["artifacts"]["metallib_manifest"]["sha256"]
+    metallib = document["artifacts"]["metallib_manifest"]
+    # A checked-in compile-only bundle is useful provenance, but is not live
+    # Metal/device evidence and must not make the candidate promotable.
+    assert metallib["status"] == "compile_only"
+    assert len(metallib["sha256"]) == 64
+    assert metallib["artifact_bound_to_head"] is True
+    assert document["artifacts"]["compile_provenance"]["status"] == (
+        "verified_compile_only"
+    )
     assert document["artifacts"]["device_fingerprint"]["status"] == "unknown"
     assert document["qwen35_harbor"]["status"] == "pending"
     assert document["promotion"]["verdict"] == "blocked"
