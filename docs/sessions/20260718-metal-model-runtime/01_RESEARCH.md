@@ -177,3 +177,84 @@ vector-gated `mx.fast.metal_kernel` with the shape contract `[B,T,Hk,Dk]`, `[B,T
 dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirrors that kernel
 behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
 clean native-vs-custom parity run.
+
+### 2026-07-27 - exact Harbor NIAH generation contract
+
+Qwen's deployment guidance documents `chat_template_kwargs: {"enable_thinking": false}` as the
+hard switch for direct responses, and the Qwen3.5 model card explicitly says `/think` and
+`/nothink` are not the supported control surface. The Harbor smoke therefore sends the hard
+switch and records `thinking_enabled=false` in its oracle envelope. With mlx-lm 0.31.3 this
+switch adds 27 chat-template tokens; the prompt builder subtracts that measured overhead so the
+API reports exactly 8192 prompt tokens. Live Apple Container evidence is recorded in
+`artifacts/harbor-qwen35-20260727-8192.json`: reward 1.0, exact needle match, no errors or
+retries, and `context_tokens_exact=true`.
+
+References: https://github.com/QwenLM/Qwen3/blob/main/docs/source/deployment/vllm.md and
+https://huggingface.co/Qwen/Qwen3.5-35B-A3B-GPTQ-Int4.
+
+### 2026-07-28 - MoE, ternary, and non-Qwen reference gap matrix
+
+The current `model-kernels` and `metal-runtime` layers have scalar contracts plus optional
+Metal implementations for top-k routing, assignment-list grouped GEMM, and packed 2-bit
+ternary GEMM. The following references sharpen the optimization target without changing the
+Qwen3.5-only production model policy:
+
+| Family/reference | Useful systems implication | Current coverage | Gap / next experiment |
+|---|---|---|---|
+| [ToMoE](https://arxiv.org/html/2501.15316v1) | Fixed-budget top-1 MLP routing, deterministic structural selection, and load regularization | top-k router + capacity buckets | expose route/load histograms and benchmark top-1 dispatch separately from top-2 |
+| [LFM2](https://arxiv.org/abs/2511.23404) | Hardware-in-the-loop hybrid short-convolution/GQA and an 8.3B/1.5B-active MoE reference | recurrent and MoE kernel families exist | add decode-shaped grouped-GEMM measurements at one-token and short-prefill regimes |
+| [ZAYA1-8B](https://arxiv.org/abs/2605.05365) | 700M-active/8B-total MoE with bounded recurrent test-time state | ZAYA and LFM contracts/tests exist | keep bounded-state routing and expert-load telemetry separate from dense Qwen3.5 evidence |
+| [Ternary Bonsai 8B](https://huggingface.co/prism-ml/Ternary-Bonsai-8B-mlx-2bit) | 2-bit packed ternary weights with MLX/Metal deployment | packed CPU and Metal GEMM paths exist | verify group-scale layout parity; benchmark zero-elision and byte-aligned K tails |
+| [Scaling Laws and Efficient Inference for Ternary LMs](https://aclanthology.org/2025.acl-long.1294/) | Ternary quality/performance trade-offs must be measured, not inferred from byte reduction | byte-level pack/unpack tests | add quality/perplexity envelopes before promoting ternary kernels |
+
+Hardening decision: `router_topk` now rejects NaN and +/-infinity before sorting or softmax,
+matching the Metal facade's finite-logit contract. This prevents non-finite weights from
+reaching grouped GEMM and is covered by a regression test. No benchmark or model-quality claim
+is made from this contract hardening alone.
+
+### 2026-07-28 - MLA and agentic decode kernel targets
+
+DeepSeek's official V2 implementation and FlashInfer's MLA API both treat latent-cache
+attention as a distinct path rather than dense GQA. The hardware-centric MLA study further
+motivates minimizing cache traversals and keeping latent/RoPE dimensions explicit:
+
+- https://github.com/deepseek-ai/DeepSeek-V2
+- https://docs.flashinfer.ai/api/attention.html
+- https://arxiv.org/abs/2506.02523
+
+The MLA Metal shader now uses a numerically stable online log-sum-exp recurrence. It computes
+each cache-entry score once, updates the running maximum/norm, and accumulates values in the
+same pass. A source contract test pins the one-traversal invariant. This is a kernel-level
+optimization only: native Metal compilation, device parity, and Qwen3.5 end-to-end dispatch
+remain separate evidence gates and must not be inferred from the source test.
+
+### 2026-07-29 - diffusion decoding acceleration targets
+
+Recent diffusion-language-model work changes the kernel target from a single argmax pass to a
+stateful denoising scheduler:
+
+| Reference | Kernel implication | Planned contract |
+|---|---|---|
+| [TSPD + Confidence Extrapolation](https://arxiv.org/abs/2605.30753) | Track per-token confidence, entropy, momentum, position, and convergence state | fused confidence/entropy reduction plus active-position compaction; preserve uncertainty metadata |
+| [S2D2](https://arxiv.org/abs/2603.25702) | Mix block-parallel diffusion proposals with autoregressive self-verification | remask/proposal buffers and bounded verifier dispatch, sharing the existing speculative governor |
+| [Not All Denoising Steps Are Equal](https://arxiv.org/abs/2604.02340) | Early/late steps can use a smaller denoiser while middle steps retain full capacity | step-class schedule in `StatePlan`; benchmark FLOP reduction separately from quality |
+| [Discrete Diffusion Survey](https://arxiv.org/abs/2506.13759) | Masked diffusion requires active-token masks and repeated full-sequence attention | keep remask, mask compaction, and denoise logits as separate Metal kernels |
+
+Implementation consequence: the existing `diffusion_argmax_confidence_f32` kernel is a useful
+leaf, but it is not a complete diffusion runtime. The next source-level additions should be
+confidence trajectory state, active-position compaction, and remask scheduling; none should be
+promoted from source tests without live parity and quality envelopes.
+
+### 2026-07-29 - active-position and remask source contracts
+
+The first two scheduler leaves are now concrete: Rust `active_positions`/`compact_active`
+preserve ascending scatter indices and reject value/mask shape mismatches, while Metal provides
+`diffusion_active_compact_u32` and `diffusion_remask_confidence_f32`. Both are catalogued by
+stable tag and concrete function symbol. The Xcode-beta source bundle compiles 19/19 shaders;
+this remains source/artifact evidence, not device or Qwen3.5 quality evidence.
+
+Trajectory state is now concrete as well: Rust tracks confidence, entropy, per-position
+confidence momentum, decode step, and convergence; the Metal leaf is
+`diffusion_trajectory_update_f32`. Focused oracle tests pass and the source bundle compiles
+20/20 shaders. The contract intentionally keeps trajectory metadata separate from token values
+so active compaction can scatter updates without losing uncertainty history.

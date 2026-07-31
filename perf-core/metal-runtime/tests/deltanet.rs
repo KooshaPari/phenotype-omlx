@@ -32,16 +32,8 @@ fn metal_matches_deltanet_reference() {
     }
 
     let mut two_pass_state = vec![0.1; 9];
-    let two_pass = deltanet_step_metal_two_pass(
-        &q,
-        &k,
-        &v,
-        &mut two_pass_state,
-        0.5,
-        3,
-        &artifact,
-    )
-    .unwrap();
+    let two_pass =
+        deltanet_step_metal_two_pass(&q, &k, &v, &mut two_pass_state, 0.5, 3, &artifact).unwrap();
     let mut expected_state = vec![0.1; 9];
     let expected_output = deltanet_step(&q, &k, &v, &mut expected_state, 0.5, 3).unwrap();
     for (actual, expected) in two_pass.iter().zip(expected_output) {
@@ -119,10 +111,9 @@ fn deltanet_serial_two_pass_percentiles() {
         serial_samples.push(start.elapsed().as_secs_f64() * 1e6);
         let mut two_pass_state = vec![0.1_f32; n * n];
         let start = Instant::now();
-        let two_pass = deltanet_step_metal_two_pass(
-            &q, &k, &v, &mut two_pass_state, 0.5, n, &artifact,
-        )
-        .unwrap();
+        let two_pass =
+            deltanet_step_metal_two_pass(&q, &k, &v, &mut two_pass_state, 0.5, n, &artifact)
+                .unwrap();
         two_pass_samples.push(start.elapsed().as_secs_f64() * 1e6);
         for (a, b) in serial.iter().zip(&two_pass) {
             parity_max_abs_error = parity_max_abs_error.max((a - b).abs());
@@ -131,7 +122,10 @@ fn deltanet_serial_two_pass_percentiles() {
             parity_max_abs_error = parity_max_abs_error.max((a - b).abs());
         }
     }
-    assert!(parity_max_abs_error <= 1e-5, "two-pass parity error {parity_max_abs_error}");
+    assert!(
+        parity_max_abs_error <= 1e-5,
+        "two-pass parity error {parity_max_abs_error}"
+    );
     let record = Record {
         schema: "metal-runtime.deltanet-serial-two-pass.v1",
         samples,

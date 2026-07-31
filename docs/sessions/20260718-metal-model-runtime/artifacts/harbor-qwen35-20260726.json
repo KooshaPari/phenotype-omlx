@@ -1,0 +1,56 @@
+{
+  "schema_version": "0.1",
+  "evidence_label": "live_verified",
+  "recorded_at": "2026-07-26T04:33:10Z",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "candidate": {
+    "repository": "phenotype-omlx",
+    "head": "c71bc6228d0c2e5b7ebb392e7e36ee620a8974f8",
+    "branch": "recovery/phenotype-omlx-local-20260726"
+  },
+  "harbor": {
+    "job_id": "c8e0d681-4754-4f94-8b00-7e82c92ee653",
+    "trial_name": "omlx-niah-api-smoke__ooX9Kjs",
+    "task": "omlx/niah-api-smoke",
+    "environment": "apple-container",
+    "endpoint": "http://192.168.1.144:8766/v1",
+    "started_at": "2026-07-26T02:32:56.025089Z",
+    "finished_at": "2026-07-26T02:33:10.875898Z",
+    "n_trials": 1,
+    "n_errors": 0,
+    "n_retries": 0,
+    "fallback_applied": false,
+    "reward": 1.0,
+    "pass_at_1": 1.0,
+    "pipeline_contract": "accepted_with_evidence_label_warning"
+  },
+  "artifacts": [
+    {
+      "path": ".runs/harbor-eval-final/2026-07-25__19-32-53/result.json",
+      "sha256": "23bd5fb4379d5a7da02e8a3aec04e910e57186ba7919b4a29ffcb6261cdaafbc"
+    },
+    {
+      "path": ".runs/harbor-eval-final/2026-07-25__19-32-53/omlx-niah-api-smoke__ooX9Kjs/result.json",
+      "sha256": "83c314be7d3106793b1e7c06bb556b9037100a015a1222977f1d90cf8e7e86e5"
+    },
+    {
+      "path": ".runs/harbor-eval-final/2026-07-25__19-32-53/omlx-niah-api-smoke__ooX9Kjs/verifier/reward.txt",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": ".runs/harbor-eval-final/2026-07-25__19-32-53/omlx-niah-api-smoke__ooX9Kjs/config.json",
+      "sha256": "a3dd39096966d48b27b642db15aa55b43a2b80ba630c5545f6242dc257815538"
+    }
+  ],
+  "integrity": {
+    "canonical_sha256": "0d28f7906078857d1244399e5d1e2ec05faaf8bd784282687cbc24838f7cfcee"
+  },
+  "promotion": {
+    "candidate_manifest_refreshed": false,
+    "remaining_gates": [
+      "independent C/Go/Nim/Zig FFI evidence",
+      "candidate review against current HEAD",
+      "new manifest commit after JSON and diff checks"
+    ]
+  }
+}

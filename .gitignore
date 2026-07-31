@@ -47,3 +47,6 @@ research/.archive/*.json
 
 # Harbor run artifacts
 .runs/
+
+# Nested worktrees (not source)
+worktrees/

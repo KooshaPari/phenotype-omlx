@@ -1,3 +1,17 @@
+#[test]
+fn mla_shader_uses_single_pass_online_softmax() {
+    let source = include_str!("../shaders/mla_cache_attend.metal");
+    assert!(
+        source.contains("running_norm") && source.contains("next_max"),
+        "MLA shader must use numerically stable online softmax"
+    );
+    assert_eq!(
+        source.matches("for (uint t = 0; t < entries; ++t)").count(),
+        1,
+        "MLA scores must be computed in one cache traversal"
+    );
+}
+
 #[cfg(all(feature = "metal", target_os = "macos"))]
 #[test]
 fn metal_matches_mla_cache_reference() {

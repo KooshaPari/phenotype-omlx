@@ -65,3 +65,122 @@ token budget. A follow-up run dispatched the custom kernel for all 108 gated-del
 fallbacks) and still diverged. The experimental path is now disabled by default and requires
 `PHENOTYPE_OMLX_ENABLE_CUSTOM_QWEN_KERNEL=1`; see
 `research/baselines/qwen35-custom-gated-delta-parity-20260723.json`.
+
+Update 2026-07-25: isolated Qwen3.5-0.8B-OptiQ-4bit validation was rerun after the gating
+fix. Short generation and a 128-token run matched native MLX exactly, with custom dispatches
+and zero fallbacks; see `research/baselines/qwen35-custom-gated-delta-parity-20260723.json`
+and `research/baselines/qwen35-custom-gated-delta-long-parity-20260723.json`. Promotion is
+still reference-only until the 8192-token Harbor/Portage evidence envelope and a refreshed
+candidate manifest are available.
+
+Harbor execution update 2026-07-26: the cached Qwen3.5 model was served locally from
+`mlx_lm.server` and `/v1/models` exposed `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`. Apple
+Container initially failed with an XPC service error and succeeded after `container system
+start`. A localhost URL was unreachable from the container; the host LAN URL was reachable,
+but the request timed out during MLX batched generation. The server logged
+`There is no Stream(gpu, 0) in current thread` from `BatchGenerator.prompt`, so Harbor produced
+a real trial with reward `0.0`, not a pass. Langfuse credentials were accepted by the runner;
+the remaining blocker is the MLX server stream/thread failure under the container workload.
+
+Update 2026-07-26: Apple Container lifecycle handling is now explicit in the Harbor operator.
+`scripts/evals/apple_container_preflight.sh` checks `container system status`, starts the
+service when stopped, rechecks that it is `running`, and fails with the official
+`container system logs` diagnostic when startup does not converge. The focused contract test
+`scripts/tests/test_apple_container_preflight.sh` passes with a fake stopped-then-running
+service. This addresses the initial XPC prerequisite only; it does not mask or resolve the
+separate MLX `Stream(gpu, 0)` generation failure.
+
+Update 2026-07-26 (forward fix): the Python package floor is now `mlx-lm>=0.31.3`, the
+first release verified to include the server's thread-local stream initialization. The
+one-request NIAH oracle also sends `seed=0`, which selects mlx-lm's deterministic sequential
+path instead of `BatchGenerator`; this is a containment measure for older installed runtimes,
+not Harbor evidence. `scripts/tests/test_niah_openai_smoke.py` asserts the request contract and
+passes. A fresh Harbor run is still required before promotion.
+
+Audit 2026-07-26 (artifact correction): the currently retained Harbor runs are
+`harbor-eval`, `harbor-eval-retry`, `harbor-eval-lan`, and `harbor-eval-patched`; each task
+artifact has `verifier/reward.txt` equal to `0`, and the agent oracle records connection refusal
+or timeout. No `harbor-eval-final` artifact or reward-`1` evidence is present in this checkout.
+Promotion and candidate-manifest refresh therefore remain blocked until a new run emits a
+task-level result with reward `1` and a successful oracle transcript.
+
+Follow-up audit 2026-07-26: the final artifact is present in the Portage worktree (the prior
+correction was scoped to this checkout and is superseded for evidence discovery). The run is
+`worktrees/portage/fix-langsmith-importerror/.runs/harbor-eval-final/2026-07-25__19-32-53`, job
+`c8e0d681-4754-4f94-8b00-7e82c92ee653`, trial `omlx-niah-api-smoke__ooX9Kjs`. It records one
+Apple Container trial using Qwen3.5-0.8B-OptiQ-4bit over the host LAN endpoint, reward `1.0`,
+zero errors, zero retries, and no fallback. `run_full_pipeline.sh` accepts the resulting
+EvalReport with `pass_at_1=1.0` and one `W-EVIDENCE` warning: the cockpit converter omits
+`evidence_label` and consequently defaults the synthesized suite to `reported`. This warning
+must be corrected in the new evidence envelope (explicit `live_verified` provenance); it does
+not invalidate the task-level live Harbor result. The stale `candidate-manifest.json` remains
+unchanged with `evidence_complete=false`; promotion additionally needs a new manifest tied to
+the current HEAD, independent FFI evidence, and candidate review.
+
+Update 2026-07-27: the authorized exact Harbor gate is now live-verified with Qwen3.5
+(`prompt_tokens=8192`, `context_tokens_exact=true`, thinking disabled, reward 1.0). The host
+NIAH matrix also runs baseline/asymmetric/symmetric TurboKV modes at 4096 and 8192 tokens with
+6/24 compressed full-attention layers and effective byte reduction. A paired 16384-token
+baseline/TurboKV run then completed with 6/24 compressed layers and effective byte reduction
+(ratio 0.6317); the earlier interrupted attempt is retained only as historical stability
+evidence. The first
+matrix attempt without explicit `sitecustomize` loading is retained as `live_failed`; the
+benchmark now imports the audited layer explicitly.
+
+Update 2026-07-29 (safety hardening): no model, Harbor, NIAH, or evaluation workload was
+launched in this turn because the operator reported system overload/crashes. The
+`concurrent-exec` scheduler now uses bounded admission instead of an unbounded queue, rejects
+fan-out above a configured cap, and applies per-job deadlines. Focused deterministic unit tests
+cover queue overflow, timeout, and fan-out rejection. Native Metal/device parity remains a
+separate gate and was intentionally not exercised here.
+
+Update 2026-07-29 (source catalog): `metal-runtime` now assembles checked-in Metal shader
+sources for registry-mapped operators in reference mode and tests that each catalog entry is
+non-empty and kernel-shaped. This removes the previous source-free stub as the only reference
+artifact, but does not claim device compilation or execution; production mode remains
+fail-closed until a real Metal compiler/artifact path is wired and verified.
+
+Update 2026-07-29 (toolchain verification): the installed Xcode-beta Metal toolchain compiled
+all 17 checked-in shaders and linked a combined `metal-runtime.metallib` through
+`scripts/build_metal_runtime_bundle.sh`. This proves source/toolchain compilation only; the
+artifact is not yet allowlisted or dispatched on a live model, and its temporary hash is not a
+promotion baseline.
+
+Update 2026-07-29 (artifact contract): `scripts/manifest_metal_runtime_artifacts.py` now emits
+sorted, compact JSON containing every compiled `.metallib` filename and SHA-256 digest. The
+Rust `ArtifactAllowlist::from_manifest_json` parser validates the strict basename/extension and
+64-hex digest contract before handing bytes to `MetallibLoader`. Focused artifact tests pass;
+the generated manifest is still build output, not promotion evidence, until it is stored in an
+immutable candidate envelope tied to a current commit and verified on-device.
+
+Update 2026-07-29 (selector reachability): the dispatch bridge now routes canonical Bonsai
+two-bit ternary operators to the checked-in `ternary_pack` Metal source and grouped matmuls to
+the MoE dispatch source. Selector coverage is deterministic and tested; this is routing proof,
+not device execution or model-quality evidence.
+
+Update 2026-07-29 (native function catalog): `native_catalog` now binds each routed tag to its
+concrete Metal `kernel void` symbol and asserts that every symbol exists in checked-in MSL.
+Unknown tags fail closed. This closes selector-to-function-name drift, but does not claim that a
+device loaded or executed any function.
+
+Update 2026-07-29 (verified bundle binding): `NativeKernelBundle` now loads a manifest-approved
+`.metallib` and resolves only known tag/function pairs. Invalid manifests, unallowlisted files,
+and unknown tags fail before any Metal device call; native dispatch remains the next gate.
+
+Update 2026-07-29 (cache integration): the Bonsai ternary, MoE router/grouped GEMM, and
+diffusion-confidence wrappers now resolve Metal function names through the native catalog before
+entering the shared pipeline cache. `cargo check -p metal-runtime --features metal` passes;
+device command encoding remains unexercised.
+
+Update 2026-07-29 (diffusion scheduler leaves): active-position compaction and confidence remask
+are now represented by deterministic Rust contracts and catalogued Metal kernels. The combined
+Xcode-beta bundle compiles 19/19 sources. Device dispatch, trajectory-state persistence, and
+Qwen3.5 acceptance remain open; no live workload was run under the overload/crash guard.
+
+Update 2026-07-29b (trajectory state): confidence/entropy/momentum/convergence state is now
+implemented and tested in Rust; `diffusion_trajectory_update_f32` is included in the 20/20
+Xcode-beta source bundle. This still does not prove device execution, parity, or model quality.
+
+Update 2026-07-29c (plan integration): `StateKind::DiffusionTrajectory` is now available for
+serialized model plans. Its focused Cargo validation was stopped when unrelated concurrent Rust
+builds saturated the host; this is a validation backlog item, not a promoted runtime result.

@@ -9,7 +9,10 @@ description = "phenotype-omlx research stack: MLX, TurboQuant+, SSD, JetSpec, La
 requires-python = ">=3.11"
 dependencies = [
     "mlx>=0.31",
-    "mlx-lm>=0.30",
+    # 0.31.3 initializes a thread-local MLX stream in the HTTP server's
+    # generation worker. Earlier releases can crash Harbor/NIAH requests with
+    # `There is no Stream(gpu, 0) in current thread`.
+    "mlx-lm>=0.31.3",
     "transformers>=4.40",
     "numpy",
     "scipy",

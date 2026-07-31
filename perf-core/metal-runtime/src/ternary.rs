@@ -38,58 +38,63 @@ pub fn ternary_gemm_metal(
     if scales.len() != n {
         return Err(TernaryGemmError::BadScaleShape);
     }
-    crate::metal_cache::with_pipeline(artifact, "ternary_gemm_f32", |device, queue, pipeline| {
-        let shared = MTLResourceOptions::StorageModeShared;
-        let float_buffer = |data: &[f32]| {
-            device.new_buffer_with_data(
-                data.as_ptr().cast::<c_void>(),
-                std::mem::size_of_val(data) as u64,
+    crate::metal_cache::with_catalogued_pipeline(
+        artifact,
+        "ternary_pack",
+        |device, queue, pipeline| {
+            let shared = MTLResourceOptions::StorageModeShared;
+            let float_buffer = |data: &[f32]| {
+                device.new_buffer_with_data(
+                    data.as_ptr().cast::<c_void>(),
+                    std::mem::size_of_val(data) as u64,
+                    shared,
+                )
+            };
+            let input = float_buffer(activations);
+            let weights = device.new_buffer_with_data(
+                packed_weights.as_ptr().cast::<c_void>(),
+                packed_weights.len() as u64,
                 shared,
-            )
-        };
-        let input = float_buffer(activations);
-        let weights = device.new_buffer_with_data(
-            packed_weights.as_ptr().cast::<c_void>(),
-            packed_weights.len() as u64,
-            shared,
-        );
-        let scales_buffer = float_buffer(scales);
-        let out_len = m * n;
-        let out_buffer = device.new_buffer((out_len * std::mem::size_of::<f32>()) as u64, shared);
-        let command = queue.new_command_buffer();
-        let encoder = command.new_compute_command_encoder();
-        encoder.set_compute_pipeline_state(pipeline);
-        for (index, value) in [
-            (0, &input),
-            (1, &weights),
-            (2, &scales_buffer),
-            (3, &out_buffer),
-        ] {
-            encoder.set_buffer(index, Some(value), 0);
-        }
-        let dims = [m as u32, k as u32, n as u32];
-        for (index, value) in dims.iter().enumerate() {
-            encoder.set_bytes((4 + index) as u64, 4, (value as *const u32).cast());
-        }
-        let width = pipeline.thread_execution_width().max(1);
-        encoder.dispatch_threads(
-            MTLSize::new(m as u64, n as u64, 1),
-            MTLSize::new(width.min(m as u64), 1, 1),
-        );
-        encoder.end_encoding();
-        command.commit();
-        command.wait_until_completed();
-        if command.status() != MTLCommandBufferStatus::Completed {
-            return Err(format!("command buffer status {:?}", command.status()));
-        }
-        let mut output = vec![0.0; out_len];
-        unsafe {
-            output.copy_from_slice(std::slice::from_raw_parts(
-                out_buffer.contents().cast(),
-                out_len,
-            ));
-        }
-        Ok(output)
-    })
+            );
+            let scales_buffer = float_buffer(scales);
+            let out_len = m * n;
+            let out_buffer =
+                device.new_buffer((out_len * std::mem::size_of::<f32>()) as u64, shared);
+            let command = queue.new_command_buffer();
+            let encoder = command.new_compute_command_encoder();
+            encoder.set_compute_pipeline_state(pipeline);
+            for (index, value) in [
+                (0, &input),
+                (1, &weights),
+                (2, &scales_buffer),
+                (3, &out_buffer),
+            ] {
+                encoder.set_buffer(index, Some(value), 0);
+            }
+            let dims = [m as u32, k as u32, n as u32];
+            for (index, value) in dims.iter().enumerate() {
+                encoder.set_bytes((4 + index) as u64, 4, (value as *const u32).cast());
+            }
+            let width = pipeline.thread_execution_width().max(1);
+            encoder.dispatch_threads(
+                MTLSize::new(m as u64, n as u64, 1),
+                MTLSize::new(width.min(m as u64), 1, 1),
+            );
+            encoder.end_encoding();
+            command.commit();
+            command.wait_until_completed();
+            if command.status() != MTLCommandBufferStatus::Completed {
+                return Err(format!("command buffer status {:?}", command.status()));
+            }
+            let mut output = vec![0.0; out_len];
+            unsafe {
+                output.copy_from_slice(std::slice::from_raw_parts(
+                    out_buffer.contents().cast(),
+                    out_len,
+                ));
+            }
+            Ok(output)
+        },
+    )
     .map_err(TernaryGemmError::Metal)
 }

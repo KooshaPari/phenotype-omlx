@@ -10,6 +10,13 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Admission limits for speculative tree construction. These are deliberately
+/// conservative process-wide caps: untrusted/request-derived configuration
+/// must not turn one decoding step into an exponential allocation.
+pub const MAX_PARALLEL_BRANCHES: usize = 64;
+pub const MAX_TREE_DEPTH: usize = 64;
+pub const MAX_BRANCHES_PER_NODE: usize = 32;
+
 /// A node in the draft tree.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftNode {
@@ -47,7 +54,9 @@ impl DraftTree {
             children: Vec::new(),
         };
 
-        if branch_logits.is_empty() || max_depth == 0 {
+        let max_depth = max_depth.min(MAX_TREE_DEPTH);
+        let max_branches = max_branches.min(MAX_BRANCHES_PER_NODE);
+        if branch_logits.is_empty() || max_depth == 0 || max_branches == 0 {
             return Self {
                 root,
                 depth: 0,
@@ -232,12 +241,21 @@ pub fn create_parallel_trees(
     }
 
     let first_level = &branch_logits[0];
-    let n_branches = config.num_parallel_branches.max(1);
+    let n_branches = config
+        .num_parallel_branches
+        .clamp(1, MAX_PARALLEL_BRANCHES);
+    let max_depth = config.max_depth.min(MAX_TREE_DEPTH);
+    let max_branches = config
+        .max_branches_per_node
+        .min(MAX_BRANCHES_PER_NODE);
     let mut trees = Vec::with_capacity(n_branches);
 
     for b in 0..n_branches {
-        let start = b * config.max_branches_per_node;
-        let end = (start + config.max_branches_per_node).min(first_level.len());
+        let start = b.saturating_mul(max_branches);
+        if start >= first_level.len() {
+            break;
+        }
+        let end = start.saturating_add(max_branches).min(first_level.len());
         let slice: Vec<(u32, f32)> = first_level[start..end].to_vec();
 
         if slice.is_empty() {
@@ -250,8 +268,8 @@ pub fn create_parallel_trees(
         let tree = DraftTree::from_eagle3_predictions(
             root_token,
             logits,
-            config.max_depth,
-            config.max_branches_per_node,
+            max_depth,
+            max_branches,
         );
         trees.push(tree);
     }
@@ -260,8 +278,8 @@ pub fn create_parallel_trees(
         trees.push(DraftTree::from_eagle3_predictions(
             root_token,
             Vec::new(),
-            config.max_depth,
-            config.max_branches_per_node,
+            max_depth,
+            max_branches,
         ));
     }
 
@@ -448,5 +466,20 @@ mod tests {
         let trees = create_parallel_trees(0, Vec::new(), &config);
         assert_eq!(trees.len(), 1);
         assert_eq!(trees[0].depth, 0);
+    }
+
+    #[test]
+    fn parallel_tree_limits_cap_request_derived_fanout() {
+        let logits = vec![vec![(1, 1.0); 1_000]];
+        let config = ParallelTreeConfig {
+            num_parallel_branches: usize::MAX,
+            max_depth: usize::MAX,
+            max_branches_per_node: usize::MAX,
+            probability_threshold: 0.0,
+        };
+        let trees = create_parallel_trees(0, logits, &config);
+        assert!(trees.len() <= MAX_PARALLEL_BRANCHES);
+        assert!(trees[0].depth <= MAX_TREE_DEPTH);
+        assert!(trees[0].root.children.len() <= MAX_BRANCHES_PER_NODE);
     }
 }

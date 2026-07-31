@@ -53,6 +53,7 @@ pub mod mamba_scan;
 mod metal_cache;
 pub mod mla_cache;
 pub mod moe;
+pub mod native_catalog;
 pub mod pipeline;
 pub mod retnet;
 pub mod rope3d;
@@ -65,16 +66,17 @@ pub mod ternary;
 pub use adaln::adaln_rms_metal;
 pub use adaln::AdaLnError;
 pub use artifact::{
-    ArtifactAllowlist, ArtifactError, MetallibArtifact, MetallibLoader, RuntimeMode,
+    ArtifactAllowlist, ArtifactError, ArtifactManifest, ArtifactManifestEntry, MetallibArtifact,
+    MetallibLoader, RuntimeMode,
 };
 pub use cache::{CacheKey, CacheStats, CompiledPipeline, EvictionPolicy, PipelineCache};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use cca::cca_block_attend_metal;
 pub use cca::CcaError;
 pub use compile::{BoundedCompiler, CompileBudget};
+pub use deltanet::DeltaNetError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use deltanet::{deltanet_step_metal, deltanet_step_metal_two_pass};
-pub use deltanet::DeltaNetError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use diffusion_confidence::diffusion_argmax_confidence_metal;
 pub use diffusion_confidence::DiffusionConfidenceError;
@@ -98,6 +100,10 @@ pub use mla_cache::MlaCacheError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use moe::grouped_gemm_metal;
 pub use moe::{MoeRouter, MoeRouterError, MoeRouterOutput, MoeShape};
+pub use native_catalog::{
+    all_specs as native_kernel_specs, spec_for_tag as native_kernel_spec, NativeKernelBinding,
+    NativeKernelBundle, NativeKernelError, NativeKernelSpec,
+};
 pub use pipeline::{Pipeline, StepOutput};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use retnet::retnet_retention_step_metal;

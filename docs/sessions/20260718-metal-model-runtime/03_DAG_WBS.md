@@ -78,3 +78,63 @@ rows) mirrored against the `grouped_gemm_moe` envelope so the two
 families are directly comparable. The turn-12 critical-path item
 (grouped expert GEMM) was completed at commit c735ea0 with
 `model-kernels::moe::gemm_tiled`.
+
+## Native artifact promotion sub-DAG (2026-07-29)
+
+    checked-in MSL sources
+      -> Xcode-beta AIR compilation (17/17)
+      -> combined metal-runtime.metallib
+      -> deterministic manifest + SHA-256 allowlist [current]
+      -> current-HEAD immutable candidate envelope
+      -> verified device load / dispatch
+      -> Qwen3.5 family acceptance (throttled, authorized)
+
+The manifest/allowlist step is now implemented and covered by focused Rust tests. The final
+two nodes remain intentionally open: no device dispatch or model/evaluation workload is run in
+the overload-safe lane.
+
+Selector reachability now covers the Bonsai ternary path and grouped-MoE matmul path, so these
+families can reach catalogued native source during reference compilation. Runtime execution is
+still gated on verified artifact loading and live device dispatch.
+
+The selector-to-function-name catalog is now explicit and tested for all currently catalogued
+native sources (MoE router/dispatch, Bonsai ternary, diffusion confidence, attention, and
+recurrent families). Unknown tags fail closed before a Metal lookup.
+
+`NativeKernelBundle` now joins the manifest-approved artifact to this catalog, producing a
+verified `(artifact, tag, function)` binding suitable for the eventual Metal command encoder.
+
+The three highest-leverage native leaves now consume that binding at cache lookup time: Bonsai
+ternary GEMM, MoE router/grouped GEMM, and diffusion confidence. This removes function-name
+drift at the final pre-dispatch boundary.
+
+## Forward family expansion
+
+    diffusion confidence
+      -> confidence trajectory state
+      -> active-position compaction
+      -> remask scheduler
+      -> bounded block-diffusion self-verification
+
+Status update 2026-07-29: active-position compaction and remask now have Rust oracle contracts,
+checked-in MSL, source-catalog entries, and native tag-to-symbol bindings. The next dependency is
+trajectory-state storage plus a real command-encoder dispatch path; no workload is launched until
+the overload governor and explicit Qwen3.5 acceptance window are satisfied.
+
+Status update 2026-07-29b: trajectory state now has a Rust oracle and catalogued Metal update
+kernel. The remaining diffusion source path is command-encoder wiring, then bounded block
+self-verification; source compilation is 20/20.
+
+Status update 2026-07-29c: `StateKind::DiffusionTrajectory` now gives the plan layer an explicit
+persistent slot for confidence/entropy/momentum/convergence metadata. Focused validation was
+deferred after the local Rust build queue saturated; no runtime workload was started.
+
+    MoE router/grouped GEMM
+      -> top-1 vs top-2 load histogram envelope
+      -> expert locality / grouped-GEMM tile sweep
+      -> Qwen3.5/OLMoE/DeepSeek reference conformance
+
+    Bonsai ternary GEMM
+      -> group-scale and K-tail parity
+      -> zero-elision / byte-alignment tile sweep
+      -> quality/perplexity envelope before promotion
