@@ -1,0 +1,48 @@
+{
+  "evidence_label": "snapshot_integrity",
+  "integrity": {
+    "status": "indexed_model_verified",
+    "errors": [],
+    "interpretation": "The index total_size is the concatenated tensor payload size for model.safetensors; it intentionally excludes the safetensors header and separate optional sidecars."
+  },
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "recorded_at": "2026-07-31T06:48:40Z",
+  "schema_version": "0.1",
+  "snapshot": {
+    "cache_relative": "$HOME/.cache/huggingface/hub/models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit/snapshots/ef60586933bd2cc02b763f77eb8839a5114bbec1",
+    "config_model_type": "qwen3_5",
+    "index_total_size_bytes": 650168512,
+    "main_safetensors_file_size_bytes": 650257188,
+    "safetensors_header_bytes": 88676,
+    "indexed_tensor_count": 694,
+    "indexed_tensor_payload_bytes": 650168512,
+    "indexed_files": ["model.safetensors"],
+    "optional_sidecars": {
+      "optiq/mtp.safetensors": {
+        "size_bytes": 14530491,
+        "sha256": "a336650761924a134ddc7aaffc90858904cbe2b5eb05c007094e6acb728a558a",
+        "included_in_index_total_size": false
+      },
+      "optiq/optiq_vision.safetensors": {
+        "size_bytes": 201202432,
+        "sha256": "d53b77b0c6673925369f5c067550dff8768ff7bb334e5a7a5e5d579660159bd8",
+        "included_in_index_total_size": false
+      }
+    },
+    "required_files": {
+      "model.safetensors": {
+        "sha256": "9bd244c6ab7154c2bca10f982e1bdcd32cb7b362985284de257f03effe411678",
+        "size_bytes": 650257188
+      },
+      "model.safetensors.index.json": {
+        "sha256": "dd50d28faec94d266bab561f904f4f9f354571ad2a3751dbb284ff04087e117c",
+        "size_bytes": 70097
+      },
+      "config.json": {
+        "sha256": "b3427c819dd8a53bc9099afb52ec51c0907862770ca7d5ba02c0ae0bc1f31a72",
+        "size_bytes": 42307
+      }
+    }
+  },
+  "workload_executed": false
+}
