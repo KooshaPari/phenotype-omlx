@@ -1,22 +1,24 @@
 {
   "evidence_label": "snapshot_integrity",
   "integrity": {
-    "status": "indexed_model_verified",
-    "errors": [],
-    "interpretation": "The index total_size is the concatenated tensor payload size for model.safetensors; it intentionally excludes the safetensors header and separate optional sidecars."
+    "status": "failed_closed",
+    "errors": [
+      "index:metadata_scope_mismatch:metadata=650168512:indexed_payload=851354304:indexed_files_size=851459620"
+    ],
+    "interpretation": "The index metadata total matches model.safetensors payload, but weight_map also references optiq/optiq_vision.safetensors; promotion remains fail-closed until metadata scope is reconciled."
   },
   "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
-  "recorded_at": "2026-07-31T06:48:40Z",
+  "recorded_at": "2026-07-31T23:28:48Z",
   "schema_version": "0.1",
   "snapshot": {
-    "cache_relative": "$HOME/.cache/huggingface/hub/models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit/snapshots/ef60586933bd2cc02b763f77eb8839a5114bbec1",
+    "cache_relative": "$CACHE/models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit/snapshots/ef60586933bd2cc02b763f77eb8839a5114bbec1",
     "config_model_type": "qwen3_5",
     "index_total_size_bytes": 650168512,
     "main_safetensors_file_size_bytes": 650257188,
     "safetensors_header_bytes": 88676,
-    "indexed_tensor_count": 694,
-    "indexed_tensor_payload_bytes": 650168512,
-    "indexed_files": ["model.safetensors"],
+    "indexed_tensor_count": 847,
+    "indexed_tensor_payload_bytes": 851354304,
+    "indexed_files": ["model.safetensors", "optiq/optiq_vision.safetensors"],
     "optional_sidecars": {
       "optiq/mtp.safetensors": {
         "size_bytes": 14530491,
@@ -26,7 +28,9 @@
       "optiq/optiq_vision.safetensors": {
         "size_bytes": 201202432,
         "sha256": "d53b77b0c6673925369f5c067550dff8768ff7bb334e5a7a5e5d579660159bd8",
-        "included_in_index_total_size": false
+        "included_in_index_total_size": false,
+        "weight_map_reference": true,
+        "promotion_required": true
       }
     },
     "required_files": {

@@ -267,3 +267,17 @@ sweeps. A full-KV or dense-weight copy per token is rejected by the design contr
 must report cache hit/miss, physical disk bytes, page faults, PCIe bytes, queueing, device role,
 state hashes, and fallback/rollback; no hardware-modification or market claim can satisfy a
 Qwen3.5 acceptance gate.
+
+## Snapshot integrity gate update (2026-07-31)
+
+    cache resolution + safe index paths
+      -> safetensors payload accounting
+      -> index metadata-scope reconciliation
+      -> current-head provenance
+      -> authorized Harbor/device window
+      -> promotion review
+
+The local Qwen3.5 snapshot is not treated as corrupt: its base `model.safetensors` payload
+matches `metadata.total_size`, while `weight_map` also names the vision shard. The verifier now
+records both filesystem and payload totals and fails closed on that scope mismatch. No runtime
+window may bypass this gate or substitute the older Harbor artifact.

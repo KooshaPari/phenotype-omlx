@@ -16,13 +16,46 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(MODULE)
 
 
-def test_index_size_mismatch_fails_closed(tmp_path: Path) -> None:
-    (tmp_path / "model.safetensors").write_bytes(b"weights")
+def _write_safetensors(path: Path, payload: bytes) -> int:
+    header = json.dumps(
+        {"tensor": {"dtype": "U8", "shape": [len(payload)], "data_offsets": [0, len(payload)]}},
+        separators=(",", ":"),
+    ).encode("utf-8")
+    path.write_bytes(len(header).to_bytes(8, "little") + header + payload)
+    return len(payload)
+
+
+def test_index_scope_mismatch_fails_closed(tmp_path: Path) -> None:
+    model_payload = _write_safetensors(tmp_path / "model.safetensors", b"weights")
+    vision = tmp_path / "vision.safetensors"
+    vision_payload = _write_safetensors(vision, b"vision")
     (tmp_path / "model.safetensors.index.json").write_text(
-        json.dumps({"metadata": {"total_size": 99}, "weight_map": {"x": "model.safetensors"}}),
+        json.dumps(
+            {
+                "metadata": {"total_size": model_payload},
+                "weight_map": {"x": "model.safetensors", "vision": "vision.safetensors"},
+            }
+        ),
         encoding="utf-8",
     )
     report = MODULE.verify_snapshot(tmp_path, "mlx-community/Qwen3.5-0.8B-OptiQ-4bit")
     assert report["integrity"]["status"] == "failed"
-    assert any("size_mismatch" in error for error in report["integrity"]["errors"])
+    assert any("metadata_scope_mismatch" in error for error in report["integrity"]["errors"])
+    assert report["snapshot"]["indexed_payload_size_bytes"] == model_payload + vision_payload
     assert report["workload_executed"] is False
+
+
+def test_index_rejects_path_traversal(tmp_path: Path) -> None:
+    _write_safetensors(tmp_path / "model.safetensors", b"weights")
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps({"metadata": {"total_size": 7}, "weight_map": {"x": "../outside"}}),
+        encoding="utf-8",
+    )
+    report = MODULE.verify_snapshot(tmp_path, "mlx-community/Qwen3.5-0.8B-OptiQ-4bit")
+    assert report["integrity"]["status"] == "failed"
+    assert any("unsafe_weight_map_path" in error for error in report["integrity"]["errors"])
+
+
+def test_mtp_is_optional() -> None:
+    assert "optiq/mtp.safetensors" not in MODULE.REQUIRED
+    assert "optiq/mtp.safetensors" in MODULE.OPTIONAL
