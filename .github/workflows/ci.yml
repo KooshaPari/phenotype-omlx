@@ -309,3 +309,100 @@ jobs:
           echo "  Security:    ${{ needs.security.result }}"
           echo "  Dep review:  ${{ needs.dependency-review.result }}"
           echo "  Trunk:       ${{ needs.trunk-check.result }}"
+
+  # -------------------------------------------------------------------------
+  # Protected-branch contexts
+  #
+  # main requires the exact checks `ci / lint` and `ci / test`.  Keep these as
+  # separate, deterministic jobs instead of relying on the advisory `ci`
+  # summary above.  A skipped language is valid (language detection said it
+  # was not present); every discovered language must finish successfully.
+  # `always()` ensures a failed or cancelled prerequisite cannot silently
+  # suppress the required check.
+  # -------------------------------------------------------------------------
+  lint:
+    name: lint
+    if: always()
+    needs:
+      - detect
+      - rust
+      - python
+      - go
+      - typescript
+      - trunk-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce lint and format prerequisites
+        shell: bash
+        env:
+          DETECT: ${{ needs.detect.result }}
+          RUST: ${{ needs.rust.result }}
+          PYTHON: ${{ needs.python.result }}
+          GO: ${{ needs.go.result }}
+          TYPESCRIPT: ${{ needs.typescript.result }}
+          TRUNK: ${{ needs.trunk-check.result }}
+        run: |
+          set -euo pipefail
+          statuses=(
+            "detect=${DETECT}"
+            "rust=${RUST}"
+            "python=${PYTHON}"
+            "go=${GO}"
+            "typescript=${TYPESCRIPT}"
+            "trunk=${TRUNK}"
+          )
+          for entry in "${statuses[@]}"; do
+            name="${entry%%=*}"
+            status="${entry#*=}"
+            case "${status}" in
+              success|skipped)
+                echo "${name}: ${status}"
+                ;;
+              *)
+                echo "${name}: ${status} (required lint/format prerequisite failed)" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+  test:
+    name: test
+    if: always()
+    needs:
+      - detect
+      - rust
+      - python
+      - go
+      - typescript
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce test prerequisites
+        shell: bash
+        env:
+          DETECT: ${{ needs.detect.result }}
+          RUST: ${{ needs.rust.result }}
+          PYTHON: ${{ needs.python.result }}
+          GO: ${{ needs.go.result }}
+          TYPESCRIPT: ${{ needs.typescript.result }}
+        run: |
+          set -euo pipefail
+          statuses=(
+            "detect=${DETECT}"
+            "rust=${RUST}"
+            "python=${PYTHON}"
+            "go=${GO}"
+            "typescript=${TYPESCRIPT}"
+          )
+          for entry in "${statuses[@]}"; do
+            name="${entry%%=*}"
+            status="${entry#*=}"
+            case "${status}" in
+              success|skipped)
+                echo "${name}: ${status}"
+                ;;
+              *)
+                echo "${name}: ${status} (required test prerequisite failed)" >&2
+                exit 1
+                ;;
+            esac
+          done

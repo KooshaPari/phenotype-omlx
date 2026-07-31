@@ -7,10 +7,9 @@ pull_request_rules:
     conditions:
       - "#review-requested=0"
       - "#approved-reviews-by>=1"
-      - check-success=ci
-      - check-success=lint
-      - check-success=typecheck
-      - check-success=test
+      - "check-success=CI"
+      - "check-success=lint"
+      - "check-success=test"
       - -conflict
       - -closed
     actions:
@@ -18,7 +17,7 @@ pull_request_rules:
         method: squash
         commit_message_template: |
           {{ title }} (#{{ number }})
-          
+
           Co-authored-by: {{ author }}
       post_merge:
         action: close
@@ -27,7 +26,7 @@ pull_request_rules:
   - name: Auto-merge dependency updates
     conditions:
       - author=dependabot[bot] | renovate[bot]
-      - check-success=ci
+      - "check-success=CI"
       - -conflict
       - -closed
     actions:
@@ -35,7 +34,7 @@ pull_request_rules:
         method: squash
         commit_message_template: |
           {{ title }} (#{{ number }})
-          
+
           Co-authored-by: {{ author }}
       post_merge:
         action: close
@@ -44,8 +43,8 @@ pull_request_rules:
   - name: Auto-merge bot housekeeping PRs
     conditions:
       - author=trunk-io[bot] | mergify[bot] | github-actions[bot]
-      - check-success=ci
-      - check-success=lint
+      - "check-success=CI"
+      - "check-success=lint"
       - -conflict
       - -closed
     actions:
@@ -128,9 +127,9 @@ pull_request_rules:
     conditions:
       - -closed
       - -draft
-      - check-success=ci
-      - check-success=lint
-      - check-success=test
+      - "check-success=CI"
+      - "check-success=lint"
+      - "check-success=test"
       - "#approved-reviews-by>=1"
     actions:
       label:
