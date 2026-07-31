@@ -258,3 +258,31 @@ confidence momentum, decode step, and convergence; the Metal leaf is
 `diffusion_trajectory_update_f32`. Focused oracle tests pass and the source bundle compiles
 20/20 shaders. The contract intentionally keeps trajectory metadata separate from token values
 so active compaction can scatter updates without losing uncertainty history.
+
+### 2026-07-31 - state continuity, heterogeneous memory, and governed evaluation
+
+The SSD/HW Stream research makes exact state continuity the first optimization gate: bind
+every reusable KV/state block to model revision, tokenizer revision, canonical prompt order,
+position range, dtype, and kernel-plan version. Output KV should be promoted only after an
+authoritative decode, while semantic retrieval remains a proposer and never substitutes for
+exact KV provenance. Recommended storage is content-addressed state blocks with RAM as the hot
+tier and NVMe as a bounded cold/prefetch tier; cross-device transfers should carry IDs and
+compact projections rather than unrestricted tensors.
+
+Hardware roles remain asymmetric: the RTX 3090 Ti is the primary high-memory execution target;
+the GTX 1080 Ti is drafter-only/low-priority unless an experiment proves otherwise. Each run
+must record token fate (compute, cache hit/miss, state movement, and critical-path delay),
+prefill amplification, speculative acceptance, novel-edge acceptance, peak memory, and
+fallback/rollback counts. A governor must cap concurrency, queue depth, context length, and
+retry count before any live experiment.
+
+Primary references: MLX-LM model loading and prompt-cache guidance
+(https://github.com/ml-explore/mlx-lm), Apple Metal compute/resource synchronization
+(https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/ and
+https://developer.apple.com/documentation/metal/resource-synchronization), Harbor's eval
+and adapter contracts (https://www.harborframework.com/docs/run-jobs/run-evals and
+https://www.harborframework.com/docs/datasets/adapters), BitNet b1.58
+(https://arxiv.org/abs/2402.17764), KVQuant (https://arxiv.org/abs/2401.18079), TurboQuant
+(https://arxiv.org/abs/2504.19874), and LLaDA diffusion language modeling
+(https://arxiv.org/abs/2502.09992). These references guide experiments only; acceptance
+remains tied to the exact local Qwen3.5 snapshot and immutable Harbor/Portage evidence.

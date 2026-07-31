@@ -227,3 +227,26 @@ SHA-256 `ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`). The
 repository HEAD was `ba30267b`; its only change after `f2127090` was provenance metadata, so
 the compiled shader inputs are source-equivalent to the requested `f2127090` candidate. This
 is compile-only evidence: device/runtime execution remains false, and promotion stays blocked.
+
+Status update 2026-07-31b (research-to-experiment bridge): the next optimization wave is
+ordered by evidence risk, not projected speedup. First lock exact Qwen3.5 state continuity
+(model/tokenizer/config/kernel-plan provenance, canonical prompt ordering, position range, and
+dtype); then measure output-KV promotion and content-addressed RAM/NVMe state tiers. Semantic
+retrieval may propose a branch but cannot authorize KV reuse. JetSpec/DSpark-style speculation,
+diffusion remask/trajectory scheduling, and ternary zero-elision remain separate experiments.
+
+The bounded experiment matrix is:
+
+| Node | Experiment | Required evidence | Promotion rule |
+|---|---|---|---|
+| R1 | exact prefix/KV continuation graph | hit/miss, new tokens, state movement, peak memory | no quality or provenance regression |
+| R2 | output-KV promotion | authoritative decode marker and replay parity | exact replay only |
+| R3 | RAM/NVMe state tiers | content hash, prefetch latency, eviction/rollback | bounded queue and no stale state |
+| R4 | 3090 Ti primary / 1080 Ti drafter | per-device latency, memory, acceptance rate | drafter never authoritative |
+| R5 | diffusion active compaction/remask/trajectory | stage order, resource fences, parity, quality | current-head device evidence required |
+| R6 | Bonsai/BitNet ternary kernels | packed/unpacked parity, K-tail, scale/zero metadata | quality/perplexity envelope required |
+
+All R-nodes inherit the overload governor: one bounded trial, fixed context, no automatic
+retries, explicit timeout, and immutable result hashes. Apple Metal dispatches must publish
+resource dependencies/barriers before encoder fusion is considered. Harbor/Portage task and
+dataset artifacts are the system of record; ad-hoc scripts may only prepare or verify them.
