@@ -208,3 +208,12 @@ test compiles but was not executed; live device parity remains open.
 Update 2026-07-29i (dispatch input hardening): the diffusion Metal entry points now reject
 non-finite or out-of-range confidence/remask thresholds before buffer allocation or command
 encoding. Two isolated host tests pass; device execution and Qwen3.5 acceptance remain open.
+
+Update 2026-07-31 (Qwen3.5 snapshot gate): the integrity verifier now parses safetensors headers
+and tensor offsets, requires every `weight_map` file to be a safe snapshot-relative path, hashes
+index-referenced shards, recognizes `optiq/mtp.safetensors` as optional, and resolves
+`HUGGINGFACE_HUB_CACHE`, `HF_HUB_CACHE`, and `SSD_HF_CACHE` explicitly. The canonical cache remains
+fail-closed because `metadata.total_size=650168512` covers the base model payload while the index
+also references `optiq/optiq_vision.safetensors`, making the indexed payload total `851354304`.
+This is an index metadata-scope mismatch, not proof of corrupted tensor bytes; no model load,
+download, server, Harbor, device, or evaluation workload was run.
