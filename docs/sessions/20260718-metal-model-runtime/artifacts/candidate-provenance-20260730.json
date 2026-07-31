@@ -5,9 +5,9 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "ea2ddcddfdc49684f7898efd67c2c67f8e3ee94f",
-    "provenance_commit": "ea2ddcddfdc49684f7898efd67c2c67f8e3ee94f",
-    "working_tree": "dirty_for_provenance_update",
+    "head": "6fee37ccfe6e44a5ffd3e9ad7c7fcb9625611280",
+    "provenance_commit": "6fee37ccfe6e44a5ffd3e9ad7c7fcb9625611280",
+    "working_tree": "clean_at_recording",
     "evidence_complete": false
   },
   "artifacts": {
