@@ -5,9 +5,10 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "364cef6f223a921b302084684927d0c60fb2b8e4",
-    "provenance_commit": "6fee37ccfe6e44a5ffd3e9ad7c7fcb9625611280",
-    "working_tree": "clean_at_recording",
+    "head": "9bab1235b63cf0746acc9bd88bedb782c7449043",
+    "provenance_commit": "9bab1235b63cf0746acc9bd88bedb782c7449043",
+    "working_tree": "clean_at_compile",
+    "current_repository_head_at_recording": "ea08d0660cff849e5e509c431cace3bd4f03cdfd",
     "evidence_complete": false
   },
   "artifacts": {
@@ -43,10 +44,12 @@
       "sha256_reproduced": true
     },
     "model_snapshot_integrity": {
-      "status": "failed_closed",
-      "report": "artifacts/qwen35-snapshot-integrity-20260731.json",
-      "error": "safetensors index metadata total_size=650168512 differs from actual indexed file bytes=851459620",
-      "model_load_or_download": false
+      "status": "indexed_model_verified",
+      "report": "artifacts/qwen35-snapshot-audit.json",
+      "error": null,
+      "model_load_or_download": false,
+      "optional_sidecars_present": true,
+      "optional_sidecars_outside_index_total": true
     },
     "device_fingerprint": {
       "status": "unknown",
@@ -68,10 +71,10 @@
   },
   "promotion": {
     "verdict": "blocked",
-    "reason": "Current-head provenance has compile-only artifact evidence and the cached Qwen3.5 snapshot fails its index-size integrity check; stale candidate and Harbor records cannot be promoted without verified model and device/runtime evidence.",
+    "reason": "The cached Qwen3.5 indexed model is structurally consistent; promotion remains blocked because the record is compile-only, the candidate source is historical rather than current, and no authorized Harbor/device evidence is present.",
     "remaining_gates": [
       "fresh allowlisted Metal artifact manifest and SHA-256 verification bound to current HEAD",
-      "verified Qwen3.5 snapshot integrity with matching safetensors index metadata",
+      "current-head candidate provenance (the recorded compile source is 9bab1235)",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
       "final local promotion review"
