@@ -1,40 +1,22 @@
 {
   "evidence_label": "snapshot_integrity",
   "integrity": {
-    "errors": [],
-    "status": "verified_with_sidecar_scope",
-    "warnings": [
-      "index:metadata_scope_excludes_declared_sidecars:optiq/optiq_vision.safetensors"
-    ]
+    "errors": [
+      "index:size_mismatch:metadata=650168512:actual=851459620"
+    ],
+    "status": "failed"
   },
   "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
-  "recorded_at": "2026-08-01T01:12:23.566159Z",
+  "recorded_at": "2026-07-31T05:56:54.590227Z",
   "schema_version": "0.1",
   "snapshot": {
-    "cache_relative": "$CACHE/models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit/snapshots/ef60586933bd2cc02b763f77eb8839a5114bbec1",
+    "cache_relative": "$HOME/.cache/huggingface/hub/models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit/snapshots/ef60586933bd2cc02b763f77eb8839a5114bbec1",
     "config_model_type": "qwen3_5",
-    "declared_sidecars": [
-      "optiq/optiq_vision.safetensors"
-    ],
-    "index_scope": "declared_sidecars_excluded",
     "index_total_size_bytes": 650168512,
     "indexed_files": [
       "model.safetensors",
       "optiq/optiq_vision.safetensors"
     ],
-    "indexed_files_size_bytes": 851459620,
-    "indexed_payload_size_bytes": 851354304,
-    "indexed_payloads_bytes": {
-      "model.safetensors": 650168512,
-      "optiq/optiq_vision.safetensors": 201185792
-    },
-    "optional_files": {
-      "optiq/mtp.safetensors": {
-        "resolved_path": "optiq/mtp.safetensors",
-        "sha256": "a336650761924a134ddc7aaffc90858904cbe2b5eb05c007094e6acb728a558a",
-        "size_bytes": 14530491
-      }
-    },
     "required_files": {
       "chat_template.jinja": {
         "resolved_path": "chat_template.jinja",
@@ -65,6 +47,11 @@
         "resolved_path": "model.safetensors.index.json",
         "sha256": "dd50d28faec94d266bab561f904f4f9f354571ad2a3751dbb284ff04087e117c",
         "size_bytes": 70097
+      },
+      "optiq/mtp.safetensors": {
+        "resolved_path": "optiq/mtp.safetensors",
+        "sha256": "a336650761924a134ddc7aaffc90858904cbe2b5eb05c007094e6acb728a558a",
+        "size_bytes": 14530491
       },
       "optiq/optiq_vision.safetensors": {
         "resolved_path": "optiq/optiq_vision.safetensors",
