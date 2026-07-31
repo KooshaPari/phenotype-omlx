@@ -250,3 +250,20 @@ All R-nodes inherit the overload governor: one bounded trial, fixed context, no 
 retries, explicit timeout, and immutable result hashes. Apple Metal dispatches must publish
 resource dependencies/barriers before encoder fusion is considered. Harbor/Portage task and
 dataset artifacts are the system of record; ad-hoc scripts may only prepare or verify them.
+
+## VRAM-note serving sub-DAG (2026-07-31)
+
+    exact Qwen3.5 state replay
+      -> hot 3090 Ti shared path/KV/GDN/hot experts
+      -> measured 1080 Ti coarse stage or warm-expert residency
+      -> DRAM/page-cache warm tier
+      -> content-addressed NVMe cold catalog
+      -> slack-bytes admission + prefetch/backpressure
+      -> token-fate/state-hash envelope and promotion review
+
+The note's actionable experiments are bounded to cold/warm cache, mmap versus concurrent
+`pread`, kernel-ready layouts, expert reuse/prediction, and separate prefill/decode stage-share
+sweeps. A full-KV or dense-weight copy per token is rejected by the design contract. Each trial
+must report cache hit/miss, physical disk bytes, page faults, PCIe bytes, queueing, device role,
+state hashes, and fallback/rollback; no hardware-modification or market claim can satisfy a
+Qwen3.5 acceptance gate.
