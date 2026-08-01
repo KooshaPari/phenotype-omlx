@@ -277,7 +277,8 @@ Qwen3.5 acceptance gate.
       -> authorized Harbor/device window
       -> promotion review
 
-The local Qwen3.5 snapshot is not treated as corrupt: its base `model.safetensors` payload
-matches `metadata.total_size`, while `weight_map` also names the vision shard. The verifier now
-records both filesystem and payload totals and fails closed on that scope mismatch. No runtime
-window may bypass this gate or substitute the older Harbor artifact.
+The local Qwen3.5 snapshot is not treated as corrupt: `config.json` declares the vision shard as
+a sidecar, and its base `model.safetensors` payload matches `metadata.total_size`. The verifier
+records both filesystem and payload totals, hashes every indexed shard, and accepts only the
+explicit `declared_sidecars_excluded` scope with a warning. No runtime window may bypass this
+gate or substitute the older Harbor artifact.

@@ -45,6 +45,33 @@ def test_index_scope_mismatch_fails_closed(tmp_path: Path) -> None:
     assert report["workload_executed"] is False
 
 
+def test_declared_sidecar_scope_is_verified(tmp_path: Path) -> None:
+    for relative in MODULE.REQUIRED:
+        path = tmp_path / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if relative not in {"model.safetensors", "model.safetensors.index.json", "config.json"}:
+            path.write_text("{}" if path.suffix == ".json" else "", encoding="utf-8")
+    model_payload = _write_safetensors(tmp_path / "model.safetensors", b"weights")
+    vision_payload = _write_safetensors(tmp_path / "vision.safetensors", b"vision")
+    (tmp_path / "config.json").write_text(
+        json.dumps({"model_type": "qwen3_5", "optiq_vision": {"sidecar": "vision.safetensors"}}),
+        encoding="utf-8",
+    )
+    (tmp_path / "model.safetensors.index.json").write_text(
+        json.dumps(
+            {
+                "metadata": {"total_size": model_payload},
+                "weight_map": {"x": "model.safetensors", "vision": "vision.safetensors"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = MODULE.verify_snapshot(tmp_path, "mlx-community/Qwen3.5-0.8B-OptiQ-4bit")
+    assert report["integrity"]["status"] == "verified_with_sidecar_scope"
+    assert report["snapshot"]["indexed_payload_size_bytes"] == model_payload + vision_payload
+    assert report["snapshot"]["index_scope"] == "declared_sidecars_excluded"
+
+
 def test_index_rejects_path_traversal(tmp_path: Path) -> None:
     _write_safetensors(tmp_path / "model.safetensors", b"weights")
     (tmp_path / "model.safetensors.index.json").write_text(
