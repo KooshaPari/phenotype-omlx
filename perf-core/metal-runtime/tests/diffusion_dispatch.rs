@@ -12,6 +12,17 @@ use metal_runtime::{
 };
 
 #[test]
+fn compaction_oracle_canonicalizes_atomic_output_order() {
+    let mut compacted = vec![14_u32, 10, 17, 12];
+    let mut positions = vec![4_u32, 0, 7, 2];
+
+    canonicalize_compacted_pairs(&mut compacted, &mut positions);
+
+    assert_eq!(compacted, vec![10, 12, 14, 17]);
+    assert_eq!(positions, vec![0, 2, 4, 7]);
+}
+
+#[test]
 #[ignore = "explicit device fixture; requires METAL_RUNTIME_TEST_ARTIFACT and MANIFEST"]
 fn diffusion_three_stage_fixture_matches_oracle() {
     let artifact_path = std::env::var("METAL_RUNTIME_TEST_ARTIFACT")
@@ -41,7 +52,8 @@ fn diffusion_three_stage_fixture_matches_oracle() {
             .expect("compact telemetry");
     assert!(compacted_outcome.telemetry.completed);
     assert!(!compacted_outcome.telemetry.fallback);
-    let (compacted, positions) = compacted_outcome.output.expect("compact dispatch");
+    let (mut compacted, mut positions) = compacted_outcome.output.expect("compact dispatch");
+    canonicalize_compacted_pairs(&mut compacted, &mut positions);
     compare_u32("compacted values", &[10, 12, 14, 17], &compacted).unwrap();
     compare_u32("positions", &[0, 2, 4, 7], &positions).unwrap();
 
@@ -88,4 +100,25 @@ fn diffusion_three_stage_fixture_matches_oracle() {
     )
     .unwrap();
     compare_u8("converged", &[1, 0, 1, 0, 0, 0, 0, 1], &converged).unwrap();
+}
+
+fn canonicalize_compacted_pairs(values: &mut [u32], positions: &mut [u32]) {
+    assert_eq!(
+        values.len(),
+        positions.len(),
+        "compaction pair lengths must match"
+    );
+    let mut pairs: Vec<_> = positions
+        .iter()
+        .copied()
+        .zip(values.iter().copied())
+        .collect();
+    pairs.sort_unstable_by_key(|(position, _)| *position);
+    for ((position, value), (out_position, out_value)) in pairs
+        .into_iter()
+        .zip(positions.iter_mut().zip(values.iter_mut()))
+    {
+        *out_position = position;
+        *out_value = value;
+    }
 }
