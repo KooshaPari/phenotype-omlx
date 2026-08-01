@@ -59,15 +59,25 @@ def test_current_head_provenance_is_explicitly_non_promotable() -> None:
 
 def test_current_manifest_is_exact_head_and_holds_runtime_gate() -> None:
     document = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert document["candidate"]["head"] == "55b2af6c04ebff1261364c709582c031bed451d2"
-    assert document["candidate"]["freeze_status"] == "current-head-integrity-reviewed"
+    assert document["candidate"]["head"] == "48b1b942873bcedf298031f187389a2af4040acc"
+    assert document["candidate"]["freeze_status"] == "current-head-integrity-reviewed-canonical-dirty"
+    assert document["changes"]["working_tree_at_review"] == "canonical_checkout_dirty_untracked"
+    assert document["changes"]["working_tree_dirty_paths"] == [
+        "docs/sessions/20260719-cross-chat-alignment/"
+    ]
     assert document["candidate"]["evidence_complete"] is False
     assert document["verification"]["workload_executed"] is False
-    assert document["promotion"]["verdict"] == "blocked"
-    assert "authorized Qwen3.5 Harbor/device evidence at current HEAD" in document["promotion"]["remaining_gates"]
-    assert document["integrity"]["canonical_sha256"] == (
-        "85fb41efef6532ac0664a41b29849181fe3a1eb7b65ec915cd48fba6ed5f00b8"
+    assert document["verification"]["metal_compile_provenance"]["artifact_commit"] == (
+        "55b2af6c04ebff1261364c709582c031bed451d2"
     )
+    assert document["verification"]["metal_compile_provenance"]["artifact_bound_to_candidate_head"] is False
+    assert document["verification"]["metal_compile_provenance"]["status"] == "stale_compile_only"
+    assert document["promotion"]["verdict"] == "blocked"
+    assert "fresh current-head Metal compile/device evidence" in document["promotion"]["remaining_gates"]
+    assert "authorized Qwen3.5 Harbor/device evidence at current HEAD" in document["promotion"]["remaining_gates"]
+    payload = {key: value for key, value in document.items() if key != "integrity"}
+    canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+    assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
 
 
 def test_latest_harbor_evidence_is_positive_but_not_8192_completion() -> None:
