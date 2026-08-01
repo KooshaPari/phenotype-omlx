@@ -3,9 +3,9 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "55b2af6c04ebff1261364c709582c031bed451d2",
+    "head": "48b1b942873bcedf298031f187389a2af4040acc",
     "base": "main",
-    "freeze_status": "current-head-integrity-reviewed",
+    "freeze_status": "current-head-integrity-reviewed-canonical-dirty",
     "evidence_complete": false
   },
   "historical_snapshot": {
@@ -27,8 +27,11 @@
       "evals/harbor/tasks/omlx-niah-api-smoke"
     ],
     "todo_fr_omlx_poly_001": "removed",
-    "working_tree_at_review": "clean",
-    "review_commit": "55b2af6c04ebff1261364c709582c031bed451d2"
+    "working_tree_at_review": "canonical_checkout_dirty_untracked",
+    "working_tree_dirty_paths": [
+      "docs/sessions/20260719-cross-chat-alignment/"
+    ],
+    "review_commit": "48b1b942873bcedf298031f187389a2af4040acc"
   },
   "verification": {
     "workspace": {
@@ -38,12 +41,13 @@
     "model_snapshot_integrity": "docs/sessions/20260718-metal-model-runtime/artifacts/qwen35-snapshot-integrity-20260731.json",
     "candidate_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
     "metal_compile_provenance": {
-      "head": "55b2af6c04ebff1261364c709582c031bed451d2",
-      "artifact_bound_to_candidate_head": true,
+      "head": "48b1b942873bcedf298031f187389a2af4040acc",
+      "artifact_commit": "55b2af6c04ebff1261364c709582c031bed451d2",
+      "artifact_bound_to_candidate_head": false,
       "shader_count": 20,
       "metallib_sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
       "manifest_sha256": "dc3568fa8a0eacdf4b3262f4baff69d16d285fbeb4496b6e79d379f0d2e295b0",
-      "status": "verified_compile_only",
+      "status": "stale_compile_only",
       "workload_executed": false
     },
     "workload_executed": false
@@ -52,13 +56,14 @@
     "verdict": "blocked",
     "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; no authorized Harbor/device workload or full benchmark envelope is present.",
     "remaining_gates": [
+      "fresh current-head Metal compile/device evidence",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
       "final local promotion review"
     ]
   },
   "integrity": {
-    "canonical_sha256": "85fb41efef6532ac0664a41b29849181fe3a1eb7b65ec915cd48fba6ed5f00b8",
+    "canonical_sha256": "5a38e71aebd06f31071c4296b2f361e3cf279e2d21cdd812a445b69ff04bba72",
     "canonical_sha256_status": "verified"
   }
 }
