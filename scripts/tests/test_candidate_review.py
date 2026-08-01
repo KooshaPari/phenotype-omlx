@@ -59,14 +59,14 @@ def test_current_head_provenance_is_explicitly_non_promotable() -> None:
 
 def test_current_manifest_is_exact_head_and_holds_runtime_gate() -> None:
     document = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert document["candidate"]["head"] == "00a489846ebce282c69e1623ee41f9923169c08f"
+    assert document["candidate"]["head"] == "55b2af6c04ebff1261364c709582c031bed451d2"
     assert document["candidate"]["freeze_status"] == "current-head-integrity-reviewed"
     assert document["candidate"]["evidence_complete"] is False
     assert document["verification"]["workload_executed"] is False
     assert document["promotion"]["verdict"] == "blocked"
     assert "authorized Qwen3.5 Harbor/device evidence at current HEAD" in document["promotion"]["remaining_gates"]
     assert document["integrity"]["canonical_sha256"] == (
-        "fef5b00a5aa47b3e7ed8621ca5e8a895343cac3d6d75235c853416cd76fd032b"
+        "85fb41efef6532ac0664a41b29849181fe3a1eb7b65ec915cd48fba6ed5f00b8"
     )
 
 
