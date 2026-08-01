@@ -2,7 +2,7 @@
 # Phenotype CI — Unified multi-language pipeline (smart-discover)
 # =============================================================================
 # Detects languages from repo structure, only runs what applies.
-# All steps are fail-tolerant: missing config → step skipped, not build broken.
+# Language jobs are fail-closed when detected; missing languages are skipped.
 # Optimized for: Rust, Python, Go, TypeScript
 # Runners: Blacksmith (fast) → GitHub-hosted fallback
 # =============================================================================
@@ -76,7 +76,7 @@ jobs:
           fi
 
   # ===========================================================================
-  # STAGE 2: Per-language gates (run in parallel; fail-tolerant)
+  # STAGE 2: Per-language gates (run in parallel; fail-closed when detected)
   # ===========================================================================
 
   rust:
@@ -84,7 +84,6 @@ jobs:
     needs: detect
     if: needs.detect.outputs.rust == 'true'
     runs-on: blacksmith-2vcpu-ubuntu-2204
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -94,55 +93,46 @@ jobs:
         with:
           shared-key: phen-ci-rust
       - name: fmt check
-        run: |
-          if cargo fmt --all -- --check 2>&1 | tee /tmp/fmt.log; then
-            echo "fmt_ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "fmt_ok=false" >> "$GITHUB_OUTPUT"
-          fi
-        id: fmt
+        run: cargo fmt --all -- --check
       - name: clippy
-        run: cargo clippy --all-targets --no-deps -- -D warnings 2>&1 || echo "::warning::clippy failed (non-blocking)"
+        run: cargo clippy --all-targets --no-deps -- -D warnings
       - name: build
-        run: cargo build --workspace 2>&1 || cargo build 2>&1 || echo "::warning::build failed (non-blocking)"
+        run: cargo build --workspace
       - name: test
-        run: |
-          if [ -f "Cargo.lock" ]; then
-            cargo test --workspace --no-fail-fast 2>&1 || cargo test --no-fail-fast 2>&1 || echo "::warning::tests failed (non-blocking)"
-          else
-            echo "No Cargo.lock — skipping tests"
-          fi
+        run: cargo test --workspace --no-fail-fast
 
   python:
     name: Python
     needs: detect
     if: needs.detect.outputs.python == 'true'
     runs-on: blacksmith-2vcpu-ubuntu-2204
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install ruff
-        run: pip install --quiet ruff 2>&1 || echo "::warning::ruff install failed"
+        run: pip install --quiet ruff
       - name: ruff check
-        run: ruff check --output-format=github . 2>&1 || echo "::warning::ruff check found issues (non-blocking)"
+        run: ruff check --output-format=github .
       - name: ruff format
-        run: ruff format --check . 2>&1 || echo "::warning::format check found issues (non-blocking)"
+        run: ruff format --check .
       - name: install deps
         run: |
           if [ -f "uv.lock" ]; then
-            pip install --quiet uv && uv sync --all-extras 2>&1 || echo "::warning::uv sync failed"
+            pip install --quiet uv
+            uv sync --all-extras
           elif [ -f "pyproject.toml" ]; then
-            pip install --quiet -e . 2>&1 || echo "::warning::pip install -e failed"
-          elif compgen -G "requirements*.txt" > /dev/null; then
-            pip install --quiet -r requirements.txt 2>&1 || pip install --quiet -r requirements-dev.txt 2>&1 || echo "::warning::pip install failed"
+            pip install --quiet -e .
+          elif [ -f "requirements.txt" ]; then
+            pip install --quiet -r requirements.txt
+          elif [ -f "requirements-dev.txt" ]; then
+            pip install --quiet -r requirements-dev.txt
           fi
       - name: pytest
         run: |
           if compgen -G "**/test_*.py" > /dev/null || compgen -G "tests/**/*.py" > /dev/null; then
-            python -m pytest --no-header -q 2>&1 || echo "::warning::pytest failed (non-blocking)"
+            python -m pytest --no-header -q
           else
             echo "No tests found"
           fi
@@ -297,11 +287,11 @@ jobs:
     steps:
       - name: Aggregate
         run: |
-          # All jobs are continue-on-error; this gate just confirms CI ran
-          # without crashing the runner. Lint/test results are advisory.
+          # This summary remains informational; protected lint/test contexts
+          # below enforce every detected language job's result.
           echo "✅ CI pipeline completed"
           echo ""
-          echo "Per-language results (advisory, non-blocking):"
+          echo "Per-language results:"
           echo "  Rust:        ${{ needs.rust.result }}"
           echo "  Python:      ${{ needs.python.result }}"
           echo "  Go:          ${{ needs.go.result }}"
