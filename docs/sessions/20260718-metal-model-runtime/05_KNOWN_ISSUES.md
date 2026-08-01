@@ -224,3 +224,8 @@ snapshot integrity and compile-only provenance artifacts. Historical Harbor/NIAH
 preserved in their original artifacts, but are not reused as current promotion evidence. Direct
 candidate-review assertions pass 9/9; promotion remains blocked until a bounded Qwen3.5 runtime
 window emits current-head evidence.
+
+Update 2026-08-01b (Metal compile manifest): the 20-source Metal bundle was rebuilt at current
+HEAD and its allowlisted manifest was verified (`metallib` SHA-256
+`ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`). This closes the compile
+artifact gate only; device execution and Qwen3.5 Harbor evidence remain absent.

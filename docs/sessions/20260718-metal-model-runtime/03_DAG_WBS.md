@@ -293,3 +293,7 @@ gate or substitute the older Harbor artifact.
 
 The candidate manifest now reports `blocked` rather than inheriting historical live-run claims.
 This is an evidence correction, not a runtime result; no model or device workload was launched.
+
+The current-head Metal compile manifest is now present in the candidate record with shader count,
+metallib SHA-256, manifest SHA-256, and `verified_compile_only` status. It must not be promoted to
+device evidence without an authorized bounded execution.

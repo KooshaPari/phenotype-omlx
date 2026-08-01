@@ -37,21 +37,27 @@
     },
     "model_snapshot_integrity": "docs/sessions/20260718-metal-model-runtime/artifacts/qwen35-snapshot-integrity-20260731.json",
     "candidate_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
-    "metal_compile_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
+    "metal_compile_provenance": {
+      "head": "00a489846ebce282c69e1623ee41f9923169c08f",
+      "shader_count": 20,
+      "metallib_sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
+      "manifest_sha256": "dc3568fa8a0eacdf4b3262f4baff69d16d285fbeb4496b6e79d379f0d2e295b0",
+      "status": "verified_compile_only",
+      "workload_executed": false
+    },
     "workload_executed": false
   },
   "promotion": {
     "verdict": "blocked",
     "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; no authorized Harbor/device workload or full benchmark envelope is present.",
     "remaining_gates": [
-      "fresh allowlisted Metal artifact manifest and SHA-256 verification bound to current HEAD",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
       "final local promotion review"
     ]
   },
   "integrity": {
-    "canonical_sha256": null,
-    "canonical_sha256_status": "pending_after_current_head_refresh"
+    "canonical_sha256": "fef5b00a5aa47b3e7ed8621ca5e8a895343cac3d6d75235c853416cd76fd032b",
+    "canonical_sha256_status": "verified"
   }
 }

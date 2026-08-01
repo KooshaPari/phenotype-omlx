@@ -65,7 +65,9 @@ def test_current_manifest_is_exact_head_and_holds_runtime_gate() -> None:
     assert document["verification"]["workload_executed"] is False
     assert document["promotion"]["verdict"] == "blocked"
     assert "authorized Qwen3.5 Harbor/device evidence at current HEAD" in document["promotion"]["remaining_gates"]
-    assert document["integrity"]["canonical_sha256"] is None
+    assert document["integrity"]["canonical_sha256"] == (
+        "fef5b00a5aa47b3e7ed8621ca5e8a895343cac3d6d75235c853416cd76fd032b"
+    )
 
 
 def test_latest_harbor_evidence_is_positive_but_not_8192_completion() -> None:
