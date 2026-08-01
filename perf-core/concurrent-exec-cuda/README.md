@@ -35,6 +35,20 @@ Requires the CUDA Toolkit (`nvcc` ≥ 12.0) and an NVIDIA driver on the build
 host. The artifact is copied next to `build.sh` so the Rust example can
 `dlopen("./libphenotype_omlx_cuda.so")` without extra path config.
 
+### Mixed GTX 1080 Ti + RTX 3090 Ti desktop
+
+The Pascal GTX 1080 Ti requires CUDA 12.x and `sm_61`; the Ampere RTX 3090 Ti
+uses `sm_86`. Build one portable artifact containing both profiles explicitly:
+
+```bash
+CUDA_PROFILE=portable CUDA_ARCH='61;86' ./build.sh
+```
+
+Do not use a CUDA 13.x toolkit for this mixed build: CUDA 13 no longer emits
+Pascal `sm_61` code. The `pascal` and `ampere` profiles remain available for
+single-GPU builds, while `CUDA_ARCH` is the explicit escape hatch for a mixed
+or otherwise customized architecture set.
+
 ### 2. Rust crate
 
 ```bash
