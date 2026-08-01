@@ -158,6 +158,8 @@ def test_every_row_has_all_required_fields():
 def test_top_level_envelope_has_canonical_keys():
     """The envelope root must carry every header field the doctor and
     the existing tests already key off of."""
+    from omlx_research.smoke_models import default_model_for
+
     payload = gen.build_envelope(
         gen.EXPANDED_CONTEXT_LENGTHS,
         gen.DEFAULT_SEEDS,
@@ -166,7 +168,8 @@ def test_top_level_envelope_has_canonical_keys():
     assert payload["schema_version"] == 1
     assert payload["kind"] == "niah_target_rows"
     assert isinstance(payload["generated_at"], str)
-    assert payload["model"] == gen.DEFAULT_MODEL
+    assert payload["model"] == default_model_for("niah")
+    assert "Qwen3.5" in payload["model"]
     assert isinstance(payload["context_lengths"], list)
     assert isinstance(payload["kernels"], list)
     assert isinstance(payload["seeds"], list)
