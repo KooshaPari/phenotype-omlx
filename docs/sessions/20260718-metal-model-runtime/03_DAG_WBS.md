@@ -282,3 +282,14 @@ a sidecar, and its base `model.safetensors` payload matches `metadata.total_size
 records both filesystem and payload totals, hashes every indexed shard, and accepts only the
 explicit `declared_sidecars_excluded` scope with a warning. No runtime window may bypass this
 gate or substitute the older Harbor artifact.
+
+## Current-head candidate reconciliation (2026-08-01)
+
+    stale recovery manifest
+      -> current branch/head + compile-only references
+      -> direct review assertions 9/9
+      -> bounded Qwen3.5 Harbor/device window
+      -> benchmark envelope + promotion review
+
+The candidate manifest now reports `blocked` rather than inheriting historical live-run claims.
+This is an evidence correction, not a runtime result; no model or device workload was launched.
