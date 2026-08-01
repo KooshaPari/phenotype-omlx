@@ -3,7 +3,7 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "00a489846ebce282c69e1623ee41f9923169c08f",
+    "head": "55b2af6c04ebff1261364c709582c031bed451d2",
     "base": "main",
     "freeze_status": "current-head-integrity-reviewed",
     "evidence_complete": false
@@ -28,7 +28,7 @@
     ],
     "todo_fr_omlx_poly_001": "removed",
     "working_tree_at_review": "clean",
-    "review_commit": "00a489846ebce282c69e1623ee41f9923169c08f"
+    "review_commit": "55b2af6c04ebff1261364c709582c031bed451d2"
   },
   "verification": {
     "workspace": {
@@ -38,7 +38,8 @@
     "model_snapshot_integrity": "docs/sessions/20260718-metal-model-runtime/artifacts/qwen35-snapshot-integrity-20260731.json",
     "candidate_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
     "metal_compile_provenance": {
-      "head": "00a489846ebce282c69e1623ee41f9923169c08f",
+      "head": "55b2af6c04ebff1261364c709582c031bed451d2",
+      "artifact_bound_to_candidate_head": true,
       "shader_count": 20,
       "metallib_sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
       "manifest_sha256": "dc3568fa8a0eacdf4b3262f4baff69d16d285fbeb4496b6e79d379f0d2e295b0",
@@ -57,7 +58,7 @@
     ]
   },
   "integrity": {
-    "canonical_sha256": "fef5b00a5aa47b3e7ed8621ca5e8a895343cac3d6d75235c853416cd76fd032b",
+    "canonical_sha256": "85fb41efef6532ac0664a41b29849181fe3a1eb7b65ec915cd48fba6ed5f00b8",
     "canonical_sha256_status": "verified"
   }
 }
