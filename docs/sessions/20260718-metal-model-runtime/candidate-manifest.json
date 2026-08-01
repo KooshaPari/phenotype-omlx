@@ -3,7 +3,7 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "fd955ee456349aa5335b4556128226a769eca40a",
+    "head": "d0a67808c6db3af5bc111b1680ed554fce0c0e03",
     "base": "main",
     "freeze_status": "current-head-integrity-reviewed-canonical-dirty",
     "evidence_complete": false
@@ -31,7 +31,7 @@
     "working_tree_dirty_paths": [
       "docs/sessions/20260719-cross-chat-alignment/"
     ],
-    "review_commit": "fd955ee456349aa5335b4556128226a769eca40a"
+    "review_commit": "d0a67808c6db3af5bc111b1680ed554fce0c0e03"
   },
   "verification": {
     "workspace": {
@@ -41,7 +41,7 @@
     "model_snapshot_integrity": "docs/sessions/20260718-metal-model-runtime/artifacts/qwen35-snapshot-integrity-20260731.json",
     "candidate_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
     "metal_compile_provenance": {
-      "head": "fd955ee456349aa5335b4556128226a769eca40a",
+      "head": "d0a67808c6db3af5bc111b1680ed554fce0c0e03",
       "artifact_commit": "55b2af6c04ebff1261364c709582c031bed451d2",
       "artifact_bound_to_candidate_head": false,
       "shader_count": 20,
@@ -63,7 +63,7 @@
     ]
   },
   "integrity": {
-    "canonical_sha256": "359bf64d8576f9bb9e96739a105c39a00f6ad4e2d1e127dea3de138f95896ae9",
+    "canonical_sha256": "fc9ccfc0b1f9a1a69c768371f86ddbb6c91133cddeb2f9084b504a1f5f59a1a9",
     "canonical_sha256_status": "verified"
   }
 }
