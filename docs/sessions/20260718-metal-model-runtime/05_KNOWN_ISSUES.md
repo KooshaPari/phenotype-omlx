@@ -212,8 +212,8 @@ encoding. Two isolated host tests pass; device execution and Qwen3.5 acceptance 
 Update 2026-07-31 (Qwen3.5 snapshot gate): the integrity verifier now parses safetensors headers
 and tensor offsets, requires every `weight_map` file to be a safe snapshot-relative path, hashes
 index-referenced shards, recognizes `optiq/mtp.safetensors` as optional, and resolves
-`HUGGINGFACE_HUB_CACHE`, `HF_HUB_CACHE`, and `SSD_HF_CACHE` explicitly. The canonical cache remains
-fail-closed because `metadata.total_size=650168512` covers the base model payload while the index
-also references `optiq/optiq_vision.safetensors`, making the indexed payload total `851354304`.
-This is an index metadata-scope mismatch, not proof of corrupted tensor bytes; no model load,
-download, server, Harbor, device, or evaluation workload was run.
+`HUGGINGFACE_HUB_CACHE`, `HF_HUB_CACHE`, and `SSD_HF_CACHE` explicitly. The canonical cache now
+verifies with an explicit sidecar-scope warning: `config.json` declares
+`optiq/optiq_vision.safetensors`, and `metadata.total_size=650168512` matches the non-sidecar
+payload while all indexed payloads total `851354304` and are hashed. No model load, download,
+server, Harbor, device, or evaluation workload was run.

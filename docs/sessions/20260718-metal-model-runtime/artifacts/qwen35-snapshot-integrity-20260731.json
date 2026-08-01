@@ -1,17 +1,22 @@
 {
   "evidence_label": "snapshot_integrity",
   "integrity": {
-    "errors": [
-      "index:metadata_scope_mismatch:metadata=650168512:indexed_payload=851354304:indexed_files_size=851459620"
-    ],
-    "status": "failed"
+    "errors": [],
+    "status": "verified_with_sidecar_scope",
+    "warnings": [
+      "index:metadata_scope_excludes_declared_sidecars:optiq/optiq_vision.safetensors"
+    ]
   },
   "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
-  "recorded_at": "2026-07-31T23:28:47.877037Z",
+  "recorded_at": "2026-08-01T01:12:23.566159Z",
   "schema_version": "0.1",
   "snapshot": {
     "cache_relative": "$CACHE/models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit/snapshots/ef60586933bd2cc02b763f77eb8839a5114bbec1",
     "config_model_type": "qwen3_5",
+    "declared_sidecars": [
+      "optiq/optiq_vision.safetensors"
+    ],
+    "index_scope": "declared_sidecars_excluded",
     "index_total_size_bytes": 650168512,
     "indexed_files": [
       "model.safetensors",

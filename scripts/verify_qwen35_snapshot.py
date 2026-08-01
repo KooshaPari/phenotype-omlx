@@ -150,12 +150,32 @@ def verify_snapshot(
                 "resolved_path": relative,
             }
 
+    config_type = None
+    declared_sidecars: set[str] = set()
+    config_path = snapshot / "config.json"
+    if config_path.is_file():
+        try:
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            config_type = config.get("model_type")
+            if config_type != "qwen3_5":
+                errors.append(f"config:model_type={config_type!r}")
+            vision = config.get("optiq_vision") or {}
+            if isinstance(vision, dict) and vision.get("sidecar") is not None:
+                declared_sidecars.add(_safe_index_path(vision["sidecar"]))
+        except (OSError, ValueError, TypeError) as exc:
+            message = str(exc)
+            errors.append(
+                message if message.startswith("index:") else f"config:invalid:{type(exc).__name__}"
+            )
+
     index_path = snapshot / "model.safetensors.index.json"
     indexed_files: list[str] = []
     index_total: int | None = None
     actual_total = 0
     payload_total = 0
     payload_sizes: dict[str, int] = {}
+    index_scope = "unknown"
+    warnings: list[str] = []
     if index_path.is_file():
         try:
             index = json.loads(index_path.read_text(encoding="utf-8"))
@@ -193,12 +213,28 @@ def verify_snapshot(
             payload_total = sum(payload_sizes.values())
             if not isinstance(index_total, int):
                 errors.append("index:metadata.total_size_missing_or_non_integer")
-            elif payload_total != index_total:
-                errors.append(
-                    "index:metadata_scope_mismatch:"
-                    f"metadata={index_total}:indexed_payload={payload_total}:"
-                    f"indexed_files_size={actual_total}"
+            else:
+                sidecar_payload = sum(
+                    payload_sizes[relative]
+                    for relative in declared_sidecars
+                    if relative in payload_sizes and relative in indexed_files
                 )
+                scoped_payload = payload_total - sidecar_payload
+                if payload_total == index_total:
+                    index_scope = "all_indexed_payload"
+                elif declared_sidecars and scoped_payload == index_total:
+                    index_scope = "declared_sidecars_excluded"
+                    warnings.append(
+                        "index:metadata_scope_excludes_declared_sidecars:"
+                        + ",".join(sorted(declared_sidecars))
+                    )
+                else:
+                    index_scope = "mismatch"
+                    errors.append(
+                        "index:metadata_scope_mismatch:"
+                        f"metadata={index_total}:indexed_payload={payload_total}:"
+                        f"indexed_files_size={actual_total}"
+                    )
         except (OSError, ValueError, TypeError) as exc:
             message = str(exc)
             errors.append(
@@ -207,16 +243,7 @@ def verify_snapshot(
     else:
         errors.append("index:missing")
 
-    config_type = None
-    config_path = snapshot / "config.json"
-    if config_path.is_file():
-        try:
-            config_type = json.loads(config_path.read_text(encoding="utf-8")).get("model_type")
-            if config_type != "qwen3_5":
-                errors.append(f"config:model_type={config_type!r}")
-        except (OSError, ValueError, TypeError) as exc:
-            errors.append(f"config:invalid:{type(exc).__name__}")
-
+    status = "verified_with_sidecar_scope" if not errors and warnings else "verified" if not errors else "failed"
     return {
         "schema_version": "0.1",
         "recorded_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -231,9 +258,11 @@ def verify_snapshot(
             "indexed_files_size_bytes": actual_total if index_path.is_file() else None,
             "indexed_payload_size_bytes": payload_total if index_path.is_file() else None,
             "indexed_payloads_bytes": payload_sizes if index_path.is_file() else {},
+            "declared_sidecars": sorted(declared_sidecars),
+            "index_scope": index_scope,
             "config_model_type": config_type,
         },
-        "integrity": {"status": "verified" if not errors else "failed", "errors": errors},
+        "integrity": {"status": status, "errors": errors, "warnings": warnings},
         "workload_executed": False,
     }
 
@@ -260,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({"status": report["integrity"]["status"], "output": str(args.output)}))
-    return 0 if report["integrity"]["status"] == "verified" else 1
+    return 0 if report["integrity"]["status"] in {"verified", "verified_with_sidecar_scope"} else 1
 
 
 if __name__ == "__main__":

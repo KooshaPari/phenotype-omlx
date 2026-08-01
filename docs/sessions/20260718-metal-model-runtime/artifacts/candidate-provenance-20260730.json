@@ -44,14 +44,15 @@
       "sha256_reproduced": true
     },
     "model_snapshot_integrity": {
-      "status": "failed_closed",
+      "status": "verified_with_sidecar_scope",
       "report": "artifacts/qwen35-snapshot-integrity-20260731.json",
-      "error": "index metadata total_size=650168512 covers model.safetensors payload only while weight_map references model.safetensors plus optiq/optiq_vision.safetensors (indexed payload total=851354304)",
+      "error": null,
       "model_load_or_download": false,
       "optional_sidecars_present": {
         "optiq/mtp.safetensors": true
       },
-      "indexed_vision_sidecar_present": true
+      "indexed_vision_sidecar_present": true,
+      "scope_warning": "index metadata total_size excludes the config-declared optiq/optiq_vision.safetensors sidecar; all indexed payloads are hashed and present"
     },
     "device_fingerprint": {
       "status": "unknown",
@@ -73,7 +74,7 @@
   },
   "promotion": {
     "verdict": "blocked",
-    "reason": "The cached Qwen3.5 snapshot is fail-closed: index metadata scope does not cover every weight_map-referenced payload. Promotion also remains blocked because the record is compile-only, the candidate source is historical rather than current, and no authorized Harbor/device evidence is present.",
+    "reason": "The cached Qwen3.5 snapshot is verified with an explicit config-declared sidecar scope; promotion remains blocked because the record is compile-only, the candidate source is historical rather than current, and no authorized Harbor/device evidence is present.",
     "remaining_gates": [
       "fresh allowlisted Metal artifact manifest and SHA-256 verification bound to current HEAD",
       "current-head candidate provenance (the recorded compile source is 9bab1235)",

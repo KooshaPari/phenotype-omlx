@@ -1,11 +1,12 @@
 {
   "evidence_label": "snapshot_integrity",
   "integrity": {
-    "status": "failed_closed",
-    "errors": [
-      "index:metadata_scope_mismatch:metadata=650168512:indexed_payload=851354304:indexed_files_size=851459620"
+    "status": "verified_with_sidecar_scope",
+    "errors": [],
+    "warnings": [
+      "index:metadata_scope_excludes_declared_sidecars:optiq/optiq_vision.safetensors"
     ],
-    "interpretation": "The index metadata total matches model.safetensors payload, but weight_map also references optiq/optiq_vision.safetensors; promotion remains fail-closed until metadata scope is reconciled."
+    "interpretation": "The config declares optiq/optiq_vision.safetensors as a sidecar; index total_size matches the non-sidecar model payload, while all indexed payloads remain hashed."
   },
   "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
   "recorded_at": "2026-07-31T23:28:48Z",
