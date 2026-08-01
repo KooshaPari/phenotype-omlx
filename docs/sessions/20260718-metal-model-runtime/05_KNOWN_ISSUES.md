@@ -217,3 +217,10 @@ verifies with an explicit sidecar-scope warning: `config.json` declares
 `optiq/optiq_vision.safetensors`, and `metadata.total_size=650168512` matches the non-sidecar
 payload while all indexed payloads total `851354304` and are hashed. No model load, download,
 server, Harbor, device, or evaluation workload was run.
+
+Update 2026-08-01 (candidate manifest reconciliation): the stale recovery-branch manifest was
+updated to the current `feat/diffusion-trajectory-state` HEAD and now points at the sidecar-aware
+snapshot integrity and compile-only provenance artifacts. Historical Harbor/NIAH references remain
+preserved in their original artifacts, but are not reused as current promotion evidence. Direct
+candidate-review assertions pass 9/9; promotion remains blocked until a bounded Qwen3.5 runtime
+window emits current-head evidence.

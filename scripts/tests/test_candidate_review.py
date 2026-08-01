@@ -50,22 +50,22 @@ def test_current_head_provenance_is_explicitly_non_promotable() -> None:
     assert candidate["head"] == candidate["provenance_commit"]
     assert len(candidate["head"]) == 40
     assert candidate["evidence_complete"] is False
-    assert document["artifacts"]["metallib_manifest"]["status"] == "pending"
-    assert document["artifacts"]["metallib_manifest"]["sha256"] is None
+    assert document["artifacts"]["metallib_manifest"]["status"] == "compile_only"
+    assert document["artifacts"]["metallib_manifest"]["sha256"]
     assert document["artifacts"]["device_fingerprint"]["status"] == "unknown"
     assert document["qwen35_harbor"]["status"] == "pending"
     assert document["promotion"]["verdict"] == "blocked"
 
 
-def test_current_manifest_is_exact_head_and_holds_8192_gate() -> None:
+def test_current_manifest_is_exact_head_and_holds_runtime_gate() -> None:
     document = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert document["candidate"]["head"] == "0acc9e3d289dd45002d11e6ef1ae2a5224812d4f"
-    assert document["candidate"]["freeze_status"] == "current-head-reviewed"
-    assert document["promotion"]["verdict"] == "review"
-    assert "authorized Qwen3.5 8192-token Harbor run" not in document["promotion"]["remaining_gates"]
-    payload = {key: value for key, value in document.items() if key != "integrity"}
-    canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
-    assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
+    assert document["candidate"]["head"] == "00a489846ebce282c69e1623ee41f9923169c08f"
+    assert document["candidate"]["freeze_status"] == "current-head-integrity-reviewed"
+    assert document["candidate"]["evidence_complete"] is False
+    assert document["verification"]["workload_executed"] is False
+    assert document["promotion"]["verdict"] == "blocked"
+    assert "authorized Qwen3.5 Harbor/device evidence at current HEAD" in document["promotion"]["remaining_gates"]
+    assert document["integrity"]["canonical_sha256"] is None
 
 
 def test_latest_harbor_evidence_is_positive_but_not_8192_completion() -> None:
