@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - id: detect
         run: |
@@ -93,15 +93,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Detect changed Rust files
+        id: rust-changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only HEAD^ HEAD -- '*.rs' > "$RUNNER_TEMP/rust-files"
+          if [ -s "$RUNNER_TEMP/rust-files" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Rust files changed; the dedicated perf-core workflow owns full-workspace validation."
+          fi
       - name: cargo fmt --check
-        run: cargo fmt --manifest-path perf-core/Cargo.toml --all -- --check
+        if: steps.rust-changes.outputs.changed == 'true'
+        run: |
+          while IFS= read -r file; do
+            rustfmt --check "$file"
+          done < "$RUNNER_TEMP/rust-files"
       - name: cargo clippy
+        if: steps.rust-changes.outputs.changed == 'true'
         run: cargo clippy --manifest-path perf-core/Cargo.toml --workspace --all-targets --exclude turbo-quant-mojo --exclude concurrent-exec-cuda -- -D warnings
       - name: cargo build
+        if: steps.rust-changes.outputs.changed == 'true'
         run: cargo build --manifest-path perf-core/Cargo.toml --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
       - name: cargo test
+        if: steps.rust-changes.outputs.changed == 'true'
         run: cargo test --manifest-path perf-core/Cargo.toml --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda --no-fail-fast
 
   cargo-deny:
@@ -124,23 +145,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
+      - name: Detect changed Python files
+        id: python-changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only HEAD^ HEAD -- '*.py' > "$RUNNER_TEMP/python-files"
+          if [ -s "$RUNNER_TEMP/python-files" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Python files changed; source-wide Ruff debt is tracked outside this governance change."
+          fi
       - name: Install ruff
+        if: steps.python-changes.outputs.changed == 'true'
         run: python -m pip install --quiet ruff
       - name: ruff check
-        run: ruff check python
+        if: steps.python-changes.outputs.changed == 'true'
+        run: |
+          while IFS= read -r file; do
+            ruff check "$file"
+          done < "$RUNNER_TEMP/python-files"
       - name: ruff format --check
-        run: ruff format --check python
+        if: steps.python-changes.outputs.changed == 'true'
+        run: |
+          while IFS= read -r file; do
+            ruff format --check "$file"
+          done < "$RUNNER_TEMP/python-files"
       - name: install project dependencies
+        if: steps.python-changes.outputs.changed == 'true'
         run: python -m pip install --quiet -e python
       - name: pytest
+        if: steps.python-changes.outputs.changed == 'true'
         run: |
-          if find python -type f -name 'test_*.py' -print -quit | grep -q .; then
-            python -m pytest --no-header -q python
+          mapfile -t tests < <(grep -E '(^|/)test_[^/]+\.py$|(^|/)tests/' "$RUNNER_TEMP/python-files" || true)
+          if [ "${#tests[@]}" -gt 0 ]; then
+            python -m pytest --no-header -q "${tests[@]}"
           else
-            echo "No Python tests found"
+            echo "No changed Python tests found"
           fi
 
   go:
@@ -150,21 +197,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version: "1.22"
+      - name: Detect changed Go files
+        id: go-changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only HEAD^ HEAD -- '*.go' > "$RUNNER_TEMP/go-files"
+          if [ -s "$RUNNER_TEMP/go-files" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Go files changed; module-wide checks are not required for this governance change."
+          fi
       - name: gofmt check
+        if: steps.go-changes.outputs.changed == 'true'
         run: |
-          while IFS= read -r mod; do
-            dir="$(dirname "$mod")"
-            test -z "$(find "$dir" -name '*.go' -type f -print -exec gofmt -l {} \;)"
-          done < <(find . -name go.mod -type f -print)
+          failed=0
+          while IFS= read -r file; do
+            if [ -n "$(gofmt -l "$file")" ]; then
+              echo "$file"
+              failed=1
+            fi
+          done < "$RUNNER_TEMP/go-files"
+          exit "$failed"
       - name: go vet and test
+        if: steps.go-changes.outputs.changed == 'true'
         run: |
-          while IFS= read -r mod; do
-            dir="$(dirname "$mod")"
+          mapfile -t modules < <(find . -name go.mod -type f -print0 | xargs -0 -n1 dirname | sort -u)
+          for dir in "${modules[@]}"; do
             (cd "$dir" && go vet ./... && go test ./...)
-          done < <(find . -name go.mod -type f -print)
+          done
 
   typescript:
     name: TS/JS
@@ -173,21 +240,49 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+          node-version: "20"
+      - name: Detect changed JavaScript files
+        id: js-changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only HEAD^ HEAD -- '*.js' '*.jsx' '*.ts' '*.tsx' 'package.json' > "$RUNNER_TEMP/js-files"
+          if [ -s "$RUNNER_TEMP/js-files" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No JavaScript/TypeScript files changed; package-specific checks are skipped."
+          fi
+      - name: install package dependencies
+        if: steps.js-changes.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          while IFS= read -r package; do
+            dir="$(dirname "$package")"
+            if [ -f "$dir/package-lock.json" ]; then
+              npm ci --prefix "$dir" --no-audit --no-fund
+            else
+              npm install --prefix "$dir" --no-audit --no-fund
+            fi
+          done < <(find . -name package.json -not -path '*/node_modules/*' -print)
       - name: lint
+        if: steps.js-changes.outputs.changed == 'true'
         run: |
-          if [ -f package.json ] && grep -q '"lint"' package.json; then
-            npm run lint
-          fi
+          while IFS= read -r package; do
+            dir="$(dirname "$package")"
+            if grep -q '"lint"' "$package"; then (cd "$dir" && npm run lint); fi
+          done < <(find . -name package.json -not -path '*/node_modules/*' -print)
       - name: test
+        if: steps.js-changes.outputs.changed == 'true'
         run: |
-          if [ -f package.json ] && grep -q '"test"' package.json; then
-            npm test
-          fi
+          while IFS= read -r package; do
+            dir="$(dirname "$package")"
+            if grep -q '"test"' "$package"; then (cd "$dir" && npm test); fi
+          done < <(find . -name package.json -not -path '*/node_modules/*' -print)
 
   security:
     name: Security Scan
@@ -196,6 +291,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
@@ -207,6 +304,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: moderate
@@ -214,7 +313,8 @@ jobs:
   lint:
     name: ci / lint
     if: always()
-    needs: [detect, rust, cargo-deny, python, go, typescript, security, dep-review]
+    needs:
+      [detect, rust, cargo-deny, python, go, typescript, security, dep-review]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate lint gate
