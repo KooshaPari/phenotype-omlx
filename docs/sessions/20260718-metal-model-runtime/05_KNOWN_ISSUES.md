@@ -229,3 +229,12 @@ Update 2026-08-01b (Metal compile manifest): the 20-source Metal bundle was rebu
 HEAD and its allowlisted manifest was verified (`metallib` SHA-256
 `ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`). This closes the compile
 artifact gate only; device execution and Qwen3.5 Harbor evidence remain absent.
+
+Update 2026-08-02 (desktop Pascal runtime gate): a bounded, single-worker vLLM 0.26.0
+Qwen3.5-0.8B readiness attempt on `kooshapari-desk` with `CUDA_VISIBLE_DEVICES=0`,
+`max_model_len=1024`, and 40% VRAM cap resolved the model architecture but failed before server
+readiness with `CUDA error: no kernel image is available for execution on the device`. The GTX
+1080 Ti is compute capability 6.1, while the installed PyTorch build advertises support from
+7.5 upward. No completion, benchmark, Harbor task, or model mutation occurred. The exact
+diagnostic is recorded in `pheno-harness/state/desktop_qwen35_vllm_readiness_20260801T2337Z.json`
+and the current candidate remains blocked pending a safe RTX 3090 Ti window.
