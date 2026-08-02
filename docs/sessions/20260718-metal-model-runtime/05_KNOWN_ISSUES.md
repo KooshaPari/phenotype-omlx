@@ -246,3 +246,11 @@ deterministic `metallib` digest
 `artifacts/metal-compile-provenance-20260802.json` and is bound to the candidate's compatible
 source head. This closes the fresh compile gate only; no Metal device dispatch, model load,
 Qwen3.5 completion, Harbor task, or benchmark was executed.
+
+Update 2026-08-02 (Harbor window fail-closed): `scripts/evals/run_via_harbor.sh` now requires a
+bounded `PHENO_EXECUTION_WINDOW_ID` matching the operator-issued ID grammar and passes it into
+the Harbor agent environment. Missing or malformed IDs are rejected before Portage validation,
+Apple Container preflight, or `uv run harbor`; the contract test passes. Because this changes a
+declared production path after the compile-only candidate head, the candidate verifier correctly
+reports source-head incompatibility until a fresh artifact/candidate rebind is performed. This
+does not authorize or claim any live workload.
