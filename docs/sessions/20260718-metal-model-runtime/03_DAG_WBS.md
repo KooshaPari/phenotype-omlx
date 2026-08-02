@@ -159,6 +159,30 @@ Status update 2026-07-29j: added `DiffusionDispatchTelemetry` / `DiffusionDispat
 rejects invalid timing, stage order, and incomplete-without-error envelopes while deriving total
 duration and fallback state. Three focused telemetry tests pass; no workload was launched.
 
+Status update 2026-07-29k: bound telemetry construction to `DiffusionDispatchPlan`, rejecting
+stale layouts or stage arrays before an envelope can be emitted. Five focused telemetry tests pass.
+The ignored Metal fixture now compiles successfully with Xcode-beta and `--features metal`
+(`--no-run`, isolated target); its device test remains unexecuted.
+
+Status update 2026-07-29l: added `DiffusionStageTelemetry::from_result`, a shared conversion from
+command success/error plus elapsed time into validated completion, error, and fallback fields.
+Six focused telemetry tests pass; this remains a host-side policy primitive until the live encoder
+is explicitly exercised.
+
+Status update 2026-07-29m: added outcome-returning Metal entry points for active compaction,
+remasking, and trajectory update. Each records elapsed time and preserves native failure in the
+telemetry envelope rather than silently converting it to success. Host telemetry tests pass 6/6;
+the Xcode-beta Metal fixture target compiles with `--no-run`; no command buffer was executed.
+
+Status update 2026-07-29n: the ignored fixture now consumes those outcome APIs and aggregates all
+three stage envelopes through the validated dispatch plan before parity checks. Added a bounded
+`Promote`/`Fallback`/`Rollback` policy with explicit failed-stage limits. Seven focused telemetry
+tests pass; fixture validation remains compile-only.
+
+Status update 2026-07-29o: `DiffusionDispatchPlan::evaluate` now re-validates report layout and
+stage order before applying the rollback policy. Five focused dispatch tests pass; promotion can no
+longer be decided from telemetry belonging to a stale plan.
+
 Status update 2026-07-29i: hardened the diffusion dispatch boundary with a pure threshold
 validator shared by remask and trajectory bindings. NaN/Inf and confidence values outside
 `[0,1]` fail closed before Metal allocation; focused tests pass 2/2.
@@ -172,3 +196,104 @@ validator shared by remask and trajectory bindings. NaN/Inf and confidence value
       -> group-scale and K-tail parity
       -> zero-elision / byte-alignment tile sweep
       -> quality/perplexity envelope before promotion
+
+Status update 2026-07-30a: added the host-only `DiffusionDispatchPlan::evaluate_outcomes`
+orchestration helper. It consumes typed active-compaction, remask, and trajectory outcomes,
+retains their outputs, derives a plan-bound report, and returns the bounded `Promote`, `Fallback`,
+or `Rollback` decision. Focused dispatch tests pass 7/7; no Metal, device, or Qwen3.5 workload
+was executed.
+
+Status update 2026-07-30b (P4 promotion gate): live promotion requires a fresh immutable
+candidate envelope tied to the current branch and exact HEAD, with the manifest and every
+`.metallib` SHA-256 recorded, the Xcode-beta/device fingerprint captured, and the Qwen3.5
+model identifier, Harbor job/trial, requested and observed context lengths, prompt hash,
+fallback/error counts, reward/pass@1, and oracle/result artifact hashes present. Existing
+Harbor/candidate records reference older heads and remain review-only; no stale manifest or
+prior successful trial may be re-used as current-HEAD evidence. The gate is held until the
+current-HEAD envelope is emitted and receives final local promotion review; no workload was
+run in this turn.
+
+Status update 2026-07-30c (bounded artifact inventory): the current-head provenance envelope
+(`artifacts/candidate-provenance-20260730.json`) and the stale historical `candidate-manifest.json`
+were found under the session directory. A max-depth-six inventory of `phenotype-omlx/` and
+`Downloads/` found no `.metallib` artifact available for allowlist verification. G6 therefore
+remains held pending a fresh current-HEAD native artifact envelope; no source or workload action
+was performed.
+
+Status update 2026-07-31a (compile-only artifact reproduction):
+`scripts/build_metal_runtime_bundle.sh` compiled 20 checked-in shaders with Xcode-beta into
+`/tmp/phenotype-omlx-metal-current-20260731/metal-runtime.metallib` (111,965 bytes,
+SHA-256 `ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`). The actual
+repository HEAD was `ba30267b`; its only change after `f2127090` was provenance metadata, so
+the compiled shader inputs are source-equivalent to the requested `f2127090` candidate. This
+is compile-only evidence: device/runtime execution remains false, and promotion stays blocked.
+
+Status update 2026-07-31b (research-to-experiment bridge): the next optimization wave is
+ordered by evidence risk, not projected speedup. First lock exact Qwen3.5 state continuity
+(model/tokenizer/config/kernel-plan provenance, canonical prompt ordering, position range, and
+dtype); then measure output-KV promotion and content-addressed RAM/NVMe state tiers. Semantic
+retrieval may propose a branch but cannot authorize KV reuse. JetSpec/DSpark-style speculation,
+diffusion remask/trajectory scheduling, and ternary zero-elision remain separate experiments.
+
+The bounded experiment matrix is:
+
+| Node | Experiment | Required evidence | Promotion rule |
+|---|---|---|---|
+| R1 | exact prefix/KV continuation graph | hit/miss, new tokens, state movement, peak memory | no quality or provenance regression |
+| R2 | output-KV promotion | authoritative decode marker and replay parity | exact replay only |
+| R3 | RAM/NVMe state tiers | content hash, prefetch latency, eviction/rollback | bounded queue and no stale state |
+| R4 | 3090 Ti primary / 1080 Ti drafter | per-device latency, memory, acceptance rate | drafter never authoritative |
+| R5 | diffusion active compaction/remask/trajectory | stage order, resource fences, parity, quality | current-head device evidence required |
+| R6 | Bonsai/BitNet ternary kernels | packed/unpacked parity, K-tail, scale/zero metadata | quality/perplexity envelope required |
+
+All R-nodes inherit the overload governor: one bounded trial, fixed context, no automatic
+retries, explicit timeout, and immutable result hashes. Apple Metal dispatches must publish
+resource dependencies/barriers before encoder fusion is considered. Harbor/Portage task and
+dataset artifacts are the system of record; ad-hoc scripts may only prepare or verify them.
+
+## VRAM-note serving sub-DAG (2026-07-31)
+
+    exact Qwen3.5 state replay
+      -> hot 3090 Ti shared path/KV/GDN/hot experts
+      -> measured 1080 Ti coarse stage or warm-expert residency
+      -> DRAM/page-cache warm tier
+      -> content-addressed NVMe cold catalog
+      -> slack-bytes admission + prefetch/backpressure
+      -> token-fate/state-hash envelope and promotion review
+
+The note's actionable experiments are bounded to cold/warm cache, mmap versus concurrent
+`pread`, kernel-ready layouts, expert reuse/prediction, and separate prefill/decode stage-share
+sweeps. A full-KV or dense-weight copy per token is rejected by the design contract. Each trial
+must report cache hit/miss, physical disk bytes, page faults, PCIe bytes, queueing, device role,
+state hashes, and fallback/rollback; no hardware-modification or market claim can satisfy a
+Qwen3.5 acceptance gate.
+
+## Snapshot integrity gate update (2026-07-31)
+
+    cache resolution + safe index paths
+      -> safetensors payload accounting
+      -> index metadata-scope reconciliation
+      -> current-head provenance
+      -> authorized Harbor/device window
+      -> promotion review
+
+The local Qwen3.5 snapshot is not treated as corrupt: `config.json` declares the vision shard as
+a sidecar, and its base `model.safetensors` payload matches `metadata.total_size`. The verifier
+records both filesystem and payload totals, hashes every indexed shard, and accepts only the
+explicit `declared_sidecars_excluded` scope with a warning. No runtime window may bypass this
+gate or substitute the older Harbor artifact.
+
+## Current-head candidate reconciliation (2026-08-01)
+
+    stale recovery manifest
+      -> current branch/head + compile-only references
+      -> direct review assertions 9/9
+      -> bounded Qwen3.5 Harbor/device window
+      -> benchmark envelope + promotion review
+
+The candidate manifest now reports `blocked` rather than inheriting historical live-run claims.
+This is an evidence correction, not a runtime result; no model or device workload was launched.
+
+The current-head Metal compile manifest is now present in the candidate record with shader count,
+metallib SHA-256, manifest SHA-256, and `verified_compile_only` status. It must not be promoted to
+device evidence without an authorized bounded execution.

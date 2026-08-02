@@ -258,3 +258,60 @@ confidence momentum, decode step, and convergence; the Metal leaf is
 `diffusion_trajectory_update_f32`. Focused oracle tests pass and the source bundle compiles
 20/20 shaders. The contract intentionally keeps trajectory metadata separate from token values
 so active compaction can scatter updates without losing uncertainty history.
+
+### 2026-07-31 - state continuity, heterogeneous memory, and governed evaluation
+
+The SSD/HW Stream research makes exact state continuity the first optimization gate: bind
+every reusable KV/state block to model revision, tokenizer revision, canonical prompt order,
+position range, dtype, and kernel-plan version. Output KV should be promoted only after an
+authoritative decode, while semantic retrieval remains a proposer and never substitutes for
+exact KV provenance. Recommended storage is content-addressed state blocks with RAM as the hot
+tier and NVMe as a bounded cold/prefetch tier; cross-device transfers should carry IDs and
+compact projections rather than unrestricted tensors.
+
+Hardware roles remain asymmetric: the RTX 3090 Ti is the primary high-memory execution target;
+the GTX 1080 Ti is drafter-only/low-priority unless an experiment proves otherwise. Each run
+must record token fate (compute, cache hit/miss, state movement, and critical-path delay),
+prefill amplification, speculative acceptance, novel-edge acceptance, peak memory, and
+fallback/rollback counts. A governor must cap concurrency, queue depth, context length, and
+retry count before any live experiment.
+
+Primary references: MLX-LM model loading and prompt-cache guidance
+(https://github.com/ml-explore/mlx-lm), Apple Metal compute/resource synchronization
+(https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/ and
+https://developer.apple.com/documentation/metal/resource-synchronization), Harbor's eval
+and adapter contracts (https://www.harborframework.com/docs/run-jobs/run-evals and
+https://www.harborframework.com/docs/datasets/adapters), BitNet b1.58
+(https://arxiv.org/abs/2402.17764), KVQuant (https://arxiv.org/abs/2401.18079), TurboQuant
+(https://arxiv.org/abs/2504.19874), and LLaDA diffusion language modeling
+(https://arxiv.org/abs/2502.09992). These references guide experiments only; acceptance
+remains tied to the exact local Qwen3.5 snapshot and immutable Harbor/Portage evidence.
+
+### 2026-07-31 - VRAM note: tiered state and Qwen3.5 serving boundaries
+
+The supplied 3090 Ti VRAM note rules out treating a consumer-board memory mod as the runtime
+plan: capacity changes are controller/firmware/layout problems, not a safe path to promotion.
+For Qwen3.5, use a hierarchical object fabric instead. Keep the shared dense path, router,
+attention, KV/GDN state, and hot experts resident on the 3090 Ti; assign only measured coarse
+stages or permanently resident warm experts to the 1080 Ti. Do not copy dense weights or a full
+active KV to either GPU every token.
+
+The actionable cache policy is: NVMe is the cold content-addressed catalog, host DRAM/page cache
+is the warm tier, and GPU memory is the hot working set. Compare cold versus warm cache, mmap
+versus concurrent `pread`, and kernel-ready versus transformed layouts; record physical disk
+bytes/page faults rather than treating a warm page-cache hit as NVMe bandwidth. For MoE, trace
+expert IDs, reuse distance, union size, and prediction accuracy; use protected hot residency,
+probationary prefill entries, activation-aware prefetch, and grouped activation transfer. KV and
+recurrent state instead require session hibernate/thaw, prefix reuse, and persistent ownership.
+
+Admission should use a slack-bytes check (`object_size <= measured_path_bandwidth * deadline_slack`)
+after queueing and contention. Separate prefill/decode policies and sweep 3090/1080 stage shares
+only after exact state replay is green. These findings are design inputs, not Qwen3.5 evidence;
+the acceptance model remains Qwen3.5-only and must report token fate, state hashes, cache tier,
+device role, and fallback/rollback.
+
+Sources: [NVIDIA RTX 3090 Ti specifications](https://www.nvidia.com/en-us/geforce/graphics-cards/30-series/rtx-3090-3090ti/),
+[vLLM KV/offload documentation](https://docs.vllm.ai/en/latest/), [LMCache](https://github.com/LMCache/LMCache),
+[MoE-Infinity](https://github.com/EfficientMoE/MoE-Infinity), and
+[LLM in a Flash](https://arxiv.org/abs/2312.11514). The note's market/mod claims are not
+promotion evidence and are intentionally excluded from the Qwen3.5 gate.

@@ -2,8 +2,25 @@
 
 #![cfg(all(feature = "metal", target_os = "macos"))]
 
-use metal_runtime::{ternary_gemm_metal, ArtifactAllowlist, MetallibLoader};
-use sha2::{Digest, Sha256};
+use metal_runtime::{ternary_gemm_metal, MetallibLoader};
+
+fn load_artifact() -> metal_runtime::MetallibArtifact {
+    let artifact_path = std::env::var("TERNARY_GEMM_METALLIB")
+        .expect("set TERNARY_GEMM_METALLIB to an allowlisted metallib");
+    let manifest_path = std::env::var("TERNARY_GEMM_MANIFEST")
+        .expect("set TERNARY_GEMM_MANIFEST to its canonical JSON allowlist");
+    let manifest = std::fs::read(manifest_path).expect("read ternary manifest");
+    let path = std::path::Path::new(&artifact_path);
+    let root = path.parent().expect("artifact parent");
+    let name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .expect("utf8 artifact basename");
+    MetallibLoader::from_manifest_json(root, &manifest)
+        .expect("strict ternary manifest")
+        .load(name)
+        .expect("allowlisted ternary artifact")
+}
 
 fn pack(values: &[u8], k: usize, n: usize) -> Vec<u8> {
     let stride = k.div_ceil(4);
@@ -17,19 +34,9 @@ fn pack(values: &[u8], k: usize, n: usize) -> Vec<u8> {
 }
 
 #[test]
+#[ignore = "explicit device fixture; requires TERNARY_GEMM_METALLIB and TERNARY_GEMM_MANIFEST"]
 fn metal_matches_scalar_reference() {
-    let path = std::env::var("TERNARY_GEMM_METALLIB").expect("TERNARY_GEMM_METALLIB test artifact");
-    let bytes = std::fs::read(&path).unwrap();
-    let digest: [u8; 32] = Sha256::digest(&bytes).into();
-    let root = std::path::Path::new(&path).parent().unwrap();
-    let name = std::path::Path::new(&path)
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap();
-    let artifact = MetallibLoader::new(root, ArtifactAllowlist::new([(name.to_owned(), digest)]))
-        .load(name)
-        .unwrap();
+    let artifact = load_artifact();
     let m = 2;
     let k = 5;
     let n = 3;
@@ -64,19 +71,9 @@ fn metal_matches_scalar_reference() {
 }
 
 #[test]
+#[ignore = "explicit device fixture; requires TERNARY_GEMM_METALLIB and TERNARY_GEMM_MANIFEST"]
 fn metal_matches_edge_shape_with_all_packed_codes() {
-    let path = std::env::var("TERNARY_GEMM_METALLIB").expect("TERNARY_GEMM_METALLIB test artifact");
-    let bytes = std::fs::read(&path).unwrap();
-    let digest: [u8; 32] = Sha256::digest(&bytes).into();
-    let root = std::path::Path::new(&path).parent().unwrap();
-    let name = std::path::Path::new(&path)
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap();
-    let artifact = MetallibLoader::new(root, ArtifactAllowlist::new([(name.to_owned(), digest)]))
-        .load(name)
-        .unwrap();
+    let artifact = load_artifact();
 
     // K=127 exercises the partial final packed byte; code 3 is reserved and must decode as 0.
     let (m, k, n) = (1, 127, 256);

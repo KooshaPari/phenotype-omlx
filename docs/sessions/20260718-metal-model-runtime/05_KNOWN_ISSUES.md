@@ -208,3 +208,24 @@ test compiles but was not executed; live device parity remains open.
 Update 2026-07-29i (dispatch input hardening): the diffusion Metal entry points now reject
 non-finite or out-of-range confidence/remask thresholds before buffer allocation or command
 encoding. Two isolated host tests pass; device execution and Qwen3.5 acceptance remain open.
+
+Update 2026-07-31 (Qwen3.5 snapshot gate): the integrity verifier now parses safetensors headers
+and tensor offsets, requires every `weight_map` file to be a safe snapshot-relative path, hashes
+index-referenced shards, recognizes `optiq/mtp.safetensors` as optional, and resolves
+`HUGGINGFACE_HUB_CACHE`, `HF_HUB_CACHE`, and `SSD_HF_CACHE` explicitly. The canonical cache now
+verifies with an explicit sidecar-scope warning: `config.json` declares
+`optiq/optiq_vision.safetensors`, and `metadata.total_size=650168512` matches the non-sidecar
+payload while all indexed payloads total `851354304` and are hashed. No model load, download,
+server, Harbor, device, or evaluation workload was run.
+
+Update 2026-08-01 (candidate manifest reconciliation): the stale recovery-branch manifest was
+updated to the current `feat/diffusion-trajectory-state` HEAD and now points at the sidecar-aware
+snapshot integrity and compile-only provenance artifacts. Historical Harbor/NIAH references remain
+preserved in their original artifacts, but are not reused as current promotion evidence. Direct
+candidate-review assertions pass 9/9; promotion remains blocked until a bounded Qwen3.5 runtime
+window emits current-head evidence.
+
+Update 2026-08-01b (Metal compile manifest): the 20-source Metal bundle was rebuilt at current
+HEAD and its allowlisted manifest was verified (`metallib` SHA-256
+`ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`). This closes the compile
+artifact gate only; device execution and Qwen3.5 Harbor evidence remain absent.

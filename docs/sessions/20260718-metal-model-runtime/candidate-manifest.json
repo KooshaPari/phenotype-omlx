@@ -2,10 +2,10 @@
   "schema_version": "0.1",
   "candidate": {
     "repository": "phenotype-omlx",
-    "branch": "recovery/phenotype-omlx-local-20260726",
-    "head": "0acc9e3d289dd45002d11e6ef1ae2a5224812d4f",
-    "base": "67ce0a03c1ee71e984f09225d50518fa81a21dd5",
-    "freeze_status": "current-head-reviewed",
+    "branch": "feat/diffusion-trajectory-state",
+    "head": "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355",
+    "base": "main",
+    "freeze_status": "current-head-integrity-reviewed-canonical-dirty",
     "evidence_complete": false
   },
   "historical_snapshot": {
@@ -27,41 +27,43 @@
       "evals/harbor/tasks/omlx-niah-api-smoke"
     ],
     "todo_fr_omlx_poly_001": "removed",
-    "working_tree_at_review": "clean",
-    "review_commit": "0acc9e3d"
+    "working_tree_at_review": "canonical_checkout_dirty_untracked",
+    "working_tree_dirty_paths": [
+      "docs/sessions/20260719-cross-chat-alignment/"
+    ],
+    "review_commit": "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355"
   },
   "verification": {
     "workspace": {
-      "command": "cargo check --workspace",
+      "command": "focused cargo test -p metal-runtime --all-targets --quiet; focused cargo test -p model-kernels --all-targets --quiet",
       "exit_code": 0
     },
-    "mojo": {
-      "command": "cargo test -p turbo-quant-mojo --all-features",
-      "exit_code": 0,
-      "tests_passed": 64,
-      "tests_failed": 0,
-      "artifact": {
-        "path": "perf-core/turbo-quant-mojo/libturbo_quant_mojo.dylib",
-        "format": "Mach-O 64-bit dynamically linked shared library arm64",
-        "sha256": "f2e3e3b60186bc76b9e43d1b59d04a1c1fd746cf75423de1ccf6aaecfcecc9c4"
-      }
+    "model_snapshot_integrity": "docs/sessions/20260718-metal-model-runtime/artifacts/qwen35-snapshot-integrity-20260731.json",
+    "candidate_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
+    "metal_compile_provenance": {
+      "head": "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355",
+      "artifact_commit": "55b2af6c04ebff1261364c709582c031bed451d2",
+      "artifact_bound_to_candidate_head": false,
+      "shader_count": 20,
+      "metallib_sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
+      "manifest_sha256": "dc3568fa8a0eacdf4b3262f4baff69d16d285fbeb4496b6e79d379f0d2e295b0",
+      "status": "stale_compile_only",
+      "workload_executed": false
     },
-    "polyglot_ffi": "docs/sessions/20260718-metal-model-runtime/artifacts/polyglot-ffi-20260726.json",
-    "qwen35_harbor": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727.json",
-    "qwen35_harbor_8192": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260727-8192.json",
-    "qwen35_niah_matrix": "research/baselines/qwen35-niah-20260727-4k8k.json",
-    "qwen35_niah_16k": "research/baselines/qwen35-niah-20260727-16k-paired.json",
-    "focused_tests": "12 passed; cargo test --workspace green"
+    "workload_executed": false
   },
   "promotion": {
-    "verdict": "review",
-    "reason": "The authorized 8192-token Qwen3.5 Harbor gate and 4K/8K/16K native cache matrices are live-verified; the canonical full benchmark envelope is not yet positive, and final local promotion review remains.",
+    "verdict": "blocked",
+    "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; no authorized Harbor/device workload or full benchmark envelope is present.",
     "remaining_gates": [
+      "fresh current-head Metal compile/device evidence",
+      "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
       "final local promotion review"
     ]
   },
   "integrity": {
-    "canonical_sha256": "0d52c82f6d70af41a5cfc7afc88de96b56ccdee88fee014e00236d5dd353fa93"
+    "canonical_sha256": "3baedfc3383a4caea793f75728ac5697661749da718ad051bc20d615292f7a54",
+    "canonical_sha256_status": "verified"
   }
 }

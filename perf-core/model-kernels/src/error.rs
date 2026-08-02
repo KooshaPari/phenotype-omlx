@@ -22,6 +22,11 @@ pub enum KernelError {
         got: usize,
     },
 
+    /// A product or rounded size derived from caller-supplied dimensions
+    /// overflowed `usize` before any buffer was indexed or allocated.
+    #[error("dimension arithmetic overflowed usize for {what}")]
+    DimensionOverflow { what: &'static str },
+
     /// `q_heads` is not evenly divisible by `kv_heads` (GQA group size
     /// must be an integer).
     #[error("q_heads ({q_heads}) must be a positive multiple of kv_heads ({kv_heads})")]

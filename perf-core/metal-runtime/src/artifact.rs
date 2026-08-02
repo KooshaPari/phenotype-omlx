@@ -1,6 +1,6 @@
 //! Verified loading policy for precompiled Metal libraries.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -31,9 +31,16 @@ impl ArtifactAllowlist {
     pub fn from_manifest_json(bytes: &[u8]) -> Result<Self, ArtifactError> {
         let manifest: ArtifactManifest = serde_json::from_slice(bytes)
             .map_err(|source| ArtifactError::ManifestParse { source })?;
+        if manifest.artifacts.is_empty() {
+            return Err(ArtifactError::EmptyManifest);
+        }
         let mut entries = Vec::with_capacity(manifest.artifacts.len());
+        let mut names = HashSet::with_capacity(manifest.artifacts.len());
         for entry in manifest.artifacts {
             validate_name(&entry.name)?;
+            if !names.insert(entry.name.clone()) {
+                return Err(ArtifactError::DuplicateArtifact(entry.name));
+            }
             let digest = decode_digest(&entry.sha256)?;
             entries.push((entry.name, digest));
         }
@@ -93,6 +100,10 @@ pub enum ArtifactError {
     },
     #[error("invalid artifact manifest: {source}")]
     ManifestParse { source: serde_json::Error },
+    #[error("artifact manifest must contain at least one artifact")]
+    EmptyManifest,
+    #[error("artifact manifest contains duplicate artifact '{0}'")]
+    DuplicateArtifact(String),
     #[error("invalid sha256 digest '{0}' in artifact manifest")]
     InvalidDigest(String),
 }
@@ -268,6 +279,27 @@ mod tests {
         assert!(matches!(
             ArtifactAllowlist::from_manifest_json(manifest),
             Err(ArtifactError::InvalidDigest(_))
+        ));
+    }
+
+    #[test]
+    fn manifest_parser_rejects_empty_manifest() {
+        let manifest = br#"{"artifacts":[]}"#;
+        assert!(matches!(
+            ArtifactAllowlist::from_manifest_json(manifest),
+            Err(ArtifactError::EmptyManifest)
+        ));
+    }
+
+    #[test]
+    fn manifest_parser_rejects_duplicate_artifact_names() {
+        let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let manifest = format!(
+            r#"{{"artifacts":[{{"name":"model.metallib","sha256":"{digest}"}},{{"name":"model.metallib","sha256":"{digest}"}}]}}"#
+        );
+        assert!(matches!(
+            ArtifactAllowlist::from_manifest_json(manifest.as_bytes()),
+            Err(ArtifactError::DuplicateArtifact(name)) if name == "model.metallib"
         ));
     }
 }

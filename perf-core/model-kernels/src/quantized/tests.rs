@@ -68,6 +68,23 @@ fn ternary_partial_trailing_group_packs_cleanly() {
 }
 
 #[test]
+fn ternary_unpack_rejects_missing_group_metadata() {
+    let values = vec![SignedTernary::Pos, SignedTernary::Neg, SignedTernary::Zero];
+    let (packed, _scales, zeros) = ternary_pack(&values, 4).unwrap();
+    let mut out = vec![SignedTernary::Zero; values.len()];
+
+    let error = ternary_unpack(&packed, &[], &zeros, values.len(), 4, &mut out).unwrap_err();
+    assert!(matches!(
+        error,
+        KernelError::BadBufferLength {
+            what: "scales",
+            expected: 1,
+            got: 0
+        }
+    ));
+}
+
+#[test]
 fn subbyte_round_trip_bits_2_3_4() {
     for &bits in &[2u8, 3, 4] {
         let n = 8;
