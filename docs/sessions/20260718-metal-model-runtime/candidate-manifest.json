@@ -3,7 +3,7 @@
   "candidate": {
     "repository": "phenotype-omlx",
     "branch": "feat/diffusion-trajectory-state",
-    "head": "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355",
+    "head": "8a50efc0cadbe11603403e43d27d0e79df6f723a",
     "base": "main",
     "freeze_status": "current-head-integrity-reviewed-canonical-dirty",
     "evidence_complete": false
@@ -31,7 +31,7 @@
     "working_tree_dirty_paths": [
       "docs/sessions/20260719-cross-chat-alignment/"
     ],
-    "review_commit": "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355"
+    "review_commit": "8a50efc0cadbe11603403e43d27d0e79df6f723a"
   },
   "verification": {
     "workspace": {
@@ -40,7 +40,7 @@
     },
     "model_snapshot_integrity": "docs/sessions/20260718-metal-model-runtime/artifacts/qwen35-snapshot-integrity-20260731.json",
     "candidate_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
-    "metal_compile_provenance": {
+      "metal_compile_provenance": {
       "head": "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355",
       "artifact_commit": "55b2af6c04ebff1261364c709582c031bed451d2",
       "artifact_bound_to_candidate_head": false,
@@ -50,20 +50,35 @@
       "status": "stale_compile_only",
       "workload_executed": false
     },
+    "desktop_qwen35_vllm_readiness": {
+      "artifact": "pheno-harness/state/desktop_qwen35_vllm_readiness_20260801T2337Z.json",
+      "host": "kooshapari-desk",
+      "device_uuid": "GPU-e1e28703-34bd-e46b-6dc1-d7c39fa5612c",
+      "device": "NVIDIA GeForce GTX 1080 Ti",
+      "compute_capability": "6.1",
+      "runtime": "vllm==0.26.0",
+      "model": "Qwen/Qwen3.5-0.8B",
+      "model_revision": "2fc06364715b967f1860aea9cf38778875588b17",
+      "server_ready": false,
+      "inference_executed": false,
+      "status": "blocked_unsupported_cuda_architecture",
+      "remote_log_sha256": "599941e3e3e366a373766f9bb228c9dd0b92cd4c2f861df7061bc232e8ca085a"
+    },
     "workload_executed": false
   },
   "promotion": {
     "verdict": "blocked",
-    "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; no authorized Harbor/device workload or full benchmark envelope is present.",
+    "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; the bounded desktop helper readiness attempt is blocked by the GTX 1080 Ti compute capability, and no authorized 3090 Ti workload or full benchmark envelope is present.",
     "remaining_gates": [
       "fresh current-head Metal compile/device evidence",
+      "Qwen3.5 runtime readiness on the RTX 3090 Ti without disturbing the existing service",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
       "final local promotion review"
     ]
   },
   "integrity": {
-    "canonical_sha256": "3baedfc3383a4caea793f75728ac5697661749da718ad051bc20d615292f7a54",
+    "canonical_sha256": "90666f11d8c82b166eed40cded80f8c5a064cdce59b6e5f3a28eefc8bdef7d3a",
     "canonical_sha256_status": "verified"
   }
 }
