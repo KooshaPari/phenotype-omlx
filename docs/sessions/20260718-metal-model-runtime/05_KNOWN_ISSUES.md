@@ -238,3 +238,11 @@ readiness with `CUDA error: no kernel image is available for execution on the de
 7.5 upward. No completion, benchmark, Harbor task, or model mutation occurred. The exact
 diagnostic is recorded in `pheno-harness/state/desktop_qwen35_vllm_readiness_20260801T2337Z.json`
 and the current candidate remains blocked pending a safe RTX 3090 Ti window.
+
+Update 2026-08-02 (current-head Metal compile): the Xcode-beta Metal toolchain rebuilt all 20
+checked-in shaders at checkout `281a611822a6721e4d9a1b083ddeaac3c3314ea7`, producing the
+deterministic `metallib` digest
+`ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`. The provenance artifact is
+`artifacts/metal-compile-provenance-20260802.json` and is bound to the candidate's compatible
+source head. This closes the fresh compile gate only; no Metal device dispatch, model load,
+Qwen3.5 completion, Harbor task, or benchmark was executed.

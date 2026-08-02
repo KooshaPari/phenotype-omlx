@@ -40,14 +40,17 @@
     },
     "model_snapshot_integrity": "docs/sessions/20260718-metal-model-runtime/artifacts/qwen35-snapshot-integrity-20260731.json",
     "candidate_provenance": "docs/sessions/20260718-metal-model-runtime/artifacts/candidate-provenance-20260730.json",
-      "metal_compile_provenance": {
-      "head": "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355",
-      "artifact_commit": "55b2af6c04ebff1261364c709582c031bed451d2",
-      "artifact_bound_to_candidate_head": false,
+    "metal_compile_provenance": {
+      "artifact": "docs/sessions/20260718-metal-model-runtime/artifacts/metal-compile-provenance-20260802.json",
+      "head": "281a611822a6721e4d9a1b083ddeaac3c3314ea7",
+      "candidate_source_head": "8a50efc0cadbe11603403e43d27d0e79df6f723a",
+      "artifact_commit": "281a611822a6721e4d9a1b083ddeaac3c3314ea7",
+      "artifact_bound_to_candidate_head": true,
+      "source_head_compatible": true,
       "shader_count": 20,
       "metallib_sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
-      "manifest_sha256": "dc3568fa8a0eacdf4b3262f4baff69d16d285fbeb4496b6e79d379f0d2e295b0",
-      "status": "stale_compile_only",
+      "build_log_sha256": "bcbc39cbd83a9e5ef74811c711c2f00fc536d93271b967cc8828fb7c25e34986",
+      "status": "current_head_compile_only",
       "workload_executed": false
     },
     "desktop_qwen35_vllm_readiness": {
@@ -79,9 +82,8 @@
   },
   "promotion": {
     "verdict": "blocked",
-    "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; the bounded desktop helper readiness attempt is blocked by the GTX 1080 Ti compute capability and the 3090 Ti is occupied by an existing non-Qwen service, so no authorized Qwen3.5 workload or full benchmark envelope is present.",
+    "reason": "Current-head source, Metal compile provenance, and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; the bounded desktop helper readiness attempt is blocked by the GTX 1080 Ti compute capability and the 3090 Ti has no reserved execution window, so no authorized Qwen3.5 workload or full benchmark envelope is present.",
     "remaining_gates": [
-      "fresh current-head Metal compile/device evidence",
       "Qwen3.5 runtime readiness on the RTX 3090 Ti without disturbing the existing service",
       "authorized Qwen3.5 Harbor/device evidence at current HEAD",
       "full benchmark evidence envelope",
@@ -89,7 +91,7 @@
     ]
   },
   "integrity": {
-    "canonical_sha256": "8faf858e805485a32b5d4775d56c6f14f17214f77189144274e6b9e2752802a8",
+    "canonical_sha256": "7f587962666b246642782384e9ced83a74618ea070d80316b0ddd472050a3eae",
     "canonical_sha256_status": "verified"
   }
 }

@@ -67,13 +67,17 @@ def test_current_manifest_records_source_head_and_holds_runtime_gate() -> None:
     ]
     assert document["candidate"]["evidence_complete"] is False
     assert document["verification"]["workload_executed"] is False
-    assert document["verification"]["metal_compile_provenance"]["artifact_commit"] == (
-        "55b2af6c04ebff1261364c709582c031bed451d2"
+    metal = document["verification"]["metal_compile_provenance"]
+    assert metal["artifact"] == (
+        "docs/sessions/20260718-metal-model-runtime/artifacts/"
+        "metal-compile-provenance-20260802.json"
     )
-    assert document["verification"]["metal_compile_provenance"]["artifact_bound_to_candidate_head"] is False
-    assert document["verification"]["metal_compile_provenance"]["status"] == "stale_compile_only"
+    assert metal["artifact_commit"] == "281a611822a6721e4d9a1b083ddeaac3c3314ea7"
+    assert metal["artifact_bound_to_candidate_head"] is True
+    assert metal["status"] == "current_head_compile_only"
     assert document["promotion"]["verdict"] == "blocked"
-    assert "fresh current-head Metal compile/device evidence" in document["promotion"]["remaining_gates"]
+    assert "fresh current-head Metal compile/device evidence" not in document["promotion"]["remaining_gates"]
+    assert "Qwen3.5 runtime readiness on the RTX 3090 Ti without disturbing the existing service" in document["promotion"]["remaining_gates"]
     assert "authorized Qwen3.5 Harbor/device evidence at current HEAD" in document["promotion"]["remaining_gates"]
     payload = {key: value for key, value in document.items() if key != "integrity"}
     canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
