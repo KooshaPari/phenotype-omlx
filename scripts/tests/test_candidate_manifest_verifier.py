@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from scripts.verify_candidate_manifest import verify_candidate
+import pytest
+
+from scripts.verify_candidate_manifest import CandidateManifestError, verify_candidate
 
 
 ROOT = Path(__file__).parents[2]
@@ -40,3 +42,19 @@ def test_verifier_rejects_tampered_manifest(tmp_path: Path) -> None:
     assert report["promotable"] is False
     assert report["status"] == "blocked"
     assert "manifest canonical SHA-256 does not match" in report["reasons"]
+
+
+def test_verifier_rejects_duplicate_json_members(tmp_path: Path) -> None:
+    path = tmp_path / "duplicate.json"
+    path.write_text('{"candidate": {}, "candidate": {}}', encoding="utf-8")
+
+    with pytest.raises(CandidateManifestError):
+        verify_candidate(path, ROOT)
+
+
+def test_verifier_rejects_nonfinite_json_constants(tmp_path: Path) -> None:
+    path = tmp_path / "nonfinite.json"
+    path.write_text('{"candidate": {"score": NaN}}', encoding="utf-8")
+
+    with pytest.raises(CandidateManifestError):
+        verify_candidate(path, ROOT)
