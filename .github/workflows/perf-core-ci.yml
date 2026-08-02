@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - "perf-core/**"
+  merge_group:
   workflow_dispatch:
 
 env:
