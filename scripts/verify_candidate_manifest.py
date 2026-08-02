@@ -25,6 +25,29 @@ class CandidateManifestError(ValueError):
     """Raised when a candidate manifest cannot be verified safely."""
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Reject duplicate object members before canonicalization.
+
+    JSON permits parsers to choose a policy for duplicate members, but a
+    promotion manifest must have one unambiguous byte representation. A
+    last-write-wins parser could otherwise make the reviewed document differ
+    from the canonical payload.
+    """
+
+    document: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in document:
+            raise CandidateManifestError(f"duplicate manifest key: {key}")
+        document[key] = value
+    return document
+
+
+def _reject_nonfinite(value: str) -> Any:
+    """Reject JSON extensions that are not representable in canonical JSON."""
+
+    raise CandidateManifestError(f"non-finite JSON constant is not allowed: {value}")
+
+
 def _canonical_digest(document: Mapping[str, Any]) -> str:
     payload = {key: value for key, value in document.items() if key != "integrity"}
     encoded = json.dumps(
@@ -41,8 +64,12 @@ def _load_manifest(path: Path) -> dict[str, Any]:
     if path.is_symlink() or not path.is_file():
         raise CandidateManifestError("manifest must be a regular file")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        value = json.loads(
+            path.read_text(encoding="utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite,
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError, CandidateManifestError) as exc:
         raise CandidateManifestError("manifest is not valid UTF-8 JSON") from exc
     if not isinstance(value, dict):
         raise CandidateManifestError("manifest root must be an object")
@@ -141,7 +168,11 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     integrity = document.get("integrity")
     if isinstance(integrity, Mapping):
         declared_digest = integrity.get("canonical_sha256")
-    integrity_valid = declared_digest == _canonical_digest(document)
+    try:
+        computed_digest = _canonical_digest(document)
+    except (TypeError, ValueError) as exc:
+        raise CandidateManifestError("manifest contains values that cannot be canonicalized") from exc
+    integrity_valid = declared_digest == computed_digest
 
     workload_executed = verification.get("workload_executed") is True
     evidence_complete = candidate.get("evidence_complete") is True
