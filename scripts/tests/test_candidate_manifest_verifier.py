@@ -19,7 +19,7 @@ def test_current_manifest_is_blocked_but_source_head_compatible() -> None:
     assert report["integrity_valid"] is True
     assert report["exact_head"] is False
     assert report["source_head_compatible"] is True
-    assert report["head_compatibility"] == "manifest_only_commits"
+    assert report["head_compatibility"] == "bookkeeping_commits"
     assert report["workload_executed"] is False
     assert report["promotable"] is False
     assert report["status"] == "blocked"
