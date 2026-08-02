@@ -84,6 +84,21 @@ def test_current_manifest_records_source_head_and_holds_runtime_gate() -> None:
     assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
 
 
+def test_current_metal_compile_artifact_matches_manifest_binding() -> None:
+    document = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    metal = document["verification"]["metal_compile_provenance"]
+    artifact = json.loads((ROOT / metal["artifact"]).read_text(encoding="utf-8"))
+
+    assert artifact["candidate_source_head"] == document["candidate"]["head"]
+    assert artifact["build_checkout_head"] == metal["head"]
+    assert artifact["build_checkout_head"] == metal["artifact_commit"]
+    assert artifact["metallib_sha256"] == metal["metallib_sha256"]
+    assert artifact["shader_count"] == metal["shader_count"] == 20
+    assert artifact["workload_executed"] is False
+    assert artifact["device_dispatch_executed"] is False
+    assert artifact["model_loaded"] is False
+
+
 def test_latest_harbor_evidence_is_positive_but_not_8192_completion() -> None:
     document = json.loads(HARBOR_LATEST.read_text(encoding="utf-8"))
     assert document["evidence_label"] == "live_verified"
