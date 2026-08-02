@@ -17,6 +17,10 @@ impl DiffusionVerificationBlock {
     pub const fn len(self) -> usize {
         self.end - self.start
     }
+
+    pub const fn is_empty(self) -> bool {
+        self.start == self.end
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

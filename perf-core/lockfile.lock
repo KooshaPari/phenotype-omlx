@@ -2,4 +2,4 @@
 # Recompute via: scripts/verify_lockfile.sh
 # Algorithm: sha256 (SHA-2, FIPS 180-4) of the verbatim bytes of perf-core/Cargo.lock.
 sha256: bc16b44369eb7f5fb9d54c582d797cfcbef579570204e567f778f6e86296562e
-generated_at: 2026-07-20T11:42:00Z
+generated_at: 2026-07-27T02:03:47Z

@@ -9,6 +9,12 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
+    // The Rust wrapper's `zig` feature is a request to use the native ABI,
+    // not proof that a Zig toolchain is available.  Emit an explicit cfg only
+    // when the object was actually produced; otherwise the wrapper must use
+    // its safe unavailable-feature path rather than link unresolved symbols
+    // on hosts (notably Windows CI) without Zig installed.
+    println!("cargo:rustc-check-cfg=cfg(turbo_quant_zig_native)");
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let zig_src = manifest_dir.join("zig-src");
     let zig_file = zig_src.join("root.zig");
@@ -56,6 +62,7 @@ fn main() {
 
     match status {
         Ok(s) if s.success() && obj_path.exists() => {
+            println!("cargo:rustc-cfg=turbo_quant_zig_native");
             println!("cargo:rustc-link-arg={}", obj_path.display());
             println!("cargo:info=linking Zig object at {}", obj_path.display());
         }

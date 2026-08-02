@@ -7,7 +7,7 @@
 //! and the tests verify that its output agrees with the reference Rust
 //! implementation in `perf-core/native-abi`.
 
-#![cfg(feature = "zig")]
+#![cfg(all(feature = "zig", turbo_quant_zig_native))]
 
 use turbo_quant_zig::ZigQuantizedTensor;
 
@@ -22,7 +22,7 @@ fn zig_v1_encode_matches_reference_within_tolerance() {
         assert_eq!(q.shape, vec![input.len()]);
         assert_eq!(
             q.packed.len(),
-            (input.len() * bits as usize + 7) / 8,
+            (input.len() * bits as usize).div_ceil(8),
             "packed length must match the (n * bits + 7) / 8 contract"
         );
 
@@ -70,12 +70,10 @@ fn zig_v1_decode_rejects_invalid_arguments_and_preserves_buffer() {
 fn zig_v1_encode_rejects_invalid_bits() {
     let input = [1.0, 2.0, 3.0, 4.0];
 
-    let err = ZigQuantizedTensor::encode_v1(&input, 1, 4)
-        .expect_err("bits=1 must be rejected");
+    let err = ZigQuantizedTensor::encode_v1(&input, 1, 4).expect_err("bits=1 must be rejected");
     assert_eq!(err, native_abi::Status::ErrInvalidBits);
 
-    let err = ZigQuantizedTensor::encode_v1(&input, 5, 4)
-        .expect_err("bits=5 must be rejected");
+    let err = ZigQuantizedTensor::encode_v1(&input, 5, 4).expect_err("bits=5 must be rejected");
     assert_eq!(err, native_abi::Status::ErrInvalidBits);
 
     let err =

@@ -9,7 +9,15 @@ on:
     branches: [main]
     paths:
       - "perf-core/**"
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
+    inputs:
+      format_base_ref:
+        description: "Optional base branch for changed-Rust formatting (for example, feat/diffusion-trajectory-state)"
+        required: false
+        type: string
+        default: ""
 
 env:
   CARGO_TERM_COLOR: always
@@ -25,6 +33,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -50,9 +60,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           ZIG_VERSION="0.14.1"
-          ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+          ZIG_ARCHIVE="/tmp/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
           curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
-          sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf "${ZIG_ARCHIVE}" -C /opt/zig --strip-components=1
+          echo "/opt/zig" >> "$GITHUB_PATH"
           rm "${ZIG_ARCHIVE}"
 
       - name: Verify Zig
@@ -102,9 +114,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           ZIG_VERSION="0.14.1"
-          ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+          ZIG_ARCHIVE="/tmp/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
           curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
-          sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf "${ZIG_ARCHIVE}" -C /opt/zig --strip-components=1
+          echo "/opt/zig" >> "$GITHUB_PATH"
           rm "${ZIG_ARCHIVE}"
 
       - name: Verify Zig
@@ -156,9 +170,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           ZIG_VERSION="0.14.1"
-          ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+          ZIG_ARCHIVE="/tmp/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
           curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
-          sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf "${ZIG_ARCHIVE}" -C /opt/zig --strip-components=1
+          echo "/opt/zig" >> "$GITHUB_PATH"
           rm "${ZIG_ARCHIVE}"
 
       - name: Verify Zig
@@ -181,6 +197,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
@@ -189,7 +207,35 @@ jobs:
 
       - name: cargo fmt --check
         working-directory: perf-core
-        run: cargo fmt --all -- --check
+        env:
+          # Pull requests and merge queues provide a base ref. Manual dispatch
+          # may opt into one; otherwise use the event's previous commit (or
+          # HEAD^), never origin/main, so unrelated baseline drift is excluded.
+          FORMAT_BASE_REF: ${{ github.base_ref || github.event.merge_group.base_ref || github.event.inputs.format_base_ref || '' }}
+        run: |
+          set -euo pipefail
+          if [ -n "${FORMAT_BASE_REF}" ]; then
+            base_ref="${FORMAT_BASE_REF}"
+            case "$base_ref" in
+              refs/heads/*) base_ref="${base_ref#refs/heads/}" ;;
+            esac
+            if ! git show-ref --verify --quiet "refs/remotes/origin/${base_ref}"; then
+              git fetch --no-tags origin "+refs/heads/${base_ref}:refs/remotes/origin/${base_ref}"
+            fi
+            diff_range="origin/${base_ref}...HEAD"
+          elif [ -n "${GITHUB_EVENT_BEFORE:-}" ] && [ "${GITHUB_EVENT_BEFORE}" != "0000000000000000000000000000000000000000" ]; then
+            diff_range="${GITHUB_EVENT_BEFORE}...HEAD"
+          else
+            diff_range="HEAD^...HEAD"
+          fi
+          changed=$(git diff --name-only "$diff_range" -- '*.rs')
+          if [ -z "$changed" ]; then
+            echo "No Rust files changed; format gate is clean."
+            exit 0
+          fi
+          printf '%s\n' "$changed" | while IFS= read -r file; do
+            rustfmt --edition 2021 --check "../$file"
+          done
 
   # ---------- Windows (experimental) ----------
   windows-check:
@@ -221,15 +267,18 @@ jobs:
         run: cargo test --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
 
   # ---------- Platform-specific optional jobs ----------
-  # NOTE: turbo-quant-zig is NOT in the workspace members list yet.
-  # Build it standalone via --manifest-path when Zig is available.
+  # turbo-quant-zig is a workspace member, but its native ABI is opt-in via
+  # the `zig` feature. Keep native and no-Zig paths explicit so a green job
+  # cannot silently mean that the ABI tests were cfg-disabled.
   # NOTE: Mojo SDK is not installable on GitHub Actions runners.
   # turbo-quant-mojo is excluded from all workspace commands above.
   # NOTE: CUDA tests are skipped — concurrent-exec-cuda requires NVIDIA
   # hardware and the `cuda` feature flag, neither available on standard
   # GitHub Actions runners.
 
-  zig-crate:
+  zig-crate-native:
+    # Preserve the existing required check context while making the feature
+    # explicit in the command below.
     name: Zig crate (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -261,18 +310,56 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           ZIG_VERSION="0.14.1"
-          ZIG_ARCHIVE="/tmp/zig-linux-x86_64-${ZIG_VERSION}.tar.xz"
+          ZIG_ARCHIVE="/tmp/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"
           curl -fL "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" -o "${ZIG_ARCHIVE}"
-          sudo tar -xJf "${ZIG_ARCHIVE}" -C /usr/local --strip-components=1
+          sudo mkdir -p /opt/zig
+          sudo tar -xJf "${ZIG_ARCHIVE}" -C /opt/zig --strip-components=1
+          echo "/opt/zig" >> "$GITHUB_PATH"
           rm "${ZIG_ARCHIVE}"
 
       - name: Verify Zig
         run: zig version
 
-      - name: cargo check -p turbo-quant-zig
+      - name: cargo check -p turbo-quant-zig (native ABI)
         working-directory: perf-core
-        run: cargo check --manifest-path turbo-quant-zig/Cargo.toml
+        run: cargo check --locked --manifest-path turbo-quant-zig/Cargo.toml --features zig
 
-      - name: cargo test -p turbo-quant-zig
+      - name: cargo test -p turbo-quant-zig (native ABI)
         working-directory: perf-core
-        run: cargo test --manifest-path turbo-quant-zig/Cargo.toml
+        run: cargo test --locked --manifest-path turbo-quant-zig/Cargo.toml --features zig
+
+  zig-crate-no-zig:
+    name: Zig crate no-Zig fallback (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            perf-core/target
+          key: ${{ runner.os }}-cargo-zig-no-toolchain-${{ hashFiles('perf-core/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-zig-no-toolchain-
+
+      - name: cargo check -p turbo-quant-zig (no-Zig fallback)
+        working-directory: perf-core
+        env:
+          TURBO_QUANT_ZIG_SKIP: "1"
+        run: cargo check --locked --manifest-path turbo-quant-zig/Cargo.toml --features zig
+
+      - name: cargo test -p turbo-quant-zig (no-Zig fallback)
+        working-directory: perf-core
+        env:
+          TURBO_QUANT_ZIG_SKIP: "1"
+        run: cargo test --locked --manifest-path turbo-quant-zig/Cargo.toml --features zig

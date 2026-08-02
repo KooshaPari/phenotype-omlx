@@ -352,7 +352,7 @@ mod tests {
     fn get_nonexistent_candidate_returns_none() {
         let reg = KernelRegistry::new();
         let missing = CandidateId(0xFFFF_FFFF);
-        assert!(reg.candidates.get(&missing).is_none());
+        assert!(!reg.candidates.contains_key(&missing));
     }
 
     #[test]

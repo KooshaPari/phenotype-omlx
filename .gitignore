@@ -1,6 +1,7 @@
 # Rust build output
 /perf-core/target/
 /python/ffi/target/
+/.cargo-target/
 
 # Python environments and caches
 .venv/

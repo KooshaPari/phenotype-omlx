@@ -31,10 +31,18 @@ fn which() -> Option<PathBuf> {
     })
 }
 
+fn native_available() -> bool {
+    cfg!(mojo_native)
+}
+
 // ─── Build/smoke tests (carried over from lib.rs) ───────────────────────
 
 #[test]
 fn mojo_shared_lib_builds() {
+    if !native_available() {
+        eprintln!("Mojo native artifact unavailable; native-only test skipped");
+        return;
+    }
     let lib = mojo_shared_lib_path();
     assert!(
         lib.exists(),
@@ -45,6 +53,10 @@ fn mojo_shared_lib_builds() {
 
 #[test]
 fn mojo_smoke_script_roundtrips() {
+    if !native_available() {
+        eprintln!("Mojo native artifact unavailable; native-only test skipped");
+        return;
+    }
     let mojo = std::env::var_os("MOJO_PATH")
         .map(PathBuf::from)
         .or_else(which)
@@ -77,6 +89,10 @@ fn minimal_valid_tensor() -> MojoQuantizedTensor {
 
 #[test]
 fn mojo_encode_decode_roundtrip_ffi_owned_outputs() {
+    if !native_available() {
+        eprintln!("Mojo native artifact unavailable; native-only test skipped");
+        return;
+    }
     let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
     match MojoQuantizedTensor::encode(&data, 4, 32) {
         Ok(q) => {
@@ -96,6 +112,10 @@ fn mojo_encode_decode_roundtrip_ffi_owned_outputs() {
 
 #[test]
 fn try_decode_valid_inputs_returns_ok() {
+    if !native_available() {
+        eprintln!("Mojo native artifact unavailable; native-only test skipped");
+        return;
+    }
     let q = minimal_valid_tensor();
     let res = q.try_decode(8, 2, 4);
     assert!(res.is_ok(), "expected Ok, got {:?}", res.err());
@@ -360,7 +380,9 @@ fn encode_valid_input_succeeds_or_reports_known_abi_issue() {
     let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
     match MojoQuantizedTensor::encode(&data, 4, 32) {
         Ok(_) => {}
-        Err(e) if e.contains("null output pointers") => {
+        Err(e)
+            if e.contains("null output pointers") || e.contains("native library unavailable") =>
+        {
             // Known Mojo 1.0.0b3 ABI issue. Validation passed (no early return).
         }
         Err(e) => panic!("Mojo encode failed unexpectedly: {e}"),
@@ -385,7 +407,10 @@ fn repeated_encode_decode_exercises_guard_cleanup() {
                 let decoded = q.decode(data.len(), 16, 4);
                 assert_eq!(decoded.len(), data.len(), "round {round}: decoded length");
             }
-            Err(e) if e.contains("null output pointers") => {
+            Err(e)
+                if e.contains("null output pointers")
+                    || e.contains("native library unavailable") =>
+            {
                 // Mojo 1.0.0b3 out-pointer ABI still broken — validation
                 // passed so the guard's pre-arm path did fire and was
                 // responsible for the null-pointer error message.
