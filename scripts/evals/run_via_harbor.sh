@@ -14,6 +14,7 @@
 #   export LANGFUSE_PUBLIC_KEY=pk-lf-...
 #   export LANGFUSE_SECRET_KEY=sk-lf-...
 #   export LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # optional
+#   export PHENO_EXECUTION_WINDOW_ID=qwen35-20260802T0700Z-3090ti
 #   bash scripts/evals/run_via_harbor.sh              # hello-world oracle + Langfuse
 #   bash scripts/evals/run_via_harbor.sh --policy
 #   bash scripts/evals/run_via_harbor.sh --niah
@@ -55,6 +56,15 @@ done
 
 if [[ -z "${PORTAGE_ROOT:-}" ]]; then
   echo "ERROR: PORTAGE_ROOT required (portage-TEMP / Harbor). No hardcoded worktree paths." >&2
+  exit 2
+fi
+if [[ -z "${PHENO_EXECUTION_WINDOW_ID:-}" ]]; then
+  echo "ERROR: PHENO_EXECUTION_WINDOW_ID required; Harbor workloads need a bounded authorization window." >&2
+  echo "  Set an operator-issued window ID before invoking Portage/Apple Container." >&2
+  exit 2
+fi
+if [[ ! "${PHENO_EXECUTION_WINDOW_ID}" =~ ^[A-Za-z0-9._:-]{8,128}$ ]]; then
+  echo "ERROR: PHENO_EXECUTION_WINDOW_ID must match [A-Za-z0-9._:-]{8,128}." >&2
   exit 2
 fi
 if [[ ! -d "$PORTAGE_ROOT" ]]; then
@@ -118,7 +128,7 @@ export OMLX_READY_MODEL="${OMLX_READY_MODEL:-$(PYTHONPATH="$ROOT/python${PYTHONP
 export OPENAI_MODEL="${OPENAI_MODEL:-$OMLX_READY_MODEL}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-omlx}"
 
-AGENT_ENV_ARGS=()
+AGENT_ENV_ARGS=(--ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}")
 if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
   AGENT_ENV_ARGS+=(
     --ae "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
