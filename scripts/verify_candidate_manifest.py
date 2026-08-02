@@ -67,21 +67,29 @@ def _git_head(repo_root: Path) -> str:
 
 
 def _source_head_compatibility(
-    manifest_head: Any, current_head: str, manifest_path: Path, repo_root: Path
+    manifest_head: Any,
+    current_head: str,
+    repo_root: Path,
+    protected_paths: Any,
 ) -> tuple[bool, list[str]]:
-    """Allow only manifest-only commits after the evaluated source head.
+    """Allow only bookkeeping commits after the evaluated source head.
 
-    A tracked manifest cannot be written without changing repository HEAD.  The
-    source candidate remains compatible when every committed path after its
-    recorded head is the manifest itself; any source-file drift fails closed.
+    A tracked manifest and its verifier cannot be written without changing
+    repository HEAD.  The source candidate remains compatible when every
+    committed path after its recorded head avoids the declared production
+    paths; any runtime/source-file drift fails closed.
     """
 
     if not isinstance(manifest_head, str) or len(manifest_head) != _COMMIT_LENGTH:
         return False, []
     if manifest_head == current_head:
         return True, []
+    if not isinstance(protected_paths, list) or not protected_paths:
+        return False, []
+    roots = [path.strip("/") for path in protected_paths if isinstance(path, str) and path.strip("/")]
+    if len(roots) != len(protected_paths):
+        return False, []
     try:
-        relative_manifest = manifest_path.resolve().relative_to(repo_root.resolve()).as_posix()
         ancestor = subprocess.run(
             ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", manifest_head, current_head],
             capture_output=True,
@@ -99,7 +107,11 @@ def _source_head_compatibility(
     except (OSError, subprocess.SubprocessError):
         return False, []
     paths = [line for line in changed.stdout.splitlines() if line]
-    return bool(paths) and all(path == relative_manifest for path in paths), paths
+
+    def touches_protected(path: str) -> bool:
+        return any(path == root or path.startswith(f"{root}/") for root in roots)
+
+    return bool(paths) and not any(touches_protected(path) for path in paths), paths
 
 
 def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
@@ -117,8 +129,13 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
 
     manifest_head = candidate.get("head")
     exact_head = manifest_head == current_head
-    source_head_compatible, manifest_only_paths = _source_head_compatibility(
-        manifest_head, current_head, manifest_path, repo_root
+    source_head_compatible, post_head_changed_paths = _source_head_compatibility(
+        manifest_head,
+        current_head,
+        repo_root,
+        document.get("changes", {}).get("production_paths")
+        if isinstance(document.get("changes"), Mapping)
+        else None,
     )
     declared_digest = None
     integrity = document.get("integrity")
@@ -154,9 +171,9 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
         "exact_head": exact_head,
         "source_head_compatible": source_head_compatible,
         "head_compatibility": "exact" if exact_head else (
-            "manifest_only_commits" if source_head_compatible else "mismatch"
+            "bookkeeping_commits" if source_head_compatible else "mismatch"
         ),
-        "manifest_only_changed_paths": manifest_only_paths,
+        "post_head_changed_paths": post_head_changed_paths,
         "integrity_valid": integrity_valid,
         "workload_executed": workload_executed,
         "evidence_complete": evidence_complete,
