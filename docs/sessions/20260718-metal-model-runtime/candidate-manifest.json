@@ -64,11 +64,22 @@
       "status": "blocked_unsupported_cuda_architecture",
       "remote_log_sha256": "599941e3e3e366a373766f9bb228c9dd0b92cd4c2f861df7061bc232e8ca085a"
     },
+    "desktop_qwen35_3090_occupancy": {
+      "artifact": "pheno-harness/state/desktop_qwen35_3090_occupancy_20260802T0213Z.json",
+      "host": "kooshapari-desk",
+      "device_uuid": "GPU-8d337a84-43de-158d-7526-7175288a6064",
+      "memory_used_mib": 22609,
+      "memory_total_mib": 24564,
+      "occupying_model": "LiquidAI/LFM2.5-8B-A1B",
+      "qwen35_server_launched": false,
+      "process_interrupted": false,
+      "status": "blocked_existing_runtime_slot"
+    },
     "workload_executed": false
   },
   "promotion": {
     "verdict": "blocked",
-    "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; the bounded desktop helper readiness attempt is blocked by the GTX 1080 Ti compute capability, and no authorized 3090 Ti workload or full benchmark envelope is present.",
+    "reason": "Current-head source and Qwen3.5 snapshot integrity are recorded, but the candidate remains compile-only; the bounded desktop helper readiness attempt is blocked by the GTX 1080 Ti compute capability and the 3090 Ti is occupied by an existing non-Qwen service, so no authorized Qwen3.5 workload or full benchmark envelope is present.",
     "remaining_gates": [
       "fresh current-head Metal compile/device evidence",
       "Qwen3.5 runtime readiness on the RTX 3090 Ti without disturbing the existing service",
@@ -78,7 +89,7 @@
     ]
   },
   "integrity": {
-    "canonical_sha256": "90666f11d8c82b166eed40cded80f8c5a064cdce59b6e5f3a28eefc8bdef7d3a",
+    "canonical_sha256": "8faf858e805485a32b5d4775d56c6f14f17214f77189144274e6b9e2752802a8",
     "canonical_sha256_status": "verified"
   }
 }
