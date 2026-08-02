@@ -254,3 +254,9 @@ Apple Container preflight, or `uv run harbor`; the contract test passes. Because
 declared production path after the compile-only candidate head, the candidate verifier correctly
 reports source-head incompatibility until a fresh artifact/candidate rebind is performed. This
 does not authorize or claim any live workload.
+
+Update 2026-08-02 (candidate JSON hardening): `scripts/verify_candidate_manifest.py` now rejects
+duplicate object members and non-finite JSON constants before canonical SHA-256 verification.
+Focused candidate-manifest and review tests pass 14/14; the historical manifest remains blocked
+for its stale source head and absent workload evidence. Native diffusion/ternary validation also
+passes 69 metal-runtime tests plus 211 model-kernel unit tests; no device or model workload ran.
