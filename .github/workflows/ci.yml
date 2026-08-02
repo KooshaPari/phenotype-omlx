@@ -1,0 +1,272 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop, "release/**"]
+  pull_request:
+    branches: [main, master, develop]
+  merge_group:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  PYTHONIOENCODING: utf-8
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect Languages
+    runs-on: ubuntu-latest
+    outputs:
+      has_rust: ${{ steps.detect.outputs.has_rust }}
+      has_deny: ${{ steps.detect.outputs.has_deny }}
+      has_python: ${{ steps.detect.outputs.has_python }}
+      has_go: ${{ steps.detect.outputs.has_go }}
+      has_typescript: ${{ steps.detect.outputs.has_typescript }}
+      has_security: ${{ steps.detect.outputs.has_security }}
+      has_trunk: ${{ steps.detect.outputs.has_trunk }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - id: detect
+        run: |
+          set +e
+          # Initialize all outputs to false (critical: every output must be set)
+          {
+            echo "has_rust=false"
+            echo "has_deny=false"
+            echo "has_python=false"
+            echo "has_go=false"
+            echo "has_typescript=false"
+            echo "has_security=false"
+            echo "has_trunk=false"
+          } >> "$GITHUB_OUTPUT"
+
+          # Rust: discover nested workspaces, then optionally enable cargo-deny.
+          if find . -name Cargo.toml -type f -not -path './target/*' -print -quit | grep -q .; then
+            echo "has_rust=true" >> "$GITHUB_OUTPUT"
+            if [ -f "deny.toml" ] || find . -name deny.toml -type f -print -quit | grep -q .; then
+              echo "has_deny=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+          # Python: needs pyproject.toml, setup.py, requirements.txt, or *.py
+          if find . -maxdepth 4 \( -name pyproject.toml -o -name setup.py -o -name setup.cfg -o -name 'requirements*.txt' \) -type f -print -quit | grep -q .; then
+            echo "has_python=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Go: needs go.mod
+          if find . -name go.mod -type f -print -quit | grep -q .; then
+            echo "has_go=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          # TypeScript / JS: needs package.json (with type=module or tsconfig or js files)
+          if find . -name package.json -type f -print -quit | grep -q .; then
+            echo "has_typescript=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Security: always run (bandit/gitleaks/dependency-review)
+          echo "has_security=true" >> "$GITHUB_OUTPUT"
+
+          # Trunk: only if trunk.yaml exists
+          if [ -f "trunk.yaml" ]; then
+            echo "has_trunk=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo ""
+          echo "=== Detected ==="
+          echo "Detection complete; outputs were written to GITHUB_OUTPUT"
+
+  rust:
+    name: Rust
+    needs: detect
+    if: needs.detect.outputs.has_rust == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cargo fmt --check
+        run: cargo fmt --manifest-path perf-core/Cargo.toml --all -- --check
+      - name: cargo clippy
+        run: cargo clippy --manifest-path perf-core/Cargo.toml --workspace --all-targets --exclude turbo-quant-mojo --exclude concurrent-exec-cuda -- -D warnings
+      - name: cargo build
+        run: cargo build --manifest-path perf-core/Cargo.toml --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
+      - name: cargo test
+        run: cargo test --manifest-path perf-core/Cargo.toml --workspace --exclude turbo-quant-mojo --exclude concurrent-exec-cuda --no-fail-fast
+
+  cargo-deny:
+    name: Cargo Deny (Advisories + Licenses)
+    needs: detect
+    if: needs.detect.outputs.has_deny == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: cargo-deny check
+        uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          arguments: --all-features
+
+  python:
+    name: Python
+    needs: detect
+    if: needs.detect.outputs.has_python == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install ruff
+        run: python -m pip install --quiet ruff
+      - name: ruff check
+        run: ruff check python
+      - name: ruff format --check
+        run: ruff format --check python
+      - name: install project dependencies
+        run: python -m pip install --quiet -e python
+      - name: pytest
+        run: |
+          if find python -type f -name 'test_*.py' -print -quit | grep -q .; then
+            python -m pytest --no-header -q python
+          else
+            echo "No Python tests found"
+          fi
+
+  go:
+    name: Go
+    needs: detect
+    if: needs.detect.outputs.has_go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: gofmt check
+        run: |
+          while IFS= read -r mod; do
+            dir="$(dirname "$mod")"
+            test -z "$(find "$dir" -name '*.go' -type f -print -exec gofmt -l {} \;)"
+          done < <(find . -name go.mod -type f -print)
+      - name: go vet and test
+        run: |
+          while IFS= read -r mod; do
+            dir="$(dirname "$mod")"
+            (cd "$dir" && go vet ./... && go test ./...)
+          done < <(find . -name go.mod -type f -print)
+
+  typescript:
+    name: TS/JS
+    needs: detect
+    if: needs.detect.outputs.has_typescript == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+      - name: lint
+        run: |
+          if [ -f package.json ] && grep -q '"lint"' package.json; then
+            npm run lint
+          fi
+      - name: test
+        run: |
+          if [ -f package.json ] && grep -q '"test"' package.json; then
+            npm test
+          fi
+
+  security:
+    name: Security Scan
+    needs: detect
+    if: needs.detect.outputs.has_security == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dep-review:
+    name: Dependency Review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+
+  lint:
+    name: ci / lint
+    if: always()
+    needs: [detect, rust, cargo-deny, python, go, typescript, security, dep-review]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate lint gate
+        run: |
+          failed=0
+          for pair in \
+            "rust:${{ needs.rust.result }}" \
+            "cargo-deny:${{ needs['cargo-deny'].result }}" \
+            "python:${{ needs.python.result }}" \
+            "go:${{ needs.go.result }}" \
+            "typescript:${{ needs.typescript.result }}" \
+            "security:${{ needs.security.result }}" \
+            "dep-review:${{ needs['dep-review'].result }}" \
+            ; do
+            name="${pair%%:*}"
+            result="${pair#*:}"
+            if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+              echo "  ✗ $name: $result"
+              failed=$((failed + 1))
+            elif [ "$result" = "success" ] || [ "$result" = "skipped" ]; then
+              echo "  ✓ $name: $result"
+            else
+              echo "  ? $name: $result"
+            fi
+          done
+          if [ "$failed" -gt 0 ]; then
+            echo ""
+            echo "❌ $failed lint check(s) failed"
+            exit 1
+          fi
+          echo ""
+          echo "✅ All lint checks passed (or were skipped)"
+
+  test:
+    name: ci / test
+    if: always()
+    needs: [detect, rust, cargo-deny, python, go, typescript]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test gate
+        run: |
+          for pair in \
+            "detect:${{ needs.detect.result }}" \
+            "rust:${{ needs.rust.result }}" \
+            "cargo-deny:${{ needs['cargo-deny'].result }}" \
+            "python:${{ needs.python.result }}" \
+            "go:${{ needs.go.result }}" \
+            "typescript:${{ needs.typescript.result }}"; do
+            status="${pair#*:}"
+            if [ "$status" != success ] && [ "$status" != skipped ]; then
+              echo "$pair" >&2
+              exit 1
+            fi
+          done
+          echo "✅ All test stages passed"
