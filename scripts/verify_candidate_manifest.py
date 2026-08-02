@@ -66,6 +66,42 @@ def _git_head(repo_root: Path) -> str:
     return head
 
 
+def _source_head_compatibility(
+    manifest_head: Any, current_head: str, manifest_path: Path, repo_root: Path
+) -> tuple[bool, list[str]]:
+    """Allow only manifest-only commits after the evaluated source head.
+
+    A tracked manifest cannot be written without changing repository HEAD.  The
+    source candidate remains compatible when every committed path after its
+    recorded head is the manifest itself; any source-file drift fails closed.
+    """
+
+    if not isinstance(manifest_head, str) or len(manifest_head) != _COMMIT_LENGTH:
+        return False, []
+    if manifest_head == current_head:
+        return True, []
+    try:
+        relative_manifest = manifest_path.resolve().relative_to(repo_root.resolve()).as_posix()
+        ancestor = subprocess.run(
+            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", manifest_head, current_head],
+            capture_output=True,
+            timeout=10,
+        )
+        if ancestor.returncode != 0:
+            return False, []
+        changed = subprocess.run(
+            ["git", "-C", str(repo_root), "diff", "--name-only", f"{manifest_head}..{current_head}"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, []
+    paths = [line for line in changed.stdout.splitlines() if line]
+    return bool(paths) and all(path == relative_manifest for path in paths), paths
+
+
 def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     """Return a provenance report without authorizing any execution."""
 
@@ -81,6 +117,9 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
 
     manifest_head = candidate.get("head")
     exact_head = manifest_head == current_head
+    source_head_compatible, manifest_only_paths = _source_head_compatibility(
+        manifest_head, current_head, manifest_path, repo_root
+    )
     declared_digest = None
     integrity = document.get("integrity")
     if isinstance(integrity, Mapping):
@@ -95,8 +134,8 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     reasons: list[str] = []
     if not integrity_valid:
         reasons.append("manifest canonical SHA-256 does not match")
-    if not exact_head:
-        reasons.append("candidate head does not match current repository HEAD")
+    if not source_head_compatible:
+        reasons.append("candidate source head is not compatible with current repository HEAD")
     if not workload_executed:
         reasons.append("candidate has no executed workload evidence")
     if not evidence_complete:
@@ -113,6 +152,11 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
         "current_head": current_head,
         "manifest_head": manifest_head,
         "exact_head": exact_head,
+        "source_head_compatible": source_head_compatible,
+        "head_compatibility": "exact" if exact_head else (
+            "manifest_only_commits" if source_head_compatible else "mismatch"
+        ),
+        "manifest_only_changed_paths": manifest_only_paths,
         "integrity_valid": integrity_valid,
         "workload_executed": workload_executed,
         "evidence_complete": evidence_complete,
