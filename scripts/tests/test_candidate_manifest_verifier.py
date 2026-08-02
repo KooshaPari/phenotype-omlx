@@ -12,16 +12,18 @@ ROOT = Path(__file__).parents[2]
 MANIFEST = ROOT / "docs/sessions/20260718-metal-model-runtime/candidate-manifest.json"
 
 
-def test_current_manifest_is_reported_blocked_when_stale_or_compile_only() -> None:
+def test_current_manifest_is_blocked_but_source_head_compatible() -> None:
     report = verify_candidate(MANIFEST, ROOT)
 
     assert report["schema_version"] == "pheno.candidate-manifest-review.v1"
     assert report["integrity_valid"] is True
     assert report["exact_head"] is False
+    assert report["source_head_compatible"] is True
+    assert report["head_compatibility"] == "manifest_only_commits"
     assert report["workload_executed"] is False
     assert report["promotable"] is False
     assert report["status"] == "blocked"
-    assert "candidate head does not match current repository HEAD" in report["reasons"]
+    assert "candidate source head is not compatible with current repository HEAD" not in report["reasons"]
     assert "candidate has no executed workload evidence" in report["reasons"]
 
 

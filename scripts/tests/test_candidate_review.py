@@ -57,9 +57,9 @@ def test_current_head_provenance_is_explicitly_non_promotable() -> None:
     assert document["promotion"]["verdict"] == "blocked"
 
 
-def test_current_manifest_is_exact_head_and_holds_runtime_gate() -> None:
+def test_current_manifest_records_source_head_and_holds_runtime_gate() -> None:
     document = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert document["candidate"]["head"] == "6a3dbb7bb2fd1e489d9af25c10eac0e85825c355"
+    assert document["candidate"]["head"] == "8a50efc0cadbe11603403e43d27d0e79df6f723a"
     assert document["candidate"]["freeze_status"] == "current-head-integrity-reviewed-canonical-dirty"
     assert document["changes"]["working_tree_at_review"] == "canonical_checkout_dirty_untracked"
     assert document["changes"]["working_tree_dirty_paths"] == [
