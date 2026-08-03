@@ -60,4 +60,7 @@ fi
 grep -q 'PHENO_EXECUTION_WINDOW_ID' "${TEST_ROOT}/malformed.err"
 [[ ! -s "${CALL_LOG}" ]]
 
+grep -q 'Qwen2\.5' "${RUNNER}"
+grep -q 'OPENAI_MODEL' "${RUNNER}"
+
 printf '%s\n' '[test_harbor_execution_window] ok'

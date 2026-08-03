@@ -127,6 +127,22 @@ echo "langfuse base=$LANGFUSE_BASE_URL session=harbor_job_id (canonical)"
 export OMLX_READY_MODEL="${OMLX_READY_MODEL:-$(PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m omlx_research.smoke_models readiness)}"
 export OPENAI_MODEL="${OPENAI_MODEL:-$OMLX_READY_MODEL}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-omlx}"
+case "$OMLX_READY_MODEL" in
+  *Qwen2.5*|*qwen2.5*)
+    echo "ERROR: Qwen2.5 is quarantined; Harbor requires Qwen3.5." >&2
+    exit 2
+    ;;
+  *Qwen3.5*|*qwen3.5*)
+    ;;
+  *)
+    echo "ERROR: Harbor model must be Qwen3.5 (got $OMLX_READY_MODEL)." >&2
+    exit 2
+    ;;
+esac
+if [[ "$OPENAI_MODEL" != "$OMLX_READY_MODEL" ]]; then
+  echo "ERROR: OPENAI_MODEL must exactly match OMLX_READY_MODEL for provenance." >&2
+  exit 2
+fi
 
 AGENT_ENV_ARGS=(--ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}")
 if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
