@@ -315,3 +315,13 @@ Sources: [NVIDIA RTX 3090 Ti specifications](https://www.nvidia.com/en-us/geforc
 [MoE-Infinity](https://github.com/EfficientMoE/MoE-Infinity), and
 [LLM in a Flash](https://arxiv.org/abs/2312.11514). The note's market/mod claims are not
 promotion evidence and are intentionally excluded from the Qwen3.5 gate.
+
+### 2026-08-03 - immutable current-head evidence rebind preparation
+
+The historical candidate manifest cannot be refreshed by editing its claimed source head: its
+canonical digest, source compatibility, and runtime-evidence booleans are independent gates.
+The Harbor envelope and Metal compile provenance must each bind to the exact current full Git
+HEAD. A preparation artifact therefore records only validated input identities and SHA-256
+digests, and terminates at `promotion.verdict=review_required`; it never marks evidence complete
+or accepts promotion. This keeps the final local promotion review as a separate authority and
+prevents a compile-only artifact from being mistaken for a workload result.

@@ -135,6 +135,16 @@ kernel currently emits an invalid zero-length local array for that shape.
 The native Metal kernel is numerically parity-checked against the compiled ops reference:
 maximum output error `5.72e-6`, state error `0.0`, eight-token recurrence.
 
+### Candidate rebind preparation (2026-08-03)
+
+`scripts/tests/test_candidate_rebind.py` is a pure local contract suite. It creates temporary
+Git repositories and synthetic, canonical JSON inputs; it does not load a model, contact Harbor,
+or dispatch Metal. The suite verifies that preparation accepts only a clean current checkout with
+live, exact-8192, no-retry/no-fallback Qwen3.5 evidence and compatible 20-shader Metal
+provenance. It rejects a stale source head, Qwen2.5, a retried Harbor result, a dirty checkout,
+historical candidate-manifest output, and any existing output path. Successful preparation still
+emits `review_required` and `promotable=false`.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.
