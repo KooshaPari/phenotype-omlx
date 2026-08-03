@@ -255,6 +255,12 @@ declared production path after the compile-only candidate head, the candidate ve
 reports source-head incompatibility until a fresh artifact/candidate rebind is performed. This
 does not authorize or claim any live workload.
 
+Update 2026-08-03 (Harbor model binding): the same entrypoint now rejects Qwen2.5 and any model
+outside the Qwen3.5 SSOT, and requires `OPENAI_MODEL` to exactly equal `OMLX_READY_MODEL`. This
+prevents a pre-set OpenAI-compatible model variable from bypassing the Qwen3.5 policy before
+Portage or Apple Container is touched. The execution-window contract test passes; no workload
+was launched.
+
 Update 2026-08-02 (candidate JSON hardening): `scripts/verify_candidate_manifest.py` now rejects
 duplicate object members and non-finite JSON constants before canonical SHA-256 verification.
 Focused candidate-manifest and review tests pass 14/14; the historical manifest remains blocked

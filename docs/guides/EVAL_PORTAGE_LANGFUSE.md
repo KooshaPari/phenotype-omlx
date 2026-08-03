@@ -47,6 +47,10 @@ rejects missing or malformed IDs before checking Portage, starting Apple Contain
 or invoking `uv run harbor`; this is an authorization marker, not proof that a
 runtime workload was executed. Do not invent one or reuse a stale window.
 
+The runner also binds `OPENAI_MODEL` exactly to the Qwen3.5 SSOT resolved as
+`OMLX_READY_MODEL`; Qwen2.5 and any independent model override are rejected
+before Portage or Apple Container is touched.
+
 `--langsmith` is **rejected** (exit 2). `--langfuse` is accepted for back-compat but redundant.
 
 ## Harbor tasks in this repo
