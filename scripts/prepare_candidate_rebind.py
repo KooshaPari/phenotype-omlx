@@ -181,6 +181,11 @@ def _validate_evidence(
         authorization["window_id"],
         "evidence authorization sidecar window_id",
     )
+    _require_boolean(
+        sidecar_snapshot.document.get("approved"),
+        True,
+        "evidence authorization sidecar approved",
+    )
 
     artifacts = document.get("artifacts")
     if not isinstance(artifacts, list) or not artifacts:

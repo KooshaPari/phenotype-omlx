@@ -134,7 +134,7 @@ def _git_repository(path: Path) -> Path:
     (path / "tracked.txt").write_text("tracked\n", encoding="utf-8")
     (path / "result.json").write_text('{"fixture":true}\n', encoding="utf-8")
     (path / "authorization.json").write_text(
-        '{"window_id":"window-fixture-123"}\n', encoding="utf-8"
+        '{"window_id":"window-fixture-123","approved":true}\n', encoding="utf-8"
     )
     config = path / "config"
     config.mkdir()
@@ -375,6 +375,22 @@ def test_rejects_mismatched_authorization_sidecar_window(tmp_path: Path) -> None
     metal_path = _write_json(tmp_path / "metal.json", _metal(head))
 
     with pytest.raises(CandidateRebindError, match="authorization sidecar window_id"):
+        prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
+
+
+def test_rejects_unapproved_authorization_sidecar(tmp_path: Path) -> None:
+    repo = _git_repository(tmp_path / "repo")
+    sidecar = repo / "authorization.json"
+    sidecar.write_text(
+        '{"window_id":"window-fixture-123","approved":false}\n', encoding="utf-8"
+    )
+    subprocess.run(["git", "-C", str(repo), "add", "authorization.json"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "unapproved sidecar"], check=True)
+    head = _head_for(repo)
+    evidence_path = _write_json(tmp_path / "evidence.json", _evidence(head, repo))
+    metal_path = _write_json(tmp_path / "metal.json", _metal(head))
+
+    with pytest.raises(CandidateRebindError, match="authorization sidecar approved"):
         prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
 
 
