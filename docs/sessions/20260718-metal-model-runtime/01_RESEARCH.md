@@ -325,3 +325,22 @@ HEAD. A preparation artifact therefore records only validated input identities a
 digests, and terminates at `promotion.verdict=review_required`; it never marks evidence complete
 or accepts promotion. This keeps the final local promotion review as a separate authority and
 prevents a compile-only artifact from being mistaken for a workload result.
+
+The preparer resolves the exact readiness model from `config/smoke_models.json` rather than
+matching a Qwen3.5 substring. It also requires the bounded `omlx/niah-api-smoke` one-trial
+contract, an authorization window plus sidecar digest, a clean branch, and locally present,
+repository-relative Harbor artifacts whose bytes match the envelope SHA-256 values.
+
+### 2026-08-04 - P1/P2 immutable input pinning
+
+P1: validating JSON and later re-reading its path creates a time-of-check/time-of-use gap: a
+replacement can make a review record name a digest that was never validated. The preparer now
+opens each Harbor and Metal input once as a non-symlink regular file, validates the parsed bytes,
+and records the SHA-256 from that same in-memory snapshot. P2: the review record preserves the
+validated input descriptors as well as the authorization sidecar and every Harbor artifact
+descriptor, allowing an independent reviewer to distinguish validated bytes from a later path
+replacement. This is local provenance hardening only; it does not create workload evidence.
+
+The authorization sidecar must additionally name the same `window_id` as the Harbor envelope.
+This matches the canonical Harbor authorization record without inventing a separate `approved`
+flag or treating a window marker as proof that a workload ran.
