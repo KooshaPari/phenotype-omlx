@@ -413,6 +413,18 @@ def test_rejects_in_repo_symlink_artifact(tmp_path: Path) -> None:
         prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
 
 
+def test_rejects_embedded_nul_artifact_path(tmp_path: Path) -> None:
+    repo = _git_repository(tmp_path / "repo")
+    evidence = _evidence(_head_for(repo), repo)
+    evidence["artifacts"][0]["path"] = "result\x00.json"
+    evidence = _with_integrity(evidence)
+    evidence_path = _write_json(tmp_path / "evidence.json", evidence)
+    metal_path = _write_json(tmp_path / "metal.json", _metal(_head_for(repo)))
+
+    with pytest.raises(CandidateRebindError, match="path must not contain NUL"):
+        prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
+
+
 def test_refuses_historical_manifest_and_existing_output(tmp_path: Path) -> None:
     fixture_repo = _git_repository(tmp_path / "fixture-repo")
     head = _head()
