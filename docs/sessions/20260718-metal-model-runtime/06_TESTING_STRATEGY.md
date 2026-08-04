@@ -145,6 +145,24 @@ provenance. It rejects a stale source head, Qwen2.5, a retried Harbor result, a 
 historical candidate-manifest output, and any existing output path. Successful preparation still
 emits `review_required` and `promotable=false`.
 
+The regression matrix additionally rejects a noncanonical Qwen3.5-looking model ID, a non-NIAH
+or multi-trial result, boolean values masquerading as numeric Harbor metrics, and missing
+repository-relative artifacts. These tests protect the exact SSOT, bounded-window, and
+content-addressed provenance requirements without executing a model or Harbor task.
+
+### Candidate rebind P1/P2 regression coverage (2026-08-04)
+
+The rebind suite replaces the Harbor-envelope path after that envelope has been parsed and
+validated; the resulting record must retain the original validated input SHA-256, never the
+replacement's digest. It independently rejects a multi-trial envelope and each mismatched
+candidate repository or branch, while preserving the authorization-sidecar and artifact
+descriptors in successful review records. These are filesystem-only contract tests and do not
+start Harbor, MLX, Metal, or Qwen3.5.
+
+Authorization-sidecar coverage also rejects a valid, content-addressed sidecar whose `window_id`
+does not equal the envelope's window marker. This guards against combining unrelated authorization
+and run records while keeping execution evidence and authorization distinct.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.
