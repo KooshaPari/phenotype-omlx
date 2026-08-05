@@ -16,7 +16,7 @@ mod subbyte;
 mod ternary;
 
 pub use subbyte::{subbyte_pack, subbyte_unpack};
-pub use ternary::{ternary_pack, ternary_unpack, SignedTernary};
+pub use ternary::{ternary_pack, ternary_repack_for_metal, ternary_unpack, SignedTernary};
 pub use ternary_matmul::ternary_matmul;
 
 #[cfg(test)]

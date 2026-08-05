@@ -313,6 +313,17 @@ window must use a conflict-free Portage root, currently the hygiene candidate
 `worktrees/portage/fix-langsmith-importerror`, and must remain subject to the one-trial overload
 governor.
 
+## Bonsai ternary layout gate (2026-08-05)
+
+    host row-major ternary pack
+      -> checked [k,n] to [n,ceil(k/4)] repack
+      -> Metal upload entry point
+      -> device parity fixture
+
+The host scalar matmul now accepts arbitrary positive `n` (including an output-column tail), while
+the repack helper validates exact host byte length and preserves every 2-bit code. Device
+execution remains pending an authorized, bounded Qwen3.5/Metal fixture and signed evidence.
+
 ## Diffusion boundary finiteness gate (2026-08-05)
 
     host trajectory oracle finiteness rules

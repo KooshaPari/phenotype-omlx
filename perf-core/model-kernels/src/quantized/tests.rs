@@ -4,7 +4,7 @@
 //! scheme.
 
 use super::subbyte::{subbyte_pack, subbyte_unpack};
-use super::ternary::{ternary_pack, ternary_unpack, SignedTernary};
+use super::ternary::{ternary_pack, ternary_repack_for_metal, ternary_unpack, SignedTernary};
 use crate::error::KernelError;
 
 #[test]
@@ -65,6 +65,39 @@ fn ternary_partial_trailing_group_packs_cleanly() {
     let mut out = vec![SignedTernary::Zero; values.len()];
     ternary_unpack(&packed, &scales, &zeros, values.len(), 4, &mut out).unwrap();
     assert_eq!(out, values);
+}
+
+#[test]
+fn ternary_repack_matches_metal_column_major_layout_with_k_tail() {
+    let k = 5;
+    let n = 3;
+    let values: Vec<SignedTernary> = (0..k * n)
+        .map(|i| match i % 3 {
+            0 => SignedTernary::Pos,
+            1 => SignedTernary::Neg,
+            _ => SignedTernary::Zero,
+        })
+        .collect();
+    let (host, _, _) = ternary_pack(&values, values.len()).unwrap();
+    assert_eq!(host.len(), 4);
+    let metal = ternary_repack_for_metal(&host, k, n).unwrap();
+    assert_eq!(metal.len(), n * k.div_ceil(4));
+
+    for col in 0..n {
+        for row in 0..k {
+            let host_index = row * n + col;
+            let host_code = (host[host_index / 4] >> ((host_index % 4) * 2)) & 0b11;
+            let metal_index = col * k.div_ceil(4) + row / 4;
+            let metal_code = (metal[metal_index] >> ((row % 4) * 2)) & 0b11;
+            assert_eq!(metal_code, host_code, "row={row}, col={col}");
+        }
+    }
+}
+
+#[test]
+fn ternary_repack_rejects_wrong_host_length() {
+    let error = ternary_repack_for_metal(&[0], 5, 3).unwrap_err();
+    assert!(matches!(error, KernelError::BadBufferLength { .. }));
 }
 
 #[test]
