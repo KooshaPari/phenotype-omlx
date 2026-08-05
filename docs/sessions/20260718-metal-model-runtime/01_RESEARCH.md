@@ -394,6 +394,10 @@ Metal/build-log digests against the manifest. It also compares the manifest repo
 to the actual checkout. The existing candidate remains blocked because its source head is stale
 and its workload/evidence gates are false; these checks strengthen the rejection path only.
 
+The verifier resolves relative repository roots before identity checks, so its CLI behaves the same
+for `--repo-root .` and an absolute checkout path. A current manifest still reports `blocked` and
+exit code 1; no verifier result is a promotion claim.
+
 The read-only candidate-manifest verifier now uses the same descriptor-level no-follow rule for
 its manifest input and fails closed when the platform cannot provide that primitive. This keeps
 the promotion report from validating bytes after a path replacement or silently following a

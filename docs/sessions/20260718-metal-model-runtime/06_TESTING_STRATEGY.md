@@ -200,6 +200,10 @@ The candidate-manifest suite additionally mutates the declared branch and nested
 head while recomputing the outer manifest digest; both mutations are rejected. Review/rebind
 tests remain filesystem-only and no device, model, Harbor, or MLX workload is launched.
 
+The CLI verifier is also exercised against the current candidate using a relative repository root;
+it returns exit code 1 with `status=blocked` because the source head and workload gates remain
+incomplete. This verifies invocation semantics without promoting or launching anything.
+
 The candidate-manifest gate additionally rejects execution when no-follow filesystem support is
 available, covering the secure file-ingress invariant without changing the manifest's intentionally
 blocked promotion verdict.

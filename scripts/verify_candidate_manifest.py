@@ -188,19 +188,38 @@ def _source_head_compatibility(
         return True, []
     if not isinstance(protected_paths, list) or not protected_paths:
         return False, []
-    roots = [path.strip("/") for path in protected_paths if isinstance(path, str) and path.strip("/")]
+    roots = [
+        path.strip("/")
+        for path in protected_paths
+        if isinstance(path, str) and path.strip("/")
+    ]
     if len(roots) != len(protected_paths):
         return False, []
     try:
         ancestor = subprocess.run(
-            ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", manifest_head, current_head],
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "merge-base",
+                "--is-ancestor",
+                manifest_head,
+                current_head,
+            ],
             capture_output=True,
             timeout=10,
         )
         if ancestor.returncode != 0:
             return False, []
         changed = subprocess.run(
-            ["git", "-C", str(repo_root), "diff", "--name-only", f"{manifest_head}..{current_head}"],
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "diff",
+                "--name-only",
+                f"{manifest_head}..{current_head}",
+            ],
             check=True,
             capture_output=True,
             text=True,
@@ -219,6 +238,7 @@ def _source_head_compatibility(
 def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     """Return a provenance report without authorizing any execution."""
 
+    repo_root = repo_root.resolve()
     document = _load_manifest(manifest_path)
     current_head = _git_head(repo_root)
     current_branch = _git_branch(repo_root)
@@ -226,7 +246,11 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
         raise CandidateManifestError("unsupported candidate manifest schema_version")
     candidate = document.get("candidate")
     verification = document.get("verification")
-    metal = verification.get("metal_compile_provenance", {}) if isinstance(verification, Mapping) else {}
+    metal = (
+        verification.get("metal_compile_provenance", {})
+        if isinstance(verification, Mapping)
+        else {}
+    )
     if not isinstance(candidate, Mapping) or not isinstance(verification, Mapping):
         raise CandidateManifestError("manifest candidate and verification objects are required")
     if not isinstance(metal, Mapping):
@@ -255,14 +279,22 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
     try:
         computed_digest = _canonical_digest(document)
     except (TypeError, ValueError) as exc:
-        raise CandidateManifestError("manifest contains values that cannot be canonicalized") from exc
+        raise CandidateManifestError(
+            "manifest contains values that cannot be canonicalized"
+        ) from exc
     integrity_valid = declared_digest == computed_digest
 
     workload_executed = verification.get("workload_executed") is True
     evidence_complete = candidate.get("evidence_complete") is True
     artifact_reasons = _metal_provenance_reasons(metal, manifest_head, repo_root)
-    artifact_bound = metal.get("artifact_bound_to_candidate_head") is True and not artifact_reasons
-    promotion_verdict = document.get("promotion", {}).get("verdict") if isinstance(document.get("promotion"), Mapping) else None
+    artifact_bound = (
+        metal.get("artifact_bound_to_candidate_head") is True and not artifact_reasons
+    )
+    promotion_verdict = (
+        document.get("promotion", {}).get("verdict")
+        if isinstance(document.get("promotion"), Mapping)
+        else None
+    )
 
     reasons: list[str] = []
     reasons.extend(identity_reasons)
