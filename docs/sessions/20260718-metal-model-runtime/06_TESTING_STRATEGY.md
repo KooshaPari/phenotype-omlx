@@ -178,6 +178,15 @@ Langfuse placeholders, the runner must exit `2`, name the conflict-marker failur
 or Harbor invocation; it is a shell fixture only and does not start a model, container, Harbor,
 or Qwen3.5 workload.
 
+### Trusted Harbor Envelope v1 consumer regression (2026-08-05)
+
+`evals/harbor/interchange/test_trusted.py` uses only a deterministic in-memory Ed25519 fixture.
+It proves acceptance of a canonical, policy-bound Qwen3.5 envelope and rejection of unsigned
+input, unknown fields, altered payload digest, an unknown signer, Qwen2.5, mismatched
+Harbor/Langfuse identifiers, and a non-exact context contract. These tests exercise a future
+upstream issuer interface; they do not create a real issuer, make local evidence trusted, or run
+Harbor, MLX, Metal, containers, or Qwen3.5.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.

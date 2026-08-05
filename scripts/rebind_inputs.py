@@ -58,6 +58,8 @@ def _read_regular_bytes(path: Path, label: str) -> bytes:
 
 
 def _repository_relative_bytes(repo_root: Path, relative_path: Path, label: str) -> bytes:
+    if os.name != "posix":
+        raise CandidateRebindError(f"{label} repository-relative reads unsupported on this platform")
     nofollow = getattr(os, "O_NOFOLLOW", 0)
     root_nofollow = getattr(os, "O_NOFOLLOW_ANY", nofollow)
     directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | root_nofollow
