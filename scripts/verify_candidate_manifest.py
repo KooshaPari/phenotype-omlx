@@ -19,6 +19,7 @@ from typing import Any, Mapping
 
 
 SCHEMA_VERSION = "pheno.candidate-manifest-review.v1"
+MANIFEST_SCHEMA_VERSION = "0.1"
 _SHA256_LENGTH = 64
 _COMMIT_LENGTH = 40
 
@@ -114,6 +115,59 @@ def _git_head(repo_root: Path) -> str:
     return head
 
 
+def _git_branch(repo_root: Path) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo_root), "branch", "--show-current"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise CandidateManifestError("cannot read repository branch") from exc
+    branch = completed.stdout.strip()
+    if not branch:
+        raise CandidateManifestError("repository branch is detached or empty")
+    return branch
+
+
+def _metal_provenance_reasons(
+    metal: Mapping[str, Any], candidate_head: Any, repo_root: Path
+) -> list[str]:
+    reasons: list[str] = []
+    if metal.get("candidate_source_head") != candidate_head:
+        reasons.append("Metal artifact candidate source head does not match candidate")
+    artifact_path = metal.get("artifact")
+    if not isinstance(artifact_path, str) or not artifact_path:
+        return ["Metal artifact provenance path is missing"]
+    relative = Path(artifact_path)
+    if relative.is_absolute() or ".." in relative.parts:
+        return ["Metal artifact provenance path must be repository-relative"]
+    try:
+        artifact = _load_manifest(repo_root / relative)
+    except CandidateManifestError:
+        return ["Metal artifact provenance cannot be read"]
+    if artifact.get("schema_version") != "pheno.metal-compile-provenance.v1":
+        reasons.append("Metal artifact provenance schema is unsupported")
+    if artifact.get("candidate_source_head") != candidate_head:
+        reasons.append("Metal artifact candidate source head does not match candidate")
+    artifact_commit = metal.get("artifact_commit")
+    if artifact.get("build_checkout_head") != artifact_commit:
+        reasons.append("Metal artifact build checkout head does not match manifest")
+    if artifact.get("build_checkout_head") != metal.get("head"):
+        reasons.append("Metal artifact build checkout head does not match build head")
+    if artifact.get("metallib_sha256") != metal.get("metallib_sha256"):
+        reasons.append("Metal artifact metallib digest does not match manifest")
+    if artifact.get("build_log_sha256") != metal.get("build_log_sha256"):
+        reasons.append("Metal artifact build-log digest does not match manifest")
+    if artifact.get("shader_count") != metal.get("shader_count"):
+        reasons.append("Metal artifact shader count does not match manifest")
+    if artifact.get("source_head_compatible") is not True:
+        reasons.append("Metal artifact does not declare source-head compatibility")
+    return reasons
+
+
 def _source_head_compatibility(
     manifest_head: Any,
     current_head: str,
@@ -167,6 +221,9 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
 
     document = _load_manifest(manifest_path)
     current_head = _git_head(repo_root)
+    current_branch = _git_branch(repo_root)
+    if document.get("schema_version") != MANIFEST_SCHEMA_VERSION:
+        raise CandidateManifestError("unsupported candidate manifest schema_version")
     candidate = document.get("candidate")
     verification = document.get("verification")
     metal = verification.get("metal_compile_provenance", {}) if isinstance(verification, Mapping) else {}
@@ -174,6 +231,12 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
         raise CandidateManifestError("manifest candidate and verification objects are required")
     if not isinstance(metal, Mapping):
         raise CandidateManifestError("metal_compile_provenance must be an object")
+
+    identity_reasons: list[str] = []
+    if candidate.get("repository") != repo_root.name:
+        identity_reasons.append("candidate repository does not match repository root")
+    if candidate.get("branch") != current_branch:
+        identity_reasons.append("candidate branch does not match repository branch")
 
     manifest_head = candidate.get("head")
     exact_head = manifest_head == current_head
@@ -197,10 +260,13 @@ def verify_candidate(manifest_path: Path, repo_root: Path) -> dict[str, Any]:
 
     workload_executed = verification.get("workload_executed") is True
     evidence_complete = candidate.get("evidence_complete") is True
-    artifact_bound = metal.get("artifact_bound_to_candidate_head") is True
+    artifact_reasons = _metal_provenance_reasons(metal, manifest_head, repo_root)
+    artifact_bound = metal.get("artifact_bound_to_candidate_head") is True and not artifact_reasons
     promotion_verdict = document.get("promotion", {}).get("verdict") if isinstance(document.get("promotion"), Mapping) else None
 
     reasons: list[str] = []
+    reasons.extend(identity_reasons)
+    reasons.extend(artifact_reasons)
     if not integrity_valid:
         reasons.append("manifest canonical SHA-256 does not match")
     if not source_head_compatible:
