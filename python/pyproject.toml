@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "phenotype-omlx research stack: MLX, TurboQuant+, SSD, JetSpec, LatentMAS, TiDAR"
 requires-python = ">=3.11"
 dependencies = [
+    "cryptography>=42",
     "mlx>=0.31",
     # 0.31.3 initializes a thread-local MLX stream in the HTTP server's
     # generation worker. Earlier releases can crash Harbor/NIAH requests with
