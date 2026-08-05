@@ -9,6 +9,11 @@ Update 2026-08-05: the no-model Qwen3.5 snapshot verifier now rejects symlinked 
 snapshot revisions, snapshot-root escapes, and symlinked snapshot directories. This protects the
 integrity preflight from following a tampered cached `refs/main` outside the intended repository.
 
+Update 2026-08-05: Python promotion now rejects synthetic evidence and evidence whose
+`source_revision` does not exactly match the candidate record. This aligns the CLI with the Rust
+production evaluator and prevents `promote --gates ...` from signing a record without benchmark
+provenance. Promotion tests pass 28/28.
+
 | Priority | Area | Evidence and required resolution |
 |---|---|---|
 | P0 | eval-harness | RESOLVED (commit 2fafb76): ownership-safe ABI, deterministic suite ordering, GPQA/MMLU flexible readers, sentinel-preserved decode contract. 49 tests pass. |

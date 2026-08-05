@@ -54,6 +54,8 @@ tests. Baselines are keyed by hardware, OS, compiler, model, plan, and source re
 - These are host/reference tests only; no Metal device, MLX, Harbor, or Qwen3.5 workload ran.
 - Snapshot integrity tests: 5 passed, including cached-ref traversal rejection; this gate remains
   filesystem-only and does not download or load model weights.
+- Promotion governance tests: 28 passed, including synthetic-evidence rejection and candidate /
+  evidence source-revision parity.
 
 - `model-kernels` MLA and MLA-cache unit tests: 7 passed.
 - Metal DeltaNet, Zaya CCA, and MLA-cache parity tests: 1 passed each with their pinned

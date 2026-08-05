@@ -377,6 +377,21 @@ def validate(record: dict[str, Any]) -> None:
                 threshold=float(gate["threshold"]),
                 direction=gate["direction"],
             )
+        source_revision = record.get("source_revision")
+        evidence_revision = ev.get("source_revision")
+        if not isinstance(source_revision, str) or not source_revision.strip():
+            raise PromotionError("missing_source_revision", gate=gid)
+        if not isinstance(evidence_revision, str) or not evidence_revision.strip():
+            raise PromotionError("missing_evidence_source_revision", gate=gid)
+        if source_revision.startswith("synthetic-") or source_revision.startswith("synthetic@"):
+            raise PromotionError("synthetic_evidence", gate=gid)
+        if evidence_revision != source_revision:
+            raise PromotionError(
+                "evidence_source_mismatch",
+                gate=gid,
+                record_source_revision=source_revision,
+                evidence_source_revision=evidence_revision,
+            )
     return None
 
 
