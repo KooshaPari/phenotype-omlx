@@ -108,7 +108,7 @@ def _envelope() -> dict:
             "artifacts": [
                 {
                     "uri": "harbor://artifacts/job-0001/trial-0001/result.json",
-                    "sha256": "1" * 64,
+                    "sha256": "d" * 64,
                     "byte_count": 128,
                 }
             ],
@@ -148,6 +148,7 @@ def test_rejects_unknown_field_even_when_signed() -> None:
 def test_rejects_tampered_signed_payload() -> None:
     document = _envelope()
     document["harbor"]["result_sha256"] = "0" * 64
+    document["artifacts"][0]["sha256"] = "0" * 64
 
     with pytest.raises(TrustedHarborEnvelopeError, match="signed payload SHA-256"):
         verify_envelope(document, _policy())
