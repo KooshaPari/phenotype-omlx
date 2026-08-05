@@ -229,3 +229,5 @@ the current verifier/rebind regression count is 29 passing tests.
 `scripts/tests/test_harbor_execution_window.sh` now covers a clean Portage fixture with
 `--preflight --policy` and asserts that the runner reports readiness without invoking either the
 fake `uv` Harbor command or Apple Container. The test remains filesystem-only.
+It also exercises `--preflight --niah-8192` and asserts `context=8192` without starting a server
+or making a network request.

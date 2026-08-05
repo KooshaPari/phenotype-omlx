@@ -152,18 +152,6 @@ if [[ "$OPENAI_MODEL" != "$OMLX_READY_MODEL" ]]; then
   exit 2
 fi
 
-if [[ "$PREFLIGHT" -eq 1 ]]; then
-  echo "preflight ok: env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL window=$PHENO_EXECUTION_WINDOW_ID"
-  echo "preflight only: Apple Container and Harbor were not invoked"
-  exit 0
-fi
-
-# Apple Container's apiserver is an explicit user service, not a daemon that
-# Harbor may assume is present. Start/verify it before creating any trials so
-# XPC failures are diagnosed at the boundary.
-source "$ROOT/scripts/evals/apple_container_preflight.sh"
-ensure_apple_container_service
-
 AGENT_ENV_ARGS=(--ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}")
 if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
   AGENT_ENV_ARGS+=(
@@ -177,6 +165,22 @@ if [[ "$MODE" == "niah_8192" ]]; then
   export NIAH_CONTEXT_TOKENS=8192
   AGENT_ENV_ARGS+=(--ae "NIAH_CONTEXT_TOKENS=8192")
 fi
+
+if [[ "$PREFLIGHT" -eq 1 ]]; then
+  context="default"
+  if [[ "$MODE" == "niah_8192" ]]; then
+    context="$NIAH_CONTEXT_TOKENS"
+  fi
+  echo "preflight ok: env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL context=$context window=$PHENO_EXECUTION_WINDOW_ID"
+  echo "preflight only: Apple Container and Harbor were not invoked"
+  exit 0
+fi
+
+# Apple Container's apiserver is an explicit user service, not a daemon that
+# Harbor may assume is present. Start/verify it before creating any trials so
+# XPC failures are diagnosed at the boundary.
+source "$ROOT/scripts/evals/apple_container_preflight.sh"
+ensure_apple_container_service
 
 cd "$PORTAGE_ROOT"
 echo "harbor env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL out=$OUT"
