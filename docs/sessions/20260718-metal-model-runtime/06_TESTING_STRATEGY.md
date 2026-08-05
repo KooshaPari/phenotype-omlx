@@ -225,3 +225,7 @@ The focused Python verifier/rebind suites are invoked from the repository root w
 `PYTHONPATH=. uv run pytest ...`; invoking them without that path fails at collection because
 the repository's `scripts/` namespace is not installed as a package. With the explicit path,
 the current verifier/rebind regression count is 29 passing tests.
+
+`scripts/tests/test_harbor_execution_window.sh` now covers a clean Portage fixture with
+`--preflight --policy` and asserts that the runner reports readiness without invoking either the
+fake `uv` Harbor command or Apple Container. The test remains filesystem-only.

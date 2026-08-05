@@ -412,3 +412,8 @@ for `k=5,n=3`, the host stream is 4 bytes while the Metal stream is 6 bytes. The
 tests previously used a private output-major helper, so they did not prove host-to-device
 conformance. A checked host repack helper and an explicit Metal entry point now make the boundary
 visible; the raw Metal API remains for callers that already hold canonical device bytes.
+
+The Harbor launcher now supports `--preflight` as a non-executing readiness check. It validates
+the window, Portage Git root, Langfuse plugin presence, task selection, and exact Qwen3.5 model
+binding, then exits before Apple Container or Harbor invocation. This creates a reproducible final
+operator check without turning a preflight into workload evidence.
