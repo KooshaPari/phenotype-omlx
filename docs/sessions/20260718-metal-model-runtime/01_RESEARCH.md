@@ -382,3 +382,8 @@ interchange loader's permissive path read. It opens the candidate envelope once 
 semantics, requires a regular file after descriptor inspection, decodes UTF-8, rejects duplicate
 keys and non-finite JSON constants, then verifies that same in-memory document. This closes a
 path-substitution and parser-ambiguity gap without claiming that local bytes are issuer-attested.
+
+The trusted policy also binds `run.candidate_repo`, `run.branch`, and `run.source_head` to the
+consumer's expected current candidate. A valid issuer signature over an older checkout is now
+rejected as stale evidence instead of being accepted merely because its model and task fields
+match.

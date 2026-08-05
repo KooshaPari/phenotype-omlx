@@ -35,6 +35,9 @@ class TrustedHarborPolicy:
     expected_task_id: str
     expected_environment: str
     expected_context_tokens: int
+    expected_candidate_repo: str
+    expected_branch: str
+    expected_source_head: str
 
 
 @dataclass(frozen=True)
@@ -244,9 +247,15 @@ def _validate_policy(
         raise TrustedHarborEnvelopeError("model does not match exact Qwen3.5 policy")
     if run["model_config_sha256"] != policy.expected_model_config_sha256:
         raise TrustedHarborEnvelopeError("model configuration digest does not match policy")
-    _require_digest(run["source_head"], "run.source_head", length=40)
-    _require_string(run["candidate_repo"], "run.candidate_repo")
-    _require_string(run["branch"], "run.branch")
+    source_head = _require_digest(run["source_head"], "run.source_head", length=40)
+    candidate_repo = _require_string(run["candidate_repo"], "run.candidate_repo")
+    branch = _require_string(run["branch"], "run.branch")
+    if candidate_repo != policy.expected_candidate_repo:
+        raise TrustedHarborEnvelopeError("candidate repository does not match policy")
+    if branch != policy.expected_branch:
+        raise TrustedHarborEnvelopeError("branch does not match policy")
+    if source_head != policy.expected_source_head:
+        raise TrustedHarborEnvelopeError("source head does not match policy")
     if _require_timestamp(run["finished_at"], "run.finished_at") < _require_timestamp(
         run["started_at"], "run.started_at"
     ):
