@@ -60,6 +60,34 @@ fi
 grep -q 'PHENO_EXECUTION_WINDOW_ID' "${TEST_ROOT}/malformed.err"
 [[ ! -s "${CALL_LOG}" ]]
 
+CONFLICTED_PORTAGE="${TEST_ROOT}/conflicted-portage"
+mkdir -p "${CONFLICTED_PORTAGE}/packages/harbor-langfuse/src"
+git -C "${CONFLICTED_PORTAGE}" init -q
+git -C "${CONFLICTED_PORTAGE}" config user.email 'fixture@example.invalid'
+git -C "${CONFLICTED_PORTAGE}" config user.name 'Harbor fixture'
+printf '%s\n' '<<<<<<< HEAD' 'fixture conflict' '=======' 'other fixture' '>>>>>>> topic' \
+  >"${CONFLICTED_PORTAGE}/source.txt"
+git -C "${CONFLICTED_PORTAGE}" add source.txt
+git -C "${CONFLICTED_PORTAGE}" commit -qm 'fixture source with conflict marker'
+
+set +e
+PHENO_EXECUTION_WINDOW_ID='window-1234' \
+  PORTAGE_ROOT="${CONFLICTED_PORTAGE}" \
+  LANGFUSE_PUBLIC_KEY=public \
+  LANGFUSE_SECRET_KEY=secret \
+  bash "${RUNNER}" --policy >"${TEST_ROOT}/conflicted.out" 2>"${TEST_ROOT}/conflicted.err"
+conflicted_rc=$?
+set -e
+
+if [[ "${conflicted_rc}" -ne 2 ]]; then
+  cat "${TEST_ROOT}/conflicted.err" >&2
+  printf '[test_harbor_execution_window] expected conflict-marker exit 2, got %s\n' \
+    "${conflicted_rc}" >&2
+  exit 1
+fi
+grep -q 'conflict marker' "${TEST_ROOT}/conflicted.err"
+[[ ! -s "${CALL_LOG}" ]]
+
 grep -q 'Qwen2\.5' "${RUNNER}"
 grep -q 'OPENAI_MODEL' "${RUNNER}"
 
