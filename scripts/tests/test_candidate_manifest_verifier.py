@@ -41,7 +41,10 @@ def test_current_manifest_is_blocked_when_production_paths_drift() -> None:
     assert report["workload_executed"] is False
     assert report["promotable"] is False
     assert report["status"] == "blocked"
-    assert "candidate source head is not compatible with current repository HEAD" in report["reasons"]
+    assert (
+        "candidate source head is not compatible with current repository HEAD"
+        in report["reasons"]
+    )
     assert "candidate has no executed workload evidence" in report["reasons"]
 
 
