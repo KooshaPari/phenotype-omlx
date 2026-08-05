@@ -344,3 +344,10 @@ replacement. This is local provenance hardening only; it does not create workloa
 The authorization sidecar must additionally name the same `window_id` as the Harbor envelope.
 This matches the canonical Harbor authorization record without inventing a separate `approved`
 flag or treating a window marker as proof that a workload ran.
+
+Repository-relative descriptor reads are now anchored at an opened repository-root descriptor.
+The root requests `O_NOFOLLOW_ANY` where the platform exposes it, while every relative component
+is opened with `O_NOFOLLOW` from the already-open parent descriptor; the terminal descriptor must
+be a regular file. This rejects root, leaf, and intermediate symlink traversal without resolving
+and reopening a string path. It does not address the separate Git-root identity TOCTOU between
+repository discovery and Git metadata checks.

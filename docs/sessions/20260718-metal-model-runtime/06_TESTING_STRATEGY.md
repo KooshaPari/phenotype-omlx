@@ -163,6 +163,12 @@ Authorization-sidecar coverage also rejects a valid, content-addressed sidecar w
 does not equal the envelope's window marker. This guards against combining unrelated authorization
 and run records while keeping execution evidence and authorization distinct.
 
+The descriptor regression matrix rejects a symlinked repository root and an intermediate
+directory symlink on an artifact path, in addition to the direct artifact-symlink case. It
+exercises descriptor-anchored no-follow traversal only; it does not claim coverage of the
+separate Git-root identity TOCTOU. These tests remain fixture-only and do not start Harbor, MLX,
+Metal, or Qwen3.5.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.

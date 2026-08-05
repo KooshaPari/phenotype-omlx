@@ -58,8 +58,9 @@ def _read_regular_bytes(path: Path, label: str) -> bytes:
 
 
 def _repository_relative_bytes(repo_root: Path, relative_path: Path, label: str) -> bytes:
-    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
     nofollow = getattr(os, "O_NOFOLLOW", 0)
+    root_nofollow = getattr(os, "O_NOFOLLOW_ANY", nofollow)
+    directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | root_nofollow
     descriptor = -1
     try:
         descriptor = os.open(repo_root, directory_flags)
@@ -89,6 +90,10 @@ def load_json_snapshot(path: Path, label: str) -> InputSnapshot:
     """Read a regular JSON file once so later replacement cannot alter the record."""
 
     raw = _read_regular_bytes(path, label)
+    return _json_snapshot_from_bytes(path, raw, label)
+
+
+def _json_snapshot_from_bytes(path: Path, raw: bytes, label: str) -> InputSnapshot:
     try:
         document = json.loads(
             raw.decode("utf-8"),
@@ -127,10 +132,10 @@ def is_sha256(value: Any) -> bool:
     )
 
 
-def repository_file_descriptor(
-    repo_root: Path, item: Mapping[str, Any], label: str
-) -> dict[str, str]:
-    """Validate a repository-local regular file and preserve its declared digest."""
+def _repository_descriptor_parts(
+    item: Mapping[str, Any], label: str
+) -> tuple[str, Path, str]:
+    """Validate descriptor metadata before opening a repository-relative file."""
 
     raw_path = item.get("path")
     if not isinstance(raw_path, str) or not raw_path:
@@ -143,6 +148,28 @@ def repository_file_descriptor(
     declared_digest = item.get("sha256")
     if not is_sha256(declared_digest):
         raise CandidateRebindError(f"{label} sha256 must be a lowercase SHA-256")
+    return raw_path, relative_path, declared_digest
+
+
+def load_repository_json_snapshot(
+    repo_root: Path, item: Mapping[str, Any], label: str
+) -> InputSnapshot:
+    """Load descriptor-safe repository JSON from the same bytes used for its digest."""
+
+    raw_path, relative_path, declared_digest = _repository_descriptor_parts(item, label)
+    raw = _repository_relative_bytes(repo_root, relative_path, label)
+    snapshot = _json_snapshot_from_bytes(repo_root / relative_path, raw, label)
+    if snapshot.sha256 != declared_digest:
+        raise CandidateRebindError(f"{label} {raw_path} SHA-256 does not match")
+    return snapshot
+
+
+def repository_file_descriptor(
+    repo_root: Path, item: Mapping[str, Any], label: str
+) -> dict[str, str]:
+    """Validate a repository-local regular file and preserve its declared digest."""
+
+    raw_path, relative_path, declared_digest = _repository_descriptor_parts(item, label)
     actual_digest = hashlib.sha256(
         _repository_relative_bytes(repo_root, relative_path, label)
     ).hexdigest()

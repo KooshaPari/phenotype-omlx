@@ -13,7 +13,11 @@ import subprocess
 from typing import Any, Mapping
 
 from scripts.rebind_inputs import CandidateRebindError, InputSnapshot, canonical_digest, is_sha256
-from scripts.rebind_inputs import load_json_snapshot, repository_file_descriptor
+from scripts.rebind_inputs import (
+    load_json_snapshot,
+    load_repository_json_snapshot,
+    repository_file_descriptor,
+)
 
 
 SCHEMA_VERSION = "pheno.candidate-rebind-review.v1"
@@ -163,7 +167,7 @@ def _validate_evidence(
     authorization = _mapping(document.get("authorization"), "evidence authorization")
     if not isinstance(authorization.get("window_id"), str) or not authorization["window_id"]:
         raise CandidateRebindError("evidence authorization window_id must be non-empty")
-    sidecar = repository_file_descriptor(
+    sidecar_snapshot = load_repository_json_snapshot(
         repo_root,
         {
             "path": authorization.get("sidecar_path"),
@@ -171,20 +175,14 @@ def _validate_evidence(
         },
         "evidence authorization sidecar",
     )
-    sidecar_snapshot = load_json_snapshot(
-        repo_root / sidecar["path"], "evidence authorization sidecar"
-    )
-    if sidecar_snapshot.sha256 != sidecar["sha256"]:
-        raise CandidateRebindError("evidence authorization sidecar SHA-256 does not match")
+    sidecar = {
+        "path": authorization["sidecar_path"],
+        "sha256": sidecar_snapshot.sha256,
+    }
     _require_exact(
         sidecar_snapshot.document.get("window_id"),
         authorization["window_id"],
         "evidence authorization sidecar window_id",
-    )
-    _require_boolean(
-        sidecar_snapshot.document.get("approved"),
-        True,
-        "evidence authorization sidecar approved",
     )
 
     artifacts = document.get("artifacts")
