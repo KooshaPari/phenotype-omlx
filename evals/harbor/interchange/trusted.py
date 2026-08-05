@@ -19,9 +19,12 @@ from typing import Any, Mapping
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-
-class TrustedHarborEnvelopeError(ValueError):
-    """Raised when an envelope fails structural, policy, or signature checks."""
+from .trusted_uri import (
+    TrustedHarborEnvelopeError,
+    require_exact_harbor_result_uri as _require_exact_harbor_result_uri,
+    require_harbor_artifact_uri as _require_harbor_artifact_uri,
+    require_harbor_uri as _require_harbor_uri,
+)
 
 
 @dataclass(frozen=True)
@@ -188,30 +191,6 @@ def _require_digest(value: Any, name: str, length: int = 64) -> str:
     if len(digest) != length or any(character not in "0123456789abcdef" for character in digest):
         raise TrustedHarborEnvelopeError(f"{name} must be a lowercase {length}-hex digest")
     return digest
-
-
-def _require_harbor_uri(value: Any, name: str) -> str:
-    uri = _require_string(value, name)
-    if not uri.startswith("harbor://"):
-        raise TrustedHarborEnvelopeError(f"{name} must use an immutable harbor:// URI")
-    return uri
-
-
-def _require_exact_harbor_result_uri(value: Any, job_id: str, trial_id: str) -> str:
-    uri = _require_harbor_uri(value, "harbor.immutable_result_uri")
-    expected = f"harbor://results/{job_id}/{trial_id}"
-    if uri != expected:
-        raise TrustedHarborEnvelopeError("Harbor result URI does not exactly bind its job and trial")
-    return uri
-
-
-def _require_harbor_artifact_uri(value: Any, job_id: str, trial_id: str) -> str:
-    uri = _require_harbor_uri(value, "artifact.uri")
-    prefix = f"harbor://artifacts/{job_id}/{trial_id}/"
-    artifact_name = uri.removeprefix(prefix)
-    if not uri.startswith(prefix) or not artifact_name or any(char in artifact_name for char in "/?#"):
-        raise TrustedHarborEnvelopeError("artifact URI does not exactly bind its Harbor job and trial")
-    return uri
 
 
 def _require_timestamp(value: Any, name: str) -> datetime:
