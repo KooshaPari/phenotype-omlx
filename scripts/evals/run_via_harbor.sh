@@ -84,6 +84,17 @@ if [[ ! -d "$PORTAGE_ROOT/packages/harbor-langfuse/src" ]]; then
   echo "  Fix Portage — LangSmith is not an allowed fallback." >&2
   exit 2
 fi
+# Harbor execution depends on the checked-out Portage source. Reject a path
+# that cannot identify a committed revision, or one whose tracked revision
+# still contains merge-conflict markers, before contacting Apple Container.
+if ! git -C "$PORTAGE_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
+  echo "ERROR: PORTAGE_ROOT must be a Git checkout with a valid HEAD." >&2
+  exit 2
+fi
+if git -C "$PORTAGE_ROOT" grep -I -q -E '^(<<<<<<<|=======|>>>>>>>)' HEAD -- .; then
+  echo "ERROR: PORTAGE_ROOT tracked HEAD contains an unresolved conflict marker." >&2
+  exit 2
+fi
 # Apple Container's apiserver is an explicit user service, not a daemon that
 # Harbor may assume is present. Start/verify it before creating any trials so
 # XPC failures are diagnosed at the boundary.
