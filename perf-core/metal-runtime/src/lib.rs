@@ -97,6 +97,7 @@ pub use diffusion_dispatch_metal::{validate_diffusion_threshold, DiffusionDispat
 pub use diffusion_parity::{compare_f32, compare_u32, compare_u8, DiffusionParityError};
 pub use diffusion_self_verify::{
     DiffusionSelfVerifyError, DiffusionVerificationBlock, DiffusionVerificationPlan,
+    DiffusionVerificationSession,
 };
 pub use diffusion_state::{DiffusionStateLayout, DiffusionStateLayoutError};
 pub use diffusion_telemetry::{

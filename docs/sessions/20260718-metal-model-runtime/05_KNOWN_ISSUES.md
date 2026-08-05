@@ -1,5 +1,10 @@
 # Known Issues
 
+Update 2026-08-05: host diffusion self-verification now exposes
+`DiffusionVerificationSession`, which rejects duplicate planned blocks and rejects incomplete
+coverage at `finish()`. The stateless plan primitive remains available for individual block
+checks. This closes a host-contract gap; it is not Metal device execution or Qwen3.5 evidence.
+
 | Priority | Area | Evidence and required resolution |
 |---|---|---|
 | P0 | eval-harness | RESOLVED (commit 2fafb76): ownership-safe ABI, deterministic suite ordering, GPQA/MMLU flexible readers, sentinel-preserved decode contract. 49 tests pass. |

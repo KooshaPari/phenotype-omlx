@@ -32,7 +32,17 @@ pub enum DiffusionSelfVerifyError {
     ZeroTokens,
     ZeroBlockSize,
     ZeroBlockBudget,
-    BlockBudgetExceeded { required: usize, max: usize },
+    BlockBudgetExceeded {
+        required: usize,
+        max: usize,
+    },
+    DuplicateBlock {
+        start: usize,
+        end: usize,
+    },
+    IncompleteCoverage {
+        missing: Vec<DiffusionVerificationBlock>,
+    },
     Parity(DiffusionParityError),
 }
 
@@ -46,6 +56,19 @@ impl fmt::Display for DiffusionSelfVerifyError {
                 write!(
                     f,
                     "self-verification requires {required} blocks, budget is {max}"
+                )
+            }
+            Self::DuplicateBlock { start, end } => {
+                write!(
+                    f,
+                    "self-verification block {start}..{end} was verified twice"
+                )
+            }
+            Self::IncompleteCoverage { missing } => {
+                write!(
+                    f,
+                    "self-verification is missing {} planned blocks",
+                    missing.len()
                 )
             }
             Self::Parity(error) => error.fmt(f),
@@ -134,6 +157,75 @@ impl DiffusionVerificationPlan {
     }
 }
 
+/// Stateful host-side coverage guard for a complete block verification run.
+///
+/// `DiffusionVerificationPlan::verify_f32_block` remains a stateless primitive. Callers that
+/// consume independently returned blocks should use this session so a duplicate block cannot
+/// stand in for an omitted tail or middle block.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffusionVerificationSession {
+    plan: DiffusionVerificationPlan,
+    verified: Vec<bool>,
+}
+
+impl DiffusionVerificationSession {
+    pub fn new(plan: DiffusionVerificationPlan) -> Self {
+        let verified = vec![false; plan.blocks.len()];
+        Self { plan, verified }
+    }
+
+    pub const fn plan(&self) -> &DiffusionVerificationPlan {
+        &self.plan
+    }
+
+    pub fn verify_f32_block(
+        &mut self,
+        block: DiffusionVerificationBlock,
+        expected: &[f32],
+        actual: &[f32],
+        tolerance: f32,
+    ) -> Result<(), DiffusionSelfVerifyError> {
+        let index = self
+            .plan
+            .blocks
+            .iter()
+            .position(|planned| *planned == block)
+            .ok_or_else(|| {
+                DiffusionSelfVerifyError::Parity(DiffusionParityError::Value {
+                    what: "verification block",
+                    index: 0,
+                    expected: "planned block".into(),
+                    got: format!("{}..{}", block.start, block.end),
+                })
+            })?;
+        if self.verified[index] {
+            return Err(DiffusionSelfVerifyError::DuplicateBlock {
+                start: block.start,
+                end: block.end,
+            });
+        }
+        self.plan
+            .verify_f32_block(block, expected, actual, tolerance)?;
+        self.verified[index] = true;
+        Ok(())
+    }
+
+    pub fn finish(self) -> Result<(), DiffusionSelfVerifyError> {
+        let missing = self
+            .plan
+            .blocks
+            .iter()
+            .zip(self.verified)
+            .filter_map(|(block, verified)| (!verified).then_some(*block))
+            .collect::<Vec<_>>();
+        if missing.is_empty() {
+            Ok(())
+        } else {
+            Err(DiffusionSelfVerifyError::IncompleteCoverage { missing })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -174,5 +266,65 @@ mod tests {
             .unwrap_err();
         plan.verify_f32_block(block, &[0.1, 0.2, 0.3, 0.4], &[0.1, 0.2, 0.3, 0.4], 1e-5)
             .unwrap();
+    }
+
+    #[test]
+    fn coverage_session_rejects_duplicate_blocks() {
+        let plan = DiffusionVerificationPlan::for_tokens(8, 4, 2).unwrap();
+        let block = plan.blocks[0];
+        let mut session = DiffusionVerificationSession::new(plan);
+        session
+            .verify_f32_block(block, &[0.1, 0.2, 0.3, 0.4], &[0.1, 0.2, 0.3, 0.4], 1e-5)
+            .unwrap();
+        assert_eq!(
+            session.verify_f32_block(block, &[0.1, 0.2, 0.3, 0.4], &[0.1, 0.2, 0.3, 0.4], 1e-5),
+            Err(DiffusionSelfVerifyError::DuplicateBlock { start: 0, end: 4 })
+        );
+    }
+
+    #[test]
+    fn coverage_session_rejects_missing_tail_on_finish() {
+        let plan = DiffusionVerificationPlan::for_tokens(10, 4, 3).unwrap();
+        let mut session = DiffusionVerificationSession::new(plan);
+        let block = session.plan().blocks[0];
+        session
+            .verify_f32_block(block, &[0.0; 4], &[0.0; 4], 1e-5)
+            .unwrap();
+        assert_eq!(
+            session.finish(),
+            Err(DiffusionSelfVerifyError::IncompleteCoverage {
+                missing: vec![
+                    DiffusionVerificationBlock { start: 4, end: 8 },
+                    DiffusionVerificationBlock { start: 8, end: 10 }
+                ]
+            })
+        );
+    }
+
+    #[test]
+    fn coverage_session_finishes_only_after_all_blocks_pass() {
+        let plan = DiffusionVerificationPlan::for_tokens(6, 4, 2).unwrap();
+        let mut session = DiffusionVerificationSession::new(plan);
+        for block in session.plan().blocks.clone() {
+            let len = block.len();
+            session
+                .verify_f32_block(block, &vec![0.0; len], &vec![0.0; len], 1e-5)
+                .unwrap();
+        }
+        session.finish().unwrap();
+    }
+
+    #[test]
+    fn failed_parity_does_not_consume_block() {
+        let plan = DiffusionVerificationPlan::for_tokens(4, 4, 1).unwrap();
+        let block = plan.blocks[0];
+        let mut session = DiffusionVerificationSession::new(plan);
+        assert!(session
+            .verify_f32_block(block, &[0.0; 4], &[1.0, 0.0, 0.0, 0.0], 1e-5)
+            .is_err());
+        session
+            .verify_f32_block(block, &[0.0; 4], &[0.0; 4], 1e-5)
+            .unwrap();
+        session.finish().unwrap();
     }
 }

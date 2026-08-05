@@ -3,6 +3,8 @@
 ## Correctness Layers
 
 1. Domain tests validate plans, state transitions, shape rules, serialization, and rejection.
+   Diffusion block verification uses a stateful coverage session to reject duplicate blocks and
+   missing tails before any device-bound result can be accepted.
 2. Reference-oracle tests compare every optimized kernel across edge and randomized dimensions.
 3. ABI tests exercise ownership, capacity, failure cleanup, nullability, concurrency, and versioning.
 4. Model conformance tests execute representative layers and short end-to-end generations.
@@ -42,6 +44,14 @@ tests. Baselines are keyed by hardware, OS, compiler, model, plan, and source re
 - No edited module exceeds 500 lines; new modules target 350 lines or fewer.
 
 ## 2026-07-22 Evidence
+
+## 2026-08-05 Host diffusion coverage evidence
+
+- `cargo test -p metal-runtime --lib diffusion_self_verify`: 7 passed, including duplicate-block,
+  incomplete-tail, full-coverage, and failed-parity retry contracts.
+- `cargo test -p metal-runtime --lib diffusion_dispatch_metal`: 5 passed.
+- `cargo test -p model-kernels --lib diffusion`: 39 passed.
+- These are host/reference tests only; no Metal device, MLX, Harbor, or Qwen3.5 workload ran.
 
 - `model-kernels` MLA and MLA-cache unit tests: 7 passed.
 - Metal DeltaNet, Zaya CCA, and MLA-cache parity tests: 1 passed each with their pinned
