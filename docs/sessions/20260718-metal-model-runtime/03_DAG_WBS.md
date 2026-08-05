@@ -297,3 +297,18 @@ This is an evidence correction, not a runtime result; no model or device workloa
 The current-head Metal compile manifest is now present in the candidate record with shader count,
 metallib SHA-256, manifest SHA-256, and `verified_compile_only` status. It must not be promoted to
 device evidence without an authorized bounded execution.
+
+## Evidence-attestation prerequisite (2026-08-05)
+
+    clean Portage Git root
+      -> signed immutable Harbor/Hub envelope from an upstream issuer
+      -> strict OMLX trusted-envelope verification
+      -> current-head Qwen3.5 bounded execution evidence
+      -> independent promotion review
+
+The OMLX verifier and its fixture-only Ed25519 policy are ready to reject malformed or unsigned
+evidence, but Portage/Hub does not yet publish a signer-backed export. The trusted verifier is
+therefore a prerequisite enforcer, not a route around that missing upstream issuer. A future
+window must use a conflict-free Portage root, currently the hygiene candidate
+`worktrees/portage/fix-langsmith-importerror`, and must remain subject to the one-trial overload
+governor.
