@@ -134,7 +134,7 @@ def _git_repository(path: Path) -> Path:
     (path / "tracked.txt").write_text("tracked\n", encoding="utf-8")
     (path / "result.json").write_text('{"fixture":true}\n', encoding="utf-8")
     (path / "authorization.json").write_text(
-        '{"window_id":"window-fixture-123","approved":true}\n', encoding="utf-8"
+        '{"window_id":"window-fixture-123"}\n', encoding="utf-8"
     )
     config = path / "config"
     config.mkdir()
@@ -180,6 +180,27 @@ def test_prepares_review_only_record_from_current_head_evidence(tmp_path: Path) 
     assert record["promotion"]["verdict"] == "review_required"
     assert record["promotion"]["promotable"] is False
     assert record["integrity"]["canonical_sha256"]
+
+
+def test_parses_authorization_sidecar_from_descriptor_safe_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = _git_repository(tmp_path / "repo")
+    head = _head_for(repo)
+    evidence_path = _write_json(tmp_path / "evidence.json", _evidence(head, repo))
+    metal_path = _write_json(tmp_path / "metal.json", _metal(head))
+    generic_loader = rebind.load_json_snapshot
+
+    def reject_generic_sidecar_loader(path: Path, label: str):
+        if label == "evidence authorization sidecar":
+            raise AssertionError("authorization sidecar must not be reopened generically")
+        return generic_loader(path, label)
+
+    monkeypatch.setattr(rebind, "load_json_snapshot", reject_generic_sidecar_loader)
+
+    record = prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
+
+    assert record["evidence"]["authorization_sidecar"]["path"] == "authorization.json"
 
 
 def test_records_validated_evidence_bytes_when_input_is_replaced(
@@ -378,22 +399,6 @@ def test_rejects_mismatched_authorization_sidecar_window(tmp_path: Path) -> None
         prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
 
 
-def test_rejects_unapproved_authorization_sidecar(tmp_path: Path) -> None:
-    repo = _git_repository(tmp_path / "repo")
-    sidecar = repo / "authorization.json"
-    sidecar.write_text(
-        '{"window_id":"window-fixture-123","approved":false}\n', encoding="utf-8"
-    )
-    subprocess.run(["git", "-C", str(repo), "add", "authorization.json"], check=True)
-    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "unapproved sidecar"], check=True)
-    head = _head_for(repo)
-    evidence_path = _write_json(tmp_path / "evidence.json", _evidence(head, repo))
-    metal_path = _write_json(tmp_path / "metal.json", _metal(head))
-
-    with pytest.raises(CandidateRebindError, match="authorization sidecar approved"):
-        prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
-
-
 def test_rejects_in_repo_symlink_artifact(tmp_path: Path) -> None:
     repo = _git_repository(tmp_path / "repo")
     link = repo / "result-link.json"
@@ -411,6 +416,43 @@ def test_rejects_in_repo_symlink_artifact(tmp_path: Path) -> None:
 
     with pytest.raises(CandidateRebindError, match="symlink"):
         prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
+
+
+def test_rejects_intermediate_symlink_artifact_path(tmp_path: Path) -> None:
+    repo = _git_repository(tmp_path / "repo")
+    external_directory = tmp_path / "external-artifacts"
+    external_directory.mkdir()
+    external_result = external_directory / "result.json"
+    external_result.write_text('{"fixture":"outside"}\n', encoding="utf-8")
+    (repo / "artifacts").symlink_to(external_directory, target_is_directory=True)
+    subprocess.run(["git", "-C", str(repo), "add", "artifacts"], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-qm", "tracked-directory-symlink"],
+        check=True,
+    )
+    head = _head_for(repo)
+    evidence = _evidence(head, repo)
+    evidence["artifacts"][0] = {
+        "path": "artifacts/result.json",
+        "sha256": hashlib.sha256(external_result.read_bytes()).hexdigest(),
+    }
+    evidence_path = _write_json(tmp_path / "evidence.json", _with_integrity(evidence))
+    metal_path = _write_json(tmp_path / "metal.json", _metal(head))
+
+    with pytest.raises(CandidateRebindError, match="symlink"):
+        prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
+
+
+def test_rejects_symlinked_repository_root(tmp_path: Path) -> None:
+    repo = _git_repository(tmp_path / "repo")
+    repository_link = tmp_path / "repository-link"
+    repository_link.symlink_to(repo, target_is_directory=True)
+    head = _head_for(repo)
+    evidence_path = _write_json(tmp_path / "evidence.json", _evidence(head, repository_link))
+    metal_path = _write_json(tmp_path / "metal.json", _metal(head))
+
+    with pytest.raises(CandidateRebindError, match="symlink"):
+        prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repository_link)
 
 
 def test_rejects_embedded_nul_artifact_path(tmp_path: Path) -> None:
