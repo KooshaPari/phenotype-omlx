@@ -416,4 +416,5 @@ visible; the raw Metal API remains for callers that already hold canonical devic
 The Harbor launcher now supports `--preflight` as a non-executing readiness check. It validates
 the window, Portage Git root, Langfuse plugin presence, task selection, and exact Qwen3.5 model
 binding, then exits before Apple Container or Harbor invocation. This creates a reproducible final
-operator check without turning a preflight into workload evidence.
+operator check without turning a preflight into workload evidence. For `--niah-8192`, the check
+also constructs the exact `NIAH_CONTEXT_TOKENS=8192` agent binding before exiting.

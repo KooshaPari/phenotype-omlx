@@ -127,6 +127,17 @@ grep -q 'preflight ok' "${TEST_ROOT}/preflight.out"
 grep -q 'were not invoked' "${TEST_ROOT}/preflight.out"
 [[ ! -s "${CALL_LOG}" ]]
 
+PHENO_EXECUTION_WINDOW_ID='window-1234' \
+  PORTAGE_ROOT="${PREFLIGHT_PORTAGE}" \
+  LANGFUSE_PUBLIC_KEY=public \
+  LANGFUSE_SECRET_KEY=secret \
+  OMLX_READY_MODEL='Qwen/Qwen3.5-0.8B' \
+  OPENAI_BASE_URL='http://127.0.0.1:8766/v1' \
+  bash "${RUNNER}" --preflight --niah-8192 >"${TEST_ROOT}/niah-preflight.out" 2>"${TEST_ROOT}/niah-preflight.err"
+grep -q 'mode=niah_8192' "${TEST_ROOT}/niah-preflight.out"
+grep -q 'context=8192' "${TEST_ROOT}/niah-preflight.out"
+[[ ! -s "${CALL_LOG}" ]]
+
 grep -q 'Qwen2\.5' "${RUNNER}"
 grep -q 'OPENAI_MODEL' "${RUNNER}"
 
