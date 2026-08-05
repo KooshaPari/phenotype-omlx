@@ -418,3 +418,7 @@ the window, Portage Git root, Langfuse plugin presence, task selection, and exac
 binding, then exits before Apple Container or Harbor invocation. This creates a reproducible final
 operator check without turning a preflight into workload evidence. For `--niah-8192`, the check
 also constructs the exact `NIAH_CONTEXT_TOKENS=8192` agent binding before exiting.
+
+The NIAH task verifier had a conditional context check that accepted a zero-token result whenever
+the field was falsey. It now requires `requested_context_tokens=8192`, `prompt_tokens=8192`, and
+`context_tokens_exact=true` for reward 1, matching the bounded promotion contract.

@@ -241,3 +241,7 @@ the current verifier/rebind regression count is 29 passing tests.
 fake `uv` Harbor command or Apple Container. The test remains filesystem-only.
 It also exercises `--preflight --niah-8192` and asserts `context=8192` without starting a server
 or making a network request.
+
+`scripts/tests/test_niah_task_contract.sh` runs the verifier against synthetic local result files,
+proving that zero-context output is rejected and exact 8192-token output is accepted. It does not
+create `/app`, `/logs`, contact an endpoint, or execute Harbor.
