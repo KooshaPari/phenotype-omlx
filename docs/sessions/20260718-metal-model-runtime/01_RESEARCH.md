@@ -376,3 +376,9 @@ must bind the Harbor job/trial, while each artifact carries a non-negative byte 
 The in-repository key is a deterministic test fixture only. Until Portage or Hub publishes a real
 issuer/key policy and immutable signed envelope, all actual Harbor output remains untrusted for
 promotion.
+
+The trusted consumer now owns a separate file-ingress boundary rather than inheriting the generic
+interchange loader's permissive path read. It opens the candidate envelope once with no-follow
+semantics, requires a regular file after descriptor inspection, decodes UTF-8, rejects duplicate
+keys and non-finite JSON constants, then verifies that same in-memory document. This closes a
+path-substitution and parser-ambiguity gap without claiming that local bytes are issuer-attested.

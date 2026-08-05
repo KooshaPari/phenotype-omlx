@@ -24,6 +24,7 @@ from .trusted import (
     TrustedHarborEnvelopeError,
     TrustedHarborPolicy,
     VerifiedTrustedHarborEnvelope,
+    load_verified_envelope,
     verify_envelope,
 )
 from .validator import ValidationResult, validate
@@ -48,6 +49,7 @@ __all__ = [
     "ingest_from_dict",
     "ingest_from_file",
     "ingest_report",
+    "load_verified_envelope",
     "load_report",
     "validate",
     "verify_envelope",

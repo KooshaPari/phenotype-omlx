@@ -11,6 +11,9 @@ from dataclasses import dataclass
 from datetime import datetime
 import hashlib
 import json
+import os
+from pathlib import Path
+import stat
 from typing import Any, Mapping
 
 from cryptography.exceptions import InvalidSignature
@@ -108,6 +111,55 @@ def _canonical_json(document: Mapping[str, Any]) -> bytes:
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise TrustedHarborEnvelopeError("envelope is not canonical JSON") from exc
+
+
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    document: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in document:
+            raise TrustedHarborEnvelopeError(f"duplicate JSON key: {key}")
+        document[key] = value
+    return document
+
+
+def _reject_nonfinite(value: str) -> Any:
+    raise TrustedHarborEnvelopeError(f"non-finite JSON constant is not allowed: {value}")
+
+
+def _read_regular_bytes(path: Path) -> bytes:
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise TrustedHarborEnvelopeError("envelope requires no-follow filesystem support")
+    flags = os.O_RDONLY | nofollow
+    try:
+        descriptor = os.open(path, flags)
+    except FileNotFoundError as exc:
+        raise TrustedHarborEnvelopeError("envelope does not exist as a regular file") from exc
+    except OSError as exc:
+        raise TrustedHarborEnvelopeError("envelope must be a regular file") from exc
+    try:
+        with os.fdopen(descriptor, "rb") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise TrustedHarborEnvelopeError("envelope must be a regular file")
+            return handle.read()
+    except OSError as exc:
+        raise TrustedHarborEnvelopeError("cannot read envelope") from exc
+
+
+def _parse_envelope_bytes(raw: bytes) -> Mapping[str, Any]:
+    try:
+        document = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite,
+        )
+    except TrustedHarborEnvelopeError:
+        raise
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise TrustedHarborEnvelopeError("envelope is not valid UTF-8 JSON") from exc
+    if not isinstance(document, Mapping):
+        raise TrustedHarborEnvelopeError("envelope root must be an object")
+    return document
 
 
 def _require_mapping(value: Any, name: str, allowed: frozenset[str]) -> Mapping[str, Any]:
@@ -272,3 +324,11 @@ def verify_envelope(
         source_head=run["source_head"],
         signed_payload_sha256=payload_digest,
     )
+
+
+def load_verified_envelope(
+    path: Path | str, policy: TrustedHarborPolicy
+) -> VerifiedTrustedHarborEnvelope:
+    """Safely load a regular JSON file once, then verify its signed contents."""
+    document = _parse_envelope_bytes(_read_regular_bytes(Path(path)))
+    return verify_envelope(document, policy)
