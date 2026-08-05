@@ -86,6 +86,15 @@ _AUTHORIZATION_FIELDS = frozenset({"window_id", "sidecar_sha256", "immutable_aut
 _ARTIFACT_FIELDS = frozenset({"uri", "sha256", "byte_count"})
 _OBSERVABILITY_FIELDS = frozenset({"langfuse_session_id", "trace_id"})
 _SIGNATURE_FIELDS = frozenset({"alg", "key_id", "signed_payload_sha256", "signature"})
+EnvelopeSections = tuple[
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    list[Any],
+    Mapping[str, Any],
+]
 
 
 def _canonical_json(document: Mapping[str, Any]) -> bytes:
@@ -143,7 +152,9 @@ def _require_timestamp(value: Any, name: str) -> datetime:
         raise TrustedHarborEnvelopeError(f"{name} must be an ISO-8601 timestamp") from exc
 
 
-def _validate_shape(document: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...]:
+def _validate_shape(
+    document: Mapping[str, Any],
+) -> EnvelopeSections:
     root = _require_mapping(document, "envelope", _ROOT_FIELDS)
     if root["schema_version"] != "trusted-harbor-envelope/v1":
         raise TrustedHarborEnvelopeError("unsupported schema_version")
@@ -158,7 +169,7 @@ def _validate_shape(document: Mapping[str, Any]) -> tuple[Mapping[str, Any], ...
         raise TrustedHarborEnvelopeError("artifacts must be a non-empty list")
     for artifact in artifacts:
         _require_mapping(artifact, "artifact", _ARTIFACT_FIELDS)
-    return issuer, harbor, run, authorization, observability, signature
+    return issuer, harbor, run, authorization, observability, artifacts, signature
 
 
 def _validate_policy(
@@ -167,6 +178,7 @@ def _validate_policy(
     run: Mapping[str, Any],
     authorization: Mapping[str, Any],
     observability: Mapping[str, Any],
+    artifacts: list[Any],
     policy: TrustedHarborPolicy,
 ) -> None:
     if issuer["name"] != policy.expected_issuer:
@@ -197,7 +209,15 @@ def _validate_policy(
     _require_string(harbor["trial_name"], "harbor.trial_name")
     _require_digest(harbor["job_config_sha256"], "harbor.job_config_sha256")
     _require_digest(harbor["result_sha256"], "harbor.result_sha256")
-    _require_harbor_uri(harbor["immutable_result_uri"], "harbor.immutable_result_uri")
+    result_uri = _require_harbor_uri(harbor["immutable_result_uri"], "harbor.immutable_result_uri")
+    if f"/{job_id}/{trial_id}" not in result_uri:
+        raise TrustedHarborEnvelopeError("Harbor result URI does not bind its job and trial")
+    for artifact in artifacts:
+        _require_harbor_uri(artifact["uri"], "artifact.uri")
+        _require_digest(artifact["sha256"], "artifact.sha256")
+        byte_count = artifact["byte_count"]
+        if isinstance(byte_count, bool) or not isinstance(byte_count, int) or byte_count < 0:
+            raise TrustedHarborEnvelopeError("artifact.byte_count must be a non-negative integer")
     window_id = _require_string(authorization["window_id"], "authorization.window_id")
     _require_digest(authorization["sidecar_sha256"], "authorization.sidecar_sha256")
     auth_uri = _require_harbor_uri(
@@ -219,8 +239,10 @@ def verify_envelope(
     document: Mapping[str, Any], policy: TrustedHarborPolicy
 ) -> VerifiedTrustedHarborEnvelope:
     """Verify a strict signed envelope against an explicit public-key trust policy."""
-    issuer, harbor, run, authorization, observability, signature = _validate_shape(document)
-    _validate_policy(issuer, harbor, run, authorization, observability, policy)
+    issuer, harbor, run, authorization, observability, artifacts, signature = _validate_shape(
+        document
+    )
+    _validate_policy(issuer, harbor, run, authorization, observability, artifacts, policy)
     if signature["alg"] != "Ed25519":
         raise TrustedHarborEnvelopeError("unsupported signature algorithm")
     key_id = _require_string(signature["key_id"], "signature.key_id")
