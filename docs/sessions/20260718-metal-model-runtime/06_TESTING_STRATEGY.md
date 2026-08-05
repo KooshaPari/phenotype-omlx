@@ -196,6 +196,10 @@ The policy fixture now pins the candidate repository, branch, and exact source H
 envelope with a stale source head is rejected. This is a local policy regression and does not
 assert that the fixture signer is an upstream Portage or Hub authority.
 
+The candidate-manifest suite additionally mutates the declared branch and nested Metal source
+head while recomputing the outer manifest digest; both mutations are rejected. Review/rebind
+tests remain filesystem-only and no device, model, Harbor, or MLX workload is launched.
+
 The candidate-manifest gate additionally rejects execution when no-follow filesystem support is
 available, covering the secure file-ingress invariant without changing the manifest's intentionally
 blocked promotion verdict.
@@ -208,10 +212,7 @@ Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.2
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.
 
-### 2026-07-28 diffusion non-finite contract
-
-`diffusion_confidence.rs` now includes an artifact-backed regression for an all-`-inf` masked row
-and a row containing NaNs. The expected contract is deterministic argmax index `0` with confidence
-`0.0` for a fully invalid row; NaNs are ignored when finite logits are present. The Metal shader
-was compiled with the installed Xcode Metal toolchain after this change. A live artifact-backed
-test still requires `DIFFUSION_CONFIDENCE_METALLIB`; it is not replaced by a source-only check.
+The ternary contract suite now proves exact host-to-Metal byte repacking for non-square `k=5,n=3`
+with a partial K byte, rejects incorrect host buffer lengths, and exercises scalar matmul with an
+un-aligned output-column tail. These are host-only tests; they do not claim Metal shader parity or
+Qwen3.5 workload evidence.

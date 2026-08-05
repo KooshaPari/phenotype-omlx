@@ -14,6 +14,8 @@ pub enum TernaryGemmError {
     DimensionLimit,
     #[error("ternary buffer size overflow")]
     SizeOverflow,
+    #[error("host ternary packed layout invalid: {0}")]
+    HostPackedLayout(String),
     #[error("ternary scale at index {index} must be finite")]
     NonFiniteScale { index: usize },
     #[cfg(all(feature = "metal", target_os = "macos"))]
@@ -129,6 +131,24 @@ pub fn ternary_gemm_metal(
         },
     )
     .map_err(TernaryGemmError::Metal)
+}
+
+/// Upload a host-packed `[k, n]` ternary stream after converting it to the
+/// Metal shader's `[n, ceil(k / 4)]` layout. `scales` remains output-column
+/// metadata and therefore must have exactly `n` entries.
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub fn ternary_gemm_metal_from_host(
+    activations: &[f32],
+    host_packed_weights: &[u8],
+    scales: &[f32],
+    m: usize,
+    k: usize,
+    n: usize,
+    artifact: &crate::MetallibArtifact,
+) -> Result<Vec<f32>, TernaryGemmError> {
+    let packed_weights = model_kernels::ternary_repack_for_metal(host_packed_weights, k, n)
+        .map_err(|error| TernaryGemmError::HostPackedLayout(error.to_string()))?;
+    ternary_gemm_metal(activations, &packed_weights, scales, m, k, n, artifact)
 }
 
 #[cfg(test)]

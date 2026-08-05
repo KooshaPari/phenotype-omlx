@@ -146,6 +146,8 @@ pub use temporal_attention::temporal_window_attention_metal;
 pub use temporal_attention::TemporalAttentionError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use ternary::ternary_gemm_metal;
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use ternary::ternary_gemm_metal_from_host;
 pub use ternary::TernaryGemmError;
 
 // ---------------------------------------------------------------------------

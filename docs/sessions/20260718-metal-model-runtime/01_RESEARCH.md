@@ -388,7 +388,23 @@ consumer's expected current candidate. A valid issuer signature over an older ch
 rejected as stale evidence instead of being accepted merely because its model and task fields
 match.
 
+The candidate-manifest verifier now independently reads the referenced Metal compile provenance
+file and checks its schema, candidate source head, build checkout head, shader count, and recorded
+Metal/build-log digests against the manifest. It also compares the manifest repository and branch
+to the actual checkout. The existing candidate remains blocked because its source head is stale
+and its workload/evidence gates are false; these checks strengthen the rejection path only.
+
 The read-only candidate-manifest verifier now uses the same descriptor-level no-follow rule for
 its manifest input and fails closed when the platform cannot provide that primitive. This keeps
 the promotion report from validating bytes after a path replacement or silently following a
 symlink.
+
+### 2026-08-05 - Bonsai host/device packed-layout audit
+
+The host `model-kernels` ternary packer emits a flat row-major `[k, n]` stream, grouping four
+adjacent output columns into each byte. The Metal ternary GEMM shader consumes output-major
+`[n, ceil(k/4)]` bytes, grouping four K lanes per output column. These layouts are not equivalent:
+for `k=5,n=3`, the host stream is 4 bytes while the Metal stream is 6 bytes. The ignored device
+tests previously used a private output-major helper, so they did not prove host-to-device
+conformance. A checked host repack helper and an explicit Metal entry point now make the boundary
+visible; the raw Metal API remains for callers that already hold canonical device bytes.

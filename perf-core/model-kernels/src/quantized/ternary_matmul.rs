@@ -30,7 +30,8 @@
 //!
 //! # Constraints
 //!
-//! - `n` must be a multiple of 4 (ternary packs 4 elements per byte).
+//! - `n` may be any positive size; host packing uses a flat stream and the
+//!   Metal bridge repacks it into output-column-major bytes.
 //! - `k` must be a positive multiple of `group_size` (or the trailing
 //!   partial group, if any, must still be in-bounds; this is what
 //!   `ternary_pack` itself allows).
@@ -71,19 +72,6 @@ pub fn ternary_matmul(
         return Err(KernelError::ZeroDimension {
             what: "group_size",
             got: 0,
-        });
-    }
-    if n % 4 != 0 {
-        // The packed layout emits four 2-bit symbols per byte; if n
-        // is not a multiple of 4 we cannot index into a byte in a
-        // row-aligned way.
-        let aligned_n = n
-            .checked_add(4 - n % 4)
-            .ok_or(KernelError::DimensionOverflow { what: "aligned n" })?;
-        return Err(KernelError::DimMismatch {
-            what: "n aligned to 4",
-            expected: aligned_n,
-            got: n,
         });
     }
     let activation_len = m
@@ -382,16 +370,16 @@ mod tests {
     }
 
     #[test]
-    fn rejects_n_not_aligned_to_four() {
-        // n=3 is not a multiple of 4 -> the packed layout cannot
-        // index into a byte in a row-aligned way.
-        let a = vec![0.0f32; 4];
-        let b_packed = vec![0u8; 3]; // 3 ternary symbols -> ceil(3/4) = 1 byte
-        let scales = [1.0f32];
-        let zeros = [0.0f32];
-        let mut out = vec![0.0f32; 3];
-        let err = ternary_matmul(&a, &b_packed, &scales, &zeros, 4, 1, 4, 3, &mut out).unwrap_err();
-        assert!(matches!(err, KernelError::DimMismatch { .. }));
+    fn supports_n_tail_without_row_alignment() {
+        let m = 1;
+        let k = 4;
+        let n = 3;
+        let values = vec![SignedTernary::Pos; k * n];
+        let (packed, scales, zeros) = ternary_pack(&values, k * n).unwrap();
+        let mut out = vec![0.0f32; m * n];
+        ternary_matmul(&[1.0, 2.0, 3.0, 4.0], &packed, &scales, &zeros, k * n, m, k, n, &mut out)
+            .unwrap();
+        assert_eq!(out, vec![10.0; n]);
     }
 
     #[test]
