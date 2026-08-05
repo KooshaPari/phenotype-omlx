@@ -245,3 +245,4 @@ or making a network request.
 `scripts/tests/test_niah_task_contract.sh` runs the verifier against synthetic local result files,
 proving that zero-context output is rejected and exact 8192-token output is accepted. It does not
 create `/app`, `/logs`, contact an endpoint, or execute Harbor.
+The fixture also rejects a truthy string `exact_match` before checking the valid exact-8192 case.
