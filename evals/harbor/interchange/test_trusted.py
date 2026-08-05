@@ -51,13 +51,13 @@ def _policy() -> TrustedHarborPolicy:
     )
 
 
-def _sign(document: dict) -> dict:
+def _sign(document: dict, key_id: str = KEY_ID) -> dict:
     signed = deepcopy(document)
     signed.pop("signature", None)
     payload = _canonical_payload(signed)
     signed["signature"] = {
         "alg": "Ed25519",
-        "key_id": KEY_ID,
+        "key_id": key_id,
         "signed_payload_sha256": hashlib.sha256(payload).hexdigest(),
         "signature": _private_key().sign(payload).hex(),
     }
@@ -150,7 +150,8 @@ def test_rejects_tampered_signed_payload() -> None:
 
 def test_rejects_unknown_signing_key() -> None:
     document = _envelope()
-    document["signature"]["key_id"] = "unknown-key"
+    document["issuer"]["key_id"] = "unknown-key"
+    document = _sign(document, key_id="unknown-key")
 
     with pytest.raises(TrustedHarborEnvelopeError, match="trusted key"):
         verify_envelope(document, _policy())
