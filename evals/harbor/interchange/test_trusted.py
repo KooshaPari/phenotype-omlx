@@ -5,11 +5,13 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import json
+import os
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from . import trusted
 from .trusted import TrustedHarborEnvelopeError, TrustedHarborPolicy, verify_envelope
 
 
@@ -200,3 +202,58 @@ def test_rejects_result_uri_not_bound_to_harbor_job_and_trial() -> None:
 
     with pytest.raises(TrustedHarborEnvelopeError, match="result URI"):
         verify_envelope(document, _policy())
+
+
+def test_loads_and_verifies_regular_signed_envelope_file(tmp_path) -> None:
+    path = tmp_path / "trusted-envelope.json"
+    path.write_text(json.dumps(_envelope()), encoding="utf-8")
+
+    envelope = trusted.load_verified_envelope(path, _policy())
+
+    assert envelope.harbor_job_id == JOB_ID
+    assert envelope.harbor_trial_id == TRIAL_ID
+
+
+def test_loader_rejects_duplicate_json_keys_before_verification(tmp_path) -> None:
+    path = tmp_path / "duplicate-envelope.json"
+    raw = json.dumps(_envelope())[:-1] + ',"schema_version":"trusted-harbor-envelope/v1"}'
+    path.write_text(raw, encoding="utf-8")
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="duplicate JSON key"):
+        trusted.load_verified_envelope(path, _policy())
+
+
+def test_loader_rejects_nonfinite_json_constants(tmp_path) -> None:
+    path = tmp_path / "nonfinite-envelope.json"
+    path.write_text('{"schema_version":NaN}', encoding="utf-8")
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="non-finite JSON constant"):
+        trusted.load_verified_envelope(path, _policy())
+
+
+def test_loader_rejects_non_utf8_envelope_file(tmp_path) -> None:
+    path = tmp_path / "invalid-encoding-envelope.json"
+    path.write_bytes(b"\xff")
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="valid UTF-8 JSON"):
+        trusted.load_verified_envelope(path, _policy())
+
+
+def test_loader_fails_closed_without_no_follow_support(tmp_path, monkeypatch) -> None:
+    path = tmp_path / "trusted-envelope.json"
+    path.write_text(json.dumps(_envelope()), encoding="utf-8")
+    monkeypatch.delattr(trusted.os, "O_NOFOLLOW")
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="no-follow"):
+        trusted.load_verified_envelope(path, _policy())
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink semantics are POSIX-specific")
+def test_loader_rejects_symlinked_envelope_file(tmp_path) -> None:
+    target = tmp_path / "target-envelope.json"
+    target.write_text(json.dumps(_envelope()), encoding="utf-8")
+    link = tmp_path / "linked-envelope.json"
+    link.symlink_to(target)
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="regular file"):
+        trusted.load_verified_envelope(link, _policy())

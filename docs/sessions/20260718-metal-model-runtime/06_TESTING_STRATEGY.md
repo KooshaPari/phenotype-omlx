@@ -187,6 +187,11 @@ Harbor/Langfuse identifiers, and a non-exact context contract. These tests exerc
 upstream issuer interface; they do not create a real issuer, make local evidence trusted, or run
 Harbor, MLX, Metal, containers, or Qwen3.5.
 
+The same trusted-envelope suite now proves file-ingress behavior: a regular signed JSON file
+loads and verifies; duplicate keys, non-finite constants, non-UTF8 bytes, and a symlinked input
+are rejected before signature verification. The suite remains filesystem-only and does not invoke
+Harbor, MLX, Metal, a container, or Qwen3.5.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.
