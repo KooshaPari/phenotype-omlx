@@ -422,3 +422,7 @@ also constructs the exact `NIAH_CONTEXT_TOKENS=8192` agent binding before exitin
 The NIAH task verifier had a conditional context check that accepted a zero-token result whenever
 the field was falsey. It now requires `requested_context_tokens=8192`, `prompt_tokens=8192`, and
 `context_tokens_exact=true` for reward 1, matching the bounded promotion contract.
+
+The same verifier now requires `exact_match` to be the JSON boolean `true` and `model` to be a
+string containing Qwen3.5, preventing truthy strings or malformed model fields from becoming
+passing evidence.

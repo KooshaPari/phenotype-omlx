@@ -334,6 +334,9 @@ The NIAH verifier gate is now strict on all three exact-context fields; a zero-t
 context result cannot receive a passing reward. This is a task-contract hardening step, not live
 model evidence.
 
+Result typing is strict as well: non-boolean `exact_match` and non-string model identifiers are
+rejected before reward calculation.
+
 ## Diffusion boundary finiteness gate (2026-08-05)
 
     host trajectory oracle finiteness rules

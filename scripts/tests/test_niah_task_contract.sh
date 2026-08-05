@@ -15,6 +15,14 @@ chmod +x "${TEST_ROOT}/test.sh"
 printf '%s\n' '42-alpha' >"${APP_ROOT}/niah_answer.txt"
 
 cat >"${APP_ROOT}/niah_result.json" <<'EOF'
+{"exact_match":"true","model":"Qwen/Qwen3.5-0.8B","requested_context_tokens":8192,"prompt_tokens":8192,"context_tokens_exact":true}
+EOF
+if "${TEST_ROOT}/test.sh"; then
+  echo '[test_niah_task_contract] non-boolean exact_match was incorrectly accepted' >&2
+  exit 1
+fi
+
+cat >"${APP_ROOT}/niah_result.json" <<'EOF'
 {"exact_match":true,"model":"Qwen/Qwen3.5-0.8B","requested_context_tokens":0,"prompt_tokens":0,"context_tokens_exact":false}
 EOF
 if "${TEST_ROOT}/test.sh"; then
