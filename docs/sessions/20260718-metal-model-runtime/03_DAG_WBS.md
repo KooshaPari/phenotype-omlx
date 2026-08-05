@@ -312,3 +312,14 @@ therefore a prerequisite enforcer, not a route around that missing upstream issu
 window must use a conflict-free Portage root, currently the hygiene candidate
 `worktrees/portage/fix-langsmith-importerror`, and must remain subject to the one-trial overload
 governor.
+
+## Diffusion boundary finiteness gate (2026-08-05)
+
+    host trajectory oracle finiteness rules
+      -> shared Metal-boundary value validator
+      -> remask/trajectory dispatch rejection before pipeline lookup
+      -> bounded device fixture
+
+The Metal dispatch boundary now rejects non-finite confidence and non-finite or negative entropy
+before allocation or catalogued pipeline lookup. This aligns the device boundary with the host
+trajectory oracle; it is host-only contract evidence and not device or Qwen3.5 execution evidence.

@@ -200,6 +200,10 @@ The candidate-manifest gate additionally rejects execution when no-follow filesy
 available, covering the secure file-ingress invariant without changing the manifest's intentionally
 blocked promotion verdict.
 
+The Metal diffusion dispatch unit suite now covers non-finite confidence and non-finite, negative,
+and valid entropy values through the shared host-only validator. These tests run without Metal,
+device allocation, Harbor, or Qwen3.5.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.
