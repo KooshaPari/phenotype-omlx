@@ -63,6 +63,16 @@ def cache(monkeypatch, tmp_path):
     return tmp_path / ".omlx" / "cache"
 
 
+@pytest.fixture
+def evaluation_report(tmp_path):
+    path = tmp_path / "evaluation-report.json"
+    path.write_text(
+        json.dumps({"suite": "mmlu", "accuracy": 0.9}),
+        encoding="utf-8",
+    )
+    return path
+
+
 # --- pure-function tests ---------------------------------------------------
 
 def test_parse_gates_basic():
@@ -166,10 +176,31 @@ def test_sign_record_uses_hmac_sha256():
 
 # --- validate() tests ------------------------------------------------------
 
-def test_validate_passes_for_synthetic_evidence():
-    """Synthetic scores fall in [0.5, 1.0); threshold 0.0 always passes."""
+def test_validate_rejects_synthetic_evidence():
+    """Synthetic scores must never be sufficient for promotion."""
     rec = build_candidate("k1", parse_gates("mmlu=0.0"), None)
-    validate(rec)  # no exception
+    with pytest.raises(PromotionError) as exc_info:
+        validate(rec)
+    assert exc_info.value.kind == "synthetic_evidence"
+
+
+def test_validate_rejects_evidence_source_mismatch():
+    rec = build_candidate(
+        "k1",
+        parse_gates("mmlu=0.0"),
+        None,
+        report_evidence=[
+            {
+                "id": "mmlu",
+                "score": 0.9,
+                "source_revision": "report-rev",
+            }
+        ],
+    )
+    rec["source_revision"] = "candidate-rev"
+    with pytest.raises(PromotionError) as exc_info:
+        validate(rec)
+    assert exc_info.value.kind == "evidence_source_mismatch"
 
 
 def test_validate_rejects_missing_evidence():
@@ -214,16 +245,17 @@ def test_validate_rejects_duplicate_evidence():
 
 # --- cmd_promote integration tests ----------------------------------------
 
-def test_cmd_promote_writes_signed_record(cache, monkeypatch):
+def test_cmd_promote_writes_signed_record(cache, evaluation_report, monkeypatch):
     monkeypatch.setenv("USER", "tester")
     with _IO() as io:
         rc = cmd_promote(_ns(
             kernel_id="knl-promote-1",
-            gates="mmlu=0.1,gpqa=0.1",
+            gates="mmlu=0.1",
             sign_key="deadbeef",
             approver="alice",
             decision="auto",
             json=False,
+            report=str(evaluation_report),
         ))
     assert rc == 0
     out = io.stdout.getvalue()
@@ -239,7 +271,7 @@ def test_cmd_promote_writes_signed_record(cache, monkeypatch):
     assert rec["content_hash"] == content_hash(rec)
 
 
-def test_cmd_promote_unsigned_record_has_no_signature(cache):
+def test_cmd_promote_unsigned_record_has_no_signature(cache, evaluation_report):
     with _IO() as io:
         rc = cmd_promote(_ns(
             kernel_id="knl-promote-2",
@@ -248,6 +280,7 @@ def test_cmd_promote_unsigned_record_has_no_signature(cache):
             approver="bob",
             decision="auto",
             json=False,
+            report=str(evaluation_report),
         ))
     assert rc == 0
     rec = json.loads(open(promotion_path("knl-promote-2")).read())
@@ -302,7 +335,7 @@ def test_cmd_promote_malformed_gates_returns_exit_2(cache):
     assert "must be 'id=threshold'" in io.stderr.getvalue()
 
 
-def test_cmd_promote_bad_sign_key_returns_exit_2(cache):
+def test_cmd_promote_bad_sign_key_returns_exit_2(cache, evaluation_report):
     with _IO() as io:
         rc = cmd_promote(_ns(
             kernel_id="knl-promote-badkey",
@@ -311,12 +344,13 @@ def test_cmd_promote_bad_sign_key_returns_exit_2(cache):
             approver="tester",
             decision="auto",
             json=False,
+            report=str(evaluation_report),
         ))
     assert rc == 2
     assert "hex bytes" in io.stderr.getvalue()
 
 
-def test_cmd_promote_reuses_cached_evidence(cache):
+def test_cmd_promote_reuses_cached_evidence(cache, evaluation_report):
     """A second promote call should reuse the evidence from the cache."""
     with _IO():
         cmd_promote(_ns(
@@ -324,8 +358,9 @@ def test_cmd_promote_reuses_cached_evidence(cache):
             gates="mmlu=0.0",
             sign_key=None,
             approver="t",
-            decision="auto",
-            json=False,
+                decision="auto",
+                json=False,
+                report=str(evaluation_report),
         ))
     rec_first = json.loads(open(promotion_path("knl-promote-reuse")).read())
     with _IO():
@@ -343,7 +378,7 @@ def test_cmd_promote_reuses_cached_evidence(cache):
     assert rec_first["evidence"] == rec_second["evidence"]
 
 
-def test_cmd_promote_json_output_is_structured(cache):
+def test_cmd_promote_json_output_is_structured(cache, evaluation_report):
     with _IO() as io:
         rc = cmd_promote(_ns(
             kernel_id="knl-promote-json",
@@ -352,7 +387,7 @@ def test_cmd_promote_json_output_is_structured(cache):
             approver="alice",
             decision="manual",
             json=True,
-            report=None,
+            report=str(evaluation_report),
         ))
     assert rc == 0
     payload = json.loads(io.stdout.getvalue())
