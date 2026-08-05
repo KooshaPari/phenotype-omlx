@@ -6,6 +6,7 @@ import pytest
 
 from .trusted import (
     TrustedHarborEnvelopeError,
+    _require_exact_harbor_authorization_uri,
     _require_exact_harbor_result_uri,
     _require_harbor_artifact_uri,
 )
@@ -27,3 +28,45 @@ def test_rejects_percent_encoded_artifact_path_ambiguity() -> None:
             "job-0001",
             "trial-0001",
         )
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "harbor://authorization/window-0001?override=true",
+        "harbor://authorization/window-0001#fragment",
+        "harbor://results/window-0001",
+    ],
+)
+def test_rejects_noncanonical_authorization_uri_authority_or_suffix(uri: str) -> None:
+    with pytest.raises(TrustedHarborEnvelopeError, match="authorization URI"):
+        _require_exact_harbor_authorization_uri(uri, "window-0001")
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "harbor://authorization/window%2D0001",
+        "harbor://authorization/window-0001/extra",
+    ],
+)
+def test_rejects_percent_encoded_or_split_authorization_uri_path(uri: str) -> None:
+    with pytest.raises(TrustedHarborEnvelopeError, match="authorization URI"):
+        _require_exact_harbor_authorization_uri(uri, "window-0001")
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "harbor://authorization/window-0001?",
+        "harbor://authorization/window-0001#",
+        " harbor://authorization/window-0001",
+        "harbor://authorization/window-0001 ",
+        "harbor://authorization/window-0001\n",
+        "HARBOR://authorization/window-0001",
+        "harbor://AUTHORIZATION/window-0001",
+    ],
+)
+def test_rejects_noncanonical_authorization_uri_serialization(uri: str) -> None:
+    with pytest.raises(TrustedHarborEnvelopeError, match="authorization URI"):
+        _require_exact_harbor_authorization_uri(uri, "window-0001")

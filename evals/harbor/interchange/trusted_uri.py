@@ -58,6 +58,21 @@ def require_harbor_uri(value: Any, name: str) -> str:
     return uri
 
 
+def require_exact_harbor_authorization_uri(value: Any, window_id: str) -> str:
+    """Require a canonical Harbor authorization URI bound to the supplied window."""
+    _require_identifier(window_id, "authorization window")
+    uri = _require_uri(value, "authorization.immutable_auth_uri")
+    components = _path_components(
+        _parse_harbor_uri(uri, "authorization URI", "authorization"), "authorization URI", 1
+    )
+    canonical_uri = f"harbor://authorization/{window_id}"
+    if components != [window_id] or uri != canonical_uri:
+        raise TrustedHarborEnvelopeError(
+            "authorization URI does not exactly bind its authorization window"
+        )
+    return uri
+
+
 def require_exact_harbor_result_uri(value: Any, job_id: str, trial_id: str) -> str:
     """Require a canonical Harbor result URI bound to the supplied identifiers."""
     _require_identifier(job_id, "job")
