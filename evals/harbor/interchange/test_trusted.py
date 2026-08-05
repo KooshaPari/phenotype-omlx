@@ -182,3 +182,21 @@ def test_rejects_non_exact_context_contract() -> None:
 
     with pytest.raises(TrustedHarborEnvelopeError, match="context"):
         verify_envelope(document, _policy())
+
+
+def test_rejects_mutable_or_unbound_artifact_uri() -> None:
+    document = _envelope()
+    document["artifacts"][0]["uri"] = "file:///tmp/result.json"
+    document = _sign(document)
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="artifact.uri"):
+        verify_envelope(document, _policy())
+
+
+def test_rejects_result_uri_not_bound_to_harbor_job_and_trial() -> None:
+    document = _envelope()
+    document["harbor"]["immutable_result_uri"] = "harbor://results/other-job/other-trial"
+    document = _sign(document)
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="result URI"):
+        verify_envelope(document, _policy())

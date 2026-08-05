@@ -371,6 +371,8 @@ The OMLX consumer boundary is `evals/harbor/interchange/trusted.py`, deliberatel
 permissive generic interchange loader and aggregate synthesizer. It accepts only the fixed
 `trusted-harbor-envelope/v1` shape, an injected Ed25519 public-key policy, canonical signed
 payload bytes, exact Qwen3.5 model/config/task/environment/context bindings, Harbor-to-Langfuse
-identifier binding, UTC run ordering, and `harbor://` immutable identifiers. The in-repository
-key is a deterministic test fixture only. Until Portage or Hub publishes a real issuer/key policy
-and immutable signed envelope, all actual Harbor output remains untrusted for promotion.
+identifier binding, UTC run ordering, and `harbor://` immutable identifiers. Result identifiers
+must bind the Harbor job/trial, while each artifact carries a non-negative byte count and SHA-256.
+The in-repository key is a deterministic test fixture only. Until Portage or Hub publishes a real
+issuer/key policy and immutable signed envelope, all actual Harbor output remains untrusted for
+promotion.
