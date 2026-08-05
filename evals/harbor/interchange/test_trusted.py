@@ -207,6 +207,33 @@ def test_rejects_mutable_or_unbound_artifact_uri() -> None:
         verify_envelope(document, _policy())
 
 
+def test_rejects_artifact_uri_for_a_foreign_harbor_job_or_trial() -> None:
+    document = _envelope()
+    document["artifacts"][0]["uri"] = "harbor://artifacts/other-job/other-trial/result.json"
+    document = _sign(document)
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="artifact URI"):
+        verify_envelope(document, _policy())
+
+
+def test_rejects_artifact_sha256_that_differs_from_the_harbor_result() -> None:
+    document = _envelope()
+    document["artifacts"][0]["sha256"] = "0" * 64
+    document = _sign(document)
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="artifact SHA-256"):
+        verify_envelope(document, _policy())
+
+
+def test_rejects_result_uri_that_contains_identifiers_but_is_not_exact() -> None:
+    document = _envelope()
+    document["harbor"]["immutable_result_uri"] = "harbor://results/job-0001/trial-0001/extra"
+    document = _sign(document)
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="result URI"):
+        verify_envelope(document, _policy())
+
+
 def test_rejects_result_uri_not_bound_to_harbor_job_and_trial() -> None:
     document = _envelope()
     document["harbor"]["immutable_result_uri"] = "harbor://results/other-job/other-trial"

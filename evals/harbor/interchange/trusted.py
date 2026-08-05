@@ -197,6 +197,23 @@ def _require_harbor_uri(value: Any, name: str) -> str:
     return uri
 
 
+def _require_exact_harbor_result_uri(value: Any, job_id: str, trial_id: str) -> str:
+    uri = _require_harbor_uri(value, "harbor.immutable_result_uri")
+    expected = f"harbor://results/{job_id}/{trial_id}"
+    if uri != expected:
+        raise TrustedHarborEnvelopeError("Harbor result URI does not exactly bind its job and trial")
+    return uri
+
+
+def _require_harbor_artifact_uri(value: Any, job_id: str, trial_id: str) -> str:
+    uri = _require_harbor_uri(value, "artifact.uri")
+    prefix = f"harbor://artifacts/{job_id}/{trial_id}/"
+    artifact_name = uri.removeprefix(prefix)
+    if not uri.startswith(prefix) or not artifact_name or any(char in artifact_name for char in "/?#"):
+        raise TrustedHarborEnvelopeError("artifact URI does not exactly bind its Harbor job and trial")
+    return uri
+
+
 def _require_timestamp(value: Any, name: str) -> datetime:
     raw = _require_string(value, name)
     if not raw.endswith("Z"):
@@ -270,12 +287,12 @@ def _validate_policy(
     _require_string(harbor["trial_name"], "harbor.trial_name")
     _require_digest(harbor["job_config_sha256"], "harbor.job_config_sha256")
     _require_digest(harbor["result_sha256"], "harbor.result_sha256")
-    result_uri = _require_harbor_uri(harbor["immutable_result_uri"], "harbor.immutable_result_uri")
-    if f"/{job_id}/{trial_id}" not in result_uri:
-        raise TrustedHarborEnvelopeError("Harbor result URI does not bind its job and trial")
+    _require_exact_harbor_result_uri(harbor["immutable_result_uri"], job_id, trial_id)
     for artifact in artifacts:
-        _require_harbor_uri(artifact["uri"], "artifact.uri")
-        _require_digest(artifact["sha256"], "artifact.sha256")
+        _require_harbor_artifact_uri(artifact["uri"], job_id, trial_id)
+        artifact_sha256 = _require_digest(artifact["sha256"], "artifact.sha256")
+        if artifact_sha256 != harbor["result_sha256"]:
+            raise TrustedHarborEnvelopeError("artifact SHA-256 does not match Harbor result SHA-256")
         byte_count = artifact["byte_count"]
         if isinstance(byte_count, bool) or not isinstance(byte_count, int) or byte_count < 0:
             raise TrustedHarborEnvelopeError("artifact.byte_count must be a non-negative integer")
