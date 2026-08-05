@@ -324,6 +324,10 @@ The host scalar matmul now accepts arbitrary positive `n` (including an output-c
 the repack helper validates exact host byte length and preserves every 2-bit code. Device
 execution remains pending an authorized, bounded Qwen3.5/Metal fixture and signed evidence.
 
+The Harbor execution lane now has an explicit non-executing preflight node. It must pass before
+any future Apple Container invocation, but its output is configuration evidence only and cannot
+satisfy the live workload or promotion gates.
+
 ## Diffusion boundary finiteness gate (2026-08-05)
 
     host trajectory oracle finiteness rules

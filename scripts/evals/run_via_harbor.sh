@@ -20,6 +20,7 @@
 #   bash scripts/evals/run_via_harbor.sh --niah
 #   bash scripts/evals/run_via_harbor.sh --niah-8192
 #   bash scripts/evals/run_via_harbor.sh --turbo
+#   bash scripts/evals/run_via_harbor.sh --preflight --niah-8192
 set -euo pipefail
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:${PATH:-}"
 
@@ -27,6 +28,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${HARBOR_OUT:-$ROOT/.runs/harbor-eval}"
 HARBOR_ENV="${HARBOR_ENV:-apple-container}"
 MODE="hello"
+PREFLIGHT=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -43,6 +45,7 @@ for arg in "$@"; do
     --niah) MODE="niah" ;;
     --niah-8192) MODE="niah_8192" ;;
     --turbo) MODE="turbo" ;;
+    --preflight) PREFLIGHT=1 ;;
     --help|-h)
       sed -n '2,22p' "$0"
       exit 0
@@ -95,12 +98,6 @@ if git -C "$PORTAGE_ROOT" grep -I -q -E '^(<<<<<<<|=======|>>>>>>>)' HEAD -- .; 
   echo "ERROR: PORTAGE_ROOT tracked HEAD contains an unresolved conflict marker." >&2
   exit 2
 fi
-# Apple Container's apiserver is an explicit user service, not a daemon that
-# Harbor may assume is present. Start/verify it before creating any trials so
-# XPC failures are diagnosed at the boundary.
-source "$ROOT/scripts/evals/apple_container_preflight.sh"
-ensure_apple_container_service
-
 mkdir -p "$OUT"
 case "$MODE" in
   hello) TASK="$PORTAGE_ROOT/examples/tasks/hello-world" ;;
@@ -154,6 +151,18 @@ if [[ "$OPENAI_MODEL" != "$OMLX_READY_MODEL" ]]; then
   echo "ERROR: OPENAI_MODEL must exactly match OMLX_READY_MODEL for provenance." >&2
   exit 2
 fi
+
+if [[ "$PREFLIGHT" -eq 1 ]]; then
+  echo "preflight ok: env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL window=$PHENO_EXECUTION_WINDOW_ID"
+  echo "preflight only: Apple Container and Harbor were not invoked"
+  exit 0
+fi
+
+# Apple Container's apiserver is an explicit user service, not a daemon that
+# Harbor may assume is present. Start/verify it before creating any trials so
+# XPC failures are diagnosed at the boundary.
+source "$ROOT/scripts/evals/apple_container_preflight.sh"
+ensure_apple_container_service
 
 AGENT_ENV_ARGS=(--ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}")
 if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then

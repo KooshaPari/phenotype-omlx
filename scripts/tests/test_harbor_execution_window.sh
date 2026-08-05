@@ -108,6 +108,25 @@ fi
 grep -q 'Git checkout' "${TEST_ROOT}/nongit.err"
 [[ ! -s "${CALL_LOG}" ]]
 
+PREFLIGHT_PORTAGE="${TEST_ROOT}/preflight-portage"
+mkdir -p "${PREFLIGHT_PORTAGE}/packages/harbor-langfuse/src"
+git -C "${PREFLIGHT_PORTAGE}" init -q
+git -C "${PREFLIGHT_PORTAGE}" config user.email 'fixture@example.invalid'
+git -C "${PREFLIGHT_PORTAGE}" config user.name 'Harbor fixture'
+printf '%s\n' 'clean fixture' >"${PREFLIGHT_PORTAGE}/source.txt"
+git -C "${PREFLIGHT_PORTAGE}" add source.txt
+git -C "${PREFLIGHT_PORTAGE}" commit -qm 'clean fixture source'
+
+PHENO_EXECUTION_WINDOW_ID='window-1234' \
+  PORTAGE_ROOT="${PREFLIGHT_PORTAGE}" \
+  LANGFUSE_PUBLIC_KEY=public \
+  LANGFUSE_SECRET_KEY=secret \
+  OMLX_READY_MODEL='Qwen/Qwen3.5-0.8B' \
+  bash "${RUNNER}" --preflight --policy >"${TEST_ROOT}/preflight.out" 2>"${TEST_ROOT}/preflight.err"
+grep -q 'preflight ok' "${TEST_ROOT}/preflight.out"
+grep -q 'were not invoked' "${TEST_ROOT}/preflight.out"
+[[ ! -s "${CALL_LOG}" ]]
+
 grep -q 'Qwen2\.5' "${RUNNER}"
 grep -q 'OPENAI_MODEL' "${RUNNER}"
 
