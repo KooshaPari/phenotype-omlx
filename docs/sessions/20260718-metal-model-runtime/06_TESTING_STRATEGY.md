@@ -169,6 +169,15 @@ exercises descriptor-anchored no-follow traversal only; it does not claim covera
 separate Git-root identity TOCTOU. These tests remain fixture-only and do not start Harbor, MLX,
 Metal, or Qwen3.5.
 
+### Harbor launcher root-integrity regression (2026-08-05)
+
+`scripts/tests/test_harbor_execution_window.sh` builds a temporary Git fixture whose committed
+`HEAD` contains merge-conflict markers. With an otherwise valid execution-window shape and
+Langfuse placeholders, the runner must exit `2`, name the conflict-marker failure, and record no
+`container` or `uv` call. This proves the Portage source gate runs before Apple Container preflight
+or Harbor invocation; it is a shell fixture only and does not start a model, container, Harbor,
+or Qwen3.5 workload.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.

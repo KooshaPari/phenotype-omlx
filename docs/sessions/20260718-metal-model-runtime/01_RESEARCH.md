@@ -351,3 +351,18 @@ is opened with `O_NOFOLLOW` from the already-open parent descriptor; the termina
 be a regular file. This rejects root, leaf, and intermediate symlink traversal without resolving
 and reopening a string path. It does not address the separate Git-root identity TOCTOU between
 repository discovery and Git metadata checks.
+
+### 2026-08-05 - Harbor root hygiene and attestation boundary
+
+The Harbor launcher now rejects a `PORTAGE_ROOT` that is not a Git checkout with a valid `HEAD`,
+or whose tracked `HEAD` contains an unresolved merge-conflict marker, before Apple Container
+preflight or the Harbor CLI can run. This prevents the launcher from using the conflicted
+canonical Portage checkout as an accidental execution root. A separate clean Harbor-Langfuse
+worktree is only a future hygiene candidate; it is not execution authorization or evidence.
+
+Portage's local job, trial, task-lock, archive, and Hub records support cross-record consistency,
+but the examined code has no result-artifact signature or server-issued provenance envelope.
+Canonical JSON and SHA-256 protect an asserted byte sequence, not who executed it. Promotion-grade
+evidence therefore needs an upstream Portage/Hub signer over immutable artifact identities. OMLX
+can consume such an envelope fail-closed, but must reject unsigned Harbor output rather than
+misrepresent local consistency as attestation.
