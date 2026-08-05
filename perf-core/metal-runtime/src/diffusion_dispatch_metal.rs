@@ -23,6 +23,12 @@ pub enum DiffusionDispatchError {
         max: f32,
         got: f32,
     },
+    #[error("diffusion buffer '{what}' has invalid value at index {index}: {got}")]
+    InvalidValue {
+        what: &'static str,
+        index: usize,
+        got: f32,
+    },
     #[cfg(all(feature = "metal", target_os = "macos"))]
     #[error("Metal diffusion dispatch failed: {0}")]
     Metal(String),
@@ -53,6 +59,20 @@ pub fn validate_diffusion_threshold(
             max,
             got: value,
         });
+    }
+    Ok(())
+}
+
+/// Reject non-finite device inputs and, for entropy, negative values.
+pub fn validate_diffusion_values(
+    what: &'static str,
+    values: &[f32],
+    require_nonnegative: bool,
+) -> Result<(), DiffusionDispatchError> {
+    if let Some((index, &got)) = values.iter().enumerate().find(|(_, value)| {
+        !value.is_finite() || (require_nonnegative && **value < 0.0)
+    }) {
+        return Err(DiffusionDispatchError::InvalidValue { what, index, got });
     }
     Ok(())
 }
@@ -190,6 +210,7 @@ pub fn diffusion_remask_metal(
     validate_tokens(tokens)?;
     validate_diffusion_threshold("remask", threshold, 0.0, 1.0)?;
     validate_len("confidence", confidence.len(), tokens)?;
+    validate_diffusion_values("confidence", confidence, false)?;
     crate::metal_cache::with_catalogued_pipeline(artifact, "remask", |device, queue, pipeline| {
         let shared = MTLResourceOptions::StorageModeShared;
         let mask = device.new_buffer_with_data(
@@ -247,6 +268,9 @@ pub fn diffusion_trajectory_metal(
     validate_diffusion_threshold("momentum", momentum_threshold, 0.0, f32::MAX)?;
     validate_len("previous_confidence", previous_confidence.len(), tokens)?;
     validate_len("entropy", entropy.len(), tokens)?;
+    validate_diffusion_values("previous_confidence", previous_confidence, false)?;
+    validate_diffusion_values("confidence", confidence, false)?;
+    validate_diffusion_values("entropy", entropy, true)?;
     crate::metal_cache::with_catalogued_pipeline(
         artifact,
         "trajectory",
@@ -378,7 +402,8 @@ pub fn diffusion_trajectory_metal_with_telemetry(
 #[cfg(test)]
 mod tests {
     use super::{
-        validate_diffusion_threshold, validate_tokens, DiffusionDispatchError, MAX_DIFFUSION_TOKENS,
+        validate_diffusion_threshold, validate_diffusion_values, validate_tokens,
+        DiffusionDispatchError, MAX_DIFFUSION_TOKENS,
     };
 
     #[test]
@@ -405,5 +430,26 @@ mod tests {
             validate_tokens(MAX_DIFFUSION_TOKENS + 1),
             Err(DiffusionDispatchError::TokenLimit { .. })
         ));
+    }
+
+    #[test]
+    fn value_contract_rejects_non_finite_confidence() {
+        for value in [f32::NAN, f32::NEG_INFINITY, f32::INFINITY] {
+            assert!(matches!(
+                validate_diffusion_values("confidence", &[value], false),
+                Err(DiffusionDispatchError::InvalidValue { .. })
+            ));
+        }
+    }
+
+    #[test]
+    fn value_contract_rejects_invalid_entropy() {
+        for value in [f32::NAN, f32::NEG_INFINITY, f32::INFINITY, -0.01] {
+            assert!(matches!(
+                validate_diffusion_values("entropy", &[value], true),
+                Err(DiffusionDispatchError::InvalidValue { .. })
+            ));
+        }
+        assert!(validate_diffusion_values("entropy", &[0.0, 1.0], true).is_ok());
     }
 }
