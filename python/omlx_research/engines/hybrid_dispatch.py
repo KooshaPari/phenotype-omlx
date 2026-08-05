@@ -40,6 +40,20 @@ class HybridConfig:
     )
 
 
+class HybridDispatchError(RuntimeError):
+    """Raised when a requested dispatch route has no usable backend."""
+
+    def __init__(self, policy: DispatchPolicy, available: list[DispatchPolicy]) -> None:
+        self.policy = policy
+        self.available = available
+        available_names = ", ".join(item.value for item in available) or "none"
+        if not available:
+            message = f"backend {policy.value!r} unavailable; no available backends"
+        else:
+            message = f"backend {policy.value!r} unavailable; available backends: {available_names}"
+        super().__init__(message)
+
+
 class HybridDispatch:
     def __init__(self, config: HybridConfig | None = None):
         self.config = config or HybridConfig()
@@ -67,24 +81,36 @@ class HybridDispatch:
         if pol == DispatchPolicy.AUTO:
             pol = self._auto_pick()
         if pol == DispatchPolicy.FANOUT:
-            return [b.generate(req) for _, b in self._backends.items() if b.is_available()]
+            available = [(name, backend) for name, backend in self._backends.items() if backend.is_available()]
+            if not available:
+                raise HybridDispatchError(DispatchPolicy.FANOUT, self.available())
+            return [backend.generate(req) for _, backend in available]
         b = self._backends.get(pol)
-        if b is None:
-            return []
+        if b is None or not b.is_available():
+            raise HybridDispatchError(pol, self.available())
         return [b.generate(req)]
 
     def _auto_pick(self) -> DispatchPolicy:
         # Prefer Metal/MLX on Apple Silicon, NVIDIA engines otherwise.
+        preferred: list[DispatchPolicy]
         try:
             import mlx.core as mx
             if mx.metal.is_available():
-                return DispatchPolicy.METAL
+                preferred = [DispatchPolicy.METAL, DispatchPolicy.MLX]
+            else:
+                preferred = []
         except ImportError:
-            pass
-        try:
-            import torch
-            if torch.cuda.is_available():
-                return DispatchPolicy.SGLANG
-        except ImportError:
-            pass
-        return DispatchPolicy.MLX
+            preferred = []
+        if not preferred:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    preferred = [DispatchPolicy.SGLANG, DispatchPolicy.VLLM, DispatchPolicy.TENSORRT]
+            except ImportError:
+                pass
+        preferred.extend([DispatchPolicy.MLX, DispatchPolicy.LLAMACPP])
+        for candidate in preferred:
+            backend = self._backends.get(candidate)
+            if backend is not None and backend.is_available():
+                return candidate
+        raise HybridDispatchError(DispatchPolicy.AUTO, self.available())

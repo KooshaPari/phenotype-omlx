@@ -3,7 +3,7 @@
 from .spec_decode import SpeculativeEngine, SpecMode
 from .tree_attn import TreeAttentionEngine
 from .par_batch import ParallelBatchEngine
-from .hybrid_dispatch import HybridDispatch, DispatchPolicy
+from .hybrid_dispatch import HybridConfig, HybridDispatch, HybridDispatchError, DispatchPolicy
 
 __all__ = [
     "SpeculativeEngine",
@@ -11,5 +11,7 @@ __all__ = [
     "TreeAttentionEngine",
     "ParallelBatchEngine",
     "HybridDispatch",
+    "HybridConfig",
+    "HybridDispatchError",
     "DispatchPolicy",
 ]

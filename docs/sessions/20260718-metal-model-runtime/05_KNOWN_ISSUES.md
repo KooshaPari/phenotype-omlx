@@ -14,6 +14,10 @@ Update 2026-08-05: Python promotion now rejects synthetic evidence and evidence 
 production evaluator and prevents `promote --gates ...` from signing a record without benchmark
 provenance. Promotion tests pass 28/28.
 
+Update 2026-08-05: `HybridDispatch` no longer returns an empty list when a requested backend is
+unavailable, and AUTO now selects only an actually available backend or raises a structured error.
+This prevents silent no-op inference responses while preserving deferred GPU/Metal execution.
+
 | Priority | Area | Evidence and required resolution |
 |---|---|---|
 | P0 | eval-harness | RESOLVED (commit 2fafb76): ownership-safe ABI, deterministic suite ordering, GPQA/MMLU flexible readers, sentinel-preserved decode contract. 49 tests pass. |
@@ -280,3 +284,16 @@ duplicate object members and non-finite JSON constants before canonical SHA-256 
 Focused candidate-manifest and review tests pass 14/14; the historical manifest remains blocked
 for its stale source head and absent workload evidence. Native diffusion/ternary validation also
 passes 69 metal-runtime tests plus 211 model-kernel unit tests; no device or model workload ran.
+
+Update 2026-08-05 (trusted envelope intake): `~/.config/phenotype/portage.env` is present, but
+the local filesystem has no issuer-signed trusted Harbor envelope, matching authorization sidecar,
+execution window ID, signer public key/key ID, or current candidate manifest. The historical NIAH
+JSON is explicitly live-failed/unsigned and cannot be promoted. This is an external artifact
+blocker, not a code defect; the fail-closed behavior is intentional.
+
+Update 2026-08-05 (cross-platform scope): no standalone Unsloth Studio, LM Studio, Ollama,
+phenotype-gpu, or phenocli checkout was found under the local repo container. Existing provider
+implementations in Portage, Forgecode, and Helios-CLI are the authoritative ingress surfaces.
+Stale Qwen2.5 examples must remain excluded from the active Qwen3.5-only matrix. Desktop dual-GPU
+execution remains pending a signed window and a bounded RTX 3090 Ti run; no broad serving or
+benchmark workload is permitted.

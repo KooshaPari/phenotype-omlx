@@ -56,6 +56,8 @@ tests. Baselines are keyed by hardware, OS, compiler, model, plan, and source re
   filesystem-only and does not download or load model weights.
 - Promotion governance tests: 28 passed, including synthetic-evidence rejection and candidate /
   evidence source-revision parity.
+- Hybrid dispatch contract tests: 3 passed; unavailable explicit routes and empty fanout now fail
+  closed, while AUTO uses an available backend. Tests use fake backends only.
 
 - `model-kernels` MLA and MLA-cache unit tests: 7 passed.
 - Metal DeltaNet, Zaya CCA, and MLA-cache parity tests: 1 passed each with their pinned
