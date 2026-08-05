@@ -50,6 +50,9 @@ def _policy() -> TrustedHarborPolicy:
         expected_task_id="omlx/niah-api-smoke",
         expected_environment="apple-container",
         expected_context_tokens=8192,
+        expected_candidate_repo="phenotype-omlx",
+        expected_branch="feature/trusted-envelope",
+        expected_source_head="e" * 40,
     )
 
 
@@ -165,6 +168,15 @@ def test_rejects_qwen25_even_when_signature_is_valid() -> None:
     document = _sign(document)
 
     with pytest.raises(TrustedHarborEnvelopeError, match="model"):
+        verify_envelope(document, _policy())
+
+
+def test_rejects_signed_evidence_from_a_stale_source_head() -> None:
+    document = _envelope()
+    document["run"]["source_head"] = "0" * 40
+    document = _sign(document)
+
+    with pytest.raises(TrustedHarborEnvelopeError, match="source head"):
         verify_envelope(document, _policy())
 
 
