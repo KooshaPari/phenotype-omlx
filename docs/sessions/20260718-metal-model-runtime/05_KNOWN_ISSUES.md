@@ -5,6 +5,10 @@ Update 2026-08-05: host diffusion self-verification now exposes
 coverage at `finish()`. The stateless plan primitive remains available for individual block
 checks. This closes a host-contract gap; it is not Metal device execution or Qwen3.5 evidence.
 
+Update 2026-08-05: the no-model Qwen3.5 snapshot verifier now rejects symlinked refs, path-bearing
+snapshot revisions, snapshot-root escapes, and symlinked snapshot directories. This protects the
+integrity preflight from following a tampered cached `refs/main` outside the intended repository.
+
 | Priority | Area | Evidence and required resolution |
 |---|---|---|
 | P0 | eval-harness | RESOLVED (commit 2fafb76): ownership-safe ABI, deterministic suite ordering, GPQA/MMLU flexible readers, sentinel-preserved decode contract. 49 tests pass. |

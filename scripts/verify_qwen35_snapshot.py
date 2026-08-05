@@ -49,12 +49,21 @@ def _snapshot_dir(model_id: str, cache_root: Path) -> Path:
     owner, name = model_id.split("/", 1)
     repo = cache_root / f"models--{owner}--{name}"
     ref = repo / "refs" / "main"
-    if not ref.is_file():
+    if not ref.is_file() or ref.is_symlink():
         raise FileNotFoundError(f"missing cached main ref: {ref}")
-    snapshot = repo / "snapshots" / ref.read_text(encoding="utf-8").strip()
-    if not snapshot.is_dir():
+    revision = ref.read_text(encoding="utf-8").strip()
+    if not revision or "/" in revision or "\\" in revision:
+        raise ValueError("cached main ref must contain one snapshot revision")
+    snapshots_root = (repo / "snapshots").resolve()
+    snapshot = snapshots_root / revision
+    resolved_snapshot = snapshot.resolve(strict=False)
+    try:
+        resolved_snapshot.relative_to(snapshots_root)
+    except ValueError as exc:
+        raise ValueError("cached main ref escapes snapshots root") from exc
+    if snapshot.is_symlink() or not snapshot.is_dir():
         raise FileNotFoundError(f"missing cached snapshot: {snapshot}")
-    return snapshot
+    return resolved_snapshot
 
 
 def _sha256(path: Path) -> str:
