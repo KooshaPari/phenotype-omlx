@@ -330,6 +330,10 @@ satisfy the live workload or promotion gates.
 For the 8192-token NIAH mode, the preflight additionally proves the exact context binding and
 OpenAI-compatible endpoint are present before the future container boundary.
 
+The NIAH verifier gate is now strict on all three exact-context fields; a zero-token or missing
+context result cannot receive a passing reward. This is a task-contract hardening step, not live
+model evidence.
+
 ## Diffusion boundary finiteness gate (2026-08-05)
 
     host trajectory oracle finiteness rules
