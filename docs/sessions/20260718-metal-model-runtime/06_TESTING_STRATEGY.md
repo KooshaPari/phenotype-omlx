@@ -220,3 +220,8 @@ The ternary contract suite now proves exact host-to-Metal byte repacking for non
 with a partial K byte, rejects incorrect host buffer lengths, and exercises scalar matmul with an
 un-aligned output-column tail. These are host-only tests; they do not claim Metal shader parity or
 Qwen3.5 workload evidence.
+
+The focused Python verifier/rebind suites are invoked from the repository root with
+`PYTHONPATH=. uv run pytest ...`; invoking them without that path fails at collection because
+the repository's `scripts/` namespace is not installed as a package. With the explicit path,
+the current verifier/rebind regression count is 29 passing tests.
