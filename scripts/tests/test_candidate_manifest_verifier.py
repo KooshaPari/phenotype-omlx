@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -57,4 +58,15 @@ def test_verifier_rejects_nonfinite_json_constants(tmp_path: Path) -> None:
     path.write_text('{"candidate": {"score": NaN}}', encoding="utf-8")
 
     with pytest.raises(CandidateManifestError):
+        verify_candidate(path, ROOT)
+
+
+def test_verifier_fails_closed_without_no_follow_support(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "manifest.json"
+    path.write_bytes(MANIFEST.read_bytes())
+    monkeypatch.delattr(os, "O_NOFOLLOW")
+
+    with pytest.raises(CandidateManifestError, match="no-follow"):
         verify_candidate(path, ROOT)

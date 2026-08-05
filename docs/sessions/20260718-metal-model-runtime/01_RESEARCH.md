@@ -387,3 +387,8 @@ The trusted policy also binds `run.candidate_repo`, `run.branch`, and `run.sourc
 consumer's expected current candidate. A valid issuer signature over an older checkout is now
 rejected as stale evidence instead of being accepted merely because its model and task fields
 match.
+
+The read-only candidate-manifest verifier now uses the same descriptor-level no-follow rule for
+its manifest input and fails closed when the platform cannot provide that primitive. This keeps
+the promotion report from validating bytes after a path replacement or silently following a
+symlink.
