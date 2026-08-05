@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 
@@ -13,6 +14,19 @@ from scripts.verify_candidate_manifest import CandidateManifestError, verify_can
 
 ROOT = Path(__file__).parents[2]
 MANIFEST = ROOT / "docs/sessions/20260718-metal-model-runtime/candidate-manifest.json"
+
+
+def _with_recomputed_integrity(document: dict) -> dict:
+    payload = {key: value for key, value in document.items() if key != "integrity"}
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    document["integrity"]["canonical_sha256"] = hashlib.sha256(encoded).hexdigest()
+    return document
 
 
 def test_current_manifest_is_blocked_when_production_paths_drift() -> None:
@@ -59,6 +73,28 @@ def test_verifier_rejects_nonfinite_json_constants(tmp_path: Path) -> None:
 
     with pytest.raises(CandidateManifestError):
         verify_candidate(path, ROOT)
+
+
+def test_verifier_rejects_candidate_branch_mismatch(tmp_path: Path) -> None:
+    document = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    document["candidate"]["branch"] = "untrusted-branch"
+    path = tmp_path / "branch-mismatch.json"
+    path.write_text(json.dumps(_with_recomputed_integrity(document)), encoding="utf-8")
+
+    report = verify_candidate(path, ROOT)
+
+    assert "candidate branch does not match repository branch" in report["reasons"]
+
+
+def test_verifier_rejects_unbound_metal_provenance(tmp_path: Path) -> None:
+    document = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    document["verification"]["metal_compile_provenance"]["candidate_source_head"] = "0" * 40
+    path = tmp_path / "metal-mismatch.json"
+    path.write_text(json.dumps(_with_recomputed_integrity(document)), encoding="utf-8")
+
+    report = verify_candidate(path, ROOT)
+
+    assert "Metal artifact candidate source head does not match candidate" in report["reasons"]
 
 
 def test_verifier_fails_closed_without_no_follow_support(
