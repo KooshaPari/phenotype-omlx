@@ -196,6 +196,10 @@ The policy fixture now pins the candidate repository, branch, and exact source H
 envelope with a stale source head is rejected. This is a local policy regression and does not
 assert that the fixture signer is an upstream Portage or Hub authority.
 
+The candidate-manifest gate additionally rejects execution when no-follow filesystem support is
+available, covering the secure file-ingress invariant without changing the manifest's intentionally
+blocked promotion verdict.
+
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.

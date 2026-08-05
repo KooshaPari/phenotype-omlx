@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
+import stat
 import subprocess
 from typing import Any, Mapping
 
@@ -60,16 +62,35 @@ def _canonical_digest(document: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _read_manifest_text(path: Path) -> str:
+    nofollow = getattr(os, "O_NOFOLLOW", None)
+    if nofollow is None:
+        raise CandidateManifestError("manifest requires no-follow filesystem support")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | nofollow)
+    except FileNotFoundError as exc:
+        raise CandidateManifestError("manifest must be a regular file") from exc
+    except OSError as exc:
+        raise CandidateManifestError("manifest must be a regular file") from exc
+    try:
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+                raise CandidateManifestError("manifest must be a regular file")
+            return handle.read()
+    except OSError as exc:
+        raise CandidateManifestError("cannot read manifest") from exc
+
+
 def _load_manifest(path: Path) -> dict[str, Any]:
-    if path.is_symlink() or not path.is_file():
-        raise CandidateManifestError("manifest must be a regular file")
     try:
         value = json.loads(
-            path.read_text(encoding="utf-8"),
+            _read_manifest_text(path),
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite,
         )
-    except (OSError, UnicodeError, json.JSONDecodeError, CandidateManifestError) as exc:
+    except CandidateManifestError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise CandidateManifestError("manifest is not valid UTF-8 JSON") from exc
     if not isinstance(value, dict):
         raise CandidateManifestError("manifest root must be an object")
