@@ -146,7 +146,11 @@ pub fn ternary_gemm_metal_from_host(
     n: usize,
     artifact: &crate::MetallibArtifact,
 ) -> Result<Vec<f32>, TernaryGemmError> {
-    let packed_weights = model_kernels::ternary_repack_for_metal(host_packed_weights, k, n)
+    let packed_weights = model_kernels::quantized::ternary_repack_for_metal(
+        host_packed_weights,
+        k,
+        n,
+    )
         .map_err(|error| TernaryGemmError::HostPackedLayout(error.to_string()))?;
     ternary_gemm_metal(activations, &packed_weights, scales, m, k, n, artifact)
 }
