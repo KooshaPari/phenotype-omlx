@@ -88,6 +88,26 @@ fi
 grep -q 'conflict marker' "${TEST_ROOT}/conflicted.err"
 [[ ! -s "${CALL_LOG}" ]]
 
+NONGIT_PORTAGE="${TEST_ROOT}/nongit-portage"
+mkdir -p "${NONGIT_PORTAGE}/packages/harbor-langfuse/src"
+
+set +e
+PHENO_EXECUTION_WINDOW_ID='window-1234' \
+  PORTAGE_ROOT="${NONGIT_PORTAGE}" \
+  LANGFUSE_PUBLIC_KEY=public \
+  LANGFUSE_SECRET_KEY=secret \
+  bash "${RUNNER}" --policy >"${TEST_ROOT}/nongit.out" 2>"${TEST_ROOT}/nongit.err"
+nongit_rc=$?
+set -e
+
+if [[ "${nongit_rc}" -ne 2 ]]; then
+  cat "${TEST_ROOT}/nongit.err" >&2
+  printf '[test_harbor_execution_window] expected non-Git-root exit 2, got %s\n' "${nongit_rc}" >&2
+  exit 1
+fi
+grep -q 'Git checkout' "${TEST_ROOT}/nongit.err"
+[[ ! -s "${CALL_LOG}" ]]
+
 grep -q 'Qwen2\.5' "${RUNNER}"
 grep -q 'OPENAI_MODEL' "${RUNNER}"
 
