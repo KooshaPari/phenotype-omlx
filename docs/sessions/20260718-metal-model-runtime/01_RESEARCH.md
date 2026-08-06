@@ -426,3 +426,23 @@ the field was falsey. It now requires `requested_context_tokens=8192`, `prompt_t
 The same verifier now requires `exact_match` to be the JSON boolean `true` and `model` to be a
 string containing Qwen3.5, preventing truthy strings or malformed model fields from becoming
 passing evidence.
+
+### 2026-08-05 - Signed Harbor intake and desktop-first cross-platform topology
+
+The local operator environment file exists at `~/.config/phenotype/portage.env` and resolves a
+Portage checkout, but it contains no envelope path, execution-window identifier, authorization
+sidecar, signer public key, or trusted key identifier. No file matching the trusted Harbor schema
+was found in the OMLX checkout, Portage root, local runs, or temporary evidence locations.
+
+The checked-in `qwen35-niah-20260727-envelope.json` is an unsigned historical `schema_version: 2`
+record marked `evidence_label: live_failed` and `reported: false`; it is not admissible live
+evidence. The historical 8192-token result and Metal provenance are likewise not current-head,
+issuer-signed authorization envelopes. Therefore no Harbor or model workload is launched.
+
+The cross-platform boundary is explicit: OMLX owns model/runtime research and native perf-core;
+pheno-harness owns policy, evaluation, proxy, events, and metrics; Portage/Harbor owns execution;
+Forgecode and Helios-CLI own agent/harness orchestration. Existing provider registries already
+cover Ollama, LM Studio, llama.cpp, vLLM, and SGLang ingress. This avoids a second bespoke server
+layer. The current program remains Qwen3.5-only; stale Qwen2.5 examples in Portage are excluded
+from the active matrix. Desktop dual-GPU work is a later bounded 3090 Ti/Qwen3.5 lane, not a
+Mac/Metal prerequisite.

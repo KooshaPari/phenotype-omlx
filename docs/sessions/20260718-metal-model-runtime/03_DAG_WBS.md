@@ -347,3 +347,27 @@ rejected before reward calculation.
 The Metal dispatch boundary now rejects non-finite confidence and non-finite or negative entropy
 before allocation or catalogued pipeline lookup. This aligns the device boundary with the host
 trajectory oracle; it is host-only contract evidence and not device or Qwen3.5 execution evidence.
+
+## Signed Harbor and desktop execution DAG (2026-08-05)
+
+    [A] locate signed envelope + authorization sidecar
+      -> [B] verify issuer signature, policy, model, repo, branch, head, window
+      -> [C] verify Portage root and clean conflict-free checkout
+      -> [D] non-executing exact-Qwen3.5/NIAH-8192 preflight
+      -> [E] bounded authorized desktop 3090 Ti run (only if window permits)
+      -> [F] immutable result/artifact digests + Langfuse trace
+      -> [G] candidate rebind + verifier 64/64 + promotion review
+
+    [R1] OMLX native runtime/perf-core
+    [R2] pheno-harness policy/eval/proxy/events/metrics
+    [R3] Portage/Harbor execution substrate
+    [R4] Forgecode/Helios agent harness
+    [R5] existing Ollama/LM Studio/llama.cpp/vLLM/SGLang provider ingress
+
+Current state: [A] failed closed locally because no trusted signed envelope or authorization
+sidecar was present. Historical unsigned artifacts cannot advance [B]. The cross-platform plan
+keeps OMLX as the client/runtime layer, pheno-harness as the mature evaluation/control layer,
+and Portage/Harbor as the execution substrate; no bespoke duplicate serving stack is introduced.
+The next executable lane is a bounded Qwen3.5 desktop run on the RTX 3090 Ti after [A]-[D], with
+the GTX 1080 Ti treated as a separate capability probe because its prior vLLM readiness failed
+with `no kernel image is available`.
