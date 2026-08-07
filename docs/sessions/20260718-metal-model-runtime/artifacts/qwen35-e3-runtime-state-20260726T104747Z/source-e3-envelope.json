@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "kind": "niah_qwen35_e3_runtime_state",
+  "evidence_label": "live_verified",
+  "reported": true,
+  "synthetic": false,
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "backend": "mlx_lm_inprocess_paired_prefill",
+  "run_at": "2026-07-26T10:47:47Z",
+  "evidence_scope": "qwen35_full_attention_runtime_state_only",
+  "context_tokens": 512,
+  "e3_compression_qualifying": true,
+  "metrics": {
+    "state_contract": "qwen35_full_attention_turbokv_post_prefill_v1",
+    "model_id": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+    "full_attention_layers": [
+      3,
+      7,
+      11,
+      15,
+      19,
+      23
+    ],
+    "packed_state_bytes": 1625184,
+    "fp16_baseline_bytes": 9437184,
+    "resident_state_bytes": 1625184,
+    "byte_reduction": 0.827789306640625,
+    "e3_compression_qualifying": true,
+    "paired_prefill": true,
+    "prefill_prompt_tokens": 512,
+    "compaction_calls_reported": 7812000
+  },
+  "not_applicable_reason": null,
+  "non_claims": [
+    "Does not prove linear-recurrent state compression.",
+    "Does not claim Harbor/OpenAI cache visibility."
+  ]
+}

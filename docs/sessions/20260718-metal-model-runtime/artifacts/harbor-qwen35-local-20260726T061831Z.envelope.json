@@ -1,0 +1,65 @@
+{
+  "schema_version": "0.2",
+  "evidence_label": "live_verified",
+  "recorded_at": "2026-07-26T06:18:45Z",
+  "evidence_scope": "local_only_qwen35_niah_api_retrieval",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "candidate": {
+    "repository": "phenotype-omlx",
+    "source_revision": "c35ca83c395d03661860a46133cddcdd8b613654",
+    "endpoint_scope": "dedicated_8766"
+  },
+  "harbor": {
+    "job_id": "95405942-75c8-409c-906b-b20d416685a1",
+    "trial_name": "omlx-niah-api-smoke__dY6wRyo",
+    "task": "omlx/niah-api-smoke",
+    "environment": "apple-container",
+    "endpoint": "http://192.168.1.144:8766/v1",
+    "started_at": "2026-07-26T06:18:31.917454Z",
+    "finished_at": "2026-07-26T06:18:45.027442Z",
+    "n_trials": 1,
+    "n_errors": 0,
+    "n_retries": 0,
+    "fallback_applied": false,
+    "reward": 1.0,
+    "pass_at_1": 1.0
+  },
+  "telemetry": {
+    "mode": "local_only",
+    "remote_exported": false
+  },
+  "fr5_qualification": {
+    "e3_compression_qualifying": false,
+    "e3_missing_metrics": [
+      "packed_state_bytes",
+      "fp16_baseline_bytes",
+      "byte_reduction"
+    ],
+    "e4_local_retrieval_observed": true,
+    "release_eligible": false,
+    "non_claims": [
+      "not a Langfuse-exported run",
+      "not a remote-observability release gate",
+      "not a replacement for broader FR-5 evidence",
+      "not an FR-5 E3 compression proof"
+    ]
+  },
+  "artifacts": [
+    {"path": "harbor-qwen35-local-20260726T061831Z/result.json", "sha256": "359151e3bc88bdd53e2930b5d83ba119395dff3e4d6702aba925d59776168e67"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/evaluation_report.local.json", "sha256": "b93d9bb2fe7bade82149df3d3f3b1342e7b73e474661606ce3e955629c08cb79"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/candidate-manifest.local.json", "sha256": "b261ecb70940a610f18d2cbc7678d8bb1db48cc83efb533ef8204013936dc3a1"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/config.json", "sha256": "036342263fd286fe782ebe3d81808ed7ef361f2e3e90e964f9605ec23a852b83"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/lock.json", "sha256": "b2ad00b2b49cce70a7e5ac9839766f92e7460bd5150f299887ddba511c4c168d"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/job.log", "sha256": "5868e519b78e4f2f267470e411fb5e62ab85729eb3642ffbddd64e569930f993"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/omlx-niah-api-smoke__dY6wRyo/result.json", "sha256": "9ad5feca8804f018a6a7d6921d3a4492b3c7cdc0fe17112c13ca680f47893f51"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/omlx-niah-api-smoke__dY6wRyo/config.json", "sha256": "e329f443ce9a48c7cfb1f4b7f11ab82853bc34e89309d2e221e4632fbb8f9b9d"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/omlx-niah-api-smoke__dY6wRyo/artifacts/manifest.json", "sha256": "c1db653f487fb773c4f9247162ab3314e7f0584a486914b9874c4b3d6949e42d"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/omlx-niah-api-smoke__dY6wRyo/verifier/reward.txt", "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/omlx-niah-api-smoke__dY6wRyo/trial.log", "sha256": "5868e519b78e4f2f267470e411fb5e62ab85729eb3642ffbddd64e569930f993"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/omlx-niah-api-smoke__dY6wRyo/agent/oracle.txt", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    {"path": "harbor-qwen35-local-20260726T061831Z/omlx-niah-api-smoke__dY6wRyo/verifier/test-stdout.txt", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}
+  ],
+  "integrity": {
+    "canonical_sha256": "afe242058b504c4d307f2855776b78145b60a594c946782446f04c48796b05c9"
+  }
+}
