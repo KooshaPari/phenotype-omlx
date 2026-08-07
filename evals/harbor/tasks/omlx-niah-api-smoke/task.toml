@@ -26,6 +26,8 @@ gpus = 0
 mcp_servers = []
 
 # Host templates → container persistent env (Harbor resolve_env_vars).
+# 8k NIAH gate: token count comes from host Infisical NIAH_CONTEXT_TOKENS
+# (default 8192). For longer-context variants, see omlx-niah-32k-api-smoke.
 [environment.env]
 OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
