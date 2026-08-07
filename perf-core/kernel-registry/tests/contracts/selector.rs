@@ -59,17 +59,23 @@ fn setup_registry_with_two_records(
 fn selector_picks_lowest_p95_among_fresh_records() {
     let now = NOW_UNIX_MS;
     let (reg, id_low, id_high, key) = setup_registry_with_two_records(now);
-    let caps = DeviceCaps { capabilities: vec![Capability::MetalGpu] };
+    let caps = DeviceCaps {
+        capabilities: vec![Capability::MetalGpu],
+    };
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &caps,
         now,
     );
     match decision {
         SelectionDecision::Chosen { candidate, tuning } => {
-            assert_eq!(candidate.id, id_low,
-                "expected lowest-p95 candidate, got high");
+            assert_eq!(
+                candidate.id, id_low,
+                "expected lowest-p95 candidate, got high"
+            );
             assert_eq!(tuning.candidate_id, id_low);
             // id_high must NOT be the chosen one.
             assert_ne!(candidate.id, id_high);
@@ -83,8 +89,16 @@ fn selector_tie_breaks_by_candidate_id_ascending() {
     let now = NOW_UNIX_MS;
     let mut reg = KernelRegistry::new();
     // Two candidates with identical samples (and therefore identical p95).
-    let a = candidate_from("alpha-kernel", BackendKind::Metal, vec![Capability::MetalGpu]);
-    let b = candidate_from("beta-kernel", BackendKind::Metal, vec![Capability::MetalGpu]);
+    let a = candidate_from(
+        "alpha-kernel",
+        BackendKind::Metal,
+        vec![Capability::MetalGpu],
+    );
+    let b = candidate_from(
+        "beta-kernel",
+        BackendKind::Metal,
+        vec![Capability::MetalGpu],
+    );
     let id_a = a.id;
     let id_b = b.id;
     reg.register_candidate(a.clone());
@@ -95,17 +109,37 @@ fn selector_tie_breaks_by_candidate_id_ascending() {
     let samples: Vec<u64> = (0..50).map(|i| 200 + (i % 5)).collect();
     reg.attach_tuning_record(
         key.clone(),
-        tuning_record(id_a, key.clone(), &samples, Some(now + 86_400_000), "clang", "17.0.0", "rev-x"),
+        tuning_record(
+            id_a,
+            key.clone(),
+            &samples,
+            Some(now + 86_400_000),
+            "clang",
+            "17.0.0",
+            "rev-x",
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        tuning_record(id_b, key.clone(), &samples, Some(now + 86_400_000), "clang", "17.0.0", "rev-x"),
+        tuning_record(
+            id_b,
+            key.clone(),
+            &samples,
+            Some(now + 86_400_000),
+            "clang",
+            "17.0.0",
+            "rev-x",
+        ),
     );
 
-    let caps = DeviceCaps { capabilities: vec![Capability::MetalGpu] };
+    let caps = DeviceCaps {
+        capabilities: vec![Capability::MetalGpu],
+    };
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &caps,
         now,
     );
@@ -134,20 +168,39 @@ fn selector_rejects_all_when_tuning_records_are_stale() {
     // expires 1 ms before now
     reg.attach_tuning_record(
         key.clone(),
-        tuning_record(id, key.clone(), &samples, Some(now - 1), "clang", "17.0.0", "rev-s"),
+        tuning_record(
+            id,
+            key.clone(),
+            &samples,
+            Some(now - 1),
+            "clang",
+            "17.0.0",
+            "rev-s",
+        ),
     );
-    let caps = DeviceCaps { capabilities: vec![Capability::MetalGpu] };
+    let caps = DeviceCaps {
+        capabilities: vec![Capability::MetalGpu],
+    };
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &caps,
         now,
     );
     match decision {
-        SelectionDecision::Rejected { rejections, considered } => {
+        SelectionDecision::Rejected {
+            rejections,
+            considered,
+        } => {
             assert!(considered.contains(&id));
-            assert!(rejections.iter().any(|r| matches!(r.reason, RejectionReason::StaleTuning { .. })),
-                "expected StaleTuning reason, got {rejections:?}");
+            assert!(
+                rejections
+                    .iter()
+                    .any(|r| matches!(r.reason, RejectionReason::StaleTuning { .. })),
+                "expected StaleTuning reason, got {rejections:?}"
+            );
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
@@ -157,7 +210,11 @@ fn selector_rejects_all_when_tuning_records_are_stale() {
 fn selector_falls_back_to_reference_when_no_tuning_records() {
     let now = NOW_UNIX_MS;
     let mut reg = KernelRegistry::new();
-    let fast = candidate_from("fast-no-tune", BackendKind::Metal, vec![Capability::MetalGpu]);
+    let fast = candidate_from(
+        "fast-no-tune",
+        BackendKind::Metal,
+        vec![Capability::MetalGpu],
+    );
     let reference = Candidate {
         id: CandidateId(99),
         name: "reference-cpu".into(),
@@ -177,17 +234,23 @@ fn selector_falls_back_to_reference_when_no_tuning_records() {
     reg.register_candidate(reference);
 
     let key = key_with(OperatorKind::DenseMatmul, TEST_DEVICE_FINGERPRINT, 1);
-    let caps = DeviceCaps { capabilities: vec![Capability::MetalGpu] };
+    let caps = DeviceCaps {
+        capabilities: vec![Capability::MetalGpu],
+    };
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &caps,
         now,
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert_eq!(candidate.id, id_ref,
-                "with no tuning evidence the reference kernel must be chosen");
+            assert_eq!(
+                candidate.id, id_ref,
+                "with no tuning evidence the reference kernel must be chosen"
+            );
             assert_ne!(candidate.id, id_fast);
         }
         other => panic!("expected Chosen (reference fallback), got {other:?}"),
@@ -218,25 +281,41 @@ fn selector_returns_rejected_with_human_explanation_when_no_candidate_matches() 
     let mut key = key_with(OperatorKind::DenseMatmul, TEST_DEVICE_FINGERPRINT, 1);
     key.dtype = DType::Fp16;
 
-    let caps = DeviceCaps { capabilities: vec![Capability::MetalGpu, Capability::Bf16] };
+    let caps = DeviceCaps {
+        capabilities: vec![Capability::MetalGpu, Capability::Bf16],
+    };
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &caps,
         now,
     );
     let trace = reg.explain(&decision);
     match decision {
-        SelectionDecision::Rejected { rejections, considered } => {
+        SelectionDecision::Rejected {
+            rejections,
+            considered,
+        } => {
             assert!(considered.contains(&CandidateId(7)));
-            assert!(rejections.iter().any(|r| matches!(r.reason, RejectionReason::UnsupportedDtype(_))),
-                "expected UnsupportedDtype reason, got {rejections:?}");
+            assert!(
+                rejections
+                    .iter()
+                    .any(|r| matches!(r.reason, RejectionReason::UnsupportedDtype(_))),
+                "expected UnsupportedDtype reason, got {rejections:?}"
+            );
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
-    assert!(!trace.human_explanation.is_empty(),
-        "the trace must carry a human-readable explanation even on rejection");
-    assert!(trace.human_explanation.to_lowercase().contains("dtype")
-        || trace.human_explanation.to_lowercase().contains("reject"),
-        "explanation should mention the rejection category: {}", trace.human_explanation);
+    assert!(
+        !trace.human_explanation.is_empty(),
+        "the trace must carry a human-readable explanation even on rejection"
+    );
+    assert!(
+        trace.human_explanation.to_lowercase().contains("dtype")
+            || trace.human_explanation.to_lowercase().contains("reject"),
+        "explanation should mention the rejection category: {}",
+        trace.human_explanation
+    );
 }

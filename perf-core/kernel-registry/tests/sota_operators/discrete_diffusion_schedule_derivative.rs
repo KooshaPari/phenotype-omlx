@@ -60,7 +60,10 @@ fn forward_diff(schedule: Schedule, t: usize, num_steps: usize) -> f64 {
 
 /// Central diff at `t ∈ [1, N - 1]`: `(alpha(t + 1) - alpha(t - 1)) / 2`.
 fn central_diff(schedule: Schedule, t: usize, num_steps: usize) -> f64 {
-    debug_assert!(t >= 1 && t < num_steps, "central_diff requires 1 <= t < num_steps");
+    debug_assert!(
+        t >= 1 && t < num_steps,
+        "central_diff requires 1 <= t < num_steps"
+    );
     let a_next = schedule.alpha_at(t + 1, num_steps);
     let a_prev = schedule.alpha_at(t - 1, num_steps);
     (a_next - a_prev) / 2.0
@@ -68,7 +71,10 @@ fn central_diff(schedule: Schedule, t: usize, num_steps: usize) -> f64 {
 
 /// Backward diff at `t ∈ [1, N]`: `(alpha(t) - alpha(t - 1)) / 1`.
 fn backward_diff(schedule: Schedule, t: usize, num_steps: usize) -> f64 {
-    debug_assert!(t >= 1 && t <= num_steps, "backward_diff requires 1 <= t <= num_steps");
+    debug_assert!(
+        t >= 1 && t <= num_steps,
+        "backward_diff requires 1 <= t <= num_steps"
+    );
     let a_now = schedule.alpha_at(t, num_steps);
     let a_prev = schedule.alpha_at(t - 1, num_steps);
     a_now - a_prev

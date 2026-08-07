@@ -19,11 +19,7 @@ impl TargetBackend for AcceptAllTarget {
         })
     }
 
-    async fn verify_tree(
-        &self,
-        _: &[u32],
-        candidates: &[Vec<u32>],
-    ) -> Result<Vec<bool>, String> {
+    async fn verify_tree(&self, _: &[u32], candidates: &[Vec<u32>]) -> Result<Vec<bool>, String> {
         Ok(vec![true; candidates.len()])
     }
 
@@ -52,11 +48,7 @@ impl TargetBackend for RejectAllTarget {
         })
     }
 
-    async fn verify_tree(
-        &self,
-        _: &[u32],
-        candidates: &[Vec<u32>],
-    ) -> Result<Vec<bool>, String> {
+    async fn verify_tree(&self, _: &[u32], candidates: &[Vec<u32>]) -> Result<Vec<bool>, String> {
         Ok(vec![false; candidates.len()])
     }
 
@@ -80,12 +72,9 @@ async fn e2e_eagle3_full_step_cycle() {
         probability_threshold: 0.01,
     };
 
-    let mut engine = SpecDecodeEngine::new(
-        SpecDecodeConfig::default(),
-        Box::new(AcceptAllTarget),
-        None,
-    )
-    .with_proposal_mode(ProposalMode::Eagle3(config));
+    let mut engine =
+        SpecDecodeEngine::new(SpecDecodeConfig::default(), Box::new(AcceptAllTarget), None)
+            .with_proposal_mode(ProposalMode::Eagle3(config));
 
     for step in 0..5 {
         let prefix = vec![100 + step as u32];
@@ -121,12 +110,9 @@ async fn e2e_eagle3_reject_all_returns_empty() {
         probability_threshold: 0.01,
     };
 
-    let mut engine = SpecDecodeEngine::new(
-        SpecDecodeConfig::default(),
-        Box::new(RejectAllTarget),
-        None,
-    )
-    .with_proposal_mode(ProposalMode::Eagle3(config));
+    let mut engine =
+        SpecDecodeEngine::new(SpecDecodeConfig::default(), Box::new(RejectAllTarget), None)
+            .with_proposal_mode(ProposalMode::Eagle3(config));
 
     let branch_logits = vec![
         vec![(10, 0.6), (11, 0.3), (12, 0.1)],
@@ -146,28 +132,23 @@ async fn e2e_eagle3_reject_all_returns_empty() {
 
 #[tokio::test]
 async fn e2e_eagle3_state_accumulates_across_steps() {
-    let mut engine = SpecDecodeEngine::new(
-        SpecDecodeConfig::default(),
-        Box::new(AcceptAllTarget),
-        None,
-    )
-    .with_proposal_mode(ProposalMode::Eagle3(ParallelTreeConfig {
-        num_parallel_branches: 2,
-        max_depth: 2,
-        max_branches_per_node: 2,
-        probability_threshold: 0.01,
-    }));
+    let mut engine =
+        SpecDecodeEngine::new(SpecDecodeConfig::default(), Box::new(AcceptAllTarget), None)
+            .with_proposal_mode(ProposalMode::Eagle3(ParallelTreeConfig {
+                num_parallel_branches: 2,
+                max_depth: 2,
+                max_branches_per_node: 2,
+                probability_threshold: 0.01,
+            }));
 
     let mut total_accepted: usize = 0;
     for step in 0..3 {
-        let branch_logits = vec![
-            vec![
-                (500 + step as u32, 0.6),
-                (600 + step as u32, 0.3),
-                (700 + step as u32, 0.05),
-                (800 + step as u32, 0.05),
-            ],
-        ];
+        let branch_logits = vec![vec![
+            (500 + step as u32, 0.6),
+            (600 + step as u32, 0.3),
+            (700 + step as u32, 0.05),
+            (800 + step as u32, 0.05),
+        ]];
         let result = engine
             .step_eagle3(&[step as u32], branch_logits)
             .await
@@ -184,9 +165,15 @@ async fn e2e_eagle3_state_accumulates_across_steps() {
 fn e2e_eagle3_tree_stats() {
     let branch_logits = vec![
         vec![
-            (1, 0.5), (2, 0.3), (3, 0.2),
-            (4, 0.45), (5, 0.35), (6, 0.2),
-            (7, 0.4), (8, 0.35), (9, 0.25),
+            (1, 0.5),
+            (2, 0.3),
+            (3, 0.2),
+            (4, 0.45),
+            (5, 0.35),
+            (6, 0.2),
+            (7, 0.4),
+            (8, 0.35),
+            (9, 0.25),
         ],
         vec![(10, 0.6), (11, 0.3), (12, 0.1)],
     ];
@@ -199,14 +186,14 @@ fn e2e_eagle3_tree_stats() {
     };
 
     let trees = create_parallel_trees(0, branch_logits.clone(), &config);
-    assert_eq!(trees.len(), 3, "9 first-level candidates / 3 per branch = 3 trees");
+    assert_eq!(
+        trees.len(),
+        3,
+        "9 first-level candidates / 3 per branch = 3 trees"
+    );
 
     for (i, tree) in trees.iter().enumerate() {
-        assert!(
-            tree.node_count() > 0,
-            "Tree {} should have nodes",
-            i
-        );
+        assert!(tree.node_count() > 0, "Tree {} should have nodes", i);
         assert!(
             tree.depth > 0 || tree.root.children.is_empty(),
             "Tree {} should have depth > 0 or be single node",
@@ -220,10 +207,7 @@ fn e2e_eagle3_tree_stats() {
 
 #[test]
 fn e2e_eagle3_tree_leaf_paths_match_expected_count() {
-    let branch_logits = vec![
-        vec![(10, 0.5), (20, 0.3)],
-        vec![(30, 0.6), (40, 0.4)],
-    ];
+    let branch_logits = vec![vec![(10, 0.5), (20, 0.3)], vec![(30, 0.6), (40, 0.4)]];
     let tree = spec_decode::DraftTree::from_eagle3_predictions(0, branch_logits, 4, 3);
     let paths = tree.leaf_paths();
     assert_eq!(paths.len(), 4);
@@ -234,23 +218,17 @@ fn e2e_eagle3_tree_leaf_paths_match_expected_count() {
 
 #[tokio::test]
 async fn e2e_eagle3_vs_medusa_same_input() {
-    let mut eagle = SpecDecodeEngine::new(
-        SpecDecodeConfig::default(),
-        Box::new(AcceptAllTarget),
-        None,
-    )
-    .with_proposal_mode(ProposalMode::Eagle3(ParallelTreeConfig::default()));
+    let mut eagle =
+        SpecDecodeEngine::new(SpecDecodeConfig::default(), Box::new(AcceptAllTarget), None)
+            .with_proposal_mode(ProposalMode::Eagle3(ParallelTreeConfig::default()));
 
     let branch_logits = vec![vec![(10, 0.6), (11, 0.3), (12, 0.1)]];
 
     let eagle_result = eagle.step_eagle3(&[5], branch_logits).await;
     assert!(eagle_result.is_ok(), "EAGLE-3 should not panic");
 
-    let mut medusa = SpecDecodeEngine::new(
-        SpecDecodeConfig::default(),
-        Box::new(AcceptAllTarget),
-        None,
-    );
+    let mut medusa =
+        SpecDecodeEngine::new(SpecDecodeConfig::default(), Box::new(AcceptAllTarget), None);
 
     let medusa_result = medusa.step(&[5]).await;
     assert!(medusa_result.is_ok(), "Medusa legacy path should not panic");
@@ -265,12 +243,9 @@ fn e2e_eagle3_config_round_trip() {
         probability_threshold: 0.001,
     };
 
-    let engine = SpecDecodeEngine::new(
-        SpecDecodeConfig::default(),
-        Box::new(AcceptAllTarget),
-        None,
-    )
-    .with_proposal_mode(ProposalMode::Eagle3(config.clone()));
+    let engine =
+        SpecDecodeEngine::new(SpecDecodeConfig::default(), Box::new(AcceptAllTarget), None)
+            .with_proposal_mode(ProposalMode::Eagle3(config.clone()));
 
     match &engine.proposal_mode {
         ProposalMode::Eagle3(cfg) => {

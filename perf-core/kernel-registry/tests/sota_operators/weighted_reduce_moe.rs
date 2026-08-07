@@ -41,14 +41,9 @@
 //!   find this file via the `KernelOp::MoeReduce` tag search.
 
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry};
 
-use super::{
-    build_record, make_candidate, samples_with_p95, shape, NOW_UNIX_MS,
-    TEST_FINGERPRINT,
-};
+use super::{build_record, make_candidate, samples_with_p95, shape, NOW_UNIX_MS, TEST_FINGERPRINT};
 
 /// Canonical Qwen-MoE weighted-reduction shape: `(m=64, n=64, k=64,
 /// batch, seq=1, group=1)`. The numbers mirror the canonical
@@ -79,7 +74,11 @@ pub(crate) fn weighted_reduce_moe_key() -> KernelKey {
 /// tiled scalar backend. Returns the registry plus both `CandidateId`s
 /// so the bench envelope can attach distinct tuning records to each
 /// without re-deriving the deterministic hash.
-pub(crate) fn weighted_reduce_moe_registry() -> (KernelRegistry, kernel_registry::CandidateId, kernel_registry::CandidateId) {
+pub(crate) fn weighted_reduce_moe_registry() -> (
+    KernelRegistry,
+    kernel_registry::CandidateId,
+    kernel_registry::CandidateId,
+) {
     let min = shape(1, 1, 1, 1, 1, 1);
     let max = shape(256, 256, 256, 4096, 1, 1);
     let scalar = make_candidate(
@@ -94,11 +93,11 @@ pub(crate) fn weighted_reduce_moe_registry() -> (KernelRegistry, kernel_registry
     let tiled = make_candidate(
         "MoeReduceTiled",
         BackendKind::Cpu, // scalar-tile path runs on CPU; matches the
-                          // `grouped_gemm_moe.rs` pattern where the
-                          // second candidate is `BackendKind::Cpu`
-                          // rather than `BackendKind::Metal` because
-                          // no Metal kernel exists for weighted
-                          // reduction yet.
+        // `grouped_gemm_moe.rs` pattern where the
+        // second candidate is `BackendKind::Cpu`
+        // rather than `BackendKind::Metal` because
+        // no Metal kernel exists for weighted
+        // reduction yet.
         vec![Capability::Avx512],
         min,
         max,
@@ -130,16 +129,28 @@ fn weighted_reduce_moe_selector_picks_lowest_p95_tiled() {
     // Scalar p95 = 2400, tiled p95 = 1100 → tiled wins under Deterministic.
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(2400), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(2400),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_tiled, key.clone(), &samples_with_p95(1100), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_tiled,
+            key.clone(),
+            &samples_with_p95(1100),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
 
     let decision = reg.select_with_caps(
         &key,
-        kernel_registry::SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        kernel_registry::SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &super::full_capabilities(),
         NOW_UNIX_MS,
     );
@@ -186,11 +197,23 @@ fn weighted_reduce_moe_oracle_parity_scalar_vs_tiled() {
         .collect();
 
     let mut scalar_out = vec![0.0f32; num_tokens * hidden];
-    weighted_reduce(&expert_outs, &weights, experts_per_token, hidden, &mut scalar_out)
-        .expect("scalar reference must accept well-formed inputs");
+    weighted_reduce(
+        &expert_outs,
+        &weights,
+        experts_per_token,
+        hidden,
+        &mut scalar_out,
+    )
+    .expect("scalar reference must accept well-formed inputs");
     let mut tiled_out = vec![0.0f32; num_tokens * hidden];
-    weighted_reduce_tiled(&expert_outs, &weights, experts_per_token, hidden, &mut tiled_out)
-        .expect("tiled path must accept well-formed inputs");
+    weighted_reduce_tiled(
+        &expert_outs,
+        &weights,
+        experts_per_token,
+        hidden,
+        &mut tiled_out,
+    )
+    .expect("tiled path must accept well-formed inputs");
 
     assert_eq!(scalar_out.len(), tiled_out.len());
     for (i, (&x, &y)) in scalar_out.iter().zip(tiled_out.iter()).enumerate() {
@@ -226,13 +249,7 @@ fn weighted_reduce_moe_oracle_parity_scalar_vs_tiled() {
 fn weighted_reduce_moe_sweep_t_values() {
     use kernel_registry::selector::SelectionDecision;
 
-    let t_values: &[(usize, usize)] = &[
-        (1, 32),
-        (2, 128),
-        (3, 512),
-        (4, 2048),
-        (5, 4096),
-    ];
+    let t_values: &[(usize, usize)] = &[(1, 32), (2, 128), (3, 512), (4, 2048), (5, 4096)];
     let seeds: &[u64] = &[7, 19, 42, 73, 101];
 
     let (mut reg, _id_scalar, id_tiled) = weighted_reduce_moe_registry();
@@ -264,12 +281,19 @@ fn weighted_reduce_moe_sweep_t_values() {
             let p95 = 1100u64 + ((t as u64) * 50) + (seed % 17);
             reg.attach_tuning_record(
                 key.clone(),
-                build_record(id_tiled, key.clone(), &samples_with_p95(p95), Some(NOW_UNIX_MS + 86_400_000)),
+                build_record(
+                    id_tiled,
+                    key.clone(),
+                    &samples_with_p95(p95),
+                    Some(NOW_UNIX_MS + 86_400_000),
+                ),
             );
 
             let decision = reg.select_with_caps(
                 &key,
-                kernel_registry::SelectionPolicy::Deterministic { prefer_lower_p95: true },
+                kernel_registry::SelectionPolicy::Deterministic {
+                    prefer_lower_p95: true,
+                },
                 &super::full_capabilities(),
                 NOW_UNIX_MS,
             );
@@ -291,5 +315,8 @@ fn weighted_reduce_moe_sweep_t_values() {
         "bench envelope must produce exactly t_values * seeds rows (>= 25)"
     );
     // Floor: the task spec asks for >= 25 rows.
-    assert!(rows_pinned >= 25, "bench envelope must have >= 25 rows, got {rows_pinned}");
+    assert!(
+        rows_pinned >= 25,
+        "bench envelope must have >= 25 rows, got {rows_pinned}"
+    );
 }

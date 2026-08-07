@@ -1,8 +1,8 @@
 // turbo-quant-nim — Rust workspace member for Nim binding.
 
 use native_abi::{
-    DecodeRequest as RustDecodeRequest, EncodeRequest as RustEncodeRequest,
-    Status as RustStatus, ABI_VERSION_CURRENT,
+    DecodeRequest as RustDecodeRequest, EncodeRequest as RustEncodeRequest, Status as RustStatus,
+    ABI_VERSION_CURRENT,
 };
 
 #[derive(Debug, Clone)]
@@ -20,7 +20,15 @@ impl NimQuantizedTensor {
 
     pub fn decode(&self, n: usize, group_size: usize, bits: u8) -> Vec<f32> {
         let mut out = vec![0.0; n];
-        let status = decode_v1(&self.packed, &self.scales, &self.zeros, n, group_size, bits, &mut out);
+        let status = decode_v1(
+            &self.packed,
+            &self.scales,
+            &self.zeros,
+            n,
+            group_size,
+            bits,
+            &mut out,
+        );
         if status != RustStatus::Ok {
             eprintln!("Nim decode failed with status {:?}", status);
         }
@@ -28,7 +36,11 @@ impl NimQuantizedTensor {
     }
 }
 
-pub fn encode_v1(data: &[f32], bits: u8, group_size: usize) -> Result<NimQuantizedTensor, RustStatus> {
+pub fn encode_v1(
+    data: &[f32],
+    bits: u8,
+    group_size: usize,
+) -> Result<NimQuantizedTensor, RustStatus> {
     let n_groups = native_abi::group_count(data.len(), group_size);
     let packed_len = native_abi::expected_packed_len(data.len(), bits);
 

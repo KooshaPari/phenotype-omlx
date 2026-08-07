@@ -30,14 +30,9 @@
 //!   registry factory used by every test in this file.
 
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry};
 
-use super::{
-    build_record, make_candidate, samples_with_p95, shape, NOW_UNIX_MS,
-    TEST_FINGERPRINT,
-};
+use super::{build_record, make_candidate, samples_with_p95, shape, NOW_UNIX_MS, TEST_FINGERPRINT};
 
 /// Canonical Qwen-MoE grouped-GEMM shape: `(m=64, n=64, k=64,
 /// batch=64, seq=1, group=1)`. The numbers are the canonical
@@ -66,7 +61,11 @@ pub(crate) fn grouped_gemm_moe_key() -> KernelKey {
 /// scalar backend. Returns the registry plus both `CandidateId`s so
 /// the bench envelope can attach distinct tuning records to each
 /// without re-deriving the deterministic hash.
-pub(crate) fn grouped_gemm_moe_registry() -> (KernelRegistry, kernel_registry::CandidateId, kernel_registry::CandidateId) {
+pub(crate) fn grouped_gemm_moe_registry() -> (
+    KernelRegistry,
+    kernel_registry::CandidateId,
+    kernel_registry::CandidateId,
+) {
     let min = shape(1, 1, 1, 1, 1, 1);
     let max = shape(256, 256, 256, 4096, 1, 1);
     let scalar = make_candidate(
@@ -81,10 +80,10 @@ pub(crate) fn grouped_gemm_moe_registry() -> (KernelRegistry, kernel_registry::C
     let tiled = make_candidate(
         "GroupedGemmMoeTiled",
         BackendKind::Cpu, // scalar-tile path runs on CPU; matches the
-                          // `lfm_routing.rs` pattern where the second
-                          // candidate is `BackendKind::Cpu` rather
-                          // than `BackendKind::Metal` because no Metal
-                          // kernel exists for grouped GEMM yet.
+        // `lfm_routing.rs` pattern where the second
+        // candidate is `BackendKind::Cpu` rather
+        // than `BackendKind::Metal` because no Metal
+        // kernel exists for grouped GEMM yet.
         vec![Capability::Avx512],
         min,
         max,
@@ -116,16 +115,28 @@ fn grouped_gemm_moe_selector_picks_lowest_p95_tiled() {
     // Scalar p95 = 2400, tiled p95 = 1100 → tiled wins under Deterministic.
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(2400), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(2400),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_tiled, key.clone(), &samples_with_p95(1100), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_tiled,
+            key.clone(),
+            &samples_with_p95(1100),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
 
     let decision = reg.select_with_caps(
         &key,
-        kernel_registry::SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        kernel_registry::SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &super::full_capabilities(),
         NOW_UNIX_MS,
     );
@@ -163,15 +174,13 @@ fn grouped_gemm_moe_oracle_parity_scalar_vs_tiled() {
     let mut act_rng = Lcg::new(0xA1_B2_C3_D4);
     let a: Vec<f32> = (0..num_tokens * k).map(|_| act_rng.next_signed()).collect();
     let mut exp_rng = Lcg::new(0xFEED_FACE);
-    let b: Vec<f32> = (0..num_experts * k * n).map(|_| exp_rng.next_signed()).collect();
+    let b: Vec<f32> = (0..num_experts * k * n)
+        .map(|_| exp_rng.next_signed())
+        .collect();
     // Round-robin assignment: each expert owns `num_tokens / num_experts`
     // tokens, evenly distributed.
     let buckets: Vec<Vec<usize>> = (0..num_experts)
-        .map(|e| {
-            (0..num_tokens)
-                .filter(|t| t % num_experts == e)
-                .collect()
-        })
+        .map(|e| (0..num_tokens).filter(|t| t % num_experts == e).collect())
         .collect();
 
     let mut scalar_out = vec![0.0f32; num_tokens * n];
@@ -212,13 +221,7 @@ fn grouped_gemm_moe_oracle_parity_scalar_vs_tiled() {
 fn grouped_gemm_moe_sweep_t_values() {
     use kernel_registry::selector::SelectionDecision;
 
-    let t_values: &[(usize, usize)] = &[
-        (1, 32),
-        (2, 128),
-        (3, 512),
-        (4, 2048),
-        (5, 4096),
-    ];
+    let t_values: &[(usize, usize)] = &[(1, 32), (2, 128), (3, 512), (4, 2048), (5, 4096)];
     let seeds: &[u64] = &[7, 19, 42, 73, 101];
 
     let (mut reg, _id_scalar, id_tiled) = grouped_gemm_moe_registry();
@@ -248,12 +251,19 @@ fn grouped_gemm_moe_sweep_t_values() {
             let p95 = 1100u64 + ((t as u64) * 50) + (seed % 17);
             reg.attach_tuning_record(
                 key.clone(),
-                build_record(id_tiled, key.clone(), &samples_with_p95(p95), Some(NOW_UNIX_MS + 86_400_000)),
+                build_record(
+                    id_tiled,
+                    key.clone(),
+                    &samples_with_p95(p95),
+                    Some(NOW_UNIX_MS + 86_400_000),
+                ),
             );
 
             let decision = reg.select_with_caps(
                 &key,
-                kernel_registry::SelectionPolicy::Deterministic { prefer_lower_p95: true },
+                kernel_registry::SelectionPolicy::Deterministic {
+                    prefer_lower_p95: true,
+                },
                 &super::full_capabilities(),
                 NOW_UNIX_MS,
             );
@@ -275,7 +285,10 @@ fn grouped_gemm_moe_sweep_t_values() {
         "bench envelope must produce exactly t_values * seeds rows (>= 25)"
     );
     // Floor: the task spec asks for >= 25 rows.
-    assert!(rows_pinned >= 25, "bench envelope must have >= 25 rows, got {rows_pinned}");
+    assert!(
+        rows_pinned >= 25,
+        "bench envelope must have >= 25 rows, got {rows_pinned}"
+    );
 }
 
 // =============================================================================
@@ -312,7 +325,9 @@ fn dispatch_aware_writeback_matches_naive_for_random_dispatch() {
     let n: usize = 16;
     let mut rng = Lcg::new(0xD15C_A17C);
     let activations: Vec<f32> = (0..num_tokens * k).map(|_| rng.next_signed()).collect();
-    let experts: Vec<f32> = (0..num_experts * k * n).map(|_| rng.next_signed()).collect();
+    let experts: Vec<f32> = (0..num_experts * k * n)
+        .map(|_| rng.next_signed())
+        .collect();
 
     // Top_k=1 round-robin: token t -> expert (t + offset) % num_experts.
     let offset = (Lcg::new(0xABC).next_u64() % num_experts as u64) as usize;
@@ -334,8 +349,8 @@ fn dispatch_aware_writeback_matches_naive_for_random_dispatch() {
     // Dispatch-aware path: stage the (already-produced) gemm_out
     // rows through the per-expert blocks, then coalesce_writeback
     // into a residual buffer.
-    let stage = stage_expert_outputs(&gemm_out, &plan, n)
-        .expect("stage must accept well-formed inputs");
+    let stage =
+        stage_expert_outputs(&gemm_out, &plan, n).expect("stage must accept well-formed inputs");
     let mut out = vec![f32::NAN; num_tokens * n];
     coalesced_writeback(&stage, num_tokens, n, &mut out)
         .expect("writeback must accept well-formed inputs");
@@ -355,21 +370,19 @@ fn dispatch_aware_writeback_matches_naive_for_random_dispatch() {
 #[test]
 fn writeback_coalesces_into_residual_buffer_byte_equal_to_scalar_reference() {
     use model_kernels::common::Lcg;
-    use model_kernels::moe::{
-        coalesced_writeback, moe_dispatch, stage_expert_outputs,
-    };
+    use model_kernels::moe::{coalesced_writeback, moe_dispatch, stage_expert_outputs};
 
     let num_tokens: usize = 6;
     let num_experts: usize = 3;
     let hidden: usize = 4;
     let mut rng = Lcg::new(0xCAFE_F00D);
-    let expert_outs: Vec<f32> = (0..num_tokens * hidden).map(|_| rng.next_signed()).collect();
+    let expert_outs: Vec<f32> = (0..num_tokens * hidden)
+        .map(|_| rng.next_signed())
+        .collect();
     let token_indices: Vec<usize> = (0..num_tokens).collect();
     // Hand-rolled assignment: t -> (t % num_experts) so the
     // coverage spans all three experts.
-    let assignments: Vec<(usize, f32)> = (0..num_tokens)
-        .map(|t| (t % num_experts, 1.0))
-        .collect();
+    let assignments: Vec<(usize, f32)> = (0..num_tokens).map(|t| (t % num_experts, 1.0)).collect();
     let plan = moe_dispatch(&token_indices, &assignments, num_experts, 2.0)
         .expect("dispatch must accept well-formed inputs");
 

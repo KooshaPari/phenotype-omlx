@@ -56,17 +56,33 @@ fn gate_direction_at_most_is_respected() {
 
 #[test]
 fn policy_production_metrics_round_trip() {
-    let p1 = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::P95 };
+    let p1 = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::P95,
+    };
     assert_eq!(p1.metric(), Metric::P95);
-    let p2 = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::P99 };
+    let p2 = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::P99,
+    };
     assert_eq!(p2.metric(), Metric::P99);
-    let p3 = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::EnergyPerOp };
+    let p3 = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::EnergyPerOp,
+    };
     assert_eq!(p3.metric(), Metric::EnergyPerOp);
-    let p4 = SelectionPolicy::Production { gates: Vec::new(), metric: Metric::Dispatches };
+    let p4 = SelectionPolicy::Production {
+        gates: Vec::new(),
+        metric: Metric::Dispatches,
+    };
     assert_eq!(p4.metric(), Metric::Dispatches);
-    let d = SelectionPolicy::Deterministic { prefer_lower_p95: true };
+    let d = SelectionPolicy::Deterministic {
+        prefer_lower_p95: true,
+    };
     assert_eq!(d.metric(), Metric::P95);
-    let d99 = SelectionPolicy::Deterministic { prefer_lower_p95: false };
+    let d99 = SelectionPolicy::Deterministic {
+        prefer_lower_p95: false,
+    };
     assert_eq!(d99.metric(), Metric::P99);
     let exp = SelectionPolicy::ExperimentalOnly;
     assert_eq!(exp.metric(), Metric::P95);

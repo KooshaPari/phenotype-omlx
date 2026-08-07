@@ -14,8 +14,8 @@
 
 use kernel_registry::{
     evaluate_for_production, AttentionKind, CandidateId, DType, GateDirection, KernelKey,
-    OperatorKind, PromotionAction, PromotionRecord, PromotionValidator, QuantizationPolicy,
-    QualityAttachment, QualityEvidence, QualityGate, ShapeSignature, TuningRecord,
+    OperatorKind, PromotionAction, PromotionRecord, PromotionValidator, QualityAttachment,
+    QualityEvidence, QualityGate, QuantizationPolicy, ShapeSignature, TuningRecord,
 };
 use proptest::prelude::*;
 
@@ -84,7 +84,10 @@ fn arb_promotable_record() -> impl Strategy<Value = PromotionRecord> {
             0..=3,
         ),
         prop_oneof![Just("ci-bot".to_string()), Just("manual".to_string())],
-        prop_oneof![Just(String::new()), Just("within 1.05x baseline".to_string())],
+        prop_oneof![
+            Just(String::new()),
+            Just("within 1.05x baseline".to_string())
+        ],
         prop::option::of(Just("trace-1".to_string())),
     )
         .prop_map(
@@ -159,7 +162,10 @@ fn arb_unique_id_record() -> impl Strategy<Value = PromotionRecord> {
             0u64..=1024u64,
             prop_oneof![Just("rev-7".to_string()), Just("rev-8".to_string())],
             prop_oneof![Just("ci-bot".to_string()), Just("manual".to_string())],
-            prop_oneof![Just(String::new()), Just("within 1.05x baseline".to_string())],
+            prop_oneof![
+                Just(String::new()),
+                Just("within 1.05x baseline".to_string())
+            ],
             prop::option::of(Just("trace-1".to_string())),
         )
             .prop_map(
@@ -425,7 +431,11 @@ fn promotion_validator_is_concurrency_safe() {
     let mut promoted = 0usize;
     for h in handles {
         let action = h.join().expect("thread ok");
-        if let PromotionAction::Promote { record, decision: _ } = action {
+        if let PromotionAction::Promote {
+            record,
+            decision: _,
+        } = action
+        {
             assert!(record.verify_content_hash(), "content hash must verify");
             assert!(
                 record.verify_signature(b"signing-key-bytes"),

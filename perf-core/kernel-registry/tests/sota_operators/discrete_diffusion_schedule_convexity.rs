@@ -56,7 +56,10 @@ use super::discrete_diffusion_l2::Schedule;
 /// Mirrors the Turn-12 `central_diff` helper style.
 #[inline]
 fn central_diff_2nd(schedule: Schedule, t: usize, num_steps: usize) -> f64 {
-    debug_assert!(t > 0 && t < num_steps, "central_diff_2nd requires 0 < t < N");
+    debug_assert!(
+        t > 0 && t < num_steps,
+        "central_diff_2nd requires 0 < t < N"
+    );
     let a_prev = schedule.alpha_at(t - 1, num_steps);
     let a_now = schedule.alpha_at(t, num_steps);
     let a_next = schedule.alpha_at(t + 1, num_steps);
