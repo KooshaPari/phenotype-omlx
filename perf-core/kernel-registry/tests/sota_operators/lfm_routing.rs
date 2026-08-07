@@ -14,9 +14,7 @@
 
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
 use kernel_registry::selector::SelectionDecision;
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy};
 
 use super::{
     build_record, full_capabilities, make_candidate, samples_with_p95, shape, NOW_UNIX_MS,
@@ -169,7 +167,12 @@ fn lfm_short_conv_deterministic_picks_lowest_p95_metal_backend() {
     let key = lfm_short_conv_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_cpu, key.clone(), &samples_with_p95(2400), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_cpu,
+            key.clone(),
+            &samples_with_p95(2400),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
@@ -182,12 +185,19 @@ fn lfm_short_conv_deterministic_picks_lowest_p95_metal_backend() {
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(900), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(900),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
 
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &full_capabilities(),
         NOW_UNIX_MS,
     );
@@ -245,9 +255,7 @@ fn lfm_dynamic_compute_routes_easy_tokens_to_short_conv() {
 #[test]
 fn lfm_dynamic_compute_routes_monotonic_with_difficulty() {
     let steps = 32;
-    let difficulties: Vec<f32> = (0..steps)
-        .map(|i| i as f32 / (steps - 1) as f32)
-        .collect();
+    let difficulties: Vec<f32> = (0..steps).map(|i| i as f32 / (steps - 1) as f32).collect();
     let routes = lfm_router_oracle(&difficulties);
     assert_eq!(routes.len(), steps);
 
@@ -297,7 +305,10 @@ fn lfm_dynamic_compute_total_compute_within_budget() {
     // the router must actually dispatch to LongConv on at least one
     // token. With `deterministic_difficulties(8)` the last token has
     // difficulty 1.0 which routes to LongConv, so the floor holds.
-    let long_count = routes.iter().filter(|r| r.kernel_len == LONG_KERNEL_LEN).count();
+    let long_count = routes
+        .iter()
+        .filter(|r| r.kernel_len == LONG_KERNEL_LEN)
+        .count();
     assert!(
         long_count >= 1,
         "router must dispatch at least one token to LongConv (batch={batch})"
@@ -316,22 +327,28 @@ fn lfm_gate_signal_byte_identical_to_oracle() {
     // A blend of anchor scores plus a few edge values at the band
     // boundaries (0.3 and 0.7 inclusive).
     let difficulties: Vec<f32> = vec![
-        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.299, 0.3001, 0.699, 0.7001,
-        0.55,
+        0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.299, 0.3001, 0.699, 0.7001, 0.55,
     ];
     assert_eq!(difficulties.len(), batch);
 
     let oracle = lfm_router_oracle(&difficulties);
     let reference = lfm_router_reference(&difficulties);
 
-    assert_eq!(oracle.len(), reference.len(), "routers must agree on length");
+    assert_eq!(
+        oracle.len(),
+        reference.len(),
+        "routers must agree on length"
+    );
     assert_eq!(oracle.len(), batch);
 
     for (i, (a, b)) in oracle.iter().zip(reference.iter()).enumerate() {
         // Every field must be byte-identical (no ULP drift in the
         // gate, no length drift in the kernel_len).
         assert_eq!(a.kernel_len, b.kernel_len, "token {i}: kernel_len drifted");
-        assert_eq!(a.gate, b.gate, "token {i}: gate byte mismatch between oracle and reference");
+        assert_eq!(
+            a.gate, b.gate,
+            "token {i}: gate byte mismatch between oracle and reference"
+        );
     }
 
     // Replay the oracle under the same input and assert byte
@@ -344,6 +361,9 @@ fn lfm_gate_signal_byte_identical_to_oracle() {
             a.gate, b.gate,
             "token {i}: gate byte drifted across runs (kernel not byte-deterministic)"
         );
-        assert_eq!(a.kernel_len, b.kernel_len, "token {i}: kernel_len drifted across runs");
+        assert_eq!(
+            a.kernel_len, b.kernel_len,
+            "token {i}: kernel_len drifted across runs"
+        );
     }
 }

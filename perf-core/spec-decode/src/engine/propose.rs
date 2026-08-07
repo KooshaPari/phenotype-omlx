@@ -13,8 +13,7 @@ impl SpecDecodeEngine {
         config: &tree_proposal::ParallelTreeConfig,
     ) -> tree_proposal::DraftTree {
         let root_token = self.state.history.back().copied().unwrap_or(0);
-        let trees =
-            tree_proposal::create_parallel_trees(root_token, branch_logits, config);
+        let trees = tree_proposal::create_parallel_trees(root_token, branch_logits, config);
         trees
             .into_iter()
             .next()
@@ -317,18 +316,13 @@ mod tests {
             Box::new(ConstantTarget(5)),
             None,
         )
-        .with_proposal_mode(ProposalMode::Eagle3(
-            tree_proposal::ParallelTreeConfig {
-                num_parallel_branches: 1,
-                max_depth: 2,
-                max_branches_per_node: 2,
-                probability_threshold: 0.01,
-            },
-        ));
-        let logits = vec![
-            vec![(5, 0.9), (3, 0.1)],
-            vec![(5, 0.8), (7, 0.2)],
-        ];
+        .with_proposal_mode(ProposalMode::Eagle3(tree_proposal::ParallelTreeConfig {
+            num_parallel_branches: 1,
+            max_depth: 2,
+            max_branches_per_node: 2,
+            probability_threshold: 0.01,
+        }));
+        let logits = vec![vec![(5, 0.9), (3, 0.1)], vec![(5, 0.8), (7, 0.2)]];
         let result = e.step_eagle3(&[1, 2, 3], logits).await.unwrap();
         assert!(!result.accepted.is_empty());
         assert_eq!(result.accepted[0].token_id, 5);
@@ -351,13 +345,10 @@ mod tests {
     fn engine_with_echokv_evicts_on_step() {
         use tree_proposal::ParallelTreeConfig;
         let config = ParallelTreeConfig::default();
-        let engine = SpecDecodeEngine::new(
-            SpecDecodeConfig::default(),
-            Box::new(AcceptAllTarget),
-            None,
-        )
-        .with_proposal_mode(ProposalMode::Eagle3(config))
-        .with_echokv(16);
+        let engine =
+            SpecDecodeEngine::new(SpecDecodeConfig::default(), Box::new(AcceptAllTarget), None)
+                .with_proposal_mode(ProposalMode::Eagle3(config))
+                .with_echokv(16);
 
         assert!(engine.kv_cache.is_some());
         assert_eq!(engine.kv_cache.as_ref().unwrap().len(), 0);

@@ -6,7 +6,8 @@
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
 use kernel_registry::selector::{RejectionReason, SelectionDecision};
 use kernel_registry::{
-    BackendKind, CandidateId, Capability, ExecutionTrace, KernelKey, KernelRegistry, SelectionPolicy,
+    BackendKind, CandidateId, Capability, ExecutionTrace, KernelKey, KernelRegistry,
+    SelectionPolicy,
 };
 
 use super::{
@@ -68,15 +69,30 @@ pub fn mamba_registry() -> (KernelRegistry, CandidateId, CandidateId, CandidateI
     let key = mamba_key();
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(5000), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(5000),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_simd, key.clone(), &samples_with_p95(2000), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_simd,
+            key.clone(),
+            &samples_with_p95(2000),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(1500), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(1500),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     (reg, id_scalar, id_simd, id_metal)
 }
@@ -86,7 +102,9 @@ fn mamba_scan_deterministic_picks_lowest_p95_metal_backend() {
     let (reg, _id_scalar, _id_simd, id_metal) = mamba_registry();
     let decision = reg.select_with_caps(
         &mamba_key(),
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -112,9 +130,11 @@ fn mamba_scan_experimental_only_picks_a_tunable_candidate() {
     );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
-            assert!(candidate.tunable,
+            assert!(
+                candidate.tunable,
                 "ExperimentalOnly must select a tunable candidate; got non-tunable {:?}",
-                candidate.name);
+                candidate.name
+            );
         }
         other => panic!("expected Chosen under ExperimentalOnly, got {other:?}"),
     }
@@ -125,18 +145,27 @@ fn mamba_scan_trace_lists_chosen_candidate() {
     let (reg, _id_scalar, _id_simd, id_metal) = mamba_registry();
     let decision = reg.select_with_caps(
         &mamba_key(),
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     let trace: ExecutionTrace = reg.explain(&decision);
-    assert_eq!(trace.selected, Some(id_metal),
-        "trace must record the chosen candidate id");
-    assert!(trace.tuning_record_id.is_some(),
-        "tuned selection must carry a tuning_record_id");
-    assert!(trace.human_explanation.contains(&format!("{}", id_metal)),
+    assert_eq!(
+        trace.selected,
+        Some(id_metal),
+        "trace must record the chosen candidate id"
+    );
+    assert!(
+        trace.tuning_record_id.is_some(),
+        "tuned selection must carry a tuning_record_id"
+    );
+    assert!(
+        trace.human_explanation.contains(&format!("{}", id_metal)),
         "human explanation must mention the chosen id; got {:?}",
-        trace.human_explanation);
+        trace.human_explanation
+    );
 }
 
 #[test]
@@ -161,25 +190,40 @@ fn mamba_scan_rejects_with_unsupported_dtype_when_key_dtype_mismatches() {
     key.dtype = DType::Fp32; // unsupported
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     // The trace lists every considered candidate id (the rejected one).
     let trace = reg.explain(&decision);
     match &decision {
-        SelectionDecision::Rejected { rejections, considered } => {
-            assert!(considered.contains(&id),
-                "candidate must appear in the considered list");
-            assert!(rejections.iter().any(|r| matches!(r.reason, RejectionReason::UnsupportedDtype(_))),
-                "expected UnsupportedDtype rejection, got {rejections:?}");
+        SelectionDecision::Rejected {
+            rejections,
+            considered,
+        } => {
+            assert!(
+                considered.contains(&id),
+                "candidate must appear in the considered list"
+            );
+            assert!(
+                rejections
+                    .iter()
+                    .any(|r| matches!(r.reason, RejectionReason::UnsupportedDtype(_))),
+                "expected UnsupportedDtype rejection, got {rejections:?}"
+            );
         }
         other => panic!("expected Rejected, got {other:?}"),
     }
     let trace_ids: Vec<CandidateId> = trace.considered.iter().map(|r| r.candidate).collect();
-    assert!(trace_ids.contains(&id),
-        "ExecutionTrace.considered must list every rejected candidate id; got {trace_ids:?}");
-    assert!(trace.human_explanation.to_lowercase().contains("dtype"),
+    assert!(
+        trace_ids.contains(&id),
+        "ExecutionTrace.considered must list every rejected candidate id; got {trace_ids:?}"
+    );
+    assert!(
+        trace.human_explanation.to_lowercase().contains("dtype"),
         "human explanation should categorize the rejection; got {:?}",
-        trace.human_explanation);
+        trace.human_explanation
+    );
 }

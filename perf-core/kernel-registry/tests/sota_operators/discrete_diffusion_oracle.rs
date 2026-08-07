@@ -29,14 +29,9 @@
 //!    path rather than ignored.
 
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry};
 
-use super::{
-    build_record, make_candidate, samples_with_p95, shape, NOW_UNIX_MS,
-    TEST_FINGERPRINT,
-};
+use super::{build_record, make_candidate, samples_with_p95, shape, NOW_UNIX_MS, TEST_FINGERPRINT};
 
 // ---------------------------------------------------------------------------
 // Noise schedules (linear + cosine).
@@ -179,7 +174,12 @@ pub(crate) struct DiscreteDiffusionOracle {
 }
 
 impl DiscreteDiffusionOracle {
-    pub(crate) fn new(vocab_size: u32, mask_token_id: u32, num_steps: usize, schedule: Schedule) -> Self {
+    pub(crate) fn new(
+        vocab_size: u32,
+        mask_token_id: u32,
+        num_steps: usize,
+        schedule: Schedule,
+    ) -> Self {
         // The mask token must be a valid vocab id so it round-trips
         // through the buffer byte representation.
         assert!(
@@ -194,7 +194,9 @@ impl DiscreteDiffusionOracle {
             vocab_size,
             mask_token_id,
             num_steps,
-            schedule: ContinuousSchedule { kind: continuous_kind },
+            schedule: ContinuousSchedule {
+                kind: continuous_kind,
+            },
         }
     }
 
@@ -233,7 +235,14 @@ impl DiscreteDiffusionOracle {
     /// schedule reaches `alpha(num_steps) = 0`, which means
     /// every newly-decoded position is re-masked — the fully-noised
     /// prior is restored at the boundary.
-    pub(crate) fn step(&self, x_t: &[u32], mask: &[bool], clean: &[u32], step: usize, seed: u64) -> Vec<u32> {
+    pub(crate) fn step(
+        &self,
+        x_t: &[u32],
+        mask: &[bool],
+        clean: &[u32],
+        step: usize,
+        seed: u64,
+    ) -> Vec<u32> {
         debug_assert_eq!(x_t.len(), clean.len());
         debug_assert_eq!(mask.len(), clean.len());
         debug_assert!(step < self.num_steps);
@@ -316,7 +325,11 @@ pub(crate) fn ddm_key(vocab_size: usize, num_steps: usize) -> KernelKey {
     }
 }
 
-pub(crate) fn ddm_registry() -> (KernelRegistry, kernel_registry::CandidateId, kernel_registry::CandidateId) {
+pub(crate) fn ddm_registry() -> (
+    KernelRegistry,
+    kernel_registry::CandidateId,
+    kernel_registry::CandidateId,
+) {
     let min = shape(1, 1, 1, 1, 1, 1);
     let max = shape(128, 64, 128, 4, 1, 1);
     let scalar = make_candidate(
@@ -345,11 +358,21 @@ pub(crate) fn ddm_registry() -> (KernelRegistry, kernel_registry::CandidateId, k
     let key = ddm_key(16, 8);
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_scalar, key.clone(), &samples_with_p95(9500), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_scalar,
+            key.clone(),
+            &samples_with_p95(9500),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     reg.attach_tuning_record(
         key.clone(),
-        build_record(id_metal, key.clone(), &samples_with_p95(2100), Some(NOW_UNIX_MS + 86_400_000)),
+        build_record(
+            id_metal,
+            key.clone(),
+            &samples_with_p95(2100),
+            Some(NOW_UNIX_MS + 86_400_000),
+        ),
     );
     (reg, id_scalar, id_metal)
 }

@@ -71,7 +71,10 @@ fn mod_routing_production_policy_selects_passing_quality_attachment() {
     let gate = QualityGate::at_least("mod-throughput", 0.90);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Production { gates: vec![gate], metric: Metric::P95 },
+        SelectionPolicy::Production {
+            gates: vec![gate],
+            metric: Metric::P95,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -163,7 +166,10 @@ fn mod_routing_production_policy_rejects_with_quality_gate_failed() {
     let gate = QualityGate::at_least("mod-throughput", 0.65);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Production { gates: vec![gate], metric: Metric::P95 },
+        SelectionPolicy::Production {
+            gates: vec![gate],
+            metric: Metric::P95,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -171,9 +177,9 @@ fn mod_routing_production_policy_rejects_with_quality_gate_failed() {
     // QualityGateFailed entries for both ids.
     let rejections = match &decision {
         SelectionDecision::Rejected { rejections, .. } => rejections.clone(),
-        SelectionDecision::Chosen { .. } => panic!(
-            "expected Rejected when all candidates fail the quality gate; got {decision:?}"
-        ),
+        SelectionDecision::Chosen { .. } => {
+            panic!("expected Rejected when all candidates fail the quality gate; got {decision:?}")
+        }
     };
     let metal_rejection = rejections
         .iter()
@@ -184,17 +190,30 @@ fn mod_routing_production_policy_rejects_with_quality_gate_failed() {
         .find(|r| r.candidate == id_reference)
         .expect("Reference must appear in the rejection list");
     match &metal_rejection.reason {
-        RejectionReason::QualityGateFailed { gate, observed, threshold } => {
+        RejectionReason::QualityGateFailed {
+            gate,
+            observed,
+            threshold,
+        } => {
             assert_eq!(gate, "mod-throughput");
-            assert!((*observed - 0.40).abs() < 1e-9, "observed must be 0.40, got {observed}");
-            assert!((*threshold - 0.65).abs() < 1e-9, "threshold must be 0.65, got {threshold}");
+            assert!(
+                (*observed - 0.40).abs() < 1e-9,
+                "observed must be 0.40, got {observed}"
+            );
+            assert!(
+                (*threshold - 0.65).abs() < 1e-9,
+                "threshold must be 0.65, got {threshold}"
+            );
         }
         other => panic!("expected QualityGateFailed for Metal, got {other:?}"),
     }
     match &reference_rejection.reason {
         RejectionReason::QualityGateFailed { gate, observed, .. } => {
             assert_eq!(gate, "mod-throughput");
-            assert!((*observed - 0.50).abs() < 1e-9, "observed must be 0.50, got {observed}");
+            assert!(
+                (*observed - 0.50).abs() < 1e-9,
+                "observed must be 0.50, got {observed}"
+            );
         }
         other => panic!("expected QualityGateFailed for Reference, got {other:?}"),
     }
@@ -254,7 +273,9 @@ fn mod_routing_deterministic_policy_tiebreaks_by_lower_id_when_metrics_match() {
 
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Deterministic { prefer_lower_p95: true },
+        SelectionPolicy::Deterministic {
+            prefer_lower_p95: true,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
@@ -326,15 +347,18 @@ fn mod_routing_production_policy_rejects_when_quality_evidence_missing() {
     let gate = QualityGate::at_least("mod-throughput", 0.65);
     let decision = reg.select_with_caps(
         &key,
-        SelectionPolicy::Production { gates: vec![gate], metric: Metric::P95 },
+        SelectionPolicy::Production {
+            gates: vec![gate],
+            metric: Metric::P95,
+        },
         &fresh_capabilities(),
         NOW_UNIX_MS,
     );
     let rejections = match &decision {
         SelectionDecision::Rejected { rejections, .. } => rejections.clone(),
-        SelectionDecision::Chosen { .. } => panic!(
-            "expected Rejected when no candidate has a QualityAttachment; got {decision:?}"
-        ),
+        SelectionDecision::Chosen { .. } => {
+            panic!("expected Rejected when no candidate has a QualityAttachment; got {decision:?}")
+        }
     };
     for id in [id_reference, id_metal] {
         let rejection = rejections

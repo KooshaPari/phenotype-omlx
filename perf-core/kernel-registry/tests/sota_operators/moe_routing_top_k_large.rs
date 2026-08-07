@@ -15,9 +15,7 @@
 //! - `moe_routing_top_k_4_weights_sum_to_one`
 //! - `moe_routing_top_k_8_changes_with_seed_two_distinct_decisions`
 
-use super::moe_routing_top_k_small::{
-    deterministic_logits, run_kernel_router, RoutingPolicy,
-};
+use super::moe_routing_top_k_small::{deterministic_logits, run_kernel_router, RoutingPolicy};
 
 // ---------------------------------------------------------------------------
 // Top-k stress coverage (turn-8 acceptance criteria).
@@ -46,14 +44,19 @@ fn moe_routing_top_k_4_byte_identical_64_experts() {
     let b = run_kernel_router(&logits, batch, num_experts, top_k, policy);
 
     assert_eq!(a.len(), batch, "router must emit one record per token");
-    assert_eq!(a, b, "two runs at top_k=4 over 64 experts must produce byte-identical routing tensors");
+    assert_eq!(
+        a, b,
+        "two runs at top_k=4 over 64 experts must produce byte-identical routing tensors"
+    );
 
     // Tight per-byte replay check: pick ids and f32 weight bits must
     // match exactly across runs.
     for t in 0..batch {
         for i in 0..top_k {
-            assert_eq!(a[t][i].0, b[t][i].0,
-                "token {t} pick {i} expert_id drifted across runs (top_k=4)");
+            assert_eq!(
+                a[t][i].0, b[t][i].0,
+                "token {t} pick {i} expert_id drifted across runs (top_k=4)"
+            );
             assert_eq!(a[t][i].1.to_bits(), b[t][i].1.to_bits(),
                 "token {t} pick {i} weight drifted across runs (kernel not byte-deterministic at top_k=4)");
         }
@@ -63,7 +66,11 @@ fn moe_routing_top_k_4_byte_identical_64_experts() {
     // that forgets to dedupe after picking.
     for (t, picks) in a.iter().enumerate() {
         let unique: std::collections::HashSet<usize> = picks.iter().map(|(e, _)| *e).collect();
-        assert_eq!(unique.len(), top_k, "token {t}: top_k=4 expert ids must be distinct");
+        assert_eq!(
+            unique.len(),
+            top_k,
+            "token {t}: top_k=4 expert ids must be distinct"
+        );
     }
 }
 
@@ -83,12 +90,17 @@ fn moe_routing_top_k_8_byte_identical_64_experts() {
     let b = run_kernel_router(&logits, batch, num_experts, top_k, policy);
 
     assert_eq!(a.len(), batch, "router must emit one record per token");
-    assert_eq!(a, b, "two runs at top_k=8 over 64 experts must produce byte-identical routing tensors");
+    assert_eq!(
+        a, b,
+        "two runs at top_k=8 over 64 experts must produce byte-identical routing tensors"
+    );
 
     for t in 0..batch {
         for i in 0..top_k {
-            assert_eq!(a[t][i].0, b[t][i].0,
-                "token {t} pick {i} expert_id drifted across runs (top_k=8)");
+            assert_eq!(
+                a[t][i].0, b[t][i].0,
+                "token {t} pick {i} expert_id drifted across runs (top_k=8)"
+            );
             assert_eq!(a[t][i].1.to_bits(), b[t][i].1.to_bits(),
                 "token {t} pick {i} weight drifted across runs (kernel not byte-deterministic at top_k=8)");
         }
@@ -96,14 +108,19 @@ fn moe_routing_top_k_8_byte_identical_64_experts() {
 
     for (t, picks) in a.iter().enumerate() {
         let unique: std::collections::HashSet<usize> = picks.iter().map(|(e, _)| *e).collect();
-        assert_eq!(unique.len(), top_k, "token {t}: top_k=8 expert ids must be distinct");
+        assert_eq!(
+            unique.len(),
+            top_k,
+            "token {t}: top_k=8 expert ids must be distinct"
+        );
         // Sanity: picks must be sorted by score DESC (and id ASC on
         // ties), which is the production ordering contract.
         for i in 1..top_k {
             assert!(
                 picks[i - 1].1 >= picks[i].1,
                 "token {t}: top_k=8 picks must be non-increasing in weight (got {} < {})",
-                picks[i - 1].1, picks[i].1
+                picks[i - 1].1,
+                picks[i].1
             );
         }
     }
@@ -188,8 +205,10 @@ fn moe_routing_top_k_8_changes_with_seed_two_distinct_decisions() {
     let a_again = run_kernel_router(&logits_a, batch, num_experts, top_k, policy_a);
     for t in 0..batch {
         for i in 0..top_k {
-            assert_eq!(a[t][i].0, a_again[t][i].0,
-                "token {t} pick {i} expert_id drifted on replay (top_k=8)");
+            assert_eq!(
+                a[t][i].0, a_again[t][i].0,
+                "token {t} pick {i} expert_id drifted on replay (top_k=8)"
+            );
             assert_eq!(a[t][i].1.to_bits(), a_again[t][i].1.to_bits(),
                 "token {t} pick {i} weight drifted on replay (kernel not byte-deterministic at top_k=8)");
         }

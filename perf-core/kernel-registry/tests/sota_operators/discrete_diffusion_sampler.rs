@@ -82,7 +82,9 @@ impl SelectorMetadata {
         Self {
             family: OperatorKind::DiscreteDiffusion,
             mode: SelectorMode::Decode,
-            policy: SelectionPolicy::Deterministic { prefer_lower_p95: true },
+            policy: SelectionPolicy::Deterministic {
+                prefer_lower_p95: true,
+            },
             kind: StepKind::MaskedDiffusionStep,
         }
     }
@@ -101,7 +103,12 @@ fn ddm_metadata_decode_deterministic_picks_lowest_p95_metal_backend() {
     let (reg, _id_scalar, id_metal) = ddm_registry();
     let meta = SelectorMetadata::decode_deterministic();
     let key = ddm_key(16, 8);
-    let decision = reg.select_with_caps(&key, meta.policy.clone(), &fresh_capabilities(), NOW_UNIX_MS);
+    let decision = reg.select_with_caps(
+        &key,
+        meta.policy.clone(),
+        &fresh_capabilities(),
+        NOW_UNIX_MS,
+    );
     match decision {
         SelectionDecision::Chosen { candidate, .. } => {
             assert_eq!(

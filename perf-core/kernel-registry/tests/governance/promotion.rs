@@ -108,8 +108,12 @@ fn promotion_validator_promotes_when_gates_pass() {
 fn promotion_validator_signs_record_when_key_provided() {
     let cand = make_candidate("a", BackendKind::Metal, min_max());
     let record = passing_record(cand.id);
-    let v = PromotionValidator { signing_key: Some(b"k1".to_vec()) };
-    let action = v.promote(record, "ci-bot-1", "two-person").expect("promote");
+    let v = PromotionValidator {
+        signing_key: Some(b"k1".to_vec()),
+    };
+    let action = v
+        .promote(record, "ci-bot-1", "two-person")
+        .expect("promote");
     match action {
         PromotionAction::Promote { record, .. } => {
             assert!(record.signature.is_some());
@@ -212,8 +216,8 @@ fn promotion_validator_promotes_from_evaluation_report_fixture() {
 
 #[test]
 fn evaluation_report_json_rejects_malformed() {
-    let err = QualityEvidence::from_evaluation_report_json(b"{}", "rev", 1)
-        .expect_err("missing fields");
+    let err =
+        QualityEvidence::from_evaluation_report_json(b"{}", "rev", 1).expect_err("missing fields");
     assert!(matches!(err, QualityError::InvalidEvaluationReport(_)));
 }
 
@@ -222,7 +226,9 @@ fn promotion_action_serde_round_trip() {
     let cand = make_candidate("a", BackendKind::Metal, min_max());
     let record = passing_record(cand.id);
     let actions = vec![
-        PromotionAction::Hold { reason: "awaiting".into() },
+        PromotionAction::Hold {
+            reason: "awaiting".into(),
+        },
         PromotionAction::Quarantine {
             record: record.clone(),
             decision: "blocked".into(),

@@ -77,8 +77,12 @@ fn jamba_hybrid_attention_mamba_mixer_byte_identical() {
     let d = 4usize;
     let mut rng = 0xA1B2C3D4u32;
     let x: Vec<f32> = (0..l * d).map(|_| rand_unit(&mut rng)).collect();
-    let a: Vec<f32> = (0..d).map(|_| 0.5 + 0.4 * rand_unit(&mut rng).abs()).collect();
-    let b: Vec<f32> = (0..d).map(|_| 0.3 + 0.4 * rand_unit(&mut rng).abs()).collect();
+    let a: Vec<f32> = (0..d)
+        .map(|_| 0.5 + 0.4 * rand_unit(&mut rng).abs())
+        .collect();
+    let b: Vec<f32> = (0..d)
+        .map(|_| 0.3 + 0.4 * rand_unit(&mut rng).abs())
+        .collect();
 
     // Hybrid: 4-layer Mamba/Attention/Mamba/Attention mixer.
     let mut h = mamba_forward_scan(&x, &a, &b, l, d);

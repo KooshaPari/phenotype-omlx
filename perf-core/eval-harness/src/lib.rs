@@ -30,12 +30,11 @@ pub mod gpqa;
 pub mod mmlu;
 pub mod perplexity;
 pub mod provenance;
+#[cfg(feature = "pyo3")]
+pub mod pyo3_bindings;
 pub mod report;
 pub mod runner;
 pub mod terminal_bench;
-#[cfg(feature = "pyo3")]
-pub mod pyo3_bindings;
-
 
 #[cfg(feature = "python")]
 pub mod python;

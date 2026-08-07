@@ -19,7 +19,7 @@ impl SpecDecodeEngine {
 
 #[cfg(test)]
 mod tests {
-    use crate::backend::{BackendInfo, TargetOutput, TargetBackend};
+    use crate::backend::{BackendInfo, TargetBackend, TargetOutput};
     use crate::{SpecDecodeConfig, SpecDecodeEngine};
     use async_trait::async_trait;
 

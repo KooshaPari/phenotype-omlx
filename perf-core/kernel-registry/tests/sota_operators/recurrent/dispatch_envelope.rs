@@ -14,9 +14,7 @@
 
 use kernel_registry::compat::{DType, OperatorKind, QuantizationPolicy};
 use kernel_registry::selector::SelectionDecision;
-use kernel_registry::{
-    BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy,
-};
+use kernel_registry::{BackendKind, Capability, KernelKey, KernelRegistry, SelectionPolicy};
 
 use super::{
     build_record_with_dispatches, fresh_capabilities, make_candidate, samples_with_p95, shape,
@@ -93,8 +91,7 @@ fn dispatch_buckets_recurrent_picks_delta_net_batched_within_budget() {
         // tile-size changes, mirroring regress_baseline::BUCKETS).
         const TILE_BATCH: usize = 32;
         const CHUNK_SIZE: usize = 16;
-        let oracle: u32 =
-            ceil_div(b_size, TILE_BATCH) * (1 + ceil_div(c_size, CHUNK_SIZE));
+        let oracle: u32 = ceil_div(b_size, TILE_BATCH) * (1 + ceil_div(c_size, CHUNK_SIZE));
         reg.attach_tuning_record(
             key.clone(),
             build_record_with_dispatches(
@@ -107,17 +104,22 @@ fn dispatch_buckets_recurrent_picks_delta_net_batched_within_budget() {
         );
         let decision = reg.select_with_caps(
             &key,
-            SelectionPolicy::Deterministic { prefer_lower_p95: true },
+            SelectionPolicy::Deterministic {
+                prefer_lower_p95: true,
+            },
             &fresh_capabilities(),
             NOW_UNIX_MS,
         );
         match &decision {
             SelectionDecision::Chosen { candidate, tuning } => {
-                assert_eq!(candidate.id, id_metal,
-                    "[{name}] deterministic must pick Metal; got {:?}", candidate.name);
-                let observed = tuning.median_dispatches.expect(
-                    "Metal tuning record must carry dispatches metadata",
+                assert_eq!(
+                    candidate.id, id_metal,
+                    "[{name}] deterministic must pick Metal; got {:?}",
+                    candidate.name
                 );
+                let observed = tuning
+                    .median_dispatches
+                    .expect("Metal tuning record must carry dispatches metadata");
                 // ceil-into-rounding: observed_dispatches <= oracle * 1.2
                 // (no floor since oracle itself may be the minimum).
                 let ceiling = oracle.saturating_mul(12) / 10;

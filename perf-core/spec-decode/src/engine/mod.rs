@@ -11,7 +11,7 @@ use crate::backend::{DraftBackend, TargetBackend};
 use crate::proposal::MedusaHead;
 use crate::state::EngineState;
 use crate::tree_proposal;
-use crate::verify::{verify_tree, verify_linear};
+use crate::verify::{verify_linear, verify_tree};
 use crate::{AcceptedToken, DraftMode, ProposalMode, SpecDecodeConfig, SpecError, StepResult};
 use turbo_quant::echokv::{EchoKVCache, EchoKVConfig};
 
@@ -302,8 +302,7 @@ impl SpecDecodeEngine {
         };
 
         let root_token = self.state.history.back().copied().unwrap_or(0);
-        let trees =
-            tree_proposal::create_parallel_trees(root_token, branch_logits, &eagle_config);
+        let trees = tree_proposal::create_parallel_trees(root_token, branch_logits, &eagle_config);
 
         let mut candidates: Vec<DraftCandidate> = Vec::new();
         for tree in &trees {
@@ -461,10 +460,7 @@ mod tests {
             Box::new(ConstantTarget(2)),
             None,
         );
-        let r = e
-            .step_cancellable(&[1, 2, 3], &[], || false)
-            .await
-            .unwrap();
+        let r = e.step_cancellable(&[1, 2, 3], &[], || false).await.unwrap();
         // accept at least 0 tokens; do not panic.
         let _ = r;
     }
@@ -477,10 +473,7 @@ mod tests {
             None,
         );
         let before = e.state();
-        let r = e
-            .step_cancellable(&[1, 2, 3], &[], || true)
-            .await
-            .unwrap();
+        let r = e.step_cancellable(&[1, 2, 3], &[], || true).await.unwrap();
         assert!(r.accepted.is_empty());
         assert_eq!(r.drafted, 0);
         assert!(!r.finished);

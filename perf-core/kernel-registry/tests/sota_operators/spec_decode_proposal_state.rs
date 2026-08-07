@@ -51,11 +51,16 @@ const SEED: u64 = 42;
 /// byte-for-byte prefix copying.
 fn state_with_drafts(drafts: &[u32]) -> ProposalState {
     let mut s = ProposalState::new(NUM_DRAFTS, VOCAB_SIZE, SEED);
-    assert_eq!(drafts.len(), NUM_DRAFTS,
-        "fixture must supply exactly num_drafts tokens");
+    assert_eq!(
+        drafts.len(),
+        NUM_DRAFTS,
+        "fixture must supply exactly num_drafts tokens"
+    );
     for (i, &t) in drafts.iter().enumerate() {
-        assert!((t as usize) < VOCAB_SIZE,
-            "draft token {t} at slot {i} is out of vocab range");
+        assert!(
+            (t as usize) < VOCAB_SIZE,
+            "draft token {t} at slot {i} is out of vocab range"
+        );
     }
     s.draft_tokens.copy_from_slice(drafts);
     s
@@ -71,26 +76,37 @@ fn production_proposal_state_initializes_with_zero_acceptance_count() {
 
     // (a) Acceptance counters are zero — no drafts accepted yet, no
     // bonus, no history.
-    assert_eq!(s.acceptance_count, 0,
-        "fresh ProposalState must have acceptance_count=0");
-    assert_eq!(s.bonus_token, None,
-        "fresh ProposalState must have bonus_token=None");
-    assert!(s.acceptance_history.is_empty(),
-        "fresh ProposalState must have empty acceptance_history");
+    assert_eq!(
+        s.acceptance_count, 0,
+        "fresh ProposalState must have acceptance_count=0"
+    );
+    assert_eq!(
+        s.bonus_token, None,
+        "fresh ProposalState must have bonus_token=None"
+    );
+    assert!(
+        s.acceptance_history.is_empty(),
+        "fresh ProposalState must have empty acceptance_history"
+    );
 
     // (b) `draft_tokens` is zero-filled to `num_drafts` slots. The
     // contract is explicit: a fresh state must NOT carry a residual
     // draft from a prior round — `vec![0; num_drafts]` is the byte
     // contract.
-    assert_eq!(s.draft_tokens, vec![0u32; NUM_DRAFTS],
-        "fresh ProposalState must zero-fill draft_tokens");
+    assert_eq!(
+        s.draft_tokens,
+        vec![0u32; NUM_DRAFTS],
+        "fresh ProposalState must zero-fill draft_tokens"
+    );
     assert_eq!(s.draft_tokens.len(), NUM_DRAFTS);
 
     // (c) `verified_prefix` is empty. A regression that copied
     // `draft_tokens` into `verified_prefix` at construction time
     // trips this assertion.
-    assert!(s.verified_prefix.is_empty(),
-        "fresh ProposalState must have empty verified_prefix");
+    assert!(
+        s.verified_prefix.is_empty(),
+        "fresh ProposalState must have empty verified_prefix"
+    );
 
     // (d) Construction-time scalars are recorded verbatim.
     assert_eq!(s.num_drafts, NUM_DRAFTS);
@@ -111,20 +127,34 @@ fn production_proposal_state_accepts_draft_tokens_byte_identical() {
 
     s.accept_drafts(3);
 
-    assert_eq!(s.acceptance_count, 3,
-        "accepting 3 of 5 drafts must set acceptance_count=3");
-    assert_eq!(s.acceptance_history, vec![3usize],
-        "acceptance_history must record per-round count [3]");
-    assert_eq!(s.verified_prefix, drafts[..3].to_vec(),
-        "verified_prefix must be byte-identical to drafts[..3]");
+    assert_eq!(
+        s.acceptance_count, 3,
+        "accepting 3 of 5 drafts must set acceptance_count=3"
+    );
+    assert_eq!(
+        s.acceptance_history,
+        vec![3usize],
+        "acceptance_history must record per-round count [3]"
+    );
+    assert_eq!(
+        s.verified_prefix,
+        drafts[..3].to_vec(),
+        "verified_prefix must be byte-identical to drafts[..3]"
+    );
     // The unaccepted slots (44, 55) MUST NOT leak into the prefix.
-    assert!(!s.verified_prefix.contains(&44),
-        "verified_prefix must not contain slot 3 (44)");
-    assert!(!s.verified_prefix.contains(&55),
-        "verified_prefix must not contain slot 4 (55)");
+    assert!(
+        !s.verified_prefix.contains(&44),
+        "verified_prefix must not contain slot 3 (44)"
+    );
+    assert!(
+        !s.verified_prefix.contains(&55),
+        "verified_prefix must not contain slot 4 (55)"
+    );
     // Bonus is still unset — acceptance does not imply a bonus.
-    assert_eq!(s.bonus_token, None,
-        "accept_drafts must not set bonus_token");
+    assert_eq!(
+        s.bonus_token, None,
+        "accept_drafts must not set bonus_token"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -138,28 +168,46 @@ fn production_proposal_state_rejects_with_zero_acceptance_preserves_state() {
 
     s.reject_drafts();
 
-    assert_eq!(s.acceptance_count, 0,
-        "rejecting all 5 drafts must leave acceptance_count=0");
-    assert!(s.verified_prefix.is_empty(),
-        "rejecting all 5 drafts must leave verified_prefix empty");
+    assert_eq!(
+        s.acceptance_count, 0,
+        "rejecting all 5 drafts must leave acceptance_count=0"
+    );
+    assert!(
+        s.verified_prefix.is_empty(),
+        "rejecting all 5 drafts must leave verified_prefix empty"
+    );
     // `draft_tokens` MUST remain intact so the caller can re-attempt
     // the round (e.g. with a freshly-sampled draft, overwriting the
     // same field). The contract is "preserves state", not "resets state".
-    assert_eq!(s.draft_tokens, drafts.to_vec(),
-        "reject_drafts must not mutate draft_tokens; re-attempt requires the original bytes");
+    assert_eq!(
+        s.draft_tokens,
+        drafts.to_vec(),
+        "reject_drafts must not mutate draft_tokens; re-attempt requires the original bytes"
+    );
     // `acceptance_history` records the rejection as a 0-length round
     // — this is the "preserved for diagnostics" half of the contract.
-    assert_eq!(s.acceptance_history, vec![0usize],
-        "acceptance_history must record per-round count [0] on rejection");
+    assert_eq!(
+        s.acceptance_history,
+        vec![0usize],
+        "acceptance_history must record per-round count [0] on rejection"
+    );
     // Re-attempt contract: a fresh accept after the rejection must
     // behave exactly as on a clean state.
     s.accept_drafts(NUM_DRAFTS);
-    assert_eq!(s.acceptance_count, NUM_DRAFTS,
-        "after rejection, a full accept must restore acceptance_count to num_drafts");
-    assert_eq!(s.verified_prefix, drafts.to_vec(),
-        "after rejection, a full accept must rebuild verified_prefix from the original draft bytes");
-    assert_eq!(s.acceptance_history, vec![0usize, NUM_DRAFTS],
-        "acceptance_history must accumulate [0, num_drafts] across reject + accept");
+    assert_eq!(
+        s.acceptance_count, NUM_DRAFTS,
+        "after rejection, a full accept must restore acceptance_count to num_drafts"
+    );
+    assert_eq!(
+        s.verified_prefix,
+        drafts.to_vec(),
+        "after rejection, a full accept must rebuild verified_prefix from the original draft bytes"
+    );
+    assert_eq!(
+        s.acceptance_history,
+        vec![0usize, NUM_DRAFTS],
+        "acceptance_history must accumulate [0, num_drafts] across reject + accept"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -173,8 +221,10 @@ fn production_proposal_state_bonus_token_appended_after_full_acceptance() {
 
     // Accept all 5 drafts first.
     s.accept_drafts(NUM_DRAFTS);
-    assert_eq!(s.acceptance_count, NUM_DRAFTS,
-        "baseline: full accept must set acceptance_count=5");
+    assert_eq!(
+        s.acceptance_count, NUM_DRAFTS,
+        "baseline: full accept must set acceptance_count=5"
+    );
 
     // Append a bonus token (the verifier's "you predicted the whole
     // window correctly, here's one extra sample" signal).
@@ -182,22 +232,37 @@ fn production_proposal_state_bonus_token_appended_after_full_acceptance() {
     s.append_bonus(bonus);
 
     // (a) `acceptance_count` is now 6: 5 drafts + 1 bonus.
-    assert_eq!(s.acceptance_count, NUM_DRAFTS + 1,
-        "bonus token must increment acceptance_count to 6 (= num_drafts + 1)");
+    assert_eq!(
+        s.acceptance_count,
+        NUM_DRAFTS + 1,
+        "bonus token must increment acceptance_count to 6 (= num_drafts + 1)"
+    );
     // (b) `bonus_token` is recorded verbatim.
-    assert_eq!(s.bonus_token, Some(bonus),
-        "bonus_token must be recorded verbatim from append_bonus");
+    assert_eq!(
+        s.bonus_token,
+        Some(bonus),
+        "bonus_token must be recorded verbatim from append_bonus"
+    );
     // (c) `verified_prefix` still holds the 5 accepted drafts — the
     // bonus is NOT appended to the prefix. The DeepSeek-MTP contract
     // is that the bonus is a *model-side* sample that the next round
     // consumes as input, not a verified token. A regression that
     // extends `verified_prefix` with the bonus trips this assertion.
-    assert_eq!(s.verified_prefix, drafts.to_vec(),
-        "verified_prefix must hold only the accepted drafts; the bonus is NOT a verified token");
-    assert_eq!(s.verified_prefix.len(), NUM_DRAFTS,
-        "verified_prefix length must stay at num_drafts after bonus");
+    assert_eq!(
+        s.verified_prefix,
+        drafts.to_vec(),
+        "verified_prefix must hold only the accepted drafts; the bonus is NOT a verified token"
+    );
+    assert_eq!(
+        s.verified_prefix.len(),
+        NUM_DRAFTS,
+        "verified_prefix length must stay at num_drafts after bonus"
+    );
     // (d) `acceptance_history` records only the accept (bonus is not
     // a separate round).
-    assert_eq!(s.acceptance_history, vec![NUM_DRAFTS],
-        "acceptance_history must record only the accept, not the bonus round");
+    assert_eq!(
+        s.acceptance_history,
+        vec![NUM_DRAFTS],
+        "acceptance_history must record only the accept, not the bonus round"
+    );
 }

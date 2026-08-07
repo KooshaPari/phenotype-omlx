@@ -70,9 +70,21 @@ pub(crate) enum RoutingPolicy {
 /// the production router would not silently make the oracle agree
 /// with broken output. The two implementations are checked against
 /// each other in `top_k_experts_match_oracle`.
-pub(crate) fn oracle_topk(logits: &[f32], num_experts: usize, top_k: usize, seed: u64) -> Vec<(usize, f32)> {
-    assert_eq!(logits.len(), num_experts, "logits length must match num_experts");
-    assert!(top_k > 0 && top_k <= num_experts, "top_k must be in (0, num_experts]");
+pub(crate) fn oracle_topk(
+    logits: &[f32],
+    num_experts: usize,
+    top_k: usize,
+    seed: u64,
+) -> Vec<(usize, f32)> {
+    assert_eq!(
+        logits.len(),
+        num_experts,
+        "logits length must match num_experts"
+    );
+    assert!(
+        top_k > 0 && top_k <= num_experts,
+        "top_k must be in (0, num_experts]"
+    );
 
     let mut indexed: Vec<(usize, f32)> = logits.iter().copied().enumerate().collect();
     // Sort by (score DESC, expert_id ASC) so ties resolve by expert id.
@@ -97,7 +109,11 @@ pub(crate) fn oracle_topk(logits: &[f32], num_experts: usize, top_k: usize, seed
     let mut rng = Lcg::new(seed);
     let mut out = Vec::with_capacity(top_k);
     for (i, (e, _)) in picks.iter().enumerate() {
-        let w = if sum > 0.0 { exp[i] / sum } else { 1.0 / top_k as f32 };
+        let w = if sum > 0.0 {
+            exp[i] / sum
+        } else {
+            1.0 / top_k as f32
+        };
         let _ = rng.next_u64();
         out.push((*e, w));
     }
@@ -163,7 +179,10 @@ fn moe_routing_deterministic_seed_byte_identical() {
     let b = run_kernel_router(&logits, batch, num_experts, top_k, policy);
 
     assert_eq!(a.len(), batch, "router must emit one record per token");
-    assert_eq!(a, b, "two runs under the same Deterministic seed must produce byte-identical routing tensors");
+    assert_eq!(
+        a, b,
+        "two runs under the same Deterministic seed must produce byte-identical routing tensors"
+    );
 
     // Per-token weight bytes must also match exactly (f32 is the
     // canonical wire type, so re-runs should not even drift by an
@@ -171,10 +190,15 @@ fn moe_routing_deterministic_seed_byte_identical() {
     // parallel-reduction whose summation order is non-deterministic.
     for t in 0..batch {
         for i in 0..top_k {
-            assert_eq!(a[t][i].0, b[t][i].0,
-                "token {t} pick {i} expert_id drifted across runs");
-            assert_eq!(a[t][i].1.to_bits(), b[t][i].1.to_bits(),
-                "token {t} pick {i} weight drifted across runs (kernel not byte-deterministic)");
+            assert_eq!(
+                a[t][i].0, b[t][i].0,
+                "token {t} pick {i} expert_id drifted across runs"
+            );
+            assert_eq!(
+                a[t][i].1.to_bits(),
+                b[t][i].1.to_bits(),
+                "token {t} pick {i} weight drifted across runs (kernel not byte-deterministic)"
+            );
         }
     }
 }
@@ -204,7 +228,11 @@ fn moe_routing_top_k_experts_match_oracle() {
         let oracle = oracle_topk(row, num_experts, top_k, seed);
         let picks = &kernel[t];
 
-        assert_eq!(picks.len(), top_k, "token {t} must emit exactly top_k picks");
+        assert_eq!(
+            picks.len(),
+            top_k,
+            "token {t} must emit exactly top_k picks"
+        );
         assert_eq!(
             picks.iter().map(|(e, _)| *e).collect::<Vec<_>>(),
             oracle.iter().map(|(e, _)| *e).collect::<Vec<_>>(),
@@ -216,14 +244,20 @@ fn moe_routing_top_k_experts_match_oracle() {
             assert!(
                 diff <= 1e-5,
                 "token {t} pick {i}: kernel weight {} differs from oracle {} by {} (> 1e-5)",
-                picks[i].1, oracle[i].1, diff
+                picks[i].1,
+                oracle[i].1,
+                diff
             );
         }
 
         // Top-k experts must be distinct — a regression that, e.g.,
         // forgets to dedupe after softmax would surface here.
         let unique: std::collections::HashSet<usize> = picks.iter().map(|(e, _)| *e).collect();
-        assert_eq!(unique.len(), top_k, "token {t}: top-k expert ids must be distinct");
+        assert_eq!(
+            unique.len(),
+            top_k,
+            "token {t}: top-k expert ids must be distinct"
+        );
     }
 }
 
@@ -309,10 +343,15 @@ fn moe_routing_changes_with_seed() {
     let a_again = run_kernel_router(&logits_a, batch, num_experts, top_k, policy);
     for t in 0..batch {
         for i in 0..top_k {
-            assert_eq!(a[t][i].0, a_again[t][i].0,
-                "token {t} pick {i} expert_id drifted on replay");
-            assert_eq!(a[t][i].1.to_bits(), a_again[t][i].1.to_bits(),
-                "token {t} pick {i} weight drifted on replay (kernel not byte-deterministic)");
+            assert_eq!(
+                a[t][i].0, a_again[t][i].0,
+                "token {t} pick {i} expert_id drifted on replay"
+            );
+            assert_eq!(
+                a[t][i].1.to_bits(),
+                a_again[t][i].1.to_bits(),
+                "token {t} pick {i} weight drifted on replay (kernel not byte-deterministic)"
+            );
         }
     }
 }

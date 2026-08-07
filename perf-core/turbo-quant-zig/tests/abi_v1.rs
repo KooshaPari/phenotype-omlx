@@ -70,12 +70,10 @@ fn zig_v1_decode_rejects_invalid_arguments_and_preserves_buffer() {
 fn zig_v1_encode_rejects_invalid_bits() {
     let input = [1.0, 2.0, 3.0, 4.0];
 
-    let err = ZigQuantizedTensor::encode_v1(&input, 1, 4)
-        .expect_err("bits=1 must be rejected");
+    let err = ZigQuantizedTensor::encode_v1(&input, 1, 4).expect_err("bits=1 must be rejected");
     assert_eq!(err, native_abi::Status::ErrInvalidBits);
 
-    let err = ZigQuantizedTensor::encode_v1(&input, 5, 4)
-        .expect_err("bits=5 must be rejected");
+    let err = ZigQuantizedTensor::encode_v1(&input, 5, 4).expect_err("bits=5 must be rejected");
     assert_eq!(err, native_abi::Status::ErrInvalidBits);
 
     let err =

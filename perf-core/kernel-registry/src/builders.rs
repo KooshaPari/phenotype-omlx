@@ -268,9 +268,15 @@ pub fn moe_grouped_gemm_key(
     assert!(m > 0, "moe_grouped_gemm_key: m must be > 0");
     assert!(n > 0, "moe_grouped_gemm_key: n must be > 0");
     assert!(k > 0, "moe_grouped_gemm_key: k must be > 0");
-    assert!(batch_size > 0, "moe_grouped_gemm_key: batch_size must be > 0");
+    assert!(
+        batch_size > 0,
+        "moe_grouped_gemm_key: batch_size must be > 0"
+    );
     assert!(seq_len > 0, "moe_grouped_gemm_key: seq_len must be > 0");
-    assert!(num_experts > 0, "moe_grouped_gemm_key: num_experts must be > 0");
+    assert!(
+        num_experts > 0,
+        "moe_grouped_gemm_key: num_experts must be > 0"
+    );
 
     KernelKey {
         operator_kind: OperatorKind::Moe,
