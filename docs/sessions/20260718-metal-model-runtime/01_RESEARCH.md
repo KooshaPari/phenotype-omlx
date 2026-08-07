@@ -525,3 +525,26 @@ Migration path:
   unless `LANGFUSE_ORG=phenotype-shared` is explicitly set.
 
 Owner: koosha. Linked to BACKLOG-OMLX-008.
+
+### 2026-08-09 — local Harbor provenance runner
+
+The eval harness now has an explicit local Harbor provenance runner that captures
+the full provenance trail for a local launch without requiring a remote
+authorization window. The runner sits at `scripts/evals/harbor_local_provenance.py`
+and wraps the standard `run_via_harbor_local.sh` workflow with provenance capture:
+
+- Captures the working-tree SHA, dirty-status, candidate manifest SHA, and
+  launcher script SHA at the start of each run.
+- Writes the provenance bundle to `artifacts/harbor/provenance-<sha>.json`
+  before invoking the harbor CLI.
+- Refuses to launch if the working tree has uncommitted changes (the launch
+  contract requires a clean commit, see `scripts/ci/assert_clean_tree.sh`).
+- Verifies the candidate-manifest has not been tampered with by re-running the
+  SHA-256 over the manifest file and comparing to the in-tree reference.
+
+The companion test `scripts/evals/test_harbor_local_provenance.py` exercises
+the provenance-capture path, the dirty-tree rejection, and the manifest-tamper
+detection. The shell smoke test `scripts/tests/test_harbor_local_provenance.sh`
+exercises the wrapper end-to-end.
+
+Owner: koosha. Linked to PR #70.
