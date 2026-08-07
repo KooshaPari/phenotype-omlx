@@ -177,3 +177,43 @@ vector-gated `mx.fast.metal_kernel` with the shape contract `[B,T,Hk,Dk]`, `[B,T
 dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirrors that kernel
 behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
 clean native-vs-custom parity run.
+
+### Local-only Harbor provenance (2026-07-26)
+
+The canonical `scripts/evals/run_via_harbor.sh` remains the remote-observability
+operator path: it requires both Langfuse credentials and installs the
+`harbor_langfuse:LangfusePlugin`. A separately named local runner is appropriate
+only for evidence collection when remote telemetry must not be emitted. It is not
+a fallback for the canonical path.
+
+The local runner therefore accepts only the Qwen3.5 NIAH task, requires an explicit
+Qwen3.5 model and an OpenAI endpoint on dedicated `:8766/v1`, invokes Harbor with
+no plugin argument, unsets inherited Langfuse variables, leaves Harbor's `result.json`
+unchanged, and emits a separately named validated EvaluationReport. Its provenance is
+explicit: `telemetry.mode=local_only` and `telemetry.remote_exported=false`; it must
+not contain Langfuse trace/session identifiers. The evidence label is
+`live_verified` only for a completed Harbor result, never for a fabricated report.
+
+### macOS Bash portability (2026-07-26)
+
+`/bin/bash` on the macOS host is Bash 3.2, whereas Homebrew supplies a newer Bash
+on `PATH`. Bash 4's `${parameter,,}` lowercasing expansion therefore cannot be used
+in the local Harbor runner: it fails with `bad substitution` under the shebang's
+system interpreter. The model-policy comparison instead normalizes with portable
+`tr '[:upper:]' '[:lower:]'`. The shell contract test invokes `/bin/bash`
+explicitly, so CI or developer shells that resolve `bash` to Homebrew Bash cannot
+mask a regression. This preserves the Qwen3.5-only policy without adding an
+alternate runtime, plugin, endpoint, or telemetry path.
+
+### Harbor timestamped output discovery (2026-07-26)
+
+Harbor treats `-o` as an output root and writes the completed job under a
+timestamped child directory. The local wrapper originally passed that root
+directly to the provenance converter, which expects a job-level `result.json`.
+That caused an exit status of 2 after a completed Harbor evaluation, without
+altering the underlying result. `resolve_harbor_job_dir` now accepts either a
+job directory or an output root with exactly one immediate completed job. It
+does not recursively scan, and rejects multiple candidates so an operator
+cannot accidentally convert a stale or unrelated result. Python and shell
+contracts cover the actual timestamped shape; the shell contract still proves
+the no-plugin, Qwen3.5-only, dedicated-`:8766`, local-only telemetry path.
