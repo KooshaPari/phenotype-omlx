@@ -1,0 +1,39 @@
+# Harbor JobConfig — omlx-qwen35-policy oracle (SSOT marker stamp).
+# Validates the qwen35-ssot-ok marker contract. No external API call required.
+# All secrets sourced from Infisical via `source ~/.config/phenotype/portage.env`.
+
+jobs_dir: jobs/omlx-qwen35-policy
+n_attempts: 1
+timeout_multiplier: 1.0
+
+n_concurrent_trials: 1
+quiet: false
+
+retry:
+  max_retries: 0
+  delay_sec: 0
+
+environment:
+  type: docker
+  force_build: true
+  delete: true
+  cpu_enforcement_policy: auto
+  memory_enforcement_policy: auto
+  env:
+    OPENAI_BASE_URL: "http://host.docker.internal:8081/v1"
+    OPENAI_API_KEY: "omlx-local"
+    OPENAI_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
+    OMLX_READY_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
+  extra_allowed_hosts:
+    - host.docker.internal
+
+agents:
+  - name: oracle
+
+verifier:
+  disable: false
+
+datasets:
+  - path: /Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/evals/harbor/tasks
+    task_names:
+      - omlx-qwen35-policy

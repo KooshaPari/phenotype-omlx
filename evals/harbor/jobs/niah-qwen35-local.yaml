@@ -1,0 +1,44 @@
+# Harbor JobConfig — OMLX NIAH via Docker (host.docker.internal → host MLX)
+# Uses Qwen3.5-0.8B-OptiQ-4bit served on http://127.0.0.1:8081/v1
+# All secrets sourced from Infisical via `source ~/.config/phenotype/portage.env`
+
+jobs_dir: jobs/omlx-niah-local
+n_attempts: 1
+timeout_multiplier: 1.0
+
+# Top-level orchestrator fields (deprecated nested 'orchestrator:' key)
+n_concurrent_trials: 1
+quiet: false
+
+# Top-level retry fields (fork-clean extension)
+retry:
+  max_retries: 0
+  delay_sec: 0
+
+environment:
+  type: docker
+  force_build: true
+  delete: true
+  cpu_enforcement_policy: auto
+  memory_enforcement_policy: auto
+  env:
+    # The container reaches the host's MLX server via host.docker.internal.
+    # Port 8081 is the local mlx_lm.server bound to 0.0.0.0.
+    OPENAI_BASE_URL: "http://host.docker.internal:8081/v1"
+    OPENAI_API_KEY: "omlx-local"
+    OPENAI_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
+    OMLX_READY_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
+    NIAH_CONTEXT_TOKENS: "8192"
+  extra_allowed_hosts:
+    - host.docker.internal
+
+agents:
+  - name: oracle
+
+verifier:
+  disable: false
+
+datasets:
+  - path: /Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/evals/harbor/tasks
+    task_names:
+      - omlx-niah-api-smoke
