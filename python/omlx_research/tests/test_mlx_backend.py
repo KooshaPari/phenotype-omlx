@@ -127,6 +127,17 @@ class TestMlxBackendInit(unittest.TestCase):
         self.assertEqual(plan["custom_kernel_dispatches"], 0)
         self.assertFalse(plan["custom_kernel_execution_verified"])
 
+    def test_quantization_provenance_rejects_synthetic_probe(self):
+        """A standalone quantization probe is not cache-compression evidence."""
+        from omlx_research.backends.mlx_backend import quantization_execution_provenance
+
+        provenance = quantization_execution_provenance()
+
+        self.assertEqual(provenance["execution_source"], "not_executed")
+        self.assertFalse(provenance["rust_quantization_executed"])
+        self.assertFalse(provenance["cache_compression_verified"])
+        self.assertEqual(provenance["evidence_scope"], "none")
+
 
 class TestRequireMlxLmHelper(unittest.TestCase):
     """The helper gates production-path tests on the `mlx_lm` runtime.
@@ -268,8 +279,8 @@ class TestMlxBackendTurboQuantProduction(unittest.TestCase):
             f"force_compact must compress at any length, got compressed={n_compressed}",
         )
 
-    def test_rust_encode_production_path(self):
-        """Generate with Rust path enabled (default) — encode metrics in metadata."""
+    def test_cache_compression_provenance(self):
+        """Generation evidence derives from compacted cache state, not a probe."""
         from omlx_research.backends.mlx_backend import MlxBackend, GenerateRequest
         be = MlxBackend(self.model_path)
         req = GenerateRequest(
@@ -286,13 +297,11 @@ class TestMlxBackendTurboQuantProduction(unittest.TestCase):
                     "model exposes no TurboKVCacheLite layers; KV compression is not applicable",
                 )
             )
-        # Default mode is Rust; encode_path must report 'rust' (or 'unavailable'
-        # if the _perf module wasn't built into the venv).
-        ep = turbo_meta.get("encode_path")
-        self.assertIn(
-            ep, ("rust", "unavailable"),
-            f"default encode_path should be rust or unavailable, got {ep!r}",
-        )
+        provenance = turbo_meta.get("quantization_provenance", {})
+        self.assertEqual(provenance.get("execution_source"), "turbo_kv_cache")
+        self.assertTrue(provenance.get("cache_compression_verified"))
+        self.assertEqual(provenance.get("evidence_scope"), "turbo_kv_cache_state")
+        self.assertNotIn("encode_path", turbo_meta)
 
 
 if __name__ == "__main__":
