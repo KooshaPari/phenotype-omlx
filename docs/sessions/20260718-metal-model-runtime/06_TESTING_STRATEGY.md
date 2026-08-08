@@ -270,12 +270,9 @@ not Metal-device, Harbor, or Qwen3.5 execution evidence.
 The host remask boundary now rejects NaN/Inf confidence before sorting for every strategy;
 `model-kernels --lib diffusion` remains green at 39/39 after the regression test. The exact 32k
 task uses a literal `NIAH_CONTEXT_TOKENS=32768` because Portage resolves task templates before
-job container injection. NIAH model validation accepts only canonical Qwen3.5 leaf IDs (for
-example `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`) and rejects arbitrary substring matches.
-
-`metal-runtime --lib diffusion_self_verify` now passes 8/8, including rejection of malformed
-public block ranges before length calculation. Invalid `start >= end` and `end > tokens` values
-are fail-closed rather than allowing an underflow/panic path.
+job container injection. NIAH model validation accepts only the three Qwen3.5 IDs in
+`config/smoke_models.json` (including `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`) and rejects
+arbitrary substring matches.
 
 `metal-runtime --lib diffusion_self_verify` now passes 8/8, including rejection of malformed
 public block ranges before length calculation. Invalid `start >= end` and `end > tokens` values
