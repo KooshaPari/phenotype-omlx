@@ -64,7 +64,9 @@ fn diffusion_three_stage_fixture_matches_oracle() {
     assert!(remask_outcome.telemetry.completed);
     assert!(!remask_outcome.telemetry.fallback);
     let next_mask = remask_outcome.output.expect("remask dispatch");
-    compare_u8("next mask", &[1, 1, 1, 1, 1, 1, 1, 1], &next_mask).unwrap();
+    // Token 6 was already accepted and remains above the confidence floor;
+    // every other token is either still a candidate or below the floor.
+    compare_u8("next mask", &[1, 1, 1, 1, 1, 1, 0, 1], &next_mask).unwrap();
 
     let previous = [0.8_f32; 8];
     let entropy = [0.1_f32; 8];
