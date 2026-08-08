@@ -194,6 +194,26 @@ def test_prepares_review_only_record_from_current_head_evidence(tmp_path: Path) 
     assert record["integrity"]["canonical_sha256"]
 
 
+def test_accepts_bookkeeping_commit_after_evaluated_source(tmp_path: Path) -> None:
+    repo = _git_repository(tmp_path / "repo")
+    source_head = _head_for(repo)
+    evidence_path = _write_json(tmp_path / "evidence.json", _evidence(source_head, repo))
+    metal_path = _write_json(tmp_path / "metal.json", _metal(source_head))
+
+    docs = repo / "docs"
+    docs.mkdir()
+    (docs / "provenance-note.md").write_text("record metadata\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "docs"], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "record metadata"], check=True)
+
+    record = prepare_rebind(evidence_path, metal_path, tmp_path / "record.json", repo)
+
+    assert record["candidate"]["head"] != source_head
+    assert record["evidence"]["source_head"] == source_head
+    assert record["metal_compile_provenance"]["source_head"] == source_head
+    assert record["evidence"]["post_head_changed_paths"] == ["docs/provenance-note.md"]
+
+
 def test_parses_authorization_sidecar_from_descriptor_safe_bytes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -225,9 +245,11 @@ def test_records_validated_evidence_bytes_when_input_is_replaced(
     validated_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     original_validate_metal = rebind._validate_metal
 
-    def replace_evidence_after_validation(document: dict, current_head: str) -> dict:
+    def replace_evidence_after_validation(
+        document: dict, current_head: str, repo_root: Path
+    ) -> dict:
         evidence_path.write_text('{"replacement":true}\n', encoding="utf-8")
-        return original_validate_metal(document, current_head)
+        return original_validate_metal(document, current_head, repo_root)
 
     monkeypatch.setattr(rebind, "_validate_metal", replace_evidence_after_validation)
 

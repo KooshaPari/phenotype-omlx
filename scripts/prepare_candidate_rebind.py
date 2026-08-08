@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Prepare immutable current-head evidence for an independent promotion review.
+"""Prepare immutable source-compatible evidence for an independent promotion review.
 
 The resulting record is non-promotable and never changes historical manifests or runs work.
+Bookkeeping-only commits after the evaluated source are recorded explicitly; runtime-path drift
+fails closed.
 """
 
 from __future__ import annotations
@@ -29,6 +31,16 @@ from scripts.rebind_inputs import (
 
 SCHEMA_VERSION = "pheno.candidate-rebind-review.v1"
 _COMMIT_LENGTH = 40
+_PROTECTED_PATHS = (
+    "perf-core/turbo-quant-mojo",
+    "perf-core/turbo-quant-c",
+    "perf-core/turbo-quant-go",
+    "perf-core/turbo-quant-nim",
+    "perf-core/turbo-quant-zig",
+    "python/ffi",
+    "scripts/evals",
+    "evals/harbor/tasks/omlx-niah-api-smoke",
+)
 
 
 def _canonical_digest(document: Mapping[str, Any]) -> str:
@@ -110,6 +122,56 @@ def _require_boolean(value: Any, expected: bool, field: str) -> None:
         raise CandidateRebindError(f"{field} must equal boolean {expected}")
 
 
+def _source_head_compatible(
+    source_head: Any, current_head: str, repo_root: Path
+) -> tuple[bool, list[str]]:
+    """Allow only bookkeeping commits after the evaluated runtime source."""
+    if not isinstance(source_head, str) or len(source_head) != _COMMIT_LENGTH:
+        return False, []
+    if source_head == current_head:
+        return True, []
+    try:
+        ancestor = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "merge-base",
+                "--is-ancestor",
+                source_head,
+                current_head,
+            ],
+            capture_output=True,
+            timeout=10,
+        )
+        changed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo_root),
+                "diff",
+                "--name-only",
+                f"{source_head}..{current_head}",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, []
+    if ancestor.returncode != 0:
+        return False, []
+    paths = [line for line in changed.stdout.splitlines() if line]
+    protected = tuple(path.strip("/") for path in _PROTECTED_PATHS)
+    touches_protected = any(
+        path == root or path.startswith(f"{root}/")
+        for path in paths
+        for root in protected
+    )
+    return bool(paths) and not touches_protected, paths
+
+
 def _canonical_readiness_model(repo_root: Path) -> str:
     config = load_json_snapshot(
         repo_root / "config" / "smoke_models.json", "smoke model SSOT"
@@ -146,11 +208,12 @@ def _validate_evidence(
     candidate = _mapping(document.get("candidate"), "evidence candidate")
     _require_exact(candidate.get("repository"), repo_root.name, "evidence candidate repository")
     _require_exact(candidate.get("branch"), current_branch, "evidence candidate branch")
-    _require_exact(
-        candidate.get("source_head"),
-        current_head,
-        "evidence source head vs current repository HEAD",
-    )
+    source_head = candidate.get("source_head")
+    compatible, changed_paths = _source_head_compatible(source_head, current_head, repo_root)
+    if not compatible:
+        raise CandidateRebindError(
+            "evidence source head is not compatible with current repository HEAD"
+        )
     harbor = _mapping(document.get("harbor"), "Harbor evidence")
     for field in ("job_id", "trial_name", "prompt_sha256"):
         if not isinstance(harbor.get(field), str) or not harbor[field]:
@@ -204,6 +267,8 @@ def _validate_evidence(
 
     return {
         "model": model,
+        "source_head": source_head,
+        "post_head_changed_paths": changed_paths,
         "harbor": dict(harbor),
         "authorization": dict(authorization),
         "authorization_sidecar": sidecar,
@@ -211,22 +276,21 @@ def _validate_evidence(
     }
 
 
-def _validate_metal(document: Mapping[str, Any], current_head: str) -> dict[str, Any]:
+def _validate_metal(
+    document: Mapping[str, Any], current_head: str, repo_root: Path
+) -> dict[str, Any]:
     _require_exact(
         document.get("schema_version"),
         "pheno.metal-compile-provenance.v1",
         "Metal provenance schema_version",
     )
-    _require_exact(
-        document.get("candidate_source_head"),
-        current_head,
-        "Metal candidate_source_head vs current repository HEAD",
-    )
-    _require_exact(
-        document.get("build_checkout_head"),
-        current_head,
-        "Metal build_checkout_head vs current repository HEAD",
-    )
+    source_head = document.get("candidate_source_head")
+    compatible, changed_paths = _source_head_compatible(source_head, current_head, repo_root)
+    if not compatible:
+        raise CandidateRebindError(
+            "Metal source head is not compatible with current repository HEAD"
+        )
+    _require_exact(document.get("build_checkout_head"), source_head, "Metal build_checkout_head")
     _require_boolean(document.get("source_head_compatible"), True, "Metal source_head_compatible")
     _require_exact(document.get("shader_count"), 20, "Metal shader_count")
     for field in ("metallib_sha256", "build_log_sha256"):
@@ -239,6 +303,8 @@ def _validate_metal(document: Mapping[str, Any], current_head: str) -> dict[str,
     _require_boolean(document.get("model_loaded"), False, "Metal model_loaded")
     _require_boolean(document.get("promotable"), False, "Metal promotable")
     return {
+        "source_head": source_head,
+        "post_head_changed_paths": changed_paths,
         "shader_count": document["shader_count"],
         "metallib_sha256": document["metallib_sha256"],
         "build_log_sha256": document["build_log_sha256"],
@@ -281,7 +347,7 @@ def prepare_rebind(
     evidence_summary = _validate_evidence(
         evidence.document, current_head, current_branch, repo_root
     )
-    metal_summary = _validate_metal(metal.document, current_head)
+    metal_summary = _validate_metal(metal.document, current_head, repo_root)
     record: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "candidate": {
