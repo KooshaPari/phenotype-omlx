@@ -1,0 +1,25 @@
+{
+  "schema_version": "pheno.metal-compile-provenance.v1",
+  "captured_at_start": "2026-08-08T03:37:46Z",
+  "captured_at_finish": "2026-08-08T03:37:52Z",
+  "repository": "phenotype-omlx",
+  "branch": "feat/diffusion-trajectory-state",
+  "candidate_source_head": "bbd80e18a922914cf650d3a8a091ce2fd5f9be0c",
+  "build_checkout_head": "bbd80e18a922914cf650d3a8a091ce2fd5f9be0c",
+  "source_head_compatible": true,
+  "command": "OUT_DIR=<temporary> bash scripts/build_metal_runtime_bundle.sh",
+  "toolchain": {
+    "developer_directory": "/Users/kooshapari/Downloads/Xcode-beta.app/Contents/Developer",
+    "metal_toolchain": "Xcode-beta Metal.xctoolchain",
+    "metal_binary_resolved": true,
+    "metallib_binary_resolved": true
+  },
+  "shader_count": 20,
+  "metallib_sha256": "ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83",
+  "build_log_sha256": "73a96df4fc79579ce9701a9274f41529eff126b2ff70710f860b33b9e8173132",
+  "workload_executed": false,
+  "device_dispatch_executed": false,
+  "model_loaded": false,
+  "status": "current_head_compile_only",
+  "promotable": false
+}
