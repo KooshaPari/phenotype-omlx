@@ -89,6 +89,23 @@ if [[ ! -d "$PORTAGE_ROOT/packages/harbor-langfuse/src" ]]; then
   echo "  Fix Portage — LangSmith is not an allowed fallback." >&2
   exit 2
 fi
+# Bind every Harbor request to a clean, named candidate revision.  A dirty
+# candidate checkout cannot produce promotion-grade provenance, even when the
+# Portage checkout itself is clean.
+if ! git -C "$ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
+  echo "ERROR: phenotype-omlx root must be a Git checkout with a valid HEAD." >&2
+  exit 2
+fi
+CANDIDATE_BRANCH="$(git -C "$ROOT" branch --show-current)"
+if [[ -z "$CANDIDATE_BRANCH" ]]; then
+  echo "ERROR: phenotype-omlx root must be on a named branch." >&2
+  exit 2
+fi
+if git -C "$ROOT" status --porcelain=v1 --untracked-files=no | grep -q .; then
+  echo "ERROR: phenotype-omlx root has tracked working-tree changes; commit before Harbor." >&2
+  exit 2
+fi
+CANDIDATE_SOURCE_HEAD="$(git -C "$ROOT" rev-parse HEAD)"
 # Harbor execution depends on the checked-out Portage source. Reject a path
 # that cannot identify a committed revision, or one whose tracked revision
 # still contains merge-conflict markers, before contacting Apple Container.
@@ -160,7 +177,11 @@ if [[ "$OPENAI_MODEL" != "$OMLX_READY_MODEL" ]]; then
   exit 2
 fi
 
-AGENT_ENV_ARGS=(--ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}")
+AGENT_ENV_ARGS=(
+  --ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}"
+  --ae "PHENO_CANDIDATE_SOURCE_HEAD=${CANDIDATE_SOURCE_HEAD}"
+  --ae "PHENO_CANDIDATE_BRANCH=${CANDIDATE_BRANCH}"
+)
 if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" || "$MODE" == "niah_32k" ]]; then
   AGENT_ENV_ARGS+=(
     --ae "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
