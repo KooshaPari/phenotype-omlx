@@ -16,8 +16,8 @@ import json
 import math
 import os
 from pathlib import Path
-import subprocess
 import re
+import subprocess
 from typing import Any, Callable
 
 
@@ -192,6 +192,43 @@ def _fixture_command(repo_root: Path, fixture: str) -> tuple[list[str], dict[str
     return command, {"CARGO_BUILD_JOBS": "1", "RUST_BACKTRACE": "0"}
 
 
+def preflight_fixture(
+    repo_root: Path,
+    output: Path,
+    fixture: str,
+    resource_observer: ResourceObserver | None = None,
+) -> dict[str, Any]:
+    """Record clean-head resource admission without inspecting or dispatching artifacts."""
+
+    repo_root = repo_root.resolve()
+    if fixture not in FIXTURES:
+        raise RuntimeError(f"unsupported fixture: {fixture}")
+    output = _require_external_output(output, repo_root)
+    head, branch = _require_clean_head(repo_root)
+    resource_governor = _require_admissible_resources(
+        (resource_observer or _observe_host_resources)()
+    )
+    test_target, test_name = FIXTURES[fixture]
+    record = {
+        "schema_version": "pheno.metal-device-fixture-preflight.v1",
+        "captured_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "repository": "phenotype-omlx",
+        "branch": branch,
+        "candidate_source_head": head,
+        "fixture": fixture,
+        "test_target": test_target,
+        "test_name": test_name,
+        "resource_governor": resource_governor,
+        "device_dispatch_executed": False,
+        "model_loaded": False,
+        "workload_executed": False,
+        "promotable": False,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return record
+
+
 def record_fixture(
     repo_root: Path,
     compile_provenance: Path,
@@ -268,9 +305,10 @@ def record_fixture(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument("--compile-provenance", type=Path, required=True)
-    parser.add_argument("--artifact", type=Path, required=True)
-    parser.add_argument("--manifest", type=Path, required=True)
+    parser.add_argument("--preflight", action="store_true")
+    parser.add_argument("--compile-provenance", type=Path)
+    parser.add_argument("--artifact", type=Path)
+    parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fixture", choices=sorted(FIXTURES), required=True)
     parser.add_argument("--timeout-seconds", type=int, default=90)
@@ -278,15 +316,26 @@ def main() -> int:
     if args.timeout_seconds < 1:
         parser.error("--timeout-seconds must be positive")
     try:
-        record = record_fixture(
-            args.repo_root,
-            args.compile_provenance,
-            args.artifact,
-            args.manifest,
-            args.output,
-            args.fixture,
-            args.timeout_seconds,
-        )
+        if args.preflight:
+            execution_inputs = (args.compile_provenance, args.artifact, args.manifest)
+            if any(value is not None for value in execution_inputs):
+                parser.error("--preflight does not accept compile provenance or artifact inputs")
+            record = preflight_fixture(args.repo_root, args.output, args.fixture)
+        else:
+            execution_inputs = (args.compile_provenance, args.artifact, args.manifest)
+            if any(value is None for value in execution_inputs):
+                parser.error(
+                    "fixture recording requires --compile-provenance, --artifact, and --manifest"
+                )
+            record = record_fixture(
+                args.repo_root,
+                args.compile_provenance,
+                args.artifact,
+                args.manifest,
+                args.output,
+                args.fixture,
+                args.timeout_seconds,
+            )
     except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
         print(f"error: {exc}", file=os.sys.stderr)
         return 2

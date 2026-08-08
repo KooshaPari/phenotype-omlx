@@ -27,7 +27,9 @@ def _load_recorder():
 def _git_repository(path: Path) -> None:
     path.mkdir()
     subprocess.run(["git", "init", "-q", str(path)], check=True)
-    subprocess.run(["git", "-C", str(path), "config", "user.email", "test@example.invalid"], check=True)
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.email", "test@example.invalid"], check=True
+    )
     subprocess.run(["git", "-C", str(path), "config", "user.name", "Fixture Test"], check=True)
     (path / "tracked.txt").write_text("fixture\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(path), "add", "tracked.txt"], check=True)
@@ -117,6 +119,76 @@ def test_resource_governor_rejects_constrained_host_before_cargo(tmp_path: Path)
             command_runner=cargo_runner,
         )
     assert cargo_calls == []
+
+
+def test_preflight_emits_admission_evidence_without_running_cargo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    recorder = _load_recorder()
+    repo, _, _, _, output = _valid_inputs(tmp_path)
+
+    def admissible_observer():
+        return recorder.ResourceSnapshot(
+            logical_cpu_count=8,
+            load_average_1m=1.0,
+            available_memory_bytes=8 * 1024**3,
+            source="test",
+        )
+
+    original_run = recorder.subprocess.run
+
+    def no_cargo_runner(command, *args, **kwargs):
+        if command[0] == "cargo":
+            raise AssertionError("preflight must never invoke cargo")
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(recorder, "_observe_host_resources", admissible_observer)
+    monkeypatch.setattr(recorder.subprocess, "run", no_cargo_runner)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(RECORDER),
+            "--preflight",
+            "--repo-root",
+            str(repo),
+            "--output",
+            str(output),
+            "--fixture",
+            "diffusion",
+        ],
+    )
+
+    assert recorder.main() == 0
+    record = json.loads(capsys.readouterr().out)
+    assert record["schema_version"] == "pheno.metal-device-fixture-preflight.v1"
+    assert record["device_dispatch_executed"] is False
+    assert record["model_loaded"] is False
+    assert record["workload_executed"] is False
+    assert record["promotable"] is False
+    assert "command" not in record
+    assert "metallib_sha256" not in record
+    assert "manifest_sha256" not in record
+    assert json.loads(output.read_text(encoding="utf-8")) == record
+
+
+def test_preflight_requires_a_clean_named_head(tmp_path: Path) -> None:
+    recorder = _load_recorder()
+    repo, _, _, _, output = _valid_inputs(tmp_path)
+    (repo / "dirty.txt").write_text("uncommitted\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="repository must be clean"):
+        recorder.preflight_fixture(
+            repo,
+            output,
+            "diffusion",
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+        )
 
 
 def test_rejects_compile_provenance_from_a_different_head(tmp_path: Path) -> None:
