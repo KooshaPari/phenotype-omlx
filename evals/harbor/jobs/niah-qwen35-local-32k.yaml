@@ -30,9 +30,8 @@ environment:
     OPENAI_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
     OMLX_READY_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
     # 32k context — exercises the long-context branch of build_prompt().
-    # The task contract consumes NIAH_CONTEXT_TOKENS_32K directly; using a
-    # dedicated variable avoids nested template syntax unsupported by Harbor.
-    NIAH_CONTEXT_TOKENS_32K: "32768"
+    # The task contract uses the canonical context variable at an exact 32k.
+    NIAH_CONTEXT_TOKENS: "32768"
   extra_allowed_hosts:
     - host.docker.internal
 

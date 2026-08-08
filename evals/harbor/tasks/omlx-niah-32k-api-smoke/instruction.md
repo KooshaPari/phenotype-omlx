@@ -10,5 +10,5 @@ Write:
 - `/app/niah_result.json` — structured smoke result
 
 `OPENAI_BASE_URL` is required. Model must be Qwen3.5 (SSOT).
-`NIAH_CONTEXT_TOKENS_32K=32768` (set via Infisical + portage.env) drives the
-oracle's `build_prompt()` to construct an exact 32768-token prompt.
+`NIAH_CONTEXT_TOKENS=32768` (fixed in each Harbor task environment scope) drives
+the oracle's `build_prompt()` to construct an exact 32768-token prompt.
