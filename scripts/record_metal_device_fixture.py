@@ -9,13 +9,16 @@ loads a model, starts Harbor, or runs an evaluation workload.
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
-from typing import Any
+import re
+from typing import Any, Callable
 
 
 FIXTURES = {
@@ -23,6 +26,23 @@ FIXTURES = {
     "ternary-small": ("ternary", "metal_matches_scalar_reference"),
     "ternary-edge": ("ternary", "metal_matches_edge_shape_with_all_packed_codes"),
 }
+
+_MIN_AVAILABLE_MEMORY_BYTES = 4 * 1024**3
+_MAX_LOAD_PER_LOGICAL_CPU = 0.75
+
+
+@dataclass(frozen=True)
+class ResourceSnapshot:
+    """Host state required before a bounded device-fixture dispatch."""
+
+    logical_cpu_count: int
+    load_average_1m: float
+    available_memory_bytes: int
+    source: str
+
+
+ResourceObserver = Callable[[], ResourceSnapshot]
+CommandRunner = Callable[..., subprocess.CompletedProcess[str]]
 
 
 def _sha256(path: Path) -> str:
@@ -79,6 +99,78 @@ def _require_external_output(output: Path, repo_root: Path) -> Path:
     raise RuntimeError("fixture evidence output must be outside the repository")
 
 
+def _positive_sysctl_u64(name: str) -> int:
+    try:
+        value = subprocess.check_output(
+            ["/usr/sbin/sysctl", "-n", name], text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        parsed = int(value)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(f"resource governor observability unavailable: sysctl {name}") from exc
+    if parsed < 1:
+        raise RuntimeError(f"resource governor observability unavailable: sysctl {name}")
+    return parsed
+
+
+def _available_memory_from_vm_stat() -> int:
+    try:
+        output = subprocess.check_output(
+            ["/usr/bin/vm_stat"], text=True, stderr=subprocess.DEVNULL
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("resource governor observability unavailable: vm_stat") from exc
+    page_size_match = re.search(r"page size of (\\d+) bytes", output)
+    free_pages_match = re.search(r"^Pages free:\s+(\\d+)\\.$", output, flags=re.MULTILINE)
+    speculative_pages_match = re.search(
+        r"^Pages speculative:\s+(\\d+)\\.$", output, flags=re.MULTILINE
+    )
+    if not page_size_match or not free_pages_match or not speculative_pages_match:
+        raise RuntimeError("resource governor observability unavailable: vm_stat")
+    return int(page_size_match.group(1)) * (
+        int(free_pages_match.group(1)) + int(speculative_pages_match.group(1))
+    )
+
+
+def _observe_host_resources() -> ResourceSnapshot:
+    try:
+        load_average_1m = os.getloadavg()[0]
+    except OSError as exc:
+        raise RuntimeError("resource governor observability unavailable: load average") from exc
+    if not math.isfinite(load_average_1m) or load_average_1m < 0:
+        raise RuntimeError("resource governor observability unavailable: load average")
+    return ResourceSnapshot(
+        logical_cpu_count=_positive_sysctl_u64("hw.logicalcpu"),
+        load_average_1m=load_average_1m,
+        available_memory_bytes=_available_memory_from_vm_stat(),
+        source="macos-sysctl-vm_stat",
+    )
+
+
+def _require_admissible_resources(snapshot: ResourceSnapshot) -> dict[str, Any]:
+    if snapshot.logical_cpu_count < 1:
+        raise RuntimeError("resource governor observability unavailable: logical CPU count")
+    if not math.isfinite(snapshot.load_average_1m) or snapshot.load_average_1m < 0:
+        raise RuntimeError("resource governor observability unavailable: load average")
+    if snapshot.available_memory_bytes < 0:
+        raise RuntimeError("resource governor observability unavailable: available memory")
+    if snapshot.available_memory_bytes < _MIN_AVAILABLE_MEMORY_BYTES:
+        raise RuntimeError(
+            "resource governor rejected available memory "
+            f"({snapshot.available_memory_bytes} < {_MIN_AVAILABLE_MEMORY_BYTES})"
+        )
+    max_load = max(1.0, snapshot.logical_cpu_count * _MAX_LOAD_PER_LOGICAL_CPU)
+    if snapshot.load_average_1m > max_load:
+        raise RuntimeError(
+            "resource governor rejected host load "
+            f"({snapshot.load_average_1m:.2f} > {max_load:.2f})"
+        )
+    return {
+        "observation": asdict(snapshot),
+        "minimum_available_memory_bytes": _MIN_AVAILABLE_MEMORY_BYTES,
+        "maximum_load_average_1m": max_load,
+    }
+
+
 def _fixture_command(repo_root: Path, fixture: str) -> tuple[list[str], dict[str, str]]:
     test_target, test_name = FIXTURES[fixture]
     command = [
@@ -108,6 +200,8 @@ def record_fixture(
     output: Path,
     fixture: str,
     timeout_seconds: int,
+    resource_observer: ResourceObserver | None = None,
+    command_runner: CommandRunner | None = None,
 ) -> dict[str, Any]:
     repo_root = repo_root.resolve()
     artifact = artifact.expanduser().resolve()
@@ -120,6 +214,9 @@ def record_fixture(
     head, branch = _require_clean_head(repo_root)
     provenance = _load_compile_provenance(compile_provenance, head, artifact)
     command, fixed_environment = _fixture_command(repo_root, fixture)
+    resource_governor = _require_admissible_resources(
+        (resource_observer or _observe_host_resources)()
+    )
     environment = {**os.environ, **fixed_environment}
     if fixture == "diffusion":
         environment["METAL_RUNTIME_TEST_ARTIFACT"] = str(artifact)
@@ -128,7 +225,7 @@ def record_fixture(
         environment["TERNARY_GEMM_METALLIB"] = str(artifact)
         environment["TERNARY_GEMM_MANIFEST"] = str(manifest)
     started = datetime.now(timezone.utc)
-    completed = subprocess.run(
+    completed = (command_runner or subprocess.run)(
         command,
         cwd=repo_root,
         env=environment,
@@ -156,6 +253,7 @@ def record_fixture(
         "test_target": test_target,
         "test_name": test_name,
         "command": command,
+        "resource_governor": resource_governor,
         "device_dispatch_executed": True,
         "model_loaded": False,
         "workload_executed": False,
