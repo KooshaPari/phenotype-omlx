@@ -202,6 +202,52 @@ def test_preflight_requires_a_clean_named_head(tmp_path: Path) -> None:
                 source="test",
             ),
         )
+    assert not output.exists()
+
+
+def test_preflight_records_resource_denial_without_dispatching(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorder = _load_recorder()
+    repo, _, _, _, output = _valid_inputs(tmp_path)
+    original_run = recorder.subprocess.run
+
+    def no_cargo_runner(command, *args, **kwargs):
+        if command[0] == "cargo":
+            raise AssertionError("resource-denial preflight must never invoke cargo")
+        return original_run(command, *args, **kwargs)
+
+    monkeypatch.setattr(recorder.subprocess, "run", no_cargo_runner)
+    with pytest.raises(RuntimeError, match="resource governor rejected host load"):
+        recorder.preflight_fixture(
+            repo,
+            output,
+            "diffusion",
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=8.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+        )
+
+    record = json.loads(output.read_text(encoding="utf-8"))
+    assert record["admitted"] is False
+    assert record["rejection_reason"] == "resource governor rejected host load (8.00 > 6.00)"
+    assert record["resource_governor"]["observation"]["load_average_1m"] == 8.0
+    assert record["device_dispatch_executed"] is False
+    assert record["model_loaded"] is False
+    assert record["workload_executed"] is False
+    assert record["promotable"] is False
+
+
+def test_preflight_does_not_write_evidence_for_an_invalid_fixture(tmp_path: Path) -> None:
+    recorder = _load_recorder()
+    repo, _, _, _, output = _valid_inputs(tmp_path)
+
+    with pytest.raises(RuntimeError, match="unsupported fixture"):
+        recorder.preflight_fixture(repo, output, "invalid-fixture")
+    assert not output.exists()
 
 
 def test_rejects_compile_provenance_from_a_different_head(tmp_path: Path) -> None:

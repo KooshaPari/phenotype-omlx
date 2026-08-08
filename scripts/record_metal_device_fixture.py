@@ -18,6 +18,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 from typing import Any, Callable
 
 
@@ -97,6 +98,27 @@ def _require_external_output(output: Path, repo_root: Path) -> Path:
     except ValueError:
         return output
     raise RuntimeError("fixture evidence output must be outside the repository")
+
+
+def _write_json_atomically(output: Path, document: dict[str, Any]) -> None:
+    """Publish a new external evidence document without exposing partial JSON."""
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=output.parent, prefix=f".{output.name}.", suffix=".tmp"
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(document, indent=2, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, output)
+        except FileExistsError as exc:
+            raise RuntimeError(f"output already exists: {output}") from exc
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _positive_sysctl_u64(name: str) -> int:
@@ -192,6 +214,49 @@ def _fixture_command(repo_root: Path, fixture: str) -> tuple[list[str], dict[str
     return command, {"CARGO_BUILD_JOBS": "1", "RUST_BACKTRACE": "0"}
 
 
+def _preflight_record(
+    head: str,
+    branch: str,
+    fixture: str,
+    admitted: bool,
+    resource_governor: dict[str, Any],
+    rejection_reason: str | None = None,
+) -> dict[str, Any]:
+    test_target, test_name = FIXTURES[fixture]
+    record = {
+        "schema_version": "pheno.metal-device-fixture-preflight.v1",
+        "captured_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "repository": "phenotype-omlx",
+        "branch": branch,
+        "candidate_source_head": head,
+        "fixture": fixture,
+        "test_target": test_target,
+        "test_name": test_name,
+        "admitted": admitted,
+        "resource_governor": resource_governor,
+        "device_dispatch_executed": False,
+        "model_loaded": False,
+        "workload_executed": False,
+        "promotable": False,
+    }
+    if rejection_reason is not None:
+        record["rejection_reason"] = rejection_reason
+    return record
+
+
+def _safe_rejection_governor(snapshot: ResourceSnapshot | None) -> dict[str, Any]:
+    if snapshot is None:
+        return {"observation": None}
+    if (
+        snapshot.logical_cpu_count < 1
+        or snapshot.available_memory_bytes < 0
+        or not math.isfinite(snapshot.load_average_1m)
+        or snapshot.load_average_1m < 0
+    ):
+        return {"observation": None}
+    return {"observation": asdict(snapshot)}
+
+
 def preflight_fixture(
     repo_root: Path,
     output: Path,
@@ -205,27 +270,29 @@ def preflight_fixture(
         raise RuntimeError(f"unsupported fixture: {fixture}")
     output = _require_external_output(output, repo_root)
     head, branch = _require_clean_head(repo_root)
-    resource_governor = _require_admissible_resources(
-        (resource_observer or _observe_host_resources)()
+    snapshot: ResourceSnapshot | None = None
+    try:
+        snapshot = (resource_observer or _observe_host_resources)()
+        resource_governor = _require_admissible_resources(snapshot)
+    except RuntimeError as exc:
+        record = _preflight_record(
+            head,
+            branch,
+            fixture,
+            admitted=False,
+            resource_governor=_safe_rejection_governor(snapshot),
+            rejection_reason=str(exc),
+        )
+        _write_json_atomically(output, record)
+        raise
+    record = _preflight_record(
+        head,
+        branch,
+        fixture,
+        admitted=True,
+        resource_governor=resource_governor,
     )
-    test_target, test_name = FIXTURES[fixture]
-    record = {
-        "schema_version": "pheno.metal-device-fixture-preflight.v1",
-        "captured_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "repository": "phenotype-omlx",
-        "branch": branch,
-        "candidate_source_head": head,
-        "fixture": fixture,
-        "test_target": test_target,
-        "test_name": test_name,
-        "resource_governor": resource_governor,
-        "device_dispatch_executed": False,
-        "model_loaded": False,
-        "workload_executed": False,
-        "promotable": False,
-    }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_json_atomically(output, record)
     return record
 
 
