@@ -19,6 +19,7 @@
 #   bash scripts/evals/run_via_harbor.sh --policy
 #   bash scripts/evals/run_via_harbor.sh --niah
 #   bash scripts/evals/run_via_harbor.sh --niah-8192
+#   bash scripts/evals/run_via_harbor.sh --niah-32k
 #   bash scripts/evals/run_via_harbor.sh --turbo
 #   bash scripts/evals/run_via_harbor.sh --preflight --niah-8192
 set -euo pipefail
@@ -44,6 +45,7 @@ for arg in "$@"; do
     --policy) MODE="policy" ;;
     --niah) MODE="niah" ;;
     --niah-8192) MODE="niah_8192" ;;
+    --niah-32k) MODE="niah_32k" ;;
     --turbo) MODE="turbo" ;;
     --preflight) PREFLIGHT=1 ;;
     --help|-h)
@@ -105,8 +107,11 @@ mkdir -p "$OUT"
 case "$MODE" in
   hello) TASK="$PORTAGE_ROOT/examples/tasks/hello-world" ;;
   policy) TASK="$ROOT/evals/harbor/tasks/omlx-qwen35-policy" ;;
-  niah|niah_8192)
+  niah|niah_8192|niah_32k)
     TASK="$ROOT/evals/harbor/tasks/omlx-niah-api-smoke"
+    if [[ "$MODE" == "niah_32k" ]]; then
+      TASK="$ROOT/evals/harbor/tasks/omlx-niah-32k-api-smoke"
+    fi
     if [[ -z "${OPENAI_BASE_URL:-}" ]]; then
       # Apple Container often cannot resolve host.containers.internal.
       # Prefer a routable host LAN IP (MLX must listen on 0.0.0.0).
@@ -156,7 +161,7 @@ if [[ "$OPENAI_MODEL" != "$OMLX_READY_MODEL" ]]; then
 fi
 
 AGENT_ENV_ARGS=(--ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}")
-if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
+if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" || "$MODE" == "niah_32k" ]]; then
   AGENT_ENV_ARGS+=(
     --ae "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
     --ae "OPENAI_API_KEY=${OPENAI_API_KEY}"
@@ -168,10 +173,14 @@ if [[ "$MODE" == "niah_8192" ]]; then
   export NIAH_CONTEXT_TOKENS=8192
   AGENT_ENV_ARGS+=(--ae "NIAH_CONTEXT_TOKENS=8192")
 fi
+if [[ "$MODE" == "niah_32k" ]]; then
+  export NIAH_CONTEXT_TOKENS=32768
+  AGENT_ENV_ARGS+=(--ae "NIAH_CONTEXT_TOKENS=32768")
+fi
 
 if [[ "$PREFLIGHT" -eq 1 ]]; then
   context="default"
-  if [[ "$MODE" == "niah_8192" ]]; then
+  if [[ "$MODE" == "niah_8192" || "$MODE" == "niah_32k" ]]; then
     context="$NIAH_CONTEXT_TOKENS"
   fi
   echo "preflight ok: env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL context=$context window=$PHENO_EXECUTION_WINDOW_ID"
