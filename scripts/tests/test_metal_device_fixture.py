@@ -121,6 +121,19 @@ def test_resource_governor_rejects_constrained_host_before_cargo(tmp_path: Path)
     assert cargo_calls == []
 
 
+def test_vm_stat_observer_parses_macos_page_counts(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _load_recorder()
+    macos_vm_stat = """Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                                     7769.
+Pages active:                                 277190.
+Pages speculative:                               867.
+"""
+
+    monkeypatch.setattr(recorder.subprocess, "check_output", lambda *args, **kwargs: macos_vm_stat)
+
+    assert recorder._available_memory_from_vm_stat() == (7769 + 867) * 16384
+
+
 def test_preflight_emits_admission_evidence_without_running_cargo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

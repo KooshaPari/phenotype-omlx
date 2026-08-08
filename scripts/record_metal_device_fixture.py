@@ -119,10 +119,10 @@ def _available_memory_from_vm_stat() -> int:
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError("resource governor observability unavailable: vm_stat") from exc
-    page_size_match = re.search(r"page size of (\\d+) bytes", output)
-    free_pages_match = re.search(r"^Pages free:\s+(\\d+)\\.$", output, flags=re.MULTILINE)
+    page_size_match = re.search(r"page size of (\d+) bytes", output)
+    free_pages_match = re.search(r"^Pages free:\s+(\d+)\.$", output, flags=re.MULTILINE)
     speculative_pages_match = re.search(
-        r"^Pages speculative:\s+(\\d+)\\.$", output, flags=re.MULTILINE
+        r"^Pages speculative:\s+(\d+)\.$", output, flags=re.MULTILINE
     )
     if not page_size_match or not free_pages_match or not speculative_pages_match:
         raise RuntimeError("resource governor observability unavailable: vm_stat")
