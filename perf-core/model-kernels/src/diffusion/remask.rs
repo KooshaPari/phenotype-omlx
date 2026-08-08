@@ -201,7 +201,13 @@ mod tests {
             1,
         )
         .unwrap_err();
-        assert!(matches!(err, KernelError::NonFiniteValue { what: "remask.scores", .. }));
+        assert!(matches!(
+            err,
+            KernelError::NonFiniteValue {
+                what: "remask.scores",
+                ..
+            }
+        ));
     }
 
     #[test]

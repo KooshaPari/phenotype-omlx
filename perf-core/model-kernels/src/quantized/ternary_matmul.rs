@@ -107,6 +107,9 @@ pub fn ternary_matmul(
             got: out.len(),
         });
     }
+    if let Some(index) = a.iter().position(|value| !value.is_finite()) {
+        return Err(KernelError::NonFiniteValue { what: "a", index });
+    }
     // The flat symbol stream is `[k, n]` -> `k * n` symbols, packed
     // 4-per-byte. The trailing partial byte is allowed (see
     // `ternary_pack`), but the caller-owned buffer must be exactly sized.
@@ -343,6 +346,20 @@ mod tests {
     }
 
     #[test]
+    fn rejects_nonfinite_activations_before_accumulation() {
+        let mut out = vec![0.0f32; 1];
+        let err =
+            ternary_matmul(&[f32::NAN], &[0u8], &[1.0], &[0.0], 1, 1, 1, 1, &mut out).unwrap_err();
+        assert!(matches!(
+            err,
+            KernelError::NonFiniteValue {
+                what: "a",
+                index: 0
+            }
+        ));
+    }
+
+    #[test]
     fn rejects_dimension_overflow_before_buffer_indexing() {
         let mut out = Vec::new();
         let err = ternary_matmul(&[], &[], &[], &[], 4, usize::MAX, 2, 4, &mut out).unwrap_err();
@@ -377,8 +394,18 @@ mod tests {
         let values = vec![SignedTernary::Pos; k * n];
         let (packed, scales, zeros) = ternary_pack(&values, k * n).unwrap();
         let mut out = vec![0.0f32; m * n];
-        ternary_matmul(&[1.0, 2.0, 3.0, 4.0], &packed, &scales, &zeros, k * n, m, k, n, &mut out)
-            .unwrap();
+        ternary_matmul(
+            &[1.0, 2.0, 3.0, 4.0],
+            &packed,
+            &scales,
+            &zeros,
+            k * n,
+            m,
+            k,
+            n,
+            &mut out,
+        )
+        .unwrap();
         assert_eq!(out, vec![10.0; n]);
     }
 

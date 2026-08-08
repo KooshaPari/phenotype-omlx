@@ -18,6 +18,8 @@ pub enum TernaryGemmError {
     HostPackedLayout(String),
     #[error("ternary scale at index {index} must be finite")]
     NonFiniteScale { index: usize },
+    #[error("ternary activation at index {index} must be finite")]
+    NonFiniteActivation { index: usize },
     #[cfg(all(feature = "metal", target_os = "macos"))]
     #[error("Metal ternary GEMM failed: {0}")]
     Metal(String),
@@ -45,6 +47,9 @@ fn validate_ternary_shape(
         .ok_or(TernaryGemmError::SizeOverflow)?;
     if activations.len() != activation_len || packed_weights.len() != packed_len {
         return Err(TernaryGemmError::BadShape);
+    }
+    if let Some(index) = activations.iter().position(|value| !value.is_finite()) {
+        return Err(TernaryGemmError::NonFiniteActivation { index });
     }
     if scales.len() != n {
         return Err(TernaryGemmError::BadScaleShape);
@@ -146,12 +151,9 @@ pub fn ternary_gemm_metal_from_host(
     n: usize,
     artifact: &crate::MetallibArtifact,
 ) -> Result<Vec<f32>, TernaryGemmError> {
-    let packed_weights = model_kernels::quantized::ternary_repack_for_metal(
-        host_packed_weights,
-        k,
-        n,
-    )
-        .map_err(|error| TernaryGemmError::HostPackedLayout(error.to_string()))?;
+    let packed_weights =
+        model_kernels::quantized::ternary_repack_for_metal(host_packed_weights, k, n)
+            .map_err(|error| TernaryGemmError::HostPackedLayout(error.to_string()))?;
     ternary_gemm_metal(activations, &packed_weights, scales, m, k, n, artifact)
 }
 
@@ -171,5 +173,12 @@ mod tests {
         let error = validate_ternary_shape(&[1.0], &[0], &[1.0], 1, 2, 1)
             .expect_err("activation shape must be exact");
         assert_eq!(error, TernaryGemmError::BadShape);
+    }
+
+    #[test]
+    fn shape_contract_rejects_non_finite_activations() {
+        let error = validate_ternary_shape(&[f32::INFINITY], &[0], &[1.0], 1, 1, 1)
+            .expect_err("non-finite activation must fail closed");
+        assert_eq!(error, TernaryGemmError::NonFiniteActivation { index: 0 });
     }
 }
