@@ -446,3 +446,32 @@ cover Ollama, LM Studio, llama.cpp, vLLM, and SGLang ingress. This avoids a seco
 layer. The current program remains Qwen3.5-only; stale Qwen2.5 examples in Portage are excluded
 from the active matrix. Desktop dual-GPU work is a later bounded 3090 Ti/Qwen3.5 lane, not a
 Mac/Metal prerequisite.
+
+### 2026-08-07 - Preserve-first disk and checkout audit
+
+The Data volume was observed at 98-100% utilization during the audit, with free space varying
+from roughly 170 MiB to 19 GiB as local processes reclaimed temporary space. Airlock reports 175
+registered paths, 138 never pushed, 64 dirty, and 14 without remotes; its persistence log contains
+`No space left on device`. Airlock Git snapshots are provenance preservation, not a complete system
+or configuration backup.
+
+The host has no configured Time Machine destination and no verified restic, Borg, Nix, chezmoi,
+duplicity, or rclone backup path. Therefore deleting worktrees, Airlock state, stashes, Codex
+databases, LaunchAgents, or config backups is unsafe until an off-host restore path and a small
+restore drill exist. The safe order is: inventory and push recoverable Git state, snapshot config
+metadata, disable only duplicate/stale writers if necessary, then remove only verified caches or
+build outputs.
+
+Relevant large files include Qwen3.5 model blobs in both legacy and Hub cache roots. They are
+currently treated as active model assets, not cleanup candidates; duplicate-byte deduplication
+requires reference and inode verification before any mutation.
+
+The first safe reclaim pass removed only rebuildable Rust `target/` directories from seven stale or
+archived phenotype-omlx worktrees plus the 12 GiB hwLedger model-explorer worktree target. Git
+source trees, branches, archives, and untracked bundles were preserved. Data-volume free space
+rose to approximately 53 GiB; the current OMLX target and active build outputs remain intact.
+
+The direct estate inventory found 51 Git roots, 355 summed worktree entries (nested overlap is
+possible), 11 dirty roots, 23 ahead of upstream, 21 behind, and 84 standalone `.git` directories.
+This is a triage inventory, not authorization to delete branches. The next safe candidates are
+only rebuildable caches; dirty/ahead roots require remote preservation and branch-level review.

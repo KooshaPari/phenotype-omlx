@@ -39,6 +39,12 @@ pub fn remask(
             got: 0,
         });
     }
+    if let Some(index) = scores.iter().position(|score| !score.is_finite()) {
+        return Err(KernelError::NonFiniteValue {
+            what: "remask.scores",
+            index,
+        });
+    }
     match strategy {
         RemaskStrategy::None => {
             // Leave the input mask untouched.
@@ -185,17 +191,17 @@ mod tests {
     }
 
     #[test]
-    fn percentile_hundred_masks_nonfinite_scores() {
+    fn rejects_nonfinite_scores_before_remasking() {
         let mut mask = vec![false, false, false];
-        remask(
+        let err = remask(
             &[f32::NAN, 0.5, f32::INFINITY],
             &mut mask,
             &RemaskStrategy::LowConfidence { percentile: 100.0 },
             0,
             1,
         )
-        .unwrap();
-        assert_eq!(mask, vec![true, true, true]);
+        .unwrap_err();
+        assert!(matches!(err, KernelError::NonFiniteValue { what: "remask.scores", .. }));
     }
 
     #[test]

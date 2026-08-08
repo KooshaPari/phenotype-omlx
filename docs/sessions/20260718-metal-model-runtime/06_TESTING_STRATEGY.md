@@ -252,3 +252,36 @@ or making a network request.
 proving that zero-context output is rejected and exact 8192-token output is accepted. It does not
 create `/app`, `/logs`, contact an endpoint, or execute Harbor.
 The fixture also rejects a truthy string `exact_match` before checking the valid exact-8192 case.
+
+### Bounded host-contract regression (2026-08-07)
+
+The repaired 32k Harbor task now uses the one-level Portage template
+`${NIAH_CONTEXT_TOKENS_32K}` and the job supplies the literal `32768`; the resolver and TOML
+contract were validated without launching Harbor. Both 8k and 32k task scripts resolve the
+repository Qwen3.5 SSOT when explicit model environment variables are absent, and both compile
+with `python3 -m py_compile`. The fallback searches ancestors for
+`python/omlx_research/smoke_models.py` instead of assuming an invalid fixed relative path.
+
+Bounded host-only Rust checks passed offline: `cargo test -p metal-runtime --lib
+diffusion_dispatch_metal` (5/5), `cargo test -p model-kernels --lib diffusion` (39/39), and
+`cargo test -p model-kernels --lib ternary` (16/16). These prove contract behavior only; they are
+not Metal-device, Harbor, or Qwen3.5 execution evidence.
+
+The host remask boundary now rejects NaN/Inf confidence before sorting for every strategy;
+`model-kernels --lib diffusion` remains green at 39/39 after the regression test. The exact 32k
+task uses a literal `NIAH_CONTEXT_TOKENS=32768` because Portage resolves task templates before
+job container injection. NIAH model validation accepts only canonical Qwen3.5 leaf IDs (for
+example `mlx-community/Qwen3.5-0.8B-OptiQ-4bit`) and rejects arbitrary substring matches.
+
+`metal-runtime --lib diffusion_self_verify` now passes 8/8, including rejection of malformed
+public block ranges before length calculation. Invalid `start >= end` and `end > tokens` values
+are fail-closed rather than allowing an underflow/panic path.
+
+`metal-runtime --lib diffusion_self_verify` now passes 8/8, including rejection of malformed
+public block ranges before length calculation. Invalid `start >= end` and `end > tokens` values
+are fail-closed rather than allowing an underflow/panic path.
+- Bounded compile-only check (2026-08-07): `scripts/build_metal_runtime_bundle.sh` compiled all
+  20 checked-in shaders with the Xcode Metal toolchain into a temporary directory, producing
+  SHA-256 `ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`; the temporary
+  directory was moved to Trash after capture. This is compile evidence only: no Metal device,
+  model load, Harbor task, or benchmark was executed.

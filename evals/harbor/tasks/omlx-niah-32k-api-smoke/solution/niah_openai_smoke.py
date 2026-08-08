@@ -75,8 +75,18 @@ def _model_id() -> str:
     if env_model:
         return env_model
     try:
-        root = Path(__file__).resolve().parents[2]
-        sys.path.insert(0, str(root / "python"))
+        script_path = Path(__file__).resolve()
+        package_root = next(
+            (
+                parent / "python"
+                for parent in (script_path.parent, *script_path.parents)
+                if (parent / "python/omlx_research/smoke_models.py").is_file()
+            ),
+            None,
+        )
+        if package_root is None:
+            raise FileNotFoundError("python/omlx_research/smoke_models.py not found")
+        sys.path.insert(0, str(package_root))
         from omlx_research.smoke_models import default_model_for
 
         return default_model_for("niah")
@@ -85,6 +95,12 @@ def _model_id() -> str:
             f"error: cannot resolve Qwen3.5 model id ({e}); "
             "set OMLX_READY_MODEL or OPENAI_MODEL"
         ) from e
+
+
+def _is_qwen35_id(model: str) -> bool:
+    """Accept canonical Qwen3.5 leaves, not arbitrary substring matches."""
+    leaf = model.strip().lower().rsplit("/", 1)[-1]
+    return leaf == "qwen3.5" or leaf.startswith("qwen3.5-")
 
 
 def run_niah() -> dict:
@@ -105,7 +121,7 @@ def run_niah() -> dict:
     lower = model.lower()
     if "qwen2.5" in lower:
         raise SystemExit(f"error: Qwen2.5 quarantined (got {model!r})")
-    if "qwen3.5" not in lower:
+    if not _is_qwen35_id(model):
         raise SystemExit(f"error: NIAH smoke requires Qwen3.5 model id (got {model!r})")
 
     key = os.environ.get("OPENAI_API_KEY", "omlx")
