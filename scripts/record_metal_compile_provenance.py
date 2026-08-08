@@ -12,6 +12,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -57,7 +58,7 @@ def _record(repo_root: Path, output: Path, keep_build: Path | None) -> dict[str,
         subprocess.run(
             ["bash", "scripts/build_metal_runtime_bundle.sh"],
             cwd=repo_root,
-            env={**__import__("os").environ, "OUT_DIR": str(build_dir)},
+            env={**os.environ, "OUT_DIR": str(build_dir)},
             stdout=log,
             stderr=subprocess.STDOUT,
             check=True,
