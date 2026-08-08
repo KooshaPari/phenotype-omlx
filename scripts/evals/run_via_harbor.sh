@@ -204,7 +204,7 @@ if [[ "$PREFLIGHT" -eq 1 ]]; then
   if [[ "$MODE" == "niah_8192" || "$MODE" == "niah_32k" ]]; then
     context="$NIAH_CONTEXT_TOKENS"
   fi
-  echo "preflight ok: env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL context=$context window=$PHENO_EXECUTION_WINDOW_ID"
+  echo "preflight ok: env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL context=$context window=$PHENO_EXECUTION_WINDOW_ID branch=$CANDIDATE_BRANCH head=$CANDIDATE_SOURCE_HEAD"
   echo "preflight only: Apple Container and Harbor were not invoked"
   exit 0
 fi
