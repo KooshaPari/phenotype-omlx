@@ -134,23 +134,41 @@ def _positive_sysctl_u64(name: str) -> int:
     return parsed
 
 
-def _available_memory_from_vm_stat() -> int:
+def _available_memory_from_vm_stat(output: str) -> int:
+    """Return conservative reclaimable macOS memory from a ``vm_stat`` transcript.
+
+    Only free, speculative, and purgeable pages are counted.  Inactive pages are
+    intentionally excluded: ``vm_stat`` documents them as an inactive-list count,
+    not as immediately reclaimable memory for this bounded admission gate.
+    """
+
+    page_size_match = re.search(r"page size of (\d+) bytes", output)
+    free_pages_match = re.search(r"^Pages free:\s+(\d+)\.$", output, flags=re.MULTILINE)
+    speculative_pages_match = re.search(
+        r"^Pages speculative:\s+(\d+)\.$", output, flags=re.MULTILINE
+    )
+    purgeable_pages_match = re.search(
+        r"^Pages purgeable:\s+(\d+)\.$", output, flags=re.MULTILINE
+    )
+    if not all(
+        (page_size_match, free_pages_match, speculative_pages_match, purgeable_pages_match)
+    ):
+        raise RuntimeError("resource governor observability unavailable: vm_stat")
+    return int(page_size_match.group(1)) * (
+        int(free_pages_match.group(1))
+        + int(speculative_pages_match.group(1))
+        + int(purgeable_pages_match.group(1))
+    )
+
+
+def _observe_available_memory_bytes() -> int:
     try:
         output = subprocess.check_output(
             ["/usr/bin/vm_stat"], text=True, stderr=subprocess.DEVNULL
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError("resource governor observability unavailable: vm_stat") from exc
-    page_size_match = re.search(r"page size of (\d+) bytes", output)
-    free_pages_match = re.search(r"^Pages free:\s+(\d+)\.$", output, flags=re.MULTILINE)
-    speculative_pages_match = re.search(
-        r"^Pages speculative:\s+(\d+)\.$", output, flags=re.MULTILINE
-    )
-    if not page_size_match or not free_pages_match or not speculative_pages_match:
-        raise RuntimeError("resource governor observability unavailable: vm_stat")
-    return int(page_size_match.group(1)) * (
-        int(free_pages_match.group(1)) + int(speculative_pages_match.group(1))
-    )
+    return _available_memory_from_vm_stat(output)
 
 
 def _observe_host_resources() -> ResourceSnapshot:
@@ -163,8 +181,8 @@ def _observe_host_resources() -> ResourceSnapshot:
     return ResourceSnapshot(
         logical_cpu_count=_positive_sysctl_u64("hw.logicalcpu"),
         load_average_1m=load_average_1m,
-        available_memory_bytes=_available_memory_from_vm_stat(),
-        source="macos-sysctl-vm_stat",
+        available_memory_bytes=_observe_available_memory_bytes(),
+        source="macos-sysctl-vm_stat-reclaimable",
     )
 
 
