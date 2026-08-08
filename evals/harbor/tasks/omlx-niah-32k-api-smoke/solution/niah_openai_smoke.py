@@ -97,10 +97,18 @@ def _model_id() -> str:
         ) from e
 
 
+_QWEN35_ALLOWLIST = frozenset(
+    {
+        "mlx-community/qwen3.5-0.8b-optiq-4bit",
+        "qwen/qwen3.5-0.8b",
+        "openai/qwen3.5-0.8b",
+    }
+)
+
+
 def _is_qwen35_id(model: str) -> bool:
-    """Accept canonical Qwen3.5 leaves, not arbitrary substring matches."""
-    leaf = model.strip().lower().rsplit("/", 1)[-1]
-    return leaf == "qwen3.5" or leaf.startswith("qwen3.5-")
+    """Accept only the Qwen3.5 IDs declared by the repository SSOT."""
+    return model.strip().lower() in _QWEN35_ALLOWLIST
 
 
 def run_niah() -> dict:
