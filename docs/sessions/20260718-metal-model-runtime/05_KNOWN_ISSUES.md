@@ -297,3 +297,21 @@ implementations in Portage, Forgecode, and Helios-CLI are the authoritative ingr
 Stale Qwen2.5 examples must remain excluded from the active Qwen3.5-only matrix. Desktop dual-GPU
 execution remains pending a signed window and a bounded RTX 3090 Ti run; no broad serving or
 benchmark workload is permitted.
+
+Update 2026-08-07 (subtractive disk pass): verified no `cargo`/`rustc` process was active, then
+moved only ignored, rebuildable Rust build trees to macOS Trash: the primary
+`perf-core/target/debug` tree (7.6 GiB), the clean pushed `hwLedger` model-explorer Rust target
+(25 GiB), and 12 smaller ignored targets under preserved phenotype-omlx superpower worktrees.
+Source files, dirty worktrees, branches, model blobs, and evidence were not deleted. Trash remains
+reversible; emptying these exact items is a separate operator decision. Free space improved from
+about 11 GiB to about 13 GiB. Xcode was opened through `xed` because LaunchServices could not
+open Markdown directly with `open -a Xcode`.
+
+Update 2026-08-08 (Harbor preflight): `~/.config/phenotype/portage.env` previously evaluated
+Infisical's interactive colored region prompt as shell code, leaving Harbor/Langfuse variables
+unset. The loader now requests token-authenticated `dotenv-export` with plain, silent output;
+sanitized sourcing confirms `PORTAGE_ROOT`, Langfuse variables, `OPENAI_BASE_URL`, and the
+Qwen3.5 readiness model are set. The Harbor gate also no longer treats ordinary `=======`
+Markdown/report separators as merge conflicts; its contract test passes and a real Portage
+Qwen3.5 8192 preflight passes without invoking Apple Container or Harbor. A signed execution
+window is still required before any workload.

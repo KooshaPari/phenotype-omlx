@@ -371,3 +371,22 @@ and Portage/Harbor as the execution substrate; no bespoke duplicate serving stac
 The next executable lane is a bounded Qwen3.5 desktop run on the RTX 3090 Ti after [A]-[D], with
 the GTX 1080 Ti treated as a separate capability probe because its prior vLLM readiness failed
 with `no kernel image is available`.
+
+## Preserve-first estate cleanup DAG (2026-08-07)
+
+    [P0] maintain free-space safety margin
+      -> [P1] inventory every checkout/worktree and Git preservation state
+      -> [P2] push or PR recoverable dirty/ahead branches (no force-push)
+      -> [P3] establish encrypted off-host config/recovery backup + restore drill
+      -> [P4] snapshot LaunchAgents/Airlock/Codex metadata
+      -> [P5] disable duplicate writers only after snapshot
+      -> [P6] remove verified caches/build outputs only
+      -> [P7] remeasure disk, Airlock, Git, and restore health
+
+    MUST NOT DELETE: dirty worktrees, unpushed branches, stashes, Airlock state, Codex DB/WAL,
+    recovery directories, model blobs, or config backups before P2-P4 evidence.
+
+Current blockers are preservation-related rather than OMLX code-related: no configured off-host
+backup/restore path, many Airlock paths not pushed, and duplicate LaunchAgent writers. This lane
+is intentionally subtractive and does not create new checkouts, repositories, tar dumps, or model
+workloads.

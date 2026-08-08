@@ -10,7 +10,14 @@ import argparse
 import json
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any, Mapping
+
+# Support both `python -m scripts.prepare_candidate_rebind` and the documented
+# executable form `python scripts/prepare_candidate_rebind.py`.  The latter
+# does not put the repository root on ``sys.path`` automatically.
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts.rebind_inputs import CandidateRebindError, InputSnapshot, canonical_digest, is_sha256
 from scripts.rebind_inputs import (

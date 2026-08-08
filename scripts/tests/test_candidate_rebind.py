@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 
@@ -14,6 +15,17 @@ from scripts.prepare_candidate_rebind import CandidateRebindError, prepare_rebin
 
 
 ROOT = Path(__file__).parents[2]
+
+
+def test_direct_script_help_resolves_repository_imports() -> None:
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "prepare_candidate_rebind.py"), "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "Prepare immutable current-head evidence" in result.stdout
 
 
 def _head() -> str:

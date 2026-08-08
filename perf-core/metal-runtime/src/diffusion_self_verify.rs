@@ -15,7 +15,7 @@ pub struct DiffusionVerificationBlock {
 
 impl DiffusionVerificationBlock {
     pub const fn len(self) -> usize {
-        self.end - self.start
+        self.end.saturating_sub(self.start)
     }
 }
 
@@ -35,6 +35,11 @@ pub enum DiffusionSelfVerifyError {
     BlockBudgetExceeded {
         required: usize,
         max: usize,
+    },
+    InvalidBlockRange {
+        start: usize,
+        end: usize,
+        tokens: usize,
     },
     DuplicateBlock {
         start: usize,
@@ -57,6 +62,9 @@ impl fmt::Display for DiffusionSelfVerifyError {
                     f,
                     "self-verification requires {required} blocks, budget is {max}"
                 )
+            }
+            Self::InvalidBlockRange { start, end, tokens } => {
+                write!(f, "invalid self-verification block {start}..{end} for {tokens} tokens")
             }
             Self::DuplicateBlock { start, end } => {
                 write!(
@@ -134,6 +142,13 @@ impl DiffusionVerificationPlan {
         actual: &[f32],
         tolerance: f32,
     ) -> Result<(), DiffusionSelfVerifyError> {
+        if block.start >= block.end || block.end > self.tokens {
+            return Err(DiffusionSelfVerifyError::InvalidBlockRange {
+                start: block.start,
+                end: block.end,
+                tokens: self.tokens,
+            });
+        }
         if !self.blocks.contains(&block) {
             return Err(DiffusionSelfVerifyError::Parity(
                 DiffusionParityError::Value {
@@ -255,6 +270,27 @@ mod tests {
         assert_eq!(
             DiffusionVerificationPlan::for_tokens(0, 4, 1),
             Err(DiffusionSelfVerifyError::ZeroTokens)
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_block_ranges_before_length_calculation() {
+        let plan = DiffusionVerificationPlan::for_tokens(8, 4, 2).unwrap();
+        let err = plan
+            .verify_f32_block(
+                DiffusionVerificationBlock { start: 6, end: 4 },
+                &[0.0; 0],
+                &[0.0; 0],
+                1e-5,
+            )
+            .unwrap_err();
+        assert_eq!(
+            err,
+            DiffusionSelfVerifyError::InvalidBlockRange {
+                start: 6,
+                end: 4,
+                tokens: 8
+            }
         );
     }
 

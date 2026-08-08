@@ -94,7 +94,10 @@ if ! git -C "$PORTAGE_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
   echo "ERROR: PORTAGE_ROOT must be a Git checkout with a valid HEAD." >&2
   exit 2
 fi
-if git -C "$PORTAGE_ROOT" grep -I -q -E '^(<<<<<<<|=======|>>>>>>>)' HEAD -- .; then
+# A bare `=======` is common in Markdown and generated test reports.  Only
+# conflict-arm markers carry the required branch-marker prefixes; rejecting
+# every separator line would incorrectly block otherwise clean Portage heads.
+if git -C "$PORTAGE_ROOT" grep -I -q -E '^(<<<<<<<|>>>>>>>)' HEAD -- .; then
   echo "ERROR: PORTAGE_ROOT tracked HEAD contains an unresolved conflict marker." >&2
   exit 2
 fi

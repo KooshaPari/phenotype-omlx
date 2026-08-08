@@ -113,7 +113,7 @@ mkdir -p "${PREFLIGHT_PORTAGE}/packages/harbor-langfuse/src"
 git -C "${PREFLIGHT_PORTAGE}" init -q
 git -C "${PREFLIGHT_PORTAGE}" config user.email 'fixture@example.invalid'
 git -C "${PREFLIGHT_PORTAGE}" config user.name 'Harbor fixture'
-printf '%s\n' 'clean fixture' >"${PREFLIGHT_PORTAGE}/source.txt"
+printf '%s\n' 'clean fixture' '=======' 'markdown separator' >"${PREFLIGHT_PORTAGE}/source.txt"
 git -C "${PREFLIGHT_PORTAGE}" add source.txt
 git -C "${PREFLIGHT_PORTAGE}" commit -qm 'clean fixture source'
 
