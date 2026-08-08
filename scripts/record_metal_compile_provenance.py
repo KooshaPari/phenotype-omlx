@@ -43,6 +43,12 @@ def _record(repo_root: Path, output: Path, keep_build: Path | None) -> dict[str,
     output = output.expanduser().resolve()
     if output.exists() or output.is_symlink():
         raise RuntimeError(f"output already exists: {output}")
+    try:
+        output.relative_to(repo_root)
+    except ValueError:
+        pass
+    else:
+        raise RuntimeError("provenance output must be outside the repository")
     _require_clean(repo_root)
     head = _git(repo_root, "rev-parse", "HEAD")
     branch = _git(repo_root, "branch", "--show-current")
