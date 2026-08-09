@@ -97,8 +97,12 @@ async fn event_bus_async_publish_preserves_payload() {
         action: "created".into(),
     };
 
-    bus.publish_async(event.clone())
-        .await
-        .expect("publish event");
+    assert_eq!(
+        bus.publish_async(event.clone())
+            .await
+            .expect("publish event"),
+        1,
+        "async publish reports the sole subscriber"
+    );
     assert_eq!(subscriber.recv().await.expect("subscriber event"), event);
 }
