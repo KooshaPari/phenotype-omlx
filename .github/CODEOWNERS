@@ -1,0 +1,6 @@
+# Default code owners for the Phenotype fleet
+*       @KooshaPari
+
+/.github/        @KooshaPari
+/.mergify.yml    @KooshaPari
+
