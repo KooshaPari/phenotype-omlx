@@ -1,0 +1,164 @@
+name: qwen35-policy oracle gate
+
+# Mirrors portage/.github/workflows/harbor-gate.yml — runs the qwen35-policy
+# oracle (and optionally turboquant-ssot + NIAH) end-to-end against the
+# fork-clean portage harbor CLI + a live MLX server bound to the
+# configured OPENAI_BASE_URL.
+#
+# Requires a live mlx_lm.server with Qwen3.5-0.8B-OptiQ-4bit. CI runners
+# don't ship with MLX — gate is dispatch-only on fork-clean and skip on PR.
+#
+# Use the harbor-hosted runner (mlx-1:8081) or self-hosted runners that
+# expose ${{ vars.QWEN35_POLICY_GATE_MLX_URL }}.
+#
+# Secrets (Infisical-proxied via INFISICAL_TOKEN):
+#   OPENAI_BASE_URL        http://<mlx-runner>:8081/v1
+#   OPENAI_API_KEY         omlx-local
+#   OPENAI_MODEL           mlx-community/Qwen3.5-0.8B-OptiQ-4bit
+#   OMLX_READY_MODEL       mlx-community/Qwen3.5-0.8B-OptiQ-4bit
+
+on:
+  workflow_dispatch:
+    inputs:
+      gate:
+        description: "Which oracle gate to run"
+        required: false
+        default: "qwen35-policy"
+        type: choice
+        options:
+          - "qwen35-policy"
+          - "turboquant-ssot"
+          - "niah-8k"
+          - "niah-32k"
+  push:
+    branches: [main, fork-clean]
+    paths:
+      - ".github/workflows/qwen35-policy-gate.yml"
+      - "evals/harbor/jobs/**"
+      - "evals/harbor/tasks/**"
+      - "config/smoke_models.json"
+  pull_request:
+    branches: [main, fork-clean]
+    paths:
+      - "evals/harbor/jobs/**"
+      - "evals/harbor/tasks/**"
+      - "config/smoke_models.json"
+
+concurrency:
+  group: qwen35-policy-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  policy-oracle:
+    name: ${{ inputs.gate || 'qwen35-policy' }} oracle gate
+    runs-on: ${{ vars.QWEN35_POLICY_GATE_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@5d3a7b9b5e2b5b5e5b5e5b5e5b5e5b5e5b5e5b5e
+        with:
+          version: "0.5.x"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync portage (consumer of harbor)
+        env:
+          PORTAGE_ROOT: ${{ vars.PORTAGE_ROOT || '/tmp/portage-fork-clean' }}
+        run: |
+          if [ ! -d "$PORTAGE_ROOT" ]; then
+            git clone --depth=1 --branch fork-clean \
+              https://github.com/KooshaPari/portage.git "$PORTAGE_ROOT"
+          fi
+          cd "$PORTAGE_ROOT"
+          uv sync --all-extras --dev
+
+      - name: Pull secrets from Infisical
+        env:
+          INFISICAL_TOKEN: ${{ secrets.INFISICAL_TOKEN }}
+          INFISICAL_PROJECT_ID: ${{ vars.INFISICAL_PROJECT_ID || '8efe392e-56a6-4c3c-89f9-8141183dd7e8' }}
+          INFISICAL_ENV: ${{ vars.INFISICAL_ENV || 'dev' }}
+        run: |
+          if [ -z "$INFISICAL_TOKEN" ]; then
+            echo "::error::INFISICAL_TOKEN secret not configured in repo settings"
+            exit 1
+          fi
+          infisical run \
+            --projectId "$INFISICAL_PROJECT_ID" \
+            --env "$INFISICAL_ENV" \
+            --token "$INFISICAL_TOKEN" \
+            -- bash -c 'infisical export --projectId "$INFISICAL_PROJECT_ID" --env "$INFISICAL_ENV" --token "$INFISICAL_TOKEN" --format=dotenv > /tmp/phenotype-omlx.env'
+
+      - name: Verify MLX server reachable
+        env:
+          OPENAI_BASE_URL: ${{ vars.QWEN35_POLICY_GATE_MLX_URL || secrets.QWEN35_POLICY_GATE_MLX_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENAI_BASE_URL:-}" ]; then
+            echo "::error::QWEN35_POLICY_GATE_MLX_URL not configured. Set it as a repo var/secret pointing at the MLX runner, e.g. http://mlx-1:8081/v1"
+            exit 1
+          fi
+          HEALTH_URL="${OPENAI_BASE_URL%/v1}/health"
+          echo "Probing $HEALTH_URL"
+          curl -fsS -m 5 "$HEALTH_URL"
+
+      - name: Override OPENAI_BASE_URL for fork-clean container
+        env:
+          HARBOR_RUN_MODE: fork-clean
+        run: |
+          # fork-clean containers reach the host's MLX server via host.docker.internal.
+          # On CI runners the MLX server is on the same host (or a sidecar),
+          # so we substitute the MLX URL into the resolved OPENAI_BASE_URL.
+          if [ -n "${QWEN35_POLICY_GATE_MLX_URL:-}" ]; then
+            echo "if [ \"\${HARBOR_RUN_MODE}\" = \"fork-clean\" ]; then export OPENAI_BASE_URL=\"${QWEN35_POLICY_GATE_MLX_URL}\"; fi" >> /tmp/phenotype-omlx.env
+          fi
+          echo "Updated /tmp/phenotype-omlx.env tail:"
+          tail -5 /tmp/phenotype-omlx.env
+
+      - name: Run oracle gate
+        env:
+          PORTAGE_ROOT: ${{ vars.PORTAGE_ROOT || '/tmp/portage-fork-clean' }}
+          GATE: ${{ inputs.gate || 'qwen35-policy' }}
+        run: |
+          set -euo pipefail
+          set -a; source /tmp/phenotype-omlx.env; set +a
+          export HARBOR_RUN_MODE=fork-clean
+          case "$GATE" in
+            qwen35-policy)
+              YAML="evals/harbor/jobs/qwen35-policy-local.yaml"
+              ;;
+            turboquant-ssot)
+              YAML="evals/harbor/jobs/turboquant-ssot.yaml"
+              ;;
+            niah-8k)
+              YAML="evals/harbor/jobs/niah-qwen35-local.yaml"
+              ;;
+            niah-32k)
+              YAML="evals/harbor/jobs/niah-qwen35-local-32k.yaml"
+              export NIAH_CONTEXT_TOKENS_32K=32768
+              ;;
+            *)
+              echo "::error::Unsupported gate: $GATE"; exit 1 ;;
+          esac
+          if [ ! -f "$YAML" ]; then
+            echo "::error::YAML not found: $YAML"; exit 1
+          fi
+          echo "Running: uv run harbor run -c $YAML --yes (via $PORTAGE_ROOT)"
+          cd "$PORTAGE_ROOT"
+          uv run harbor run -c "$GITHUB_WORKSPACE/$YAML" --yes
+
+      - name: Upload job artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: qwen35-policy-jobs-${{ github.run_id }}
+          path: jobs/
+          retention-days: 7
