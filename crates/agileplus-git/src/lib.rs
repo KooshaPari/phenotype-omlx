@@ -734,27 +734,26 @@ fn parse_legacy_merge_tree_path(line: &str) -> Option<&str> {
 
 /// Extract paths only from stable, path-bearing conflict diagnostic clauses.
 ///
-/// Git's `modify/delete` and `rename/delete` messages contain trailing
-/// branch prose such as `left in tree` and `deleted in HEAD`. Do not treat
-/// those clauses as paths; merge-tree stage rows or the diagnostic's leading
-/// path clause are authoritative instead.
+/// `Merge conflict in <path>` is stable across non-delete conflict types.
+/// Delete diagnostics instead contain branch prose such as `left in tree` and
+/// `deleted in HEAD`; parse only their explicit leading path grammars.
 fn parse_conflict_diagnostic(line: &str) -> Option<(&str, &str)> {
     let rest = line.strip_prefix("CONFLICT (")?;
     let (conflict_type, message) = rest.split_once("):")?;
     let conflict_type = conflict_type.trim();
     let message = message.trim();
-    let path = match conflict_type {
-        "content" => message.strip_prefix("Merge conflict in "),
-        "modify/delete" => message
-            .split_once(" deleted in ")
-            .map(|(path, _)| path.trim()),
-        "rename/delete" => message
-            .split_once(" renamed to ")
-            .and_then(|(_, renamed)| renamed.split_once(" in "))
-            .map(|(path, _)| path.trim()),
-        _ => None,
-    }?;
-    Some((path, conflict_type))
+    let path = message
+        .strip_prefix("Merge conflict in ")
+        .or_else(|| match conflict_type {
+            "modify/delete" => message.split_once(" deleted in ").map(|(path, _)| path),
+            "rename/delete" => message
+                .split_once(" renamed to ")
+                .and_then(|(_, renamed)| renamed.split_once(" in "))
+                .map(|(path, _)| path),
+            _ => None,
+        })?;
+    let path = path.trim();
+    (!path.is_empty()).then_some((path, conflict_type))
 }
 
 /// Extract the right-side path from a conventional `diff --git` header.
@@ -870,6 +869,20 @@ CONFLICT (content): Merge conflict in shared file.txt\n";
         assert_eq!(conflicts[0].path, "shared file.txt");
         assert_eq!(conflicts[0].file_path, "shared file.txt");
         assert_eq!(conflicts[0].conflict_type, "content");
+    }
+
+    #[test]
+    fn parses_stable_merge_conflict_paths_for_non_delete_types() {
+        let raw = "CONFLICT (add/add): Merge conflict in docs/new-file.txt\n\
+CONFLICT (binary): Merge conflict in assets/logo.png\n";
+
+        let conflicts = parse_merge_conflicts(raw);
+
+        assert_eq!(conflicts.len(), 2);
+        assert_eq!(conflicts[0].path, "docs/new-file.txt");
+        assert_eq!(conflicts[0].conflict_type, "add/add");
+        assert_eq!(conflicts[1].path, "assets/logo.png");
+        assert_eq!(conflicts[1].conflict_type, "binary");
     }
 
     #[test]
