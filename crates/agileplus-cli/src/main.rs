@@ -14,8 +14,8 @@ use clap::{Parser, Subcommand};
 
 use agent_adapter::RealAgentAdapter;
 use agileplus_cli::commands::{
-    cycle::CycleArgs, dashboard::DashboardArgs, list::ListArgs, module::ModuleArgs,
-    queue::QueueArgs, specify::SpecifyArgs,
+    cockpit::CockpitArgs, cycle::CycleArgs, dashboard::DashboardArgs, list::ListArgs,
+    module::ModuleArgs, queue::QueueArgs, specify::SpecifyArgs,
 };
 #[cfg(feature = "full-deps")]
 use agileplus_cli::commands::{
@@ -83,6 +83,8 @@ enum Commands {
     Triage(TriageArgs),
     /// Render an in-flight DAG / status dashboard from SQLite.
     Dashboard(DashboardArgs),
+    /// Publish and read local cockpit scorecards.
+    Cockpit(CockpitArgs),
 }
 
 #[tokio::main]
@@ -125,6 +127,7 @@ async fn run(cli: Cli) -> Result<()> {
 
     match cli.command {
         Commands::Platform(args) => run_platform(args),
+        Commands::Cockpit(args) => agileplus_cli::commands::cockpit::run(&args),
         Commands::Dashboard(mut args) => {
             // Prefer global --db when the subcommand did not set its own path.
             if args.db.is_none() {
