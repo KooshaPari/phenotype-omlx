@@ -51,3 +51,8 @@ agents:
 datasets:
   - path: evals/harbor/tasks
     task_names: ["omlx-niah-api-smoke"]
+
+# DEPRECATED 2026-08-08 — see evals/harbor/jobs/niah-qwen35-local.yaml for the
+# active variant. This file is retained for the historical-evals viewer only
+# (read-only, not eligible for new launches). New launches should target
+# the local-only job that wires the Harbor provenance runner (PR #70).
