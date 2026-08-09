@@ -732,13 +732,29 @@ fn parse_legacy_merge_tree_path(line: &str) -> Option<&str> {
     Some(path.trim())
 }
 
-/// Extract `CONFLICT (kind): ... in <path>` diagnostics, preserving the
-/// conflict kind supplied by Git where possible.
+/// Extract paths only from stable, path-bearing conflict diagnostic clauses.
+///
+/// Git's `modify/delete` and `rename/delete` messages contain trailing
+/// branch prose such as `left in tree` and `deleted in HEAD`. Do not treat
+/// those clauses as paths; merge-tree stage rows or the diagnostic's leading
+/// path clause are authoritative instead.
 fn parse_conflict_diagnostic(line: &str) -> Option<(&str, &str)> {
     let rest = line.strip_prefix("CONFLICT (")?;
     let (conflict_type, message) = rest.split_once("):")?;
-    let (_, path) = message.trim().rsplit_once(" in ")?;
-    Some((path.trim(), conflict_type.trim()))
+    let conflict_type = conflict_type.trim();
+    let message = message.trim();
+    let path = match conflict_type {
+        "content" => message.strip_prefix("Merge conflict in "),
+        "modify/delete" => message
+            .split_once(" deleted in ")
+            .map(|(path, _)| path.trim()),
+        "rename/delete" => message
+            .split_once(" renamed to ")
+            .and_then(|(_, renamed)| renamed.split_once(" in "))
+            .map(|(path, _)| path.trim()),
+        _ => None,
+    }?;
+    Some((path, conflict_type))
 }
 
 /// Extract the right-side path from a conventional `diff --git` header.
@@ -854,6 +870,31 @@ CONFLICT (content): Merge conflict in shared file.txt\n";
         assert_eq!(conflicts[0].path, "shared file.txt");
         assert_eq!(conflicts[0].file_path, "shared file.txt");
         assert_eq!(conflicts[0].conflict_type, "content");
+    }
+
+    #[test]
+    fn diagnostics_do_not_convert_branch_prose_into_conflict_paths() {
+        // Only the content diagnostic has a stable, path-bearing suffix. The
+        // other diagnostics contain branch prose with `in` clauses; their
+        // paths must come from the unmerged index rows above them instead.
+        let raw = "100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 1\tdocs/content.txt\n\
+100644 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb 2\tdocs/content.txt\n\
+100644 cccccccccccccccccccccccccccccccccccccccc 3\tdocs/content.txt\n\
+CONFLICT (content): Merge conflict in docs/content.txt\n\
+100644 dddddddddddddddddddddddddddddddddddddddd 1\tdocs/removed.txt\n\
+100644 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee 3\tdocs/removed.txt\n\
+CONFLICT (modify/delete): docs/removed.txt deleted in HEAD and modified in feature. Version feature of docs/removed.txt left in tree.\n\
+100644 ffffffffffffffffffffffffffffffffffffffff 1\tdocs/renamed.txt\n\
+100644 1111111111111111111111111111111111111111 3\tdocs/renamed.txt\n\
+CONFLICT (rename/delete): docs/item.txt renamed to docs/renamed.txt in feature, but deleted in HEAD.\n";
+
+        let conflicts = parse_merge_conflicts(raw);
+        let paths: Vec<&str> = conflicts.iter().map(|conflict| conflict.path.as_str()).collect();
+
+        assert_eq!(paths, ["docs/content.txt", "docs/removed.txt", "docs/renamed.txt"]);
+        assert_eq!(conflicts[1].conflict_type, "modify/delete");
+        assert_eq!(conflicts[2].conflict_type, "rename/delete");
+        assert!(!paths.iter().any(|path| matches!(*path, "tree." | "HEAD.")));
     }
 
     #[test]
