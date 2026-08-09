@@ -76,6 +76,23 @@ addopts = "-q --strict-markers --tb=short"
 [tool.coverage.run]
 source = ["src"]
 branch = true
+# Generated gRPC protobuf stubs are mechanically derived from .proto files
+# and not unit-testable. Exclude them from coverage so the gate stays
+# meaningful (real testable code only).
+omit = [
+  "src/agileplus_proto/gen/**",
+  "src/agileplus_proto/gen/*_pb2.py",
+  "src/agileplus_proto/gen/*_pb2_grpc.py",
+  "src/*/gen/**",
+  "**/*_pb2.py",
+  "**/*_pb2_grpc.py",
+]
 
 [tool.coverage.report]
 fail_under = 80
+exclude_lines = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
