@@ -56,6 +56,8 @@ jobs:
     name: ${{ inputs.gate || 'qwen35-policy' }} oracle gate
     runs-on: ${{ vars.QWEN35_POLICY_GATE_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 30
+    env:
+      QWEN35_POLICY_GATE_MLX_URL: ${{ vars.QWEN35_POLICY_GATE_MLX_URL || secrets.QWEN35_POLICY_GATE_MLX_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -63,7 +65,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@5d3a7b9b5e2b5b5e5b5e5b5e5b5e5b5e5b5e5b5e
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
         with:
           version: "0.5.x"
 
@@ -99,7 +101,7 @@ jobs:
 
       - name: Verify MLX server reachable
         env:
-          OPENAI_BASE_URL: ${{ vars.QWEN35_POLICY_GATE_MLX_URL || secrets.QWEN35_POLICY_GATE_MLX_URL }}
+          OPENAI_BASE_URL: ${{ env.QWEN35_POLICY_GATE_MLX_URL }}
         run: |
           set -euo pipefail
           if [ -z "${OPENAI_BASE_URL:-}" ]; then
