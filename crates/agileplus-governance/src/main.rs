@@ -2,7 +2,7 @@
 //!
 //! Command-line interface for the governance system.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -59,9 +59,6 @@ enum Commands {
         #[arg(short, long)]
         to: String,
 
-        /// Audit identity for the promotion request (defaults to AGILEPLUS_REQUESTED_BY or the OS username)
-        #[arg(long)]
-        requested_by: Option<String>,
     },
 
     /// Check connection to remote governance
@@ -111,8 +108,8 @@ async fn main() -> Result<()> {
             crate_name,
             from,
             to,
-            requested_by,
         } => {
+            let requested_by = require_authenticated_promotion_principal()?;
             let client = GovernanceClient::with_defaults().await?;
 
             let from_channel = match from.parse::<ReleaseChannel>() {
@@ -135,12 +132,7 @@ async fn main() -> Result<()> {
                 package: crate_name.clone(),
                 from: from_channel,
                 to: to_channel,
-                requested_by: resolve_promotion_requester(
-                    requested_by
-                        .clone()
-                        .or_else(|| std::env::var(PROMOTION_REQUESTER_ENV).ok()),
-                    whoami::username(),
-                )?,
+                requested_by,
                 version: "0.1.0".to_string(),
                 metadata: None,
             };
@@ -198,80 +190,44 @@ fn print_policy_result(result: &agileplus_governance::PolicyResult) {
     }
 }
 
-const PROMOTION_REQUESTER_ENV: &str = "AGILEPLUS_REQUESTED_BY";
-
-fn resolve_promotion_requester<E>(
-    requested_by: Option<String>,
-    username: std::result::Result<String, E>,
-) -> Result<String>
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    if let Some(requested_by) = requested_by {
-        return normalize_promotion_requester(requested_by, "promotion requester override");
-    }
-
-    let username = username.context(
-        "unable to resolve promotion requester from OS username; pass --requested-by or set AGILEPLUS_REQUESTED_BY",
-    )?;
-    normalize_promotion_requester(username, "OS username")
-}
-
-fn normalize_promotion_requester(requested_by: String, source: &str) -> Result<String> {
-    let requested_by = requested_by.trim();
-    if requested_by.is_empty() {
-        bail!("{source} must not be blank; pass --requested-by or set AGILEPLUS_REQUESTED_BY");
-    }
-
-    Ok(requested_by.to_string())
+fn require_authenticated_promotion_principal() -> Result<String> {
+    bail!(
+        "authenticated principal is required for promotion; this CLI has no authenticated-principal integration, so promotion is unavailable here"
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_promotion_requester;
+    use super::{require_authenticated_promotion_principal, Cli};
+    use clap::Parser;
 
     #[test]
-    fn resolve_promotion_requester_uses_explicit_override_when_lookup_fails() {
-        assert_eq!(
-            resolve_promotion_requester::<std::io::Error>(
-                Some("release-approver".to_string()),
-                Err(std::io::Error::other("user lookup unavailable")),
-            )
-            .unwrap(),
-            "release-approver"
-        );
+    fn promotion_rejects_the_legacy_requested_by_override() {
+        let error = match Cli::try_parse_from([
+            "agileplus-governance",
+            "promote",
+            "--crate-name",
+            "agileplus-governance",
+            "--from",
+            "canary",
+            "--to",
+            "prod",
+            "--requested-by",
+            "release-approver",
+        ]) {
+            Ok(_) => panic!("legacy requester override must not parse"),
+            Err(error) => error,
+        };
+
+        assert_eq!(error.kind(), clap::error::ErrorKind::UnknownArgument);
     }
 
     #[test]
-    fn resolve_promotion_requester_falls_back_to_os_username() {
-        assert_eq!(
-            resolve_promotion_requester::<std::io::Error>(None, Ok("release-agent".to_string()),)
-                .unwrap(),
-            "release-agent"
-        );
-    }
-
-    #[test]
-    fn resolve_promotion_requester_rejects_blank_override() {
-        let error = resolve_promotion_requester::<std::io::Error>(
-            Some("   ".to_string()),
-            Ok("release-agent".to_string()),
-        )
-        .unwrap_err();
-
-        assert!(error.to_string().contains("must not be blank"));
-    }
-
-    #[test]
-    fn resolve_promotion_requester_guides_lookup_failure_without_override() {
-        let error = resolve_promotion_requester::<std::io::Error>(
-            None,
-            Err(std::io::Error::other("user lookup unavailable")),
-        )
-        .unwrap_err();
+    fn promotion_fails_closed_without_an_authenticated_principal() {
+        let error = require_authenticated_promotion_principal().unwrap_err();
 
         assert!(error
             .to_string()
-            .contains("--requested-by or set AGILEPLUS_REQUESTED_BY"));
+            .contains("authenticated principal is required for promotion"));
     }
 }
