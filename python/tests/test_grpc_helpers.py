@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from agileplus_mcp.grpc_backlog import AgilePlusBacklogGrpcMixin
+from agileplus_mcp.grpc_client import AgilePlusCoreClient, GrpcCallError as ClientGrpcCallError
 from agileplus_mcp.grpc_errors import GrpcCallError, GrpcConnectionError
 from agileplus_mcp.grpc_serialization import AgilePlusGrpcSerializationMixin
-from agileplus_mcp.grpc_streaming import AgilePlusGrpcStreamingMixin
 
 
 def test_grpc_errors_preserve_code_and_message() -> None:
@@ -98,12 +98,8 @@ def test_backlog_item_conversion_returns_plain_dict() -> None:
 
 @pytest.mark.asyncio
 async def test_streaming_helper_maps_terminal_event() -> None:
-    class Client(AgilePlusGrpcStreamingMixin):
-        def _require_stub(self) -> MagicMock:
-            return self.stub
-
-    client = Client()
-    client.stub = MagicMock()
+    client = AgilePlusCoreClient()
+    client._stub = MagicMock()
 
     async def events(_request):
         yield SimpleNamespace(
@@ -115,25 +111,29 @@ async def test_streaming_helper_maps_terminal_event() -> None:
             timestamp="now",
         )
 
-    client.stub.StreamAgentEvents = events
+    client._stub.StreamAgentEvents = events
     actual = [item async for item in client.stream_agent_events("feature-one")]
 
-    assert actual[0]["event_type"] == "updated"
-    assert actual[0]["wp_sequence"] == 2
+    assert actual == [
+        {
+            "event_type": "updated",
+            "feature_slug": "feature-one",
+            "wp_sequence": 2,
+            "agent_id": "agent-1",
+            "payload": "{}",
+            "timestamp": "now",
+        }
+    ]
 
 
 @pytest.mark.asyncio
 async def test_streaming_helper_retries_unavailable(monkeypatch) -> None:
     import grpc
 
-    import agileplus_mcp.grpc_streaming as streaming
+    import agileplus_mcp.grpc_client as grpc_client
 
-    class Client(AgilePlusGrpcStreamingMixin):
-        def _require_stub(self) -> MagicMock:
-            return self.stub
-
-    client = Client()
-    client.stub = MagicMock()
+    client = AgilePlusCoreClient()
+    client._stub = MagicMock()
     client.connect = AsyncMock()
     attempts = 0
 
@@ -156,8 +156,8 @@ async def test_streaming_helper_retries_unavailable(monkeypatch) -> None:
             timestamp="now",
         )
 
-    client.stub.StreamAgentEvents = events
-    monkeypatch.setattr(streaming.asyncio, "sleep", AsyncMock())
+    client._stub.StreamAgentEvents = events
+    monkeypatch.setattr(grpc_client.asyncio, "sleep", AsyncMock())
     actual = [item async for item in client.stream_agent_events("feature-one")]
 
     assert attempts == 2
@@ -169,11 +169,7 @@ async def test_streaming_helper_retries_unavailable(monkeypatch) -> None:
 async def test_streaming_helper_maps_terminal_rpc_error() -> None:
     import grpc
 
-    class Client(AgilePlusGrpcStreamingMixin):
-        def _require_stub(self) -> MagicMock:
-            return self.stub
-
-    client = Client()
+    client = AgilePlusCoreClient()
 
     async def events(_request):
         raise grpc.aio.AioRpcError(
@@ -184,10 +180,10 @@ async def test_streaming_helper_maps_terminal_rpc_error() -> None:
         )
         yield  # pragma: no cover
 
-    client.stub = MagicMock()
-    client.stub.StreamAgentEvents = events
+    client._stub = MagicMock()
+    client._stub.StreamAgentEvents = events
 
-    with pytest.raises(GrpcCallError, match="bad request"):
+    with pytest.raises(ClientGrpcCallError, match="bad request"):
         _ = [item async for item in client.stream_agent_events("feature-one")]
 
 
