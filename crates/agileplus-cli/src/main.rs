@@ -24,7 +24,7 @@ use agileplus_cli::commands::{
 };
 use agileplus_git::GitVcsAdapter;
 use agileplus_sqlite::SqliteStorageAdapter;
-use agileplus_subcmds::{PlatformArgs, run_platform};
+use agileplus_subcmds::{run_platform, PlatformArgs};
 
 /// Spec-driven development engine.
 #[derive(Parser)]
@@ -127,7 +127,9 @@ async fn run(cli: Cli) -> Result<()> {
 
     match cli.command {
         Commands::Platform(args) => run_platform(args),
-        Commands::Cockpit(args) => agileplus_cli::commands::cockpit::run(&args),
+        Commands::Cockpit(args) => {
+            agileplus_cli::commands::cockpit::run(&args, cli.repo.as_deref())
+        }
         Commands::Dashboard(mut args) => {
             // Prefer global --db when the subcommand did not set its own path.
             if args.db.is_none() {

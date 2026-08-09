@@ -104,6 +104,53 @@ fn cockpit_path_subcommand_prints_resolved_log_path() {
 }
 
 #[test]
+fn cockpit_read_rejects_global_repo_after_subcommand() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let log = tmp.path().join("cockpit.ndjson");
+
+    cli()
+        .args([
+            "cockpit",
+            "read",
+            "--repo",
+            "/tmp/not-a-cockpit-filter",
+            "--input",
+            log.to_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("--filter-repo <NAME>"));
+}
+
+#[test]
+fn cockpit_read_rejects_global_repo_before_subcommand() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let log = tmp.path().join("cockpit.ndjson");
+
+    cli()
+        .args([
+            "--repo",
+            "/tmp/not-a-cockpit-filter",
+            "cockpit",
+            "read",
+            "--input",
+            log.to_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("--filter-repo <NAME>"));
+}
+
+#[test]
+fn cockpit_path_rejects_global_repo() {
+    cli()
+        .args(["cockpit", "path", "--repo", "/tmp/not-a-cockpit-filter"])
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("--filter-repo <NAME>"));
+}
+
+#[test]
 fn cockpit_publish_help_lists_required_flags() {
     let output = cli()
         .args(["cockpit", "publish", "--help"])

@@ -15,7 +15,10 @@ agileplus-sqlite = { path = "../agileplus-sqlite" }
 agileplus-fixtures = { path = "../agileplus-fixtures" }
 agileplus-governance = { path = "../agileplus-governance" }
 agileplus-plane = { path = "../agileplus-plane" }
+<<<<<<< Updated upstream
 agileplus-api = { path = "../agileplus-api" }
+=======
+>>>>>>> Stashed changes
 askama = "0.12"
 axum = { version = "0.8", features = ["json", "macros", "tokio"] }
 async-stream = "0.3"

@@ -20,13 +20,13 @@ use std::io::{BufWriter, Write as _};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::{Args, Subcommand};
 use serde::Serialize;
 
-use super::cockpit_read::{CockpitReadArgs, run as read_run};
+use super::cockpit_read::{run as read_run, CockpitReadArgs};
 
-use agileplus_governance::scoring_engine::{ClusterScore, ScoreReport, evaluate};
+use agileplus_governance::scoring_engine::{evaluate, ClusterScore, ScoreReport};
 
 /// Default NDJSON log path per the spec. Override with `--output`.
 fn default_log_path() -> Result<PathBuf> {
@@ -94,7 +94,25 @@ pub enum CockpitSubcommand {
 }
 
 /// Top-level dispatch for the `ap cockpit` subcommand group.
-pub fn run(args: &CockpitArgs) -> Result<()> {
+///
+/// The root CLI accepts a global `--repo <PATH>` for commands that operate on
+/// a repository. Cockpit readers instead operate on a shared score log, so a
+/// repository path cannot identify a record without silently changing its
+/// meaning. Keep the publisher's own `--repo <PATH>` contract untouched and
+/// direct readers to the exact-match record filter.
+pub fn run(args: &CockpitArgs, global_repo: Option<&Path>) -> Result<()> {
+    if global_repo.is_some() {
+        match &args.sub {
+            CockpitSubcommand::Read(_) => bail!(
+                "`cockpit read` does not accept global `--repo <PATH>`; use `--filter-repo <NAME>` to filter cockpit records"
+            ),
+            CockpitSubcommand::Path => bail!(
+                "`cockpit path` does not accept global `--repo <PATH>`; use `cockpit read --filter-repo <NAME>` to filter cockpit records"
+            ),
+            CockpitSubcommand::Publish { .. } => {}
+        }
+    }
+
     match &args.sub {
         CockpitSubcommand::Read(read_args) => read_run(read_args),
         CockpitSubcommand::Path => {
