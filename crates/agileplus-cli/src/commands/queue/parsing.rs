@@ -6,12 +6,12 @@ use agileplus_domain::domain::backlog::{BacklogPriority, BacklogSort, BacklogSta
 
 pub(crate) fn parse_intent(value: Option<String>) -> Result<Intent> {
     let value = value.unwrap_or_else(|| "task".to_string());
-    Intent::from_str(&value).map_err(|e| anyhow::anyhow!(e))
+    Intent::from_str(&value.to_ascii_lowercase()).map_err(|e| anyhow::anyhow!(e))
 }
 
 pub(crate) fn parse_intent_opt(value: Option<String>) -> Result<Option<Intent>> {
     value
-        .map(|v| Intent::from_str(&v).map_err(|e| anyhow::anyhow!(e)))
+        .map(|v| Intent::from_str(&v.to_ascii_lowercase()).map_err(|e| anyhow::anyhow!(e)))
         .transpose()
 }
 
@@ -45,6 +45,14 @@ mod tests {
         assert_eq!(
             parse_intent(Some("FEATURE".into())).unwrap(),
             Intent::Feature
+        );
+    }
+
+    #[test]
+    fn parse_intent_opt_normalizes_mixed_case() {
+        assert_eq!(
+            parse_intent_opt(Some("iDeA".into())).unwrap(),
+            Some(Intent::Idea)
         );
     }
 
