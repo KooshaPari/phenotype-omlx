@@ -9,11 +9,13 @@ pub fn transition(
     state: FeatureState,
     target: FeatureState,
 ) -> Result<TransitionResult, DomainError> {
-    state.transition(target).map_err(|e| DomainError::InvalidTransition {
-        from: e.from,
-        to: e.to,
-        reason: e.reason,
-    })
+    state
+        .transition(target)
+        .map_err(|e| DomainError::InvalidTransition {
+            from: e.from,
+            to: e.to,
+            reason: e.reason,
+        })
 }
 
 #[cfg(test)]
@@ -22,7 +24,8 @@ mod tests {
 
     #[test]
     fn valid_lifecycle_transition_succeeds() {
-        let result = transition(FeatureState::Created, FeatureState::Specified).expect("domain operation");
+        let result =
+            transition(FeatureState::Created, FeatureState::Specified).expect("domain operation");
         assert_eq!(result.transition.from, FeatureState::Created);
         assert_eq!(result.transition.to, FeatureState::Specified);
     }

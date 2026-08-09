@@ -77,10 +77,7 @@ impl UserStatus {
         use UserStatus::*;
         matches!(
             (self, target),
-            (Active, Inactive)
-                | (Active, Suspended)
-                | (Inactive, Active)
-                | (Suspended, Active)
+            (Active, Inactive) | (Active, Suspended) | (Inactive, Active) | (Suspended, Active)
         )
     }
 }

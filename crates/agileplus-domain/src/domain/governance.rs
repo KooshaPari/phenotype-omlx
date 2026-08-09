@@ -44,13 +44,6 @@ pub struct PolicyRule {
     pub updated_at: DateTime<Utc>,
 }
 
-impl PolicyRule {
-    /// Whether this policy matches a contract policy-reference string.
-    pub fn matches_reference(&self, policy_ref: &str) -> bool {
-        self.id.to_string() == policy_ref || format!("policy:{}", self.id) == policy_ref
-    }
-}
-
 /// A governance rule captured inside a contract.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GovernanceRule {
@@ -112,84 +105,9 @@ pub struct Evidence {
 pub enum PolicyCheck {
     ManualApproval,
     Automated,
-    EvidencePresent {
-        evidence_type: EvidenceType,
-    },
-    ThresholdMet {
-        metric: String,
-        min: f64,
-    },
-    Custom {
-        script: String,
-    },
-}
-
-/// A well-known built-in policy that maps a short reference key to a
-/// `PolicyDomain` + `EvidenceType` pair.  Used by the `validate` command to
-/// resolve policy references without requiring a database lookup.
-#[derive(Debug, Clone, Copy)]
-pub struct BuiltinPolicy {
-    /// Short human-readable label (e.g. "Unit tests passing").
-    pub label: &'static str,
-    /// Governance domain for grouping.
-    pub domain: PolicyDomain,
-    /// Required evidence kind.
-    pub evidence_type: EvidenceType,
-}
-
-impl BuiltinPolicy {
-    /// Well-known built-in policies keyed by their reference string.
-    const KNOWN: &'static [(&'static str, BuiltinPolicy)] = &[
-        (
-            "tests-pass",
-            BuiltinPolicy {
-                label: "Unit tests passing",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::TestResult,
-            },
-        ),
-        (
-            "ci-green",
-            BuiltinPolicy {
-                label: "CI pipeline green",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::CiOutput,
-            },
-        ),
-        (
-            "review-approved",
-            BuiltinPolicy {
-                label: "Peer review approved",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::ReviewApproval,
-            },
-        ),
-        (
-            "security-scan",
-            BuiltinPolicy {
-                label: "Security scan clean",
-                domain: PolicyDomain::Security,
-                evidence_type: EvidenceType::SecurityScan,
-            },
-        ),
-        (
-            "lint-pass",
-            BuiltinPolicy {
-                label: "Lint checks pass",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::LintResult,
-            },
-        ),
-    ];
-
-    /// Look up a built-in policy by its reference key.
-    /// Returns `None` for unknown (custom) policy references.
-    pub fn from_ref(policy_ref: &str) -> Option<&'static BuiltinPolicy> {
-        Self::KNOWN
-            .iter()
-            .find(|(key, _)| *key == policy_ref)
-            .map(|(_, bp)| bp)
-    }
+    EvidencePresent { evidence_type: EvidenceType },
+    ThresholdMet { metric: String, min: f64 },
+    Custom { script: String },
 }
 
 #[cfg(test)]
@@ -219,22 +137,6 @@ mod tests {
             EvidenceType::ManualAttestation.as_str(),
             "manual_attestation"
         );
-    }
-
-    #[test]
-    fn builtin_policy_known_refs_resolve() {
-        let tests_pass = BuiltinPolicy::from_ref("tests-pass").unwrap();
-        assert_eq!(tests_pass.domain, PolicyDomain::Quality);
-        assert_eq!(tests_pass.evidence_type, EvidenceType::TestResult);
-
-        let security = BuiltinPolicy::from_ref("security-scan").unwrap();
-        assert_eq!(security.domain, PolicyDomain::Security);
-    }
-
-    #[test]
-    fn builtin_policy_unknown_ref_returns_none() {
-        assert!(BuiltinPolicy::from_ref("nonexistent-policy").is_none());
-        assert!(BuiltinPolicy::from_ref("").is_none());
     }
 
     #[test]

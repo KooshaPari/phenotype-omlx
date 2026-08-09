@@ -95,11 +95,8 @@ pub trait VcsPort: Send + Sync {
 
     async fn checkout_branch(&self, branch_name: &str) -> Result<(), DomainError>;
 
-    async fn merge_to_target(
-        &self,
-        source: &str,
-        target: &str,
-    ) -> Result<MergeResult, DomainError>;
+    async fn merge_to_target(&self, source: &str, target: &str)
+    -> Result<MergeResult, DomainError>;
 
     async fn detect_conflicts(
         &self,
@@ -126,6 +123,8 @@ pub trait VcsPort: Send + Sync {
         relative_path: &str,
     ) -> Result<bool, DomainError>;
 
-    async fn scan_feature_artifacts(&self, feature_slug: &str)
-        -> Result<FeatureArtifacts, DomainError>;
+    async fn scan_feature_artifacts(
+        &self,
+        feature_slug: &str,
+    ) -> Result<FeatureArtifacts, DomainError>;
 }

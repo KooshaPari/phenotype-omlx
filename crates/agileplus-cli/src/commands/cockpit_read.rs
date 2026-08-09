@@ -13,7 +13,7 @@
 //! bottom of the table). Empty files print a friendly "no scores yet"
 //! hint and exit 0.
 //!
-//! `--repo <name>` filters to a single repo; `--watch` polls the file
+//! `--filter-repo <name>` filters to a single repo; `--watch` polls the file
 //! every 2s and re-renders in place (v1 uses polling; inotify is a
 //! future enhancement).
 
@@ -54,7 +54,7 @@ pub struct CockpitRecord {
 pub struct CockpitReadArgs {
     /// Restrict output to a single repo (matches `repo` field exactly).
     #[arg(long, value_name = "NAME")]
-    pub repo: Option<String>,
+    pub filter_repo: Option<String>,
 
     /// Override the NDJSON log path. Defaults to `~/.agileplus/cockpit.ndjson`.
     #[arg(long, value_name = "PATH")]
@@ -75,9 +75,9 @@ pub fn run(args: &CockpitReadArgs) -> Result<()> {
     };
 
     if args.watch {
-        watch_loop(&path, args.repo.as_deref())
+        watch_loop(&path, args.filter_repo.as_deref())
     } else {
-        render_once(&path, args.repo.as_deref())
+        render_once(&path, args.filter_repo.as_deref())
     }
 }
 

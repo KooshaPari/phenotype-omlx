@@ -43,7 +43,11 @@ pub struct NoopTraceAdapter;
 
 #[async_trait]
 impl TraceabilityPort for NoopTraceAdapter {
-    async fn link_trace(&self, _entity_id: String, _trace_ref: TraceRef) -> Result<(), DomainError> {
+    async fn link_trace(
+        &self,
+        _entity_id: String,
+        _trace_ref: TraceRef,
+    ) -> Result<(), DomainError> {
         Ok(())
     }
 

@@ -143,7 +143,10 @@ mod tests {
             .set("agileplus", keys::API_KEYS, "sha256:test")
             .unwrap();
         assert!(path.is_file());
-        assert_eq!(store.get("agileplus", keys::API_KEYS).unwrap(), "sha256:test");
+        assert_eq!(
+            store.get("agileplus", keys::API_KEYS).unwrap(),
+            "sha256:test"
+        );
         unsafe { std::env::remove_var("AGILEPLUS_CREDENTIAL_KEY") };
         match previous_home {
             Some(value) => unsafe { std::env::set_var("HOME", value) },
@@ -156,8 +159,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().join("home");
         std::fs::create_dir_all(home.join(".agileplus")).unwrap();
-        std::fs::write(home.join(".agileplus/config.toml"), "[credentials\nbackend = \"file\"")
-            .unwrap();
+        std::fs::write(
+            home.join(".agileplus/config.toml"),
+            "[credentials\nbackend = \"file\"",
+        )
+        .unwrap();
         let previous_home = std::env::var_os("HOME");
         unsafe { std::env::set_var("HOME", &home) };
         assert!(AppConfig::load().is_err());

@@ -248,7 +248,10 @@ mod tests {
         assert_eq!(VerificationMethod::Test.as_db_str(), "test");
         assert_eq!(VerificationMethod::Analysis.as_db_str(), "analysis");
         assert_eq!(VerificationMethod::Inspection.as_db_str(), "inspection");
-        assert_eq!(VerificationMethod::Demonstration.as_db_str(), "demonstration");
+        assert_eq!(
+            VerificationMethod::Demonstration.as_db_str(),
+            "demonstration"
+        );
         assert_eq!(VerificationMethod::Review.as_db_str(), "review");
     }
 

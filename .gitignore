@@ -40,3 +40,13 @@ target/
 **/.fingerprint/
 **/build-script-build
 .agileplus/
+
+# Python build/cache artifacts
+**/__pycache__/
+*.pyc
+*.pyo
+**/.coverage
+**/.pytest_cache/
+**/.ruff_cache/
+**/.venv/
+**/.benchmarks/

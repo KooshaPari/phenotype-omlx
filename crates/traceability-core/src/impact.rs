@@ -10,7 +10,7 @@
 //! - the **blast radius**: every artifact transitively reachable via trace links
 //! - the **impact score**: weighted sum of affected artifacts (with kind weights and confidence)
 
-use std::collections::{hash_map::Entry, HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque, hash_map::Entry};
 
 use serde::{Deserialize, Serialize};
 
@@ -99,7 +99,9 @@ pub fn compute_impact(
         for link in &cell.trace_links {
             let from = artifact_key(&link.from);
             let to = artifact_key(&link.to);
-            adj.entry(from.clone()).or_default().push((to.clone(), link));
+            adj.entry(from.clone())
+                .or_default()
+                .push((to.clone(), link));
             adj.entry(to).or_default().push((from.clone(), link));
         }
     }
@@ -145,9 +147,9 @@ pub fn compute_impact(
             for (nbr_key, link) in neighbors {
                 let nbr_artifact = parse_artifact_key(nbr_key);
                 let link_multiplier = match link.link_type {
-                    TraceLinkType::Satisfies | TraceLinkType::Implements | TraceLinkType::Refines => {
-                        cfg.positive_multiplier
-                    }
+                    TraceLinkType::Satisfies
+                    | TraceLinkType::Implements
+                    | TraceLinkType::Refines => cfg.positive_multiplier,
                     TraceLinkType::ConflictsWith => cfg.conflict_multiplier,
                     _ => 0.0,
                 };
@@ -196,7 +198,12 @@ pub fn compute_impact(
     let mut total_score = 0.0f32;
     let mut by_kind: HashMap<String, f32> = HashMap::new();
     let mut blast: Vec<BlastNode> = visited.into_values().collect();
-    blast.sort_by(|a, b| b.score.abs().partial_cmp(&a.score.abs()).unwrap_or(std::cmp::Ordering::Equal));
+    blast.sort_by(|a, b| {
+        b.score
+            .abs()
+            .partial_cmp(&a.score.abs())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for node in &blast {
         total_score += node.score;
         let kind = node.artifact.kind_str();
@@ -204,7 +211,10 @@ pub fn compute_impact(
     }
     // Always include seeds even if no edges
     for seed in seeds {
-        if !blast.iter().any(|n| artifact_key(&n.artifact) == artifact_key(seed)) {
+        if !blast
+            .iter()
+            .any(|n| artifact_key(&n.artifact) == artifact_key(seed))
+        {
             let kind = seed.kind_str();
             *by_kind.entry(kind).or_insert(0.0) += kind_weight(&artifact_key(seed), cfg);
             blast.push(BlastNode {
@@ -276,16 +286,22 @@ fn artifact_key(a: &ArtifactRef) -> String {
 
 fn parse_artifact_key(s: &str) -> ArtifactRef {
     if let Some(rest) = s.strip_prefix("test:") {
-        ArtifactRef::Test { id: rest.to_string() }
+        ArtifactRef::Test {
+            id: rest.to_string(),
+        }
     } else if let Some(rest) = s.strip_prefix("code:") {
         ArtifactRef::CodeEntity {
             id: rest.to_string(),
             lang: "rust".to_string(),
         }
     } else if let Some(rest) = s.strip_prefix("journey:") {
-        ArtifactRef::Journey { id: rest.to_string() }
+        ArtifactRef::Journey {
+            id: rest.to_string(),
+        }
     } else if let Some(rest) = s.strip_prefix("agent:") {
-        ArtifactRef::AgentRun { id: rest.to_string() }
+        ArtifactRef::AgentRun {
+            id: rest.to_string(),
+        }
     } else if let Some(rest) = s.strip_prefix("evidence:") {
         ArtifactRef::Evidence {
             id: rest.to_string(),
@@ -371,12 +387,7 @@ mod tests {
 
     #[test]
     fn single_link_propagates() {
-        let link = make_link(
-            req("FR-001"),
-            test("T-001"),
-            TraceLinkType::Verifies,
-            0.95,
-        );
+        let link = make_link(req("FR-001"), test("T-001"), TraceLinkType::Verifies, 0.95);
         let matrix = make_matrix(vec![link]);
         let report = compute_impact(&matrix, &[req("FR-001")], &ImpactConfig::default());
         // Should include both seed and test
@@ -403,7 +414,12 @@ mod tests {
     fn multi_hop_traversal() {
         // FR-001 -> T-001 (Verifies) -> T-002 (DerivesFrom) -> FR-002 (Satisfies)
         let l1 = make_link(req("FR-001"), test("T-001"), TraceLinkType::Verifies, 0.9);
-        let l2 = make_link(test("T-001"), test("T-002"), TraceLinkType::DerivesFrom, 0.8);
+        let l2 = make_link(
+            test("T-001"),
+            test("T-002"),
+            TraceLinkType::DerivesFrom,
+            0.8,
+        );
         let l3 = make_link(test("T-002"), req("FR-002"), TraceLinkType::Satisfies, 0.7);
         let matrix = make_matrix(vec![l1, l2, l3]);
         let report = compute_impact(&matrix, &[req("FR-001")], &ImpactConfig::default());
@@ -414,7 +430,12 @@ mod tests {
     #[test]
     fn max_depth_truncates() {
         let l1 = make_link(req("FR-001"), test("T-001"), TraceLinkType::Verifies, 0.9);
-        let l2 = make_link(test("T-001"), test("T-002"), TraceLinkType::DerivesFrom, 0.8);
+        let l2 = make_link(
+            test("T-001"),
+            test("T-002"),
+            TraceLinkType::DerivesFrom,
+            0.8,
+        );
         let matrix = make_matrix(vec![l1, l2]);
         let cfg = ImpactConfig {
             max_depth: 1,

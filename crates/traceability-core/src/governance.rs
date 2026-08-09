@@ -124,73 +124,6 @@ pub enum PolicyCheck {
     Automated,
 }
 
-/// A well-known built-in policy that maps a short reference key to a
-/// `PolicyDomain` + `EvidenceType` pair.
-///
-/// Source: AgilePlus `governance.rs:118-184`.
-#[derive(Debug, Clone, Copy)]
-pub struct BuiltinPolicy {
-    /// Short human-readable label (e.g. "Unit tests passing").
-    pub label: &'static str,
-    /// Governance domain for grouping.
-    pub domain: PolicyDomain,
-    /// Required evidence kind.
-    pub evidence_type: EvidenceType,
-}
-
-impl BuiltinPolicy {
-    const KNOWN: &'static [(&'static str, BuiltinPolicy)] = &[
-        (
-            "tests-pass",
-            BuiltinPolicy {
-                label: "Unit tests passing",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::TestResult,
-            },
-        ),
-        (
-            "ci-green",
-            BuiltinPolicy {
-                label: "CI pipeline green",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::CiOutput,
-            },
-        ),
-        (
-            "review-approved",
-            BuiltinPolicy {
-                label: "Peer review approved",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::ReviewApproval,
-            },
-        ),
-        (
-            "security-scan",
-            BuiltinPolicy {
-                label: "Security scan clean",
-                domain: PolicyDomain::Security,
-                evidence_type: EvidenceType::SecurityScan,
-            },
-        ),
-        (
-            "lint-pass",
-            BuiltinPolicy {
-                label: "Lint checks pass",
-                domain: PolicyDomain::Quality,
-                evidence_type: EvidenceType::LintResult,
-            },
-        ),
-    ];
-
-    /// Look up a built-in policy by its reference key.
-    pub fn from_ref(policy_ref: &str) -> Option<&'static BuiltinPolicy> {
-        Self::KNOWN
-            .iter()
-            .find(|(key, _)| *key == policy_ref)
-            .map(|(_, bp)| bp)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,22 +145,6 @@ mod tests {
             EvidenceType::ManualAttestation.as_str(),
             "manual_attestation"
         );
-    }
-
-    #[test]
-    fn builtin_policy_known_refs_resolve() {
-        let tests_pass = BuiltinPolicy::from_ref("tests-pass").unwrap();
-        assert_eq!(tests_pass.domain, PolicyDomain::Quality);
-        assert_eq!(tests_pass.evidence_type, EvidenceType::TestResult);
-
-        let security = BuiltinPolicy::from_ref("security-scan").unwrap();
-        assert_eq!(security.domain, PolicyDomain::Security);
-    }
-
-    #[test]
-    fn builtin_policy_unknown_ref_returns_none() {
-        assert!(BuiltinPolicy::from_ref("nonexistent-policy").is_none());
-        assert!(BuiltinPolicy::from_ref("").is_none());
     }
 
     #[test]

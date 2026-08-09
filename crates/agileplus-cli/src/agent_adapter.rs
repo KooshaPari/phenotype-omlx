@@ -54,7 +54,10 @@ impl RealAgentAdapter {
     pub fn new() -> Self {
         let backend = AgentBackend::from_env();
         tracing::info!("Initializing agent adapter with backend: {:?}", backend);
-        Self { backend, jobs: std::sync::Arc::new(DashMap::new()) }
+        Self {
+            backend,
+            jobs: std::sync::Arc::new(DashMap::new()),
+        }
     }
 }
 
@@ -89,7 +92,9 @@ impl AgentPort for RealAgentAdapter {
         let status = if result.success {
             AgentStatus::Completed { result }
         } else {
-            AgentStatus::Failed { error: result.stderr.clone() }
+            AgentStatus::Failed {
+                error: result.stderr.clone(),
+            }
         };
         self.jobs.insert(job_id.clone(), JobState { status });
         Ok(job_id)
@@ -143,7 +148,9 @@ async fn dispatch_claude_cli(
     }
 
     // Spawn the process
-    let mut child = cmd.spawn().map_err(|e| DomainError::Agent(format!("spawn claude: {}", e)))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| DomainError::Agent(format!("spawn claude: {}", e)))?;
 
     // Write prompt to stdin
     if let Some(mut stdin) = child.stdin.take() {
@@ -200,8 +207,9 @@ async fn dispatch_cheap_llm_mcp(
         cmd.arg(arg);
     }
 
-    let mut child =
-        cmd.spawn().map_err(|e| DomainError::Agent(format!("spawn cheap-llm: {}", e)))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| DomainError::Agent(format!("spawn cheap-llm: {}", e)))?;
 
     if let Some(mut stdin) = child.stdin.take() {
         stdin
@@ -280,12 +288,18 @@ mod tests {
     #[test]
     // Traces to: FR-013-dispatch-backend-selection
     fn test_backend_selection_from_env() {
-        assert!(matches!(AgentBackend::from_backend_name(None), AgentBackend::ClaudeCli));
+        assert!(matches!(
+            AgentBackend::from_backend_name(None),
+            AgentBackend::ClaudeCli
+        ));
         assert!(matches!(
             AgentBackend::from_backend_name(Some("cheap-llm-mcp")),
             AgentBackend::CheapLlmMcp
         ));
-        assert!(matches!(AgentBackend::from_backend_name(Some("stub")), AgentBackend::Stub));
+        assert!(matches!(
+            AgentBackend::from_backend_name(Some("stub")),
+            AgentBackend::Stub
+        ));
     }
 
     #[test]
@@ -293,7 +307,10 @@ mod tests {
     fn test_pr_url_extraction() {
         let stdout = "Successfully created PR at https://github.com/example/repo/pull/42";
         let pr_url = extract_pr_url(stdout);
-        assert_eq!(pr_url, Some("https://github.com/example/repo/pull/42".to_string()));
+        assert_eq!(
+            pr_url,
+            Some("https://github.com/example/repo/pull/42".to_string())
+        );
 
         let no_pr = "No PR found";
         assert_eq!(extract_pr_url(no_pr), None);

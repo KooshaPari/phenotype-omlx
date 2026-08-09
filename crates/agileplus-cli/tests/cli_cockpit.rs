@@ -188,7 +188,7 @@ fn cockpit_read_with_present_log_renders_table_with_grade_letters() {
 fn cockpit_read_repo_filter_omits_other_repos() {
     let tmp = tempfile::tempdir().expect("tempdir");
     let log = tmp.path().join("cockpit.ndjson");
-    // Two repos: AgilePlus + Tracera. --repo AgilePlus must show only the AgilePlus row.
+    // Two repos: AgilePlus + Tracera. --filter-repo AgilePlus must show only the AgilePlus row.
     let body = format!(
         "{}\n{}\n{}\n",
         r#"{"ts":"epoch:1","repo":"AgilePlus","cluster":"C00","score":3,"max":3,"grade":"A","probes":0}"#,
@@ -201,7 +201,7 @@ fn cockpit_read_repo_filter_omits_other_repos() {
         .args([
             "cockpit",
             "read",
-            "--repo",
+            "--filter-repo",
             "AgilePlus",
             "--input",
             log.to_str().unwrap(),
@@ -269,7 +269,10 @@ fn cockpit_read_help_lists_filters_and_watch_flag() {
         .get_output()
         .clone();
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("--repo"), "missing --repo flag: {stdout}");
+    assert!(
+        stdout.contains("--filter-repo"),
+        "missing --filter-repo flag: {stdout}"
+    );
     assert!(stdout.contains("--input"), "missing --input flag: {stdout}");
     assert!(stdout.contains("--watch"), "missing --watch flag: {stdout}");
 }

@@ -8,7 +8,7 @@
 //! * [`agileplus-domain`](https://example.invalid/AgilePlus/crates/agileplus-domain) —
 //!   `FeatureState` 8-stage lifecycle, `IntentGraph` ontology with node types /
 //!   dag stages / relationship types, `GovernanceContract` + `PolicyRule` +
-//!   `EvidenceType` + `BuiltinPolicy` vocabulary.
+//!   `EvidenceType` vocabulary.
 //!
 //! Hybridisation decisions live in
 //! [`docs/adr/ADR-0001-superset-merge.md`](https://example.invalid/docs/adr/ADR-0001-superset-merge.md).
@@ -25,7 +25,7 @@
 //! | [`impact`]        | Tracera                 | `ImpactConfig`, `BlastNode`, `ImpactReport`, `compute_impact`     |
 //! | [`intent_graph`]  | AgilePlus               | `NodeType`, `DagStage`, `RelationshipType`, `IntentGraph` validate|
 //! | [`lifecycle`]     | AgilePlus               | `FeatureState` 8-stage linear state machine                        |
-//! | [`governance`]    | AgilePlus               | `GovernanceContract` / `PolicyRule` / `EvidenceType` / `BuiltinPolicy` |
+//! | [`governance`]    | AgilePlus               | `GovernanceContract` / `PolicyRule` / `EvidenceType` |
 //! | [`contract`]      | **NEW (this crate)**    | `AcceptanceContract` + `ProgressionGate`                           |
 //!
 //! Consumers:
@@ -65,11 +65,13 @@ pub mod tracelink;
 pub use artifact::{Artifact, ArtifactKind, ArtifactRef, LinkKind, TraceLinkError};
 pub use contract::{AcceptanceContract, Criterion, GateReason, GherkinRef, Layer, ProgressionGate};
 pub use governance::{
-    BuiltinPolicy, Evidence, EvidenceRequirement, EvidenceType, GovernanceContract, GovernanceRule,
-    PolicyCheck, PolicyDefinition, PolicyDomain, PolicyRule,
+    Evidence, EvidenceRequirement, EvidenceType, GovernanceContract, GovernanceRule, PolicyCheck,
+    PolicyDefinition, PolicyDomain, PolicyRule,
 };
 pub use ids::{NfrId, RequirementId};
-pub use impact::{BlastNode, ImpactConfig, ImpactReport, compute_impact, conflicts_only, top_affected};
+pub use impact::{
+    BlastNode, ImpactConfig, ImpactReport, compute_impact, conflicts_only, top_affected,
+};
 pub use intent_graph::{
     CanonicalLinkType, DagStage, Edge, GraphMetadata, IntentGraph, Meta, Node, NodeType,
     RelationshipType, Status as NodeStatus, ValidationError,
@@ -79,8 +81,10 @@ pub use matrix::{
     BuildResult, MatrixCell, build_from_pairs, build_matrix, classify_cell, neighbors,
 };
 pub use requirement::{Requirement, RequirementStatus, VerificationMethod, is_core_link_type};
-pub use tracelink::{CORE_TRACE_LINK_TYPES, NEO4J_NODE_LABELS, NEO4J_RELATIONSHIP_TYPES,
-                    Neo4jSchema, TraceLink, TraceLinkType};
+pub use tracelink::{
+    CORE_TRACE_LINK_TYPES, NEO4J_NODE_LABELS, NEO4J_RELATIONSHIP_TYPES, Neo4jSchema, TraceLink,
+    TraceLinkType,
+};
 
 // CoverageState is re-exported from the matrix module so the lib-level
 // `pub use` list stays compact.

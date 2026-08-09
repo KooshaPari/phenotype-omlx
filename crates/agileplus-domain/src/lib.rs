@@ -5,6 +5,7 @@ pub use error::DomainError;
 pub use error::ErrorCode;
 pub type DomainResult<T> = std::result::Result<T, DomainError>;
 
+pub mod adapters;
 pub mod builder;
 pub mod config;
 pub mod credentials;
@@ -13,15 +14,14 @@ pub mod error;
 pub mod ids;
 pub mod intent_graph;
 pub mod ports;
-pub mod adapters;
 pub mod traceability;
 
 // Shared PM/traceability spine (phenotype-pm-core). AgilePlus-local aggregates
 // remain in `domain::*`; lifecycle, governance, and intent graph are canonical
 // in `traceability-core` and re-exported here for backward-compatible paths.
 pub use traceability_core::governance::{
-    BuiltinPolicy, Evidence, EvidenceRequirement, EvidenceType, GovernanceContract,
-    GovernanceRule, PolicyCheck, PolicyDefinition, PolicyDomain, PolicyRule,
+    Evidence, EvidenceRequirement, EvidenceType, GovernanceContract, GovernanceRule, PolicyCheck,
+    PolicyDefinition, PolicyDomain, PolicyRule,
 };
 pub use traceability_core::intent_graph::{
     CanonicalLinkType, CanonicalMap, DagStage, Edge, GraphMetadata, IntentGraph, Meta, Node,
