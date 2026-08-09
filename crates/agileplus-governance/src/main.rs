@@ -2,7 +2,7 @@
 //!
 //! Command-line interface for the governance system.
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -58,6 +58,10 @@ enum Commands {
         /// To channel
         #[arg(short, long)]
         to: String,
+
+        /// Audit identity for the promotion request (defaults to AGILEPLUS_REQUESTED_BY or the OS username)
+        #[arg(long)]
+        requested_by: Option<String>,
     },
 
     /// Check connection to remote governance
@@ -107,6 +111,7 @@ async fn main() -> Result<()> {
             crate_name,
             from,
             to,
+            requested_by,
         } => {
             let client = GovernanceClient::with_defaults().await?;
 
@@ -130,7 +135,12 @@ async fn main() -> Result<()> {
                 package: crate_name.clone(),
                 from: from_channel,
                 to: to_channel,
-                requested_by: resolve_promotion_requester(whoami::username())?,
+                requested_by: resolve_promotion_requester(
+                    requested_by
+                        .clone()
+                        .or_else(|| std::env::var(PROMOTION_REQUESTER_ENV).ok()),
+                    whoami::username(),
+                )?,
                 version: "0.1.0".to_string(),
                 metadata: None,
             };
@@ -188,11 +198,32 @@ fn print_policy_result(result: &agileplus_governance::PolicyResult) {
     }
 }
 
-fn resolve_promotion_requester<E>(username: std::result::Result<String, E>) -> Result<String>
+const PROMOTION_REQUESTER_ENV: &str = "AGILEPLUS_REQUESTED_BY";
+
+fn resolve_promotion_requester<E>(
+    requested_by: Option<String>,
+    username: std::result::Result<String, E>,
+) -> Result<String>
 where
     E: std::error::Error + Send + Sync + 'static,
 {
-    username.context("resolving promotion requester username")
+    if let Some(requested_by) = requested_by {
+        return normalize_promotion_requester(requested_by, "promotion requester override");
+    }
+
+    let username = username.context(
+        "unable to resolve promotion requester from OS username; pass --requested-by or set AGILEPLUS_REQUESTED_BY",
+    )?;
+    normalize_promotion_requester(username, "OS username")
+}
+
+fn normalize_promotion_requester(requested_by: String, source: &str) -> Result<String> {
+    let requested_by = requested_by.trim();
+    if requested_by.is_empty() {
+        bail!("{source} must not be blank; pass --requested-by or set AGILEPLUS_REQUESTED_BY");
+    }
+
+    Ok(requested_by.to_string())
 }
 
 #[cfg(test)]
@@ -200,23 +231,47 @@ mod tests {
     use super::resolve_promotion_requester;
 
     #[test]
-    fn resolve_promotion_requester_returns_username() {
+    fn resolve_promotion_requester_uses_explicit_override_when_lookup_fails() {
         assert_eq!(
-            resolve_promotion_requester::<std::io::Error>(Ok("release-agent".to_string()))
+            resolve_promotion_requester::<std::io::Error>(
+                Some("release-approver".to_string()),
+                Err(std::io::Error::other("user lookup unavailable")),
+            )
+            .unwrap(),
+            "release-approver"
+        );
+    }
+
+    #[test]
+    fn resolve_promotion_requester_falls_back_to_os_username() {
+        assert_eq!(
+            resolve_promotion_requester::<std::io::Error>(None, Ok("release-agent".to_string()),)
                 .unwrap(),
             "release-agent"
         );
     }
 
     #[test]
-    fn resolve_promotion_requester_contextualizes_lookup_failure() {
-        let error = resolve_promotion_requester::<std::io::Error>(Err(std::io::Error::other(
-            "user lookup unavailable",
-        )))
+    fn resolve_promotion_requester_rejects_blank_override() {
+        let error = resolve_promotion_requester::<std::io::Error>(
+            Some("   ".to_string()),
+            Ok("release-agent".to_string()),
+        )
+        .unwrap_err();
+
+        assert!(error.to_string().contains("must not be blank"));
+    }
+
+    #[test]
+    fn resolve_promotion_requester_guides_lookup_failure_without_override() {
+        let error = resolve_promotion_requester::<std::io::Error>(
+            None,
+            Err(std::io::Error::other("user lookup unavailable")),
+        )
         .unwrap_err();
 
         assert!(error
             .to_string()
-            .contains("resolving promotion requester username"));
+            .contains("--requested-by or set AGILEPLUS_REQUESTED_BY"));
     }
 }
