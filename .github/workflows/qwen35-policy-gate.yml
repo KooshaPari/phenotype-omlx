@@ -1,12 +1,7 @@
 name: qwen35-policy oracle gate
 
-# Mirrors portage/.github/workflows/harbor-gate.yml — runs the qwen35-policy
-# oracle (and optionally turboquant-ssot + NIAH) end-to-end against the
-# fork-clean portage harbor CLI + a live MLX server bound to the
-# configured OPENAI_BASE_URL.
-#
-# Requires a live mlx_lm.server with Qwen3.5-0.8B-OptiQ-4bit. CI runners
-# don't ship with MLX — gate is dispatch-only on fork-clean and skip on PR.
+# Validates the Qwen3.5 Harbor contracts statically on pull requests and
+# pushes. The live Harbor/MLX oracle is explicitly dispatch-only.
 #
 # Use the harbor-hosted runner (mlx-1:8081) or self-hosted runners that
 # expose ${{ vars.QWEN35_POLICY_GATE_MLX_URL }}.
@@ -40,6 +35,7 @@ on:
   pull_request:
     branches: [main, fork-clean]
     paths:
+      - ".github/workflows/qwen35-policy-gate.yml"
       - "evals/harbor/jobs/**"
       - "evals/harbor/tasks/**"
       - "config/smoke_models.json"
@@ -52,8 +48,22 @@ permissions:
   contents: read
 
 jobs:
+  static-contract:
+    name: Qwen3.5 static contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Validate workflow and Harbor contracts
+        run: python3 scripts/evals/validate_qwen35_policy_contract.py
+
   policy-oracle:
-    name: ${{ inputs.gate || 'qwen35-policy' }} oracle gate
+    name: ${{ inputs.gate || 'qwen35-policy' }} live oracle gate
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ vars.QWEN35_POLICY_GATE_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 30
     env:
@@ -93,6 +103,7 @@ jobs:
             echo "::error::INFISICAL_TOKEN secret not configured in repo settings"
             exit 1
           fi
+          # shellcheck disable=SC2016 # Variables expand in the inner bash -c.
           infisical run \
             --projectId "$INFISICAL_PROJECT_ID" \
             --env "$INFISICAL_ENV" \
