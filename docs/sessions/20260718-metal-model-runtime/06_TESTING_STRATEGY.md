@@ -138,3 +138,11 @@ maximum output error `5.72e-6`, state error `0.0`, eight-token recurrence.
 Fresh artifact-backed recurrent baseline (9 samples): DeltaNet median/p95 `448.292/708.0 us`,
 CCA `317.833/459.542 us`, MLA cache `305.916/368.5 us`, RetNet `328.958/405.375 us`,
 Mamba step `317.458/364.084 us`, and Mamba scan `345.125/462.083 us`.
+
+### 2026-07-28 diffusion non-finite contract
+
+`diffusion_confidence.rs` now includes an artifact-backed regression for an all-`-inf` masked row
+and a row containing NaNs. The expected contract is deterministic argmax index `0` with confidence
+`0.0` for a fully invalid row; NaNs are ignored when finite logits are present. The Metal shader
+was compiled with the installed Xcode Metal toolchain after this change. A live artifact-backed
+test still requires `DIFFUSION_CONFIDENCE_METALLIB`; it is not replaced by a source-only check.

@@ -21,21 +21,21 @@ Never commit keys. Prefer project `.env` / secret manager / keychain.
 
 ## Integration matrix
 
-| Surface | Status in Phenotype | Recommended action |
-|---------|---------------------|--------------------|
-| bench-cockpit BFF + UI | **Done** | Keep Cloud as default |
-| Hosted Minimax judges | **Done** (Cloud) | `setup_langfuse_judges.py` |
-| Custom dashboards | **Done** (API bootstrap) | `setup_langfuse_cloud.py` |
-| MCP / CLI / Agent Skill | **Documented** | `print-cursor-mcp-snippet.sh` |
-| Python SDK (`langfuse`) | Cockpit scripts / seed | Use in any Python agent service |
-| JS/TS SDK | Not org-standard yet | Add for helios / web agents |
-| OpenTelemetry → Langfuse | **Not rolled out** | Prefer for Go/Rust services |
-| Harbor / portage runs | **harbor-langfuse** (portage #478) + omlx `--langfuse` | Prefer over LangSmith |
-| pheno-harness | No Langfuse refs found | Emit traces from harness runner |
-| Slack / monitors / PostHog | **UI-only** | Configure once in Cloud console |
-| Prompt management | Seed prompt `bench-judge-system` | Version prompts per product |
-| Annotation queues | Hobby **1** queue | `bench-manual-review` |
-| Blob export | Higher tier | Skip on Hobby |
+| Surface                    | Status in Phenotype                                    | Recommended action              |
+| -------------------------- | ------------------------------------------------------ | ------------------------------- |
+| bench-cockpit BFF + UI     | **Done**                                               | Keep Cloud as default           |
+| Hosted Minimax judges      | **Done** (Cloud)                                       | `setup_langfuse_judges.py`      |
+| Custom dashboards          | **Done** (API bootstrap)                               | `setup_langfuse_cloud.py`       |
+| MCP / CLI / Agent Skill    | **Documented**                                         | `print-cursor-mcp-snippet.sh`   |
+| Python SDK (`langfuse`)    | Cockpit scripts / seed                                 | Use in any Python agent service |
+| JS/TS SDK                  | Not org-standard yet                                   | Add for helios / web agents     |
+| OpenTelemetry → Langfuse   | **Not rolled out**                                     | Prefer for Go/Rust services     |
+| Harbor / portage runs      | **harbor-langfuse** (portage #478) + omlx `--langfuse` | Prefer over LangSmith           |
+| pheno-harness              | No Langfuse refs found                                 | Emit traces from harness runner |
+| Slack / monitors / PostHog | **UI-only**                                            | Configure once in Cloud console |
+| Prompt management          | Seed prompt `bench-judge-system`                       | Version prompts per product     |
+| Annotation queues          | Hobby **1** queue                                      | `bench-manual-review`           |
+| Blob export                | Higher tier                                            | Skip on Hobby                   |
 
 ## OpenTelemetry (services without Langfuse SDK)
 
@@ -53,7 +53,8 @@ Use this for Go/Rust/CLI tools before adding a second proprietary client.
 Candidate shared module (when a second repo adopts Langfuse):
 
 - thin env loader + Basic-auth helper (today duplicated in cockpit Python scripts)
-- target: `phenotype-shared` or a tiny `libs/observability-langfuse` package
+- target: a future tiny `libs/observability-langfuse` package (deferred until a second consumer appears)
+- schema/manifest homes now live in `nanovms/crates/phenotype-manifest` (post 2026-08-09 `phenotype-shared` decommission)
 - do **not** duplicate dashboard JSON — keep definitions in cockpit
   `setup_langfuse_cloud.py` until a second consumer appears
 
