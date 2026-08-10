@@ -1,21 +1,21 @@
 version = "1.0"
 
 [task]
-name = "omlx/niah-api-smoke"
+name = "omlx/niah-32k-api-smoke"
 authors = []
-keywords = ["omlx", "niah", "qwen3.5"]
+keywords = ["omlx", "niah", "qwen3.5", "32k"]
 
 [metadata]
 author_name = "Phenotype"
 difficulty = "easy"
 category = "eval"
-tags = ["niah", "qwen35", "openai-compat"]
+tags = ["niah", "qwen35", "openai-compat", "32k"]
 
 [verifier]
-timeout_sec = 180.0
+timeout_sec = 240.0
 
 [agent]
-timeout_sec = 180.0
+timeout_sec = 240.0
 
 [environment]
 build_timeout_sec = 600.0
@@ -26,20 +26,21 @@ gpus = 0
 mcp_servers = []
 
 # Host templates → container persistent env (Harbor resolve_env_vars).
+# Per-context overrides (e.g. NIAH_CONTEXT_TOKENS_32K=32768) win when set;
+# otherwise NIAH_CONTEXT_TOKENS or 0 (short smoke).
 [environment.env]
 OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
 OPENAI_MODEL = "${OPENAI_MODEL}"
 OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
-NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS:-0}"
-
+NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS_32K:-${NIAH_CONTEXT_TOKENS:-0}}"
 # Oracle solve.sh only inherits solution.env (not agent.env) — keep in sync.
 [solution.env]
 OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
 OPENAI_MODEL = "${OPENAI_MODEL}"
 OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
-NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS:-0}"
+NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS_32K:-${NIAH_CONTEXT_TOKENS:-0}}"
 
 [verifier.env]
 
@@ -48,4 +49,4 @@ OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
 OPENAI_MODEL = "${OPENAI_MODEL}"
 OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
-NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS:-0}"
+NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS_32K:-${NIAH_CONTEXT_TOKENS:-0}}"

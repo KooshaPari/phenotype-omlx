@@ -1,12 +1,6 @@
 # Harbor JobConfig — OMLX NIAH via OpenAI-compatible endpoint (Qwen3.5 SSOT).
 #
-# ⚠️  DEPRECATED 2026-08-08 — superseded by `niah-qwen35-local.yaml`.
-#
-#     This contract uses the pre-fork-clean Apple-container path
-#     (env.environment.type = apple-container on host MLX). The
-#     fork-clean CI gate (PR #502 / #503) runs niah-qwen35-local.yaml
-#     which uses Docker + host.docker.internal → host MLX. The 8k /
-#     32k / qwen35-policy oracles are all green on the local contract.
+# This canonical Apple-container mapping remains active.
 #
 # Prerequisites:
 #   export PORTAGE_ROOT=.../portage/<worktree>
