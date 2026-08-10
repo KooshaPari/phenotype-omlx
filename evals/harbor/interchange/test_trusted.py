@@ -6,6 +6,7 @@ from copy import deepcopy
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -120,8 +121,27 @@ def _envelope() -> dict:
     )
 
 
+def _shared_fixture() -> dict:
+    fixture = Path(__file__).with_name("fixtures") / "trusted-harbor-envelope-v1.json"
+    return json.loads(fixture.read_text(encoding="utf-8"))
+
+
 def test_accepts_valid_signed_qwen35_harbor_envelope() -> None:
     envelope = verify_envelope(_envelope(), _policy())
+
+    assert envelope.attestation_verified is True
+    assert envelope.harbor_job_id == JOB_ID
+    assert envelope.harbor_trial_id == TRIAL_ID
+
+
+def test_accepts_shared_portage_v1_fixture_and_preserves_canonical_digest() -> None:
+    document = _shared_fixture()
+    payload = {key: value for key, value in document.items() if key != "signature"}
+
+    assert hashlib.sha256(_canonical_payload(payload)).hexdigest() == (
+        "6f28ba60ecb1e601b866ff40691a5e1d273a16e917cf44246d431a110cd14cc8"
+    )
+    envelope = verify_envelope(document, _policy())
 
     assert envelope.attestation_verified is True
     assert envelope.harbor_job_id == JOB_ID

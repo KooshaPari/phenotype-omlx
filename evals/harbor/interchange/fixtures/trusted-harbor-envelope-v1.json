@@ -1,0 +1,52 @@
+{
+  "artifacts": [
+    {
+      "byte_count": 128,
+      "sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "uri": "harbor://artifacts/job-0001/trial-0001/result.json"
+    }
+  ],
+  "authorization": {
+    "immutable_auth_uri": "harbor://authorization/qwen35-fixture-window",
+    "sidecar_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "window_id": "qwen35-fixture-window"
+  },
+  "harbor": {
+    "immutable_result_uri": "harbor://results/job-0001/trial-0001",
+    "job_config_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "job_id": "job-0001",
+    "n_trials": 1,
+    "requested_context_tokens": 8192,
+    "result_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "task_id": "omlx/niah-api-smoke",
+    "trial_id": "trial-0001",
+    "trial_name": "omlx-niah-api-smoke__fixture"
+  },
+  "issuer": {
+    "environment": "apple-container",
+    "exporter_version": "1.0.0",
+    "key_id": "fixture-ed25519-v1",
+    "name": "harbor-langfuse",
+    "portage_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "observability": {
+    "langfuse_session_id": "job-0001",
+    "trace_id": "trial-0001"
+  },
+  "run": {
+    "branch": "feature/trusted-envelope",
+    "candidate_repo": "phenotype-omlx",
+    "finished_at": "2026-08-05T00:01:00Z",
+    "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+    "model_config_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_head": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "started_at": "2026-08-05T00:00:00Z"
+  },
+  "schema_version": "trusted-harbor-envelope/v1",
+  "signature": {
+    "alg": "Ed25519",
+    "key_id": "fixture-ed25519-v1",
+    "signature": "47c5f6e408fc024efe0742f1493331fd3189fe971923c11dcb43e33cca1eb8202eb2a146155e43ca936333f36875016b5b750eb3f4c68adfb5a0e54fe61cb00e",
+    "signed_payload_sha256": "6f28ba60ecb1e601b866ff40691a5e1d273a16e917cf44246d431a110cd14cc8"
+  }
+}
