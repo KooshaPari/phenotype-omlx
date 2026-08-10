@@ -186,6 +186,7 @@ operator path: it requires both Langfuse credentials and installs the
 only for evidence collection when remote telemetry must not be emitted. It is not
 a fallback for the canonical path.
 
+<<<<<<< Updated upstream
 The local runner therefore accepts only the Qwen3.5 NIAH task, requires an explicit
 Qwen3.5 model and an OpenAI endpoint on dedicated `:8766/v1`, invokes Harbor with
 no plugin argument, unsets inherited Langfuse variables, leaves Harbor's `result.json`
@@ -217,3 +218,38 @@ does not recursively scan, and rejects multiple candidates so an operator
 cannot accidentally convert a stale or unrelated result. Python and shell
 contracts cover the actual timestamped shape; the shell contract still proves
 the no-plugin, Qwen3.5-only, dedicated-`:8766`, local-only telemetry path.
+=======
+References: https://github.com/QwenLM/Qwen3/blob/main/docs/source/deployment/vllm.md and
+https://huggingface.co/Qwen/Qwen3.5-35B-A3B-GPTQ-Int4.
+
+### 2026-07-28 - diffusion and recurrent kernel research
+
+The implementation should treat masked/discrete diffusion and continuous flow matching as
+different execution contracts. LLaDA (Large Language Diffusion Models,
+https://arxiv.org/abs/2502.09992), MDLM (https://arxiv.org/abs/2406.07524), and SEDD
+(https://arxiv.org/abs/2310.16834) all require a parallel token-state update plus a confidence or
+score-derived remask policy; a left-to-right attention kernel is not a substitute. LLaDA-MoE
+(https://arxiv.org/abs/2509.24389) combines this with sparse expert routing, so the future fused
+path should preserve an active-token mask into the router rather than materializing inactive
+rows.
+
+Block Diffusion (https://arxiv.org/abs/2503.09573) is the useful bridge for agent workloads: it
+allows block-parallel denoising while retaining an autoregressive boundary. The Metal runtime can
+reuse the existing confidence kernel for block acceptance, but needs a separate block mask and
+rollback contract before claiming lossless speculative decoding. DFlash's public MLX reference
+(https://github.com/bstnxbt/dflash-mlx) is an implementation lead only, not acceptance evidence.
+
+For image/video and other continuous models, DiT-style AdaLN and flow matching remain the native
+contract; the existing `adaln_rms` and `flow_cfg_step` kernels are the right primitives. For
+long-sequence state-space alternatives, Mamba (https://arxiv.org/abs/2312.00752), VMamba
+(https://arxiv.org/abs/2401.10166), and xLSTM-metal (https://github.com/MLXPorts/xLSTM-metal)
+motivate scan/chunk fusion and explicit recurrent-state continuity. Existing Mamba, DeltaNet,
+RWKV, RetNet, and short-convolution kernels cover those operators; future work should benchmark
+chunk sizes and state traffic rather than add another model-specific shader.
+
+Research conclusion: the immediate correctness gap was non-finite diffusion logits. The previous
+shader produced NaN confidence for an all-`-inf` masked row (`-inf - -inf`) and for rows containing
+NaN. The patched shader ignores NaNs, handles tied `+inf` maxima deterministically, and returns
+zero confidence for fully invalid rows. This matches the CPU `softmax_max` contract and gives the
+remask scheduler a deterministic low-confidence signal.
+>>>>>>> Stashed changes
