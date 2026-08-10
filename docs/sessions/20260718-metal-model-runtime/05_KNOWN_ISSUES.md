@@ -315,3 +315,27 @@ Qwen3.5 readiness model are set. The Harbor gate also no longer treats ordinary 
 Markdown/report separators as merge conflicts; its contract test passes and a real Portage
 Qwen3.5 8192 preflight passes without invoking Apple Container or Harbor. A signed execution
 window is still required before any workload.
+
+## 2026-08-08 — dotenv-export token-auth hardening (RESOLVED)
+
+The 2026-08-08 daemon-sweep pass hardened the dotenv-loader path used by
+`scripts/evals/run_via_harbor.sh` so token-bearing env exports are no longer
+visible to subprocesses that don't need them. Specifically:
+
+- `dotenv`-loaded keys are scoped to the `PORTAGE_*` and `LANGFUSE_*` namespace
+  prefixes only, so accidental exports of unrelated `OPENAI_API_KEY` /
+  `ANTHROPIC_API_KEY` / `MLX_SERVER_URL` from the parent shell are not visible
+  to the harbor subprocess unless explicitly allow-listed.
+- `set -a` was removed from the `run_via_harbor.sh` preamble and replaced with
+  explicit `export KEY=VALUE` lines per required variable, so the env that
+  reaches the harbor CLI is the minimal set.
+- The loader now refuses to read dotenv files with mode 0664 or more permissive
+  (security: a dotenv that is group-writable could be tampered with by another
+  local user).
+- The loader logs (with redaction of values matching
+  `*_KEY|*_TOKEN|*_SECRET`) when a key is being filtered by the namespace scope,
+  so audit trails show why a particular env var did not propagate.
+- The test in `scripts/tests/test_run_via_harbor_env_allowlist.py` exercises
+  the parent-shell-leak prevention with a synthetic secret key.
+
+Owner: koosha. Linked to BACKLOG-OMLX-008.
