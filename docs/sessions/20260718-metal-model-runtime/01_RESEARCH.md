@@ -506,3 +506,22 @@ shader produced NaN confidence for an all-`-inf` masked row (`-inf - -inf`) and 
 NaN. The patched shader ignores NaNs, handles tied `+inf` maxima deterministically, and returns
 zero confidence for fully invalid rows. This matches the CPU `softmax_max` contract and gives the
 remask scheduler a deterministic low-confidence signal.
+
+### 2026-08-09 — `phenotype-shared` langfuse integration decomm
+
+The langfuse integration that pointed to the shared `phenotype-shared` organization
+is decommissioned. The active integration moves to a dedicated `phenotype-omlx`
+organization with explicit per-project API keys; the shared organization was used
+by 4 other repositories in the monorepo, which meant any rate-limit or quota
+issue on one project affected all of them.
+
+Migration path:
+
+- Each project under `phenotype-*` now has its own langfuse org + API key.
+- `scripts/ci/upload_to_langfuse.py` requires `LANGFUSE_ORG` to be one of the
+  explicit allow-list; anything else fails closed.
+- The shared `phenotype-shared` org key is rotated to read-only and deprecated.
+- Eval harness scripts no longer try to authenticate against `phenotype-shared`
+  unless `LANGFUSE_ORG=phenotype-shared` is explicitly set.
+
+Owner: koosha. Linked to BACKLOG-OMLX-008.

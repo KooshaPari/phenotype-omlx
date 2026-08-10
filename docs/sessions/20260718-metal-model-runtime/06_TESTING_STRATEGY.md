@@ -290,3 +290,20 @@ and a row containing NaNs. The expected contract is deterministic argmax index `
 `0.0` for a fully invalid row; NaNs are ignored when finite logits are present. The Metal shader
 was compiled with the installed Xcode Metal toolchain after this change. A live artifact-backed
 test still requires `DIFFUSION_CONFIDENCE_METALLIB`; it is not replaced by a source-only check.
+
+### 2026-08-09 — `phenotype-shared` langfuse integration decomm (testing strategy)
+
+The `LANGFUSE_ORG` allow-list gate now requires the env var to be one of the
+explicit allow-list of project-scoped integrations (`phenotype-omlx`, `phenotype-eng`,
+`phenotype-cohort`). This means the previous-generation `phenotype-shared`
+integration tests need to be retargeted to `phenotype-omlx` or dropped. Concretely:
+
+- The eval harness fallback path that silently routed a missing `LANGFUSE_ORG` to
+  `phenotype-shared` is removed.
+- Tests that explicitly assert `LANGFUSE_ORG=phenotype-shared` is honored are
+  moved to a `legacy-shared` test path that is skipped by default and run only
+  when `LANGFUSE_RUN_LEGACY_SHARED_TESTS=1` is set.
+- The CI upload script `scripts/ci/upload_to_langfuse.py` now hard-fails with
+  `LANGFUSE_ORG_NOT_ALLOWED` if the org is not in the allow-list.
+
+Owner: koosha. Linked to BACKLOG-OMLX-008.
