@@ -14,6 +14,14 @@ from qwen35_niah_preflight import PreflightError  # noqa: E402
 
 
 class Qwen35NiahPreflightTests(unittest.TestCase):
+    def test_harbor_wrapper_runs_preflight_before_harbor(self) -> None:
+        wrapper = (ROOT / "scripts/evals/run_via_harbor_local.sh").read_text(
+            encoding="utf-8"
+        )
+        preflight = "qwen35_niah_preflight.py"
+        self.assertIn(preflight, wrapper)
+        self.assertLess(wrapper.index(preflight), wrapper.index("harbor run"))
+
     def test_accepts_bounded_qwen35_job_with_admissible_resources(self) -> None:
         plan = preflight(
             ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml",
