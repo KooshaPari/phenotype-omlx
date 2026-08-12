@@ -120,7 +120,7 @@ pub fn turbo_quant_encode(
         .checked_mul(bits as usize)
         .ok_or_else(|| PyValueError::new_err("data length * bits exceeds platform limits"))?;
     let q = contain_panic(|| Ok(QuantizedTensor::encode_uniform(&data, bits, group_size)))?;
-    let dict = PyDict::new(py);
+    let dict = PyDict::new_bound(py);
     dict.set_item("shape", q.shape.clone())?;
     dict.set_item("packed", q.packed.clone())?;
     dict.set_item("scales", q.scales.clone())?;
@@ -168,7 +168,7 @@ pub fn turbo_quant_decode(
         q.decode_uniform(&mut buf);
         Ok(())
     })?;
-    let lst = PyList::new(py, buf.iter().copied());
+    let lst = PyList::new_bound(py, buf.iter().copied());
     Ok(lst.into())
 }
 
