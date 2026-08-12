@@ -13,7 +13,24 @@ cd "$ROOT"
 RUN_DIR="${ROOT}/.run"
 mkdir -p "$RUN_DIR"
 
-if [[ -f .env ]]; then set -a; source .env; set +a; fi
+if [[ -f .env ]]; then
+  # Source .env but only export env vars whose names start with an
+  # allow-listed prefix. Token-bearing vars (OPENAI_API_KEY,
+  # ANTHROPIC_API_KEY, MLX_SERVER_URL, etc.) are intentionally NOT
+  # leaked into the Go server / Vite subprocess unless the operator
+  # exports them explicitly. The allow-list mirrors the Python
+  # _load_dotenv() in apps/bench-cockpit/scripts/evals/run_langfuse_evaluators.py.
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$line" || "$line" != *=* ]] && continue
+    key="${line%%=*}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    if [[ "$key" =~ ^(PORTAGE_|LANGFUSE_|HARBOR_LANGFUSE_|OBSERVABILITY_BACKEND) ]]; then
+      export "$line"
+    fi
+  done < .env
+fi
 
 # Prefer V5 EvaluationReport when present; override with BENCH_DATA.
 # Native JSON keeps richer per-cell fields (tok/s, traces); contract is thinner.

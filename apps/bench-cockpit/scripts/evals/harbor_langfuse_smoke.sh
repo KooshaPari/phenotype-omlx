@@ -16,8 +16,22 @@ if [[ -z "$PORTAGE" ]]; then
 fi
 
 if [[ -f "$ROOT/.env" ]]; then
+  # Source .env but only export env vars whose names start with an
+  # allow-listed prefix. Token-bearing vars (OPENAI_API_KEY,
+  # ANTHROPIC_API_KEY, MLX_SERVER_URL, etc.) are intentionally NOT
+  # leaked into the harbor subprocess unless the operator exports them
+  # explicitly. The allow-list mirrors the Python _load_dotenv().
   # shellcheck disable=SC1090
-  set -a && source "$ROOT/.env" && set +a
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "$line" || "$line" != *=* ]] && continue
+    key="${line%%=*}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    if [[ "$key" =~ ^(PORTAGE_|LANGFUSE_|HARBOR_LANGFUSE_|OBSERVABILITY_BACKEND) ]]; then
+      export "$line"
+    fi
+  done < "$ROOT/.env"
 fi
 if [[ -z "${LANGFUSE_PUBLIC_KEY:-}" || -z "${LANGFUSE_SECRET_KEY:-}" ]]; then
   echo "LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY required" >&2

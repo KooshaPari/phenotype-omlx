@@ -19,21 +19,41 @@ import base64
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 import uuid
+import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# Allow-list for dotenv-loaded keys. Token-bearing env vars
+# (OPENAI_API_KEY / ANTHROPIC_API_KEY / MLX_SERVER_URL / etc.) must NOT
+# be inherited from a local .env into the harbor subprocess unless the
+# user explicitly exports them. Keep this list short and additive.
+_DOTENV_ALLOWED_PREFIXES = ("PORTAGE_", "LANGFUSE_", "HARBOR_LANGFUSE_", "OBSERVABILITY_BACKEND")
+_DOTENV_PERMISSIVE_MASK = 0o077  # refuse .env that is group/other writable
+
 
 def _load_dotenv() -> None:
     env = ROOT / ".env"
     if not env.is_file():
+        return
+    try:
+        mode = stat.S_IMODE(env.stat().st_mode)
+    except OSError:
+        return
+    if mode & _DOTENV_PERMISSIVE_MASK:
+        warnings.warn(
+            f"dotenv: refusing {env} with permissive mode {oct(mode)} "
+            f"(must not be group/other writable)",
+            stacklevel=2,
+        )
         return
     for line in env.read_text().splitlines():
         line = line.strip()
@@ -41,7 +61,13 @@ def _load_dotenv() -> None:
             continue
         k, _, v = line.partition("=")
         k, v = k.strip(), v.strip().strip('"').strip("'")
-        if k and k not in os.environ:
+        if not k or not k.startswith(_DOTENV_ALLOWED_PREFIXES):
+            continue
+        if not v:
+            warnings.warn(
+                f"dotenv: empty token for {k} in {env} (non-fatal)", stacklevel=2
+            )
+        if k not in os.environ:
             os.environ[k] = v
 
 
