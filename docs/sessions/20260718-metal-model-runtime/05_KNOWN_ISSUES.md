@@ -339,3 +339,18 @@ visible to subprocesses that don't need them. Specifically:
   the parent-shell-leak prevention with a synthetic secret key.
 
 Owner: koosha. Linked to BACKLOG-OMLX-008.
+
+## 2026-08-08 — apple_container preflight + harbor wrapper updates
+
+Preserves the local apple_container preflight + harbor-wrapper hardening
+that landed on origin/main but was not in our staging lineage. Specifically:
+
+- `scripts/evals/apple_container_preflight.sh` — new preflight check that
+  verifies the host's `container` CLI is at a version that supports the
+  `--tmpfs` flag (needed for sandbox mount isolation in the harbor wrapper).
+- `scripts/evals/run_via_harbor.sh` — wrapper script that uses
+  apple_container when available and falls back to Docker otherwise.
+- `scripts/tests/test_apple_container_preflight.sh` — shell smoke test
+  that exercises the preflight happy-path and the version-too-old path.
+
+Owner: koosha. Linked to PR #158.

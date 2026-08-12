@@ -229,3 +229,16 @@ uv run harbor run \
   "${PLUGIN_ARGS[@]}"
 
 echo "done. artifacts: $OUT"
+
+# --- 2026-08-08 preserve: apple_container fallback ---
+# If apple_container CLI is available (and meets the preflight), prefer it
+# over docker for the sandbox isolation. Docker is the fallback for hosts
+# without apple_container (Linux runners, older macOS).
+if command -v container >/dev/null 2>&1 && scripts/evals/apple_container_preflight.sh; then
+  CONTAINER_CLI="container"
+  export HARBOR_CONTAINER_BACKEND="apple_container"
+else
+  CONTAINER_CLI="docker"
+  export HARBOR_CONTAINER_BACKEND="docker"
+fi
+export HARBOR_CONTAINER_CLI="${CONTAINER_CLI}"
