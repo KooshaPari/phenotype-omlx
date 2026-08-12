@@ -34,3 +34,37 @@ fn metal_matches_stable_argmax_and_softmax_max() {
         assert!((confidence[row] - 1.0 / denom).abs() < 1e-5);
     }
 }
+
+#[test]
+fn metal_handles_masked_or_non_finite_rows_without_nan_confidence() {
+    let path = std::env::var("DIFFUSION_CONFIDENCE_METALLIB").expect("test artifact");
+    let bytes = std::fs::read(&path).unwrap();
+    let digest: [u8; 32] = Sha256::digest(&bytes).into();
+    let root = std::path::Path::new(&path).parent().unwrap();
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let artifact = MetallibLoader::new(root, ArtifactAllowlist::new([(name.to_owned(), digest)]))
+        .load(name)
+        .unwrap();
+    // A fully masked row is all -inf in MDLM/LLaDA logits. NaNs must not poison
+    // confidence either: they are ignored while finite logits remain usable.
+    let logits = [
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+        f32::NEG_INFINITY,
+        f32::NAN,
+        2.0,
+        f32::NAN,
+        1.0,
+    ];
+    let (ids, confidence) =
+        diffusion_argmax_confidence_metal(&logits, 2, 4, &artifact).unwrap();
+    assert_eq!(ids, [0, 1]);
+    assert_eq!(confidence[0], 0.0);
+    assert!(confidence[1].is_finite());
+    assert!(confidence[1] > 0.7);
+}

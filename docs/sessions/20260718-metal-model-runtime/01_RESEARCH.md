@@ -475,3 +475,34 @@ The direct estate inventory found 51 Git roots, 355 summed worktree entries (nes
 possible), 11 dirty roots, 23 ahead of upstream, 21 behind, and 84 standalone `.git` directories.
 This is a triage inventory, not authorization to delete branches. The next safe candidates are
 only rebuildable caches; dirty/ahead roots require remote preservation and branch-level review.
+
+### 2026-07-28 - diffusion and recurrent kernel research
+
+The implementation should treat masked/discrete diffusion and continuous flow matching as
+different execution contracts. LLaDA (Large Language Diffusion Models,
+https://arxiv.org/abs/2502.09992), MDLM (https://arxiv.org/abs/2406.07524), and SEDD
+(https://arxiv.org/abs/2310.16834) all require a parallel token-state update plus a confidence or
+score-derived remask policy; a left-to-right attention kernel is not a substitute. LLaDA-MoE
+(https://arxiv.org/abs/2509.24389) combines this with sparse expert routing, so the future fused
+path should preserve an active-token mask into the router rather than materializing inactive
+rows.
+
+Block Diffusion (https://arxiv.org/abs/2503.09573) is the useful bridge for agent workloads: it
+allows block-parallel denoising while retaining an autoregressive boundary. The Metal runtime can
+reuse the existing confidence kernel for block acceptance, but needs a separate block mask and
+rollback contract before claiming lossless speculative decoding. DFlash's public MLX reference
+(https://github.com/bstnxbt/dflash-mlx) is an implementation lead only, not acceptance evidence.
+
+For image/video and other continuous models, DiT-style AdaLN and flow matching remain the native
+contract; the existing `adaln_rms` and `flow_cfg_step` kernels are the right primitives. For
+long-sequence state-space alternatives, Mamba (https://arxiv.org/abs/2312.00752), VMamba
+(https://arxiv.org/abs/2401.10166), and xLSTM-metal (https://github.com/MLXPorts/xLSTM-metal)
+motivate scan/chunk fusion and explicit recurrent-state continuity. Existing Mamba, DeltaNet,
+RWKV, RetNet, and short-convolution kernels cover those operators; future work should benchmark
+chunk sizes and state traffic rather than add another model-specific shader.
+
+Research conclusion: the immediate correctness gap was non-finite diffusion logits. The previous
+shader produced NaN confidence for an all-`-inf` masked row (`-inf - -inf`) and for rows containing
+NaN. The patched shader ignores NaNs, handles tied `+inf` maxima deterministically, and returns
+zero confidence for fully invalid rows. This matches the CPU `softmax_max` contract and gives the
+remask scheduler a deterministic low-confidence signal.
