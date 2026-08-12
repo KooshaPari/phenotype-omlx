@@ -27,7 +27,6 @@ from ._doctor_shared import (
     read_cargo_version,
 )
 
-
 # Re-export the four newest checks so the existing `checks.<name>`
 # access pattern keeps working. The implementations were originally
 # collected in `_doctor_extra_checks.py` (turn-4 batch), but that
@@ -203,7 +202,12 @@ def mlx_lm_required_by_command(cmd: str) -> Check:
 @register_check
 def turboquant_rust_extension() -> Check:
     try:
-        import _perf  # type: ignore  # noqa: F401
+        # Top-level is the layout maturin produces from `[lib] name = "_perf"`;
+        # the packaged namespace is accepted as a forward-compatible fallback.
+        try:
+            import _perf  # type: ignore  # noqa: F401
+        except ImportError:
+            from omlx_research import _perf  # type: ignore  # noqa: F401
     except Exception as e:
         return Check(
             id="turboquant_rust_extension_available",
