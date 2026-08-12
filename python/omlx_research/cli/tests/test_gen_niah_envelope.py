@@ -11,11 +11,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-
 
 # ---------------------------------------------------------------------------
 # Import the script as a module without forcing it into a package. The
@@ -33,7 +31,8 @@ _SCRIPT_PATH = (
 
 def _load_gen():
     spec = importlib.util.spec_from_file_location(
-        "gen_niah_envelope", _SCRIPT_PATH,
+        "gen_niah_envelope",
+        _SCRIPT_PATH,
     )
     module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
     assert spec and spec.loader
@@ -102,18 +101,21 @@ def test_default_seeds_are_unchanged():
 
 def test_validate_args_rejects_zero_contexts():
     import pytest
+
     with pytest.raises(SystemExit):
         gen.validate_args(0, 5, 5)
 
 
 def test_validate_args_rejects_negative_seeds():
     import pytest
+
     with pytest.raises(SystemExit):
         gen.validate_args(5, -1, 5)
 
 
 def test_validate_args_rejects_zero_kernels():
     import pytest
+
     with pytest.raises(SystemExit):
         gen.validate_args(5, 5, 0)
 
@@ -158,6 +160,8 @@ def test_every_row_has_all_required_fields():
 def test_top_level_envelope_has_canonical_keys():
     """The envelope root must carry every header field the doctor and
     the existing tests already key off of."""
+    from omlx_research.smoke_models import default_model_for
+
     payload = gen.build_envelope(
         gen.EXPANDED_CONTEXT_LENGTHS,
         gen.DEFAULT_SEEDS,
@@ -166,7 +170,8 @@ def test_top_level_envelope_has_canonical_keys():
     assert payload["schema_version"] == 1
     assert payload["kind"] == "niah_target_rows"
     assert isinstance(payload["generated_at"], str)
-    assert payload["model"] == gen.DEFAULT_MODEL
+    assert payload["model"] == default_model_for("niah")
+    assert "Qwen3.5" in payload["model"]
     assert isinstance(payload["context_lengths"], list)
     assert isinstance(payload["kernels"], list)
     assert isinstance(payload["seeds"], list)
@@ -214,7 +219,8 @@ def test_two_runs_produce_identical_bytes(tmp_path):
             sys.executable,
             str(_SCRIPT_PATH),
             "--expanded-contexts",
-            "--out", str(out_a),
+            "--out",
+            str(out_a),
         ],
         check=True,
         capture_output=True,
@@ -225,7 +231,8 @@ def test_two_runs_produce_identical_bytes(tmp_path):
             sys.executable,
             str(_SCRIPT_PATH),
             "--expanded-contexts",
-            "--out", str(out_b),
+            "--out",
+            str(out_b),
         ],
         check=True,
         capture_output=True,
@@ -270,7 +277,8 @@ def test_cli_expanded_contexts_writes_250_rows(tmp_path):
             sys.executable,
             str(_SCRIPT_PATH),
             "--expanded-contexts",
-            "--out", str(out),
+            "--out",
+            str(out),
         ],
         check=True,
         capture_output=True,
@@ -288,7 +296,8 @@ def test_cli_default_writes_125_rows(tmp_path):
         [
             sys.executable,
             str(_SCRIPT_PATH),
-            "--out", str(out),
+            "--out",
+            str(out),
         ],
         check=True,
         capture_output=True,
@@ -307,8 +316,12 @@ def test_cli_explicit_contexts_arg(tmp_path):
         [
             sys.executable,
             str(_SCRIPT_PATH),
-            "--contexts", "1024", "4096", "16384",
-            "--out", str(out),
+            "--contexts",
+            "1024",
+            "4096",
+            "16384",
+            "--out",
+            str(out),
         ],
         check=True,
         capture_output=True,
