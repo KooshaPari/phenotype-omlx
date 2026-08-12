@@ -11,11 +11,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
-
 
 # ---------------------------------------------------------------------------
 # Import the script as a module without forcing it into a package. The
