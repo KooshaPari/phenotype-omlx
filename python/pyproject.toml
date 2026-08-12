@@ -29,5 +29,5 @@ dev = ["pytest", "pytest-asyncio", "ruff", "mypy", "pydantic>=2.0"]
 omlx-research = "omlx_research.cli:main"
 
 [tool.setuptools.packages.find]
-where = ["python"]
+where = ["."]
 include = ["omlx_research*"]

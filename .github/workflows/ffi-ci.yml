@@ -1,0 +1,115 @@
+name: Python FFI CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ffi-ci.yml"
+      - "python/ffi/**"
+      - "perf-core/spec-decode/**"
+      - "perf-core/turbo-quant/**"
+      - "perf-core/concurrent-exec/**"
+      - "perf-core/tree-attention/**"
+      - "perf-core/fleet-proto/**"
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/ffi-ci.yml"
+      - "python/ffi/**"
+      - "perf-core/spec-decode/**"
+      - "perf-core/turbo-quant/**"
+      - "perf-core/concurrent-exec/**"
+      - "perf-core/tree-attention/**"
+      - "perf-core/fleet-proto/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ffi-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  ffi:
+    name: Supported PyO3 ABI3 FFI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CPython 3.14
+        id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            python/ffi/target
+          key: ${{ runner.os }}-ffi-cargo-${{ hashFiles('python/ffi/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-ffi-cargo-
+
+      - name: Verify supported toolchain
+        run: |
+          python --version
+          rustc --version
+          cargo --version
+
+      - name: Check FFI with the extension-module ABI
+        working-directory: python/ffi
+        run: cargo check --locked --features extension-module
+
+      - name: Audit FFI Rust dependencies
+        working-directory: python/ffi
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit --file Cargo.lock
+
+      - name: Build CPython 3.14 ABI3 wheel
+        working-directory: python/ffi
+        run: |
+          python -m pip install --upgrade pip "maturin>=1.9,<2"
+          maturin build --release --locked --features extension-module \
+            --interpreter "${{ steps.python.outputs.python-path }}" \
+            --out ../../dist/ffi-wheels
+
+      - name: Install wheel into a clean Python 3.14 environment
+        working-directory: python/ffi
+        run: |
+          python -m venv .venv-ffi-smoke
+          .venv-ffi-smoke/bin/python -m pip install --upgrade pip
+          .venv-ffi-smoke/bin/python -m pip install --no-deps ../../dist/ffi-wheels/*.whl
+
+      - name: Smoke import pure Rust FFI surface
+        working-directory: python/ffi
+        run: |
+          .venv-ffi-smoke/bin/python - <<'PY'
+          import _perf
+
+          assert _perf.turbo_quant_label_for_bits(4) == "asym4 (K=FP16, V=4bit)"
+          encoded = _perf.turbo_quant_encode([-1.0, 0.0, 1.0], 2, 4)
+          decoded = _perf.turbo_quant_decode(
+              encoded["packed"],
+              encoded["scales"],
+              encoded["zeros"],
+              3,
+              group_size=2,
+              bits=4,
+          )
+          assert len(decoded) == 3
+          assert all(abs(actual - expected) <= 0.14 for actual, expected in zip(decoded, [-1.0, 0.0, 1.0]))
+          PY

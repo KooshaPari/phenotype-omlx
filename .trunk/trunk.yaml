@@ -1,0 +1,39 @@
+---
+# Trunk.io configuration. Schema version 0.1.
+version: 0.1
+
+cli:
+  version: 1.25.0
+
+plugins:
+  sources:
+    - id: trunk
+      ref: v1.7.0
+      uri: https://github.com/trunk-io/plugins
+
+# Keep the repository's existing linter and formatter coverage enabled.
+lint:
+  ignore:
+    - linters: [prettier]
+      paths:
+        - .github/workflows/trunk-check.yml
+  enabled:
+    - actionlint
+    - black
+    - clippy
+    - eslint
+    - golangci-lint
+    - mypy
+    - prettier
+    - ruff
+    - shellcheck
+    - taplo
+    - yamllint
+    - rustfmt
+
+actions:
+  enabled:
+    - trunk-announce
+    - trunk-check-pre-push
+    - trunk-fmt-pre-commit
+    - trunk-upgrade-available

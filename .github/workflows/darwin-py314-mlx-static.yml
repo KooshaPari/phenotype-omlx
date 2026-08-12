@@ -1,0 +1,58 @@
+---
+# Static CPython 3.14 MLX import and smoke-configuration checks only.
+name: Darwin Python 3.14 MLX static
+
+"on":
+  pull_request:
+    paths:
+      - "python/**"
+      - "config/smoke_models.json"
+      - ".github/workflows/darwin-py314-mlx-static.yml"
+      - "python/requirements-darwin-py314.in"
+      - "python/requirements-darwin-py314.txt"
+  push:
+    paths:
+      - "python/**"
+      - "config/smoke_models.json"
+      - ".github/workflows/darwin-py314-mlx-static.yml"
+      - "python/requirements-darwin-py314.in"
+      - "python/requirements-darwin-py314.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    runs-on: macos-14
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.14"
+          architecture: arm64
+      - name: Install locked dependencies
+        run: >-
+          python -m pip install --only-binary=:all: --require-hashes
+          -r python/requirements-darwin-py314.txt
+      - name: Install research package without dependency resolution
+        run: python -m pip install --no-deps -e python
+      - name: Verify Python and MLX static imports
+        run: |
+          python - <<'PY'
+          import importlib.metadata
+          import platform
+          import sys
+
+          import mlx.core as mx
+
+          assert sys.version_info[:2] == (3, 14), sys.version
+          assert platform.machine() == "arm64", platform.machine()
+          assert importlib.metadata.version("omlx-research") == "0.1.0"
+          assert importlib.metadata.version("mlx") == "0.32.0"
+          assert importlib.metadata.version("mlx-lm") == "0.31.3"
+          assert callable(mx.new_thread_local_stream)
+          PY
+      - name: Run smoke-model configuration tests
+        run: python -m unittest python/omlx_research/tests/test_smoke_models.py
