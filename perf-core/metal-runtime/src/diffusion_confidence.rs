@@ -7,9 +7,58 @@ pub enum DiffusionConfidenceError {
     ZeroDimension,
     #[error("logits length must equal tokens * vocabulary")]
     BadShape,
+    #[error("logit at index {index} is not finite")]
+    NonFiniteLogit { index: usize },
     #[cfg(all(feature = "metal", target_os = "macos"))]
     #[error("Metal diffusion confidence failed: {0}")]
     Metal(String),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_nonfinite_logits_with_their_index_before_device_work() {
+        for (logits, index) in [
+            (&[0.0, f32::NAN][..], 1),
+            (&[f32::INFINITY, 0.0][..], 0),
+            (&[0.0, f32::NEG_INFINITY][..], 1),
+        ] {
+            let err = validate_diffusion_confidence_inputs(logits, 1, 2).unwrap_err();
+
+            assert_eq!(err, DiffusionConfidenceError::NonFiniteLogit { index });
+        }
+    }
+
+    #[test]
+    fn accepts_finite_logits_with_a_matching_shape() {
+        assert_eq!(
+            validate_diffusion_confidence_inputs(&[0.0, -1.0], 1, 2),
+            Ok(())
+        );
+    }
+}
+
+/// Validate diffusion confidence inputs without acquiring a Metal pipeline or device resource.
+fn validate_diffusion_confidence_inputs(
+    logits: &[f32],
+    tokens: usize,
+    vocab: usize,
+) -> Result<(), DiffusionConfidenceError> {
+    if tokens == 0 || vocab == 0 {
+        return Err(DiffusionConfidenceError::ZeroDimension);
+    }
+    let len = tokens
+        .checked_mul(vocab)
+        .ok_or(DiffusionConfidenceError::BadShape)?;
+    if logits.len() != len {
+        return Err(DiffusionConfidenceError::BadShape);
+    }
+    if let Some(index) = logits.iter().position(|value| !value.is_finite()) {
+        return Err(DiffusionConfidenceError::NonFiniteLogit { index });
+    }
+    Ok(())
 }
 
 #[cfg(all(feature = "metal", target_os = "macos"))]
@@ -21,15 +70,7 @@ pub fn diffusion_argmax_confidence_metal(
 ) -> Result<(Vec<u32>, Vec<f32>), DiffusionConfidenceError> {
     use metal::{MTLCommandBufferStatus, MTLResourceOptions, MTLSize};
     use std::ffi::c_void;
-    if tokens == 0 || vocab == 0 {
-        return Err(DiffusionConfidenceError::ZeroDimension);
-    }
-    let len = tokens
-        .checked_mul(vocab)
-        .ok_or(DiffusionConfidenceError::BadShape)?;
-    if logits.len() != len {
-        return Err(DiffusionConfidenceError::BadShape);
-    }
+    validate_diffusion_confidence_inputs(logits, tokens, vocab)?;
     crate::metal_cache::with_catalogued_pipeline(artifact, "denoise", |device, queue, pipeline| {
         let shared = MTLResourceOptions::StorageModeShared;
         let input = device.new_buffer_with_data(

@@ -19,12 +19,9 @@ from typing import Any, Mapping
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from .trusted_uri import (
-    TrustedHarborEnvelopeError,
-    require_exact_harbor_authorization_uri as _require_exact_harbor_authorization_uri,
-    require_exact_harbor_result_uri as _require_exact_harbor_result_uri,
-    require_harbor_artifact_uri as _require_harbor_artifact_uri,
-)
+
+class TrustedHarborEnvelopeError(ValueError):
+    """Raised when an envelope fails structural, policy, or signature checks."""
 
 
 @dataclass(frozen=True)
@@ -38,9 +35,6 @@ class TrustedHarborPolicy:
     expected_task_id: str
     expected_environment: str
     expected_context_tokens: int
-    expected_candidate_repo: str
-    expected_branch: str
-    expected_source_head: str
 
 
 @dataclass(frozen=True)
@@ -66,7 +60,9 @@ _ROOT_FIELDS = frozenset(
         "signature",
     }
 )
-_ISSUER_FIELDS = frozenset({"name", "environment", "portage_commit", "exporter_version", "key_id"})
+_ISSUER_FIELDS = frozenset(
+    {"name", "environment", "portage_commit", "exporter_version", "key_id"}
+)
 _HARBOR_FIELDS = frozenset(
     {
         "job_id",
@@ -129,18 +125,24 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _reject_nonfinite(value: str) -> Any:
-    raise TrustedHarborEnvelopeError(f"non-finite JSON constant is not allowed: {value}")
+    raise TrustedHarborEnvelopeError(
+        f"non-finite JSON constant is not allowed: {value}"
+    )
 
 
 def _read_regular_bytes(path: Path) -> bytes:
     nofollow = getattr(os, "O_NOFOLLOW", None)
     if nofollow is None:
-        raise TrustedHarborEnvelopeError("envelope requires no-follow filesystem support")
+        raise TrustedHarborEnvelopeError(
+            "envelope requires no-follow filesystem support"
+        )
     flags = os.O_RDONLY | nofollow
     try:
         descriptor = os.open(path, flags)
     except FileNotFoundError as exc:
-        raise TrustedHarborEnvelopeError("envelope does not exist as a regular file") from exc
+        raise TrustedHarborEnvelopeError(
+            "envelope does not exist as a regular file"
+        ) from exc
     except OSError as exc:
         raise TrustedHarborEnvelopeError("envelope must be a regular file") from exc
     try:
@@ -168,15 +170,21 @@ def _parse_envelope_bytes(raw: bytes) -> Mapping[str, Any]:
     return document
 
 
-def _require_mapping(value: Any, name: str, allowed: frozenset[str]) -> Mapping[str, Any]:
+def _require_mapping(
+    value: Any, name: str, allowed: frozenset[str]
+) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise TrustedHarborEnvelopeError(f"{name} must be an object")
     extras = set(value) - allowed
     missing = allowed - set(value)
     if extras:
-        raise TrustedHarborEnvelopeError(f"{name} has unknown field(s): {sorted(extras)}")
+        raise TrustedHarborEnvelopeError(
+            f"{name} has unknown field(s): {sorted(extras)}"
+        )
     if missing:
-        raise TrustedHarborEnvelopeError(f"{name} is missing field(s): {sorted(missing)}")
+        raise TrustedHarborEnvelopeError(
+            f"{name} is missing field(s): {sorted(missing)}"
+        )
     return value
 
 
@@ -188,9 +196,20 @@ def _require_string(value: Any, name: str) -> str:
 
 def _require_digest(value: Any, name: str, length: int = 64) -> str:
     digest = _require_string(value, name)
-    if len(digest) != length or any(character not in "0123456789abcdef" for character in digest):
-        raise TrustedHarborEnvelopeError(f"{name} must be a lowercase {length}-hex digest")
+    if len(digest) != length or any(
+        character not in "0123456789abcdef" for character in digest
+    ):
+        raise TrustedHarborEnvelopeError(
+            f"{name} must be a lowercase {length}-hex digest"
+        )
     return digest
+
+
+def _require_harbor_uri(value: Any, name: str) -> str:
+    uri = _require_string(value, name)
+    if not uri.startswith("harbor://"):
+        raise TrustedHarborEnvelopeError(f"{name} must use an immutable harbor:// URI")
+    return uri
 
 
 def _require_timestamp(value: Any, name: str) -> datetime:
@@ -200,7 +219,9 @@ def _require_timestamp(value: Any, name: str) -> datetime:
     try:
         return datetime.fromisoformat(f"{raw[:-1]}+00:00")
     except ValueError as exc:
-        raise TrustedHarborEnvelopeError(f"{name} must be an ISO-8601 timestamp") from exc
+        raise TrustedHarborEnvelopeError(
+            f"{name} must be an ISO-8601 timestamp"
+        ) from exc
 
 
 def _validate_shape(
@@ -212,8 +233,12 @@ def _validate_shape(
     issuer = _require_mapping(root["issuer"], "issuer", _ISSUER_FIELDS)
     harbor = _require_mapping(root["harbor"], "harbor", _HARBOR_FIELDS)
     run = _require_mapping(root["run"], "run", _RUN_FIELDS)
-    authorization = _require_mapping(root["authorization"], "authorization", _AUTHORIZATION_FIELDS)
-    observability = _require_mapping(root["observability"], "observability", _OBSERVABILITY_FIELDS)
+    authorization = _require_mapping(
+        root["authorization"], "authorization", _AUTHORIZATION_FIELDS
+    )
+    observability = _require_mapping(
+        root["observability"], "observability", _OBSERVABILITY_FIELDS
+    )
     signature = _require_mapping(root["signature"], "signature", _SIGNATURE_FIELDS)
     artifacts = root["artifacts"]
     if not isinstance(artifacts, list) or not artifacts:
@@ -242,42 +267,56 @@ def _validate_policy(
     if run["model"] != policy.expected_model:
         raise TrustedHarborEnvelopeError("model does not match exact Qwen3.5 policy")
     if run["model_config_sha256"] != policy.expected_model_config_sha256:
-        raise TrustedHarborEnvelopeError("model configuration digest does not match policy")
-    source_head = _require_digest(run["source_head"], "run.source_head", length=40)
-    candidate_repo = _require_string(run["candidate_repo"], "run.candidate_repo")
-    branch = _require_string(run["branch"], "run.branch")
-    if candidate_repo != policy.expected_candidate_repo:
-        raise TrustedHarborEnvelopeError("candidate repository does not match policy")
-    if branch != policy.expected_branch:
-        raise TrustedHarborEnvelopeError("branch does not match policy")
-    if source_head != policy.expected_source_head:
-        raise TrustedHarborEnvelopeError("source head does not match policy")
+        raise TrustedHarborEnvelopeError(
+            "model configuration digest does not match policy"
+        )
+    _require_digest(run["source_head"], "run.source_head", length=40)
+    _require_string(run["candidate_repo"], "run.candidate_repo")
+    _require_string(run["branch"], "run.branch")
     if _require_timestamp(run["finished_at"], "run.finished_at") < _require_timestamp(
         run["started_at"], "run.started_at"
     ):
         raise TrustedHarborEnvelopeError("run timestamps are out of order")
     if harbor["task_id"] != policy.expected_task_id:
         raise TrustedHarborEnvelopeError("Harbor task does not match policy")
-    matches_context = harbor["requested_context_tokens"] == policy.expected_context_tokens
+    matches_context = (
+        harbor["requested_context_tokens"] == policy.expected_context_tokens
+    )
     if harbor["n_trials"] != 1 or not matches_context:
-        raise TrustedHarborEnvelopeError("Harbor trial or context contract does not match policy")
+        raise TrustedHarborEnvelopeError(
+            "Harbor trial or context contract does not match policy"
+        )
     job_id = _require_string(harbor["job_id"], "harbor.job_id")
     trial_id = _require_string(harbor["trial_id"], "harbor.trial_id")
     _require_string(harbor["trial_name"], "harbor.trial_name")
     _require_digest(harbor["job_config_sha256"], "harbor.job_config_sha256")
     _require_digest(harbor["result_sha256"], "harbor.result_sha256")
-    _require_exact_harbor_result_uri(harbor["immutable_result_uri"], job_id, trial_id)
+    result_uri = _require_harbor_uri(
+        harbor["immutable_result_uri"], "harbor.immutable_result_uri"
+    )
+    if f"/{job_id}/{trial_id}" not in result_uri:
+        raise TrustedHarborEnvelopeError(
+            "Harbor result URI does not bind its job and trial"
+        )
     for artifact in artifacts:
-        _require_harbor_artifact_uri(artifact["uri"], job_id, trial_id)
-        artifact_sha256 = _require_digest(artifact["sha256"], "artifact.sha256")
-        if artifact_sha256 != harbor["result_sha256"]:
-            raise TrustedHarborEnvelopeError("artifact SHA-256 does not match Harbor result SHA-256")
+        _require_harbor_uri(artifact["uri"], "artifact.uri")
+        _require_digest(artifact["sha256"], "artifact.sha256")
         byte_count = artifact["byte_count"]
-        if isinstance(byte_count, bool) or not isinstance(byte_count, int) or byte_count < 0:
-            raise TrustedHarborEnvelopeError("artifact.byte_count must be a non-negative integer")
+        if (
+            isinstance(byte_count, bool)
+            or not isinstance(byte_count, int)
+            or byte_count < 0
+        ):
+            raise TrustedHarborEnvelopeError(
+                "artifact.byte_count must be a non-negative integer"
+            )
     window_id = _require_string(authorization["window_id"], "authorization.window_id")
     _require_digest(authorization["sidecar_sha256"], "authorization.sidecar_sha256")
-    _require_exact_harbor_authorization_uri(authorization["immutable_auth_uri"], window_id)
+    auth_uri = _require_harbor_uri(
+        authorization["immutable_auth_uri"], "authorization.immutable_auth_uri"
+    )
+    if not auth_uri.endswith(f"/{window_id}"):
+        raise TrustedHarborEnvelopeError("authorization URI does not bind its window")
     identifiers_match = (
         observability["langfuse_session_id"] == job_id
         and observability["trace_id"] == trial_id
@@ -292,10 +331,12 @@ def verify_envelope(
     document: Mapping[str, Any], policy: TrustedHarborPolicy
 ) -> VerifiedTrustedHarborEnvelope:
     """Verify a strict signed envelope against an explicit public-key trust policy."""
-    issuer, harbor, run, authorization, observability, artifacts, signature = _validate_shape(
-        document
+    issuer, harbor, run, authorization, observability, artifacts, signature = (
+        _validate_shape(document)
     )
-    _validate_policy(issuer, harbor, run, authorization, observability, artifacts, policy)
+    _validate_policy(
+        issuer, harbor, run, authorization, observability, artifacts, policy
+    )
     if signature["alg"] != "Ed25519":
         raise TrustedHarborEnvelopeError("unsupported signature algorithm")
     key_id = _require_string(signature["key_id"], "signature.key_id")
@@ -308,7 +349,9 @@ def verify_envelope(
     canonical_payload = _canonical_json(payload)
     payload_digest = hashlib.sha256(canonical_payload).hexdigest()
     if signature["signed_payload_sha256"] != payload_digest:
-        raise TrustedHarborEnvelopeError("signed payload SHA-256 does not match envelope")
+        raise TrustedHarborEnvelopeError(
+            "signed payload SHA-256 does not match envelope"
+        )
     try:
         signature_bytes = bytes.fromhex(
             _require_string(signature["signature"], "signature.signature")

@@ -41,6 +41,11 @@ pub enum KernelError {
         got: usize,
     },
 
+    /// A floating-point input contained `NaN` or infinity, which would
+    /// otherwise contaminate every dependent accumulation.
+    #[error("non-finite value in {what} at index {index}")]
+    NonFiniteValue { what: &'static str, index: usize },
+
     /// A bit-width outside the supported range (sub-byte quantization
     /// only accepts `1..=8`).
     #[error("bits {bits} outside supported range 1..=8")]
@@ -50,12 +55,6 @@ pub enum KernelError {
     /// zero-or-negative per-expert bucket).
     #[error("capacity_factor must be > 0, got {got}")]
     BadCapacityFactor { got: f32 },
-
-    /// A routing or kernel input contained NaN or infinity.  Rejecting these
-    /// before sorting/softmax keeps the scalar router's contract aligned with
-    /// the Metal facade and prevents NaN weights from reaching expert GEMMs.
-    #[error("non-finite value in {what} at index {index}")]
-    NonFiniteValue { what: &'static str, index: usize },
 
     /// A row / column / index referenced inside a MoE dispatch plan was
     /// out of range.
