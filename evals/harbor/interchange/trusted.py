@@ -21,9 +21,9 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from .trusted_uri import (
     TrustedHarborEnvelopeError,
+    require_exact_harbor_authorization_uri as _require_exact_harbor_authorization_uri,
     require_exact_harbor_result_uri as _require_exact_harbor_result_uri,
     require_harbor_artifact_uri as _require_harbor_artifact_uri,
-    require_harbor_uri as _require_harbor_uri,
 )
 
 
@@ -277,11 +277,7 @@ def _validate_policy(
             raise TrustedHarborEnvelopeError("artifact.byte_count must be a non-negative integer")
     window_id = _require_string(authorization["window_id"], "authorization.window_id")
     _require_digest(authorization["sidecar_sha256"], "authorization.sidecar_sha256")
-    auth_uri = _require_harbor_uri(
-        authorization["immutable_auth_uri"], "authorization.immutable_auth_uri"
-    )
-    if not auth_uri.endswith(f"/{window_id}"):
-        raise TrustedHarborEnvelopeError("authorization URI does not bind its window")
+    _require_exact_harbor_authorization_uri(authorization["immutable_auth_uri"], window_id)
     identifiers_match = (
         observability["langfuse_session_id"] == job_id
         and observability["trace_id"] == trial_id
