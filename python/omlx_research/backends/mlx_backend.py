@@ -20,10 +20,14 @@ def quantization_execution_provenance(compressed_layers: int = 0) -> dict[str, o
     """
     cache_compression_verified = compressed_layers > 0
     return {
-        "execution_source": "turbo_kv_cache" if cache_compression_verified else "not_executed",
+        "execution_source": (
+            "turbo_kv_cache" if cache_compression_verified else "not_executed"
+        ),
         "rust_quantization_executed": False,
         "cache_compression_verified": cache_compression_verified,
-        "evidence_scope": "turbo_kv_cache_state" if cache_compression_verified else "none",
+        "evidence_scope": (
+            "turbo_kv_cache_state" if cache_compression_verified else "none"
+        ),
     }
 
 
@@ -39,7 +43,9 @@ class MlxBackend(BackendBase):
         supports_spec_decode=True,
     )
 
-    def __init__(self, model_path: str | None = None, enable_custom_qwen_kernel: bool = False):
+    def __init__(
+        self, model_path: str | None = None, enable_custom_qwen_kernel: bool = False
+    ):
         self.model_path = model_path
         self._enable_custom_qwen_kernel = enable_custom_qwen_kernel
         self.custom_kernel_stats = {"installed": False, "dispatches": 0, "fallbacks": 0}
@@ -77,7 +83,14 @@ class MlxBackend(BackendBase):
         if cached is not None:
             return cached if cached is not False else None
         try:
-            import _perf  # maturin develop installs this top-level
+            # `python/ffi/Cargo.toml` sets `[lib] name = "_perf"`, so maturin
+            # installs it top-level; also accept the packaged namespace so a
+            # future move under `omlx_research` does not silently disable the
+            # Rust path.
+            try:
+                import _perf
+            except ImportError:
+                from omlx_research import _perf  # type: ignore[no-redef]
 
             self._perf_module = _perf
             return _perf
