@@ -28,7 +28,7 @@
 use model_kernels::KernelOp;
 use model_plan::attention::AttentionKind;
 use model_plan::operator::OperatorKind;
-use model_plan::OperatorPlan;
+use model_plan::{OperatorPlan, QuantizationPolicy};
 
 /// Map a plan operator to the kernel-registry dispatch tag, if a
 /// mapping exists.
@@ -83,8 +83,15 @@ pub fn plan_kernel_tag(op: &OperatorPlan) -> Option<&'static str> {
     if let Some(attn) = &op.attention {
         return Some(attention_kernel_tag(attn));
     }
+    // Bonsai's canonical ternary layout is a two-bit packed representation;
+    // route it to the checked-in ternary GEMM source instead of leaving a
+    // quantized operator as an untyped dense fallback.
+    if matches!(op.quant, QuantizationPolicy::Ternary { .. }) {
+        return Some(KernelOp::TernaryPack.tag());
+    }
     match op.kind {
         OperatorKind::MoeRouter { .. } => Some(KernelOp::MoeRouter.tag()),
+        OperatorKind::GroupedMatmul { .. } => Some(KernelOp::MoeDispatch.tag()),
         OperatorKind::MambaScan { .. } => Some(KernelOp::MambaSelectiveScan.tag()),
         OperatorKind::RetNet { .. } => Some(KernelOp::RetNet.tag()),
         // Recurrent / linear-recurrent family — no attention slot.
@@ -261,6 +268,22 @@ mod tests {
             None,
             "Softmax has no kernel-registry mapping yet"
         );
+    }
+
+    #[test]
+    fn bonsai_ternary_matmul_routes_to_checked_in_ternary_kernel() {
+        let mut op = op_plain(1, OperatorKind::DenseMatmul);
+        op.quant = QuantizationPolicy::Ternary {
+            group_size: 32,
+            bits: 2,
+        };
+        assert_eq!(plan_kernel_tag(&op), Some("ternary_pack"));
+    }
+
+    #[test]
+    fn grouped_matmul_routes_to_moe_dispatch_kernel() {
+        let op = op_plain(1, OperatorKind::GroupedMatmul { groups: 8 });
+        assert_eq!(plan_kernel_tag(&op), Some("moe_dispatch"));
     }
 
     #[test]

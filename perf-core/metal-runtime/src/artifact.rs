@@ -1,8 +1,9 @@
 //! Verified loading policy for precompiled Metal libraries.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -25,6 +26,40 @@ impl ArtifactAllowlist {
             hashes: entries.into_iter().collect(),
         }
     }
+
+    /// Parse the canonical artifact manifest emitted by the build tooling.
+    pub fn from_manifest_json(bytes: &[u8]) -> Result<Self, ArtifactError> {
+        let manifest: ArtifactManifest = serde_json::from_slice(bytes)
+            .map_err(|source| ArtifactError::ManifestParse { source })?;
+        if manifest.artifacts.is_empty() {
+            return Err(ArtifactError::EmptyManifest);
+        }
+        let mut entries = Vec::with_capacity(manifest.artifacts.len());
+        let mut names = HashSet::with_capacity(manifest.artifacts.len());
+        for entry in manifest.artifacts {
+            validate_name(&entry.name)?;
+            if !names.insert(entry.name.clone()) {
+                return Err(ArtifactError::DuplicateArtifact(entry.name));
+            }
+            let digest = decode_digest(&entry.sha256)?;
+            entries.push((entry.name, digest));
+        }
+        Ok(Self::new(entries))
+    }
+}
+
+/// Stable on-disk representation of approved `.metallib` artifacts.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ArtifactManifest {
+    pub artifacts: Vec<ArtifactManifestEntry>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ArtifactManifestEntry {
+    pub name: String,
+    pub sha256: String,
 }
 
 /// A verified precompiled Metal library.
@@ -63,6 +98,14 @@ pub enum ArtifactError {
         #[source]
         source: std::io::Error,
     },
+    #[error("invalid artifact manifest: {source}")]
+    ManifestParse { source: serde_json::Error },
+    #[error("artifact manifest must contain at least one artifact")]
+    EmptyManifest,
+    #[error("artifact manifest contains duplicate artifact '{0}'")]
+    DuplicateArtifact(String),
+    #[error("invalid sha256 digest '{0}' in artifact manifest")]
+    InvalidDigest(String),
 }
 
 /// Loader rooted at a trusted artifact directory.
@@ -78,6 +121,17 @@ impl MetallibLoader {
             root: root.into(),
             allowlist,
         }
+    }
+
+    /// Construct a loader directly from the canonical build manifest.
+    pub fn from_manifest_json(
+        root: impl Into<PathBuf>,
+        manifest: &[u8],
+    ) -> Result<Self, ArtifactError> {
+        Ok(Self::new(
+            root,
+            ArtifactAllowlist::from_manifest_json(manifest)?,
+        ))
     }
 
     pub fn load(&self, name: &str) -> Result<MetallibArtifact, ArtifactError> {
@@ -112,6 +166,18 @@ fn validate_name(name: &str) -> Result<(), ArtifactError> {
         return Err(ArtifactError::InvalidName(name.to_owned()));
     }
     Ok(())
+}
+
+fn decode_digest(value: &str) -> Result<[u8; 32], ArtifactError> {
+    if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(ArtifactError::InvalidDigest(value.to_owned()));
+    }
+    let mut digest = [0u8; 32];
+    for (index, slot) in digest.iter_mut().enumerate() {
+        *slot = u8::from_str_radix(&value[index * 2..index * 2 + 2], 16)
+            .map_err(|_| ArtifactError::InvalidDigest(value.to_owned()))?;
+    }
+    Ok(digest)
 }
 
 #[cfg(test)]
@@ -184,5 +250,56 @@ mod tests {
             Err(ArtifactError::InvalidName(_))
         ));
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn manifest_parser_accepts_canonical_digest_and_preserves_loader_contract() {
+        let bytes = b"manifest-artifact";
+        let digest: [u8; 32] = Sha256::digest(bytes).into();
+        let hex = digest
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let manifest = serde_json::json!({
+            "artifacts": [{"name": "model.metallib", "sha256": hex}]
+        });
+        let allowlist =
+            ArtifactAllowlist::from_manifest_json(&serde_json::to_vec(&manifest).unwrap()).unwrap();
+        let (root, _) = fixture(bytes);
+        let artifact = MetallibLoader::new(root.clone(), allowlist)
+            .load("model.metallib")
+            .unwrap();
+        assert_eq!(artifact.sha256(), &digest);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn manifest_parser_rejects_non_sha256_digest() {
+        let manifest = br#"{"artifacts":[{"name":"model.metallib","sha256":"00"}]}"#;
+        assert!(matches!(
+            ArtifactAllowlist::from_manifest_json(manifest),
+            Err(ArtifactError::InvalidDigest(_))
+        ));
+    }
+
+    #[test]
+    fn manifest_parser_rejects_empty_manifest() {
+        let manifest = br#"{"artifacts":[]}"#;
+        assert!(matches!(
+            ArtifactAllowlist::from_manifest_json(manifest),
+            Err(ArtifactError::EmptyManifest)
+        ));
+    }
+
+    #[test]
+    fn manifest_parser_rejects_duplicate_artifact_names() {
+        let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let manifest = format!(
+            r#"{{"artifacts":[{{"name":"model.metallib","sha256":"{digest}"}},{{"name":"model.metallib","sha256":"{digest}"}}]}}"#
+        );
+        assert!(matches!(
+            ArtifactAllowlist::from_manifest_json(manifest.as_bytes()),
+            Err(ArtifactError::DuplicateArtifact(name)) if name == "model.metallib"
+        ));
     }
 }

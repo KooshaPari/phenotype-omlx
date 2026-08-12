@@ -42,6 +42,12 @@ pub mod cca;
 pub mod compile;
 pub mod deltanet;
 pub mod diffusion_confidence;
+pub mod diffusion_dispatch;
+pub mod diffusion_dispatch_metal;
+pub mod diffusion_parity;
+pub mod diffusion_self_verify;
+pub mod diffusion_state;
+pub mod diffusion_telemetry;
 pub mod dispatch;
 pub mod error;
 pub mod fingerprint;
@@ -53,6 +59,7 @@ pub mod mamba_scan;
 mod metal_cache;
 pub mod mla_cache;
 pub mod moe;
+pub mod native_catalog;
 pub mod pipeline;
 pub mod retnet;
 pub mod rope3d;
@@ -65,7 +72,8 @@ pub mod ternary;
 pub use adaln::adaln_rms_metal;
 pub use adaln::AdaLnError;
 pub use artifact::{
-    ArtifactAllowlist, ArtifactError, MetallibArtifact, MetallibLoader, RuntimeMode,
+    ArtifactAllowlist, ArtifactError, ArtifactManifest, ArtifactManifestEntry, MetallibArtifact,
+    MetallibLoader, RuntimeMode,
 };
 pub use cache::{CacheKey, CacheStats, CompiledPipeline, EvictionPolicy, PipelineCache};
 #[cfg(all(feature = "metal", target_os = "macos"))]
@@ -78,6 +86,24 @@ pub use deltanet::{deltanet_step_metal, deltanet_step_metal_two_pass};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use diffusion_confidence::diffusion_argmax_confidence_metal;
 pub use diffusion_confidence::DiffusionConfidenceError;
+pub use diffusion_dispatch::{DiffusionDispatchEvaluation, DiffusionDispatchPlan, DiffusionStage};
+#[cfg(all(feature = "metal", target_os = "macos"))]
+pub use diffusion_dispatch_metal::{
+    diffusion_active_compact_metal, diffusion_active_compact_metal_with_telemetry,
+    diffusion_remask_metal, diffusion_remask_metal_with_telemetry, diffusion_trajectory_metal,
+    diffusion_trajectory_metal_with_telemetry,
+};
+pub use diffusion_dispatch_metal::{validate_diffusion_threshold, DiffusionDispatchError};
+pub use diffusion_parity::{compare_f32, compare_u32, compare_u8, DiffusionParityError};
+pub use diffusion_self_verify::{
+    DiffusionSelfVerifyError, DiffusionVerificationBlock, DiffusionVerificationPlan,
+};
+pub use diffusion_state::{DiffusionStateLayout, DiffusionStateLayoutError};
+pub use diffusion_telemetry::{
+    DiffusionDispatchDecision, DiffusionDispatchReport, DiffusionDispatchTelemetry,
+    DiffusionRollbackPolicy, DiffusionStageOutcome, DiffusionStageTelemetry,
+    DiffusionTelemetryError,
+};
 pub use error::{CompileError, PipelineError};
 pub use fingerprint::{DeviceFingerprint, FingerprintError, GpuFamily};
 #[cfg(all(feature = "metal", target_os = "macos"))]
@@ -98,6 +124,10 @@ pub use mla_cache::MlaCacheError;
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use moe::grouped_gemm_metal;
 pub use moe::{MoeRouter, MoeRouterError, MoeRouterOutput, MoeShape};
+pub use native_catalog::{
+    all_specs as native_kernel_specs, spec_for_tag as native_kernel_spec, NativeKernelBinding,
+    NativeKernelBundle, NativeKernelError, NativeKernelSpec,
+};
 pub use pipeline::{Pipeline, StepOutput};
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub use retnet::retnet_retention_step_metal;

@@ -28,6 +28,12 @@ pub fn router_topk(
             got: router_logits.len(),
         });
     }
+    if let Some(index) = router_logits.iter().position(|logit| !logit.is_finite()) {
+        return Err(KernelError::NonFiniteValue {
+            what: "router_logits",
+            index,
+        });
+    }
     if top_k == 0 {
         return Err(KernelError::ZeroDimension {
             what: "top_k",
@@ -108,6 +114,20 @@ mod tests {
         assert!((s - 1.0).abs() < 1e-5);
         for (_, w) in picks {
             assert!(w > 0.0);
+        }
+    }
+
+    #[test]
+    fn rejects_non_finite_logits_before_sorting() {
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            let err = router_topk(&[0.0, bad, 1.0], 3, 2, 0).unwrap_err();
+            assert!(matches!(
+                err,
+                KernelError::NonFiniteValue {
+                    what: "router_logits",
+                    index: 1
+                }
+            ));
         }
     }
 }

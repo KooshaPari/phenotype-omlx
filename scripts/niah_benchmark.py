@@ -82,6 +82,13 @@ def extract_answer_text(answer: str) -> str:
 # Never use a hard-coded absolute repos/.../python sys.path (FR-5 E2).
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "python"))
+# The miniforge MLX runtime does not always auto-import this repository's
+# sitecustomize. Load it explicitly so the audited TurboKVCache layer is
+# available to every benchmark invocation, independent of PYTHONPATH setup.
+try:
+    import sitecustomize  # noqa: F401
+except Exception:
+    pass
 
 # Heavy / optional imports are deferred so `--help` (and any other
 # argparse-only invocation) works without mlx / mlx_lm installed.

@@ -66,6 +66,16 @@ pub fn denoise_step_sequential(
             got: model_logits.len(),
         });
     }
+    if let Some((index, _)) = model_logits
+        .iter()
+        .enumerate()
+        .find(|(_, value)| !value.is_finite())
+    {
+        return Err(KernelError::NonFiniteValue {
+            what: "model_logits",
+            index,
+        });
+    }
     let mut next_x = x_t.to_vec();
     let mut next_mask = mask.to_vec();
     let mut accepted = 0usize;
@@ -102,6 +112,14 @@ pub fn denoise_step(
     confidence_threshold: f32,
     vocab: usize,
 ) -> Result<DenoiseUpdate> {
+    if !confidence_threshold.is_finite() || !(0.0..=1.0).contains(&confidence_threshold) {
+        return Err(KernelError::OutOfRange {
+            what: "confidence_threshold",
+            min: 0.0,
+            max: 1.0,
+            got: confidence_threshold,
+        });
+    }
     // Count positions that were originally masked (= newly accepted
     // if no remask is applied).
     let newly_accepted = mask.iter().filter(|m| **m).count();
@@ -115,14 +133,6 @@ pub fn denoise_step(
         scores.push(softmax_max(row));
     }
     // 3. Confidence threshold: anything below is forced back to masked.
-    if !(0.0..=1.0).contains(&confidence_threshold) {
-        return Err(KernelError::OutOfRange {
-            what: "confidence_threshold",
-            min: 0.0,
-            max: 1.0,
-            got: confidence_threshold,
-        });
-    }
     if confidence_threshold > 0.0 {
         for (i, &s) in scores.iter().enumerate() {
             if s < confidence_threshold {
@@ -191,6 +201,21 @@ mod tests {
         let logits = vec![0.0; 3];
         let err = denoise_step_sequential(&x_t, &mask, &logits, 2).unwrap_err();
         assert!(matches!(err, KernelError::BadBufferLength { .. }));
+    }
+
+    #[test]
+    fn rejects_non_finite_logits_before_argmax() {
+        let x_t = vec![0u32, 0];
+        let mask = vec![true, true];
+        let logits = vec![0.0, f32::NAN, 0.0, 1.0];
+        let err = denoise_step_sequential(&x_t, &mask, &logits, 2).unwrap_err();
+        assert_eq!(
+            err,
+            KernelError::NonFiniteValue {
+                what: "model_logits",
+                index: 1
+            }
+        );
     }
 
     #[test]

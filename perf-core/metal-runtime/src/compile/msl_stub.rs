@@ -17,6 +17,8 @@ use sha2::{Digest, Sha256};
 
 use crate::fingerprint::DeviceFingerprint;
 
+use super::shader_catalog::source_for_tag;
+
 /// Emit a deterministic MSL stub string for `plan`. The stub is currently
 /// informational — it includes the plan id, family, and a one-line kernel
 /// per operator. A future task will replace this with real codegen driven
@@ -40,6 +42,33 @@ pub(crate) fn emit_msl_stub(plan: &ModelPlan, fp: &DeviceFingerprint) -> String 
     out.push_str("using namespace metal;\n\n");
     for op in &plan.operators {
         out.push_str(&emit_per_op_stub(op));
+    }
+    out
+}
+
+/// Emit the deterministic plan envelope plus checked-in kernel source for every
+/// mapped operator. This remains reference-mode source assembly: the caller must
+/// perform a real Metal compilation before treating it as executable evidence.
+pub(crate) fn emit_msl_bundle(plan: &ModelPlan, fp: &DeviceFingerprint) -> String {
+    use crate::dispatch::plan_kernel_tag;
+    use std::collections::BTreeSet;
+
+    let mut out = emit_msl_stub(plan, fp);
+    let mut tags = BTreeSet::new();
+    for op in &plan.operators {
+        if let Some(tag) = plan_kernel_tag(op) {
+            tags.insert(tag);
+        }
+    }
+    out.push_str("// checked-in kernel sources below; native compilation required\n");
+    for tag in tags {
+        if let Some(source) = source_for_tag(tag) {
+            out.push_str("\n// [kernel-source=");
+            out.push_str(tag);
+            out.push_str("]\n");
+            out.push_str(source);
+            out.push('\n');
+        }
     }
     out
 }

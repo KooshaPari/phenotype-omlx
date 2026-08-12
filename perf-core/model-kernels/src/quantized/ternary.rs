@@ -64,11 +64,14 @@ pub fn ternary_pack(
 
 /// Unpack a 2-bit ternary bitstream. `n` is the number of logical
 /// symbols (i.e. the original `values.len()`). The output buffer is
-/// resized/overwritten in place by the caller.
+/// resized/overwritten in place by the caller. `scales` and `zeros`
+/// must carry one metadata entry per logical group, even though this
+/// symbolic decoder does not apply the affine transform; the fused
+/// matmul path consumes those entries separately.
 pub fn ternary_unpack(
     packed: &[u8],
-    _scales: &[f32],
-    _zeros: &[f32],
+    scales: &[f32],
+    zeros: &[f32],
     n: usize,
     group_size: usize,
     out: &mut [SignedTernary],
@@ -92,6 +95,21 @@ pub fn ternary_unpack(
             what: "packed",
             expected: expected_bytes,
             got: packed.len(),
+        });
+    }
+    let expected_groups = n.div_ceil(group_size);
+    if scales.len() != expected_groups {
+        return Err(KernelError::BadBufferLength {
+            what: "scales",
+            expected: expected_groups,
+            got: scales.len(),
+        });
+    }
+    if zeros.len() != expected_groups {
+        return Err(KernelError::BadBufferLength {
+            what: "zeros",
+            expected: expected_groups,
+            got: zeros.len(),
         });
     }
     for i in 0..n {

@@ -1,0 +1,12 @@
+{
+  "schema_version": "0.1",
+  "evidence_label": "live_failed",
+  "recorded_at": "2026-07-27T01:15:11Z",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "job_id": "67bdb432-3228-469c-8a83-6ffe3aa23813",
+  "trial_name": "omlx-niah-api-smoke__Ee6X7AT",
+  "environment": "apple-container",
+  "failure": "NIAH request timed out; reward 0.0",
+  "artifact_path": ".runs/harbor-eval-20260727/2026-07-26__18-11-42",
+  "promotion_effect": "does not count as positive evidence"
+}

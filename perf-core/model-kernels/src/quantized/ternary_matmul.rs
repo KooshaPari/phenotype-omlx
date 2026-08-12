@@ -77,46 +77,87 @@ pub fn ternary_matmul(
         // The packed layout emits four 2-bit symbols per byte; if n
         // is not a multiple of 4 we cannot index into a byte in a
         // row-aligned way.
+        let aligned_n = n
+            .checked_add(4 - n % 4)
+            .ok_or(KernelError::DimensionOverflow { what: "aligned n" })?;
         return Err(KernelError::DimMismatch {
             what: "n aligned to 4",
-            expected: n + (4 - n % 4),
+            expected: aligned_n,
             got: n,
         });
     }
+    let activation_len = m
+        .checked_mul(k)
+        .ok_or(KernelError::DimensionOverflow { what: "m*k" })?;
+    let output_len = m
+        .checked_mul(n)
+        .ok_or(KernelError::DimensionOverflow { what: "m*n" })?;
+    let flat = k
+        .checked_mul(n)
+        .ok_or(KernelError::DimensionOverflow { what: "k*n" })?;
+    let need_bytes = flat.checked_add(3).ok_or(KernelError::DimensionOverflow {
+        what: "packed byte count",
+    })? / 4;
+    let num_groups = flat
+        .checked_add(group_size - 1)
+        .ok_or(KernelError::DimensionOverflow {
+            what: "group count",
+        })?
+        / group_size;
     // ---- buffer length checks --------------------------------------
-    if a.len() != m * k {
+    if a.len() != activation_len {
         return Err(KernelError::BadBufferLength {
             what: "a",
-            expected: m * k,
+            expected: activation_len,
             got: a.len(),
         });
     }
-    if out.len() != m * n {
+    if out.len() != output_len {
         return Err(KernelError::BadBufferLength {
             what: "out",
-            expected: m * n,
+            expected: output_len,
             got: out.len(),
         });
     }
     // The flat symbol stream is `[k, n]` -> `k * n` symbols, packed
     // 4-per-byte. The trailing partial byte is allowed (see
-    // `ternary_pack`), so we only require `b_packed.len() >= ceil(...)`.
-    let flat = k * n;
-    let need_bytes = flat.div_ceil(4);
-    if b_packed.len() < need_bytes {
+    // `ternary_pack`), but the caller-owned buffer must be exactly sized.
+    if b_packed.len() != need_bytes {
         return Err(KernelError::BadBufferLength {
             what: "b_packed",
             expected: need_bytes,
             got: b_packed.len(),
         });
     }
-    let num_groups = flat.div_ceil(group_size);
-    if b_scales.len() < num_groups || b_zeros.len() < num_groups {
+    if b_scales.len() != num_groups {
         return Err(KernelError::BadBufferLength {
-            what: "b_scales/b_zeros",
+            what: "b_scales",
             expected: num_groups,
-            got: b_scales.len().min(b_zeros.len()),
+            got: b_scales.len(),
         });
+    }
+    if b_zeros.len() != num_groups {
+        return Err(KernelError::BadBufferLength {
+            what: "b_zeros",
+            expected: num_groups,
+            got: b_zeros.len(),
+        });
+    }
+    for (index, value) in b_scales.iter().enumerate() {
+        if !value.is_finite() {
+            return Err(KernelError::NonFiniteValue {
+                what: "b_scales",
+                index,
+            });
+        }
+    }
+    for (index, value) in b_zeros.iter().enumerate() {
+        if !value.is_finite() {
+            return Err(KernelError::NonFiniteValue {
+                what: "b_zeros",
+                index,
+            });
+        }
     }
 
     // ---- zero the output -------------------------------------------
@@ -263,6 +304,70 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, KernelError::BadBufferLength { .. }));
+    }
+
+    #[test]
+    fn rejects_extra_packed_and_metadata_buffers() {
+        let a = vec![0.0f32; 4];
+        let packed = vec![0u8; 2];
+        let scales = vec![1.0f32, 1.0];
+        let zeros = vec![0.0f32];
+        let mut out = vec![0.0f32; 4];
+
+        let packed_error =
+            ternary_matmul(&a, &packed, &zeros, &zeros, 4, 1, 4, 4, &mut out).unwrap_err();
+        assert!(matches!(packed_error, KernelError::BadBufferLength { .. }));
+
+        let metadata_error =
+            ternary_matmul(&a, &[0u8; 4], &scales, &zeros, 4, 1, 4, 4, &mut out).unwrap_err();
+        assert!(matches!(
+            metadata_error,
+            KernelError::BadBufferLength { .. }
+        ));
+    }
+
+    #[test]
+    fn rejects_nonfinite_scale_or_zero_metadata() {
+        let a = vec![0.0f32; 1];
+        let packed = vec![0u8; 1];
+        let mut out = vec![0.0f32; 4];
+
+        let scale_error =
+            ternary_matmul(&a, &packed, &[f32::NAN], &[0.0], 4, 1, 1, 4, &mut out).unwrap_err();
+        assert!(matches!(
+            scale_error,
+            KernelError::NonFiniteValue {
+                what: "b_scales",
+                index: 0
+            }
+        ));
+
+        let zero_error =
+            ternary_matmul(&a, &packed, &[1.0], &[f32::INFINITY], 4, 1, 1, 4, &mut out)
+                .unwrap_err();
+        assert!(matches!(
+            zero_error,
+            KernelError::NonFiniteValue {
+                what: "b_zeros",
+                index: 0
+            }
+        ));
+    }
+
+    #[test]
+    fn rejects_dimension_overflow_before_buffer_indexing() {
+        let mut out = Vec::new();
+        let err = ternary_matmul(&[], &[], &[], &[], 4, usize::MAX, 2, 4, &mut out).unwrap_err();
+        assert!(matches!(
+            err,
+            KernelError::DimensionOverflow { what: "m*k" }
+        ));
+
+        let err = ternary_matmul(&[], &[], &[], &[], 4, 1, usize::MAX, 4, &mut out).unwrap_err();
+        assert!(matches!(
+            err,
+            KernelError::DimensionOverflow { what: "k*n" }
+        ));
     }
 
     #[test]

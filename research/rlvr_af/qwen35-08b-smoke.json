@@ -1,6 +1,6 @@
 {
   "experiment": "L6-rlvr-af-smoke",
-  "ts": "2026-07-21T10:54:16.557309+00:00",
+  "ts": "2026-07-24T07:44:09.121569+00:00",
   "model": "fixture-hard-verifier",
   "pheno_harness": "/Users/kooshapari/CodeProjects/Phenotype/pheno-harness",
   "n_tasks": 5,
@@ -43,6 +43,6 @@
   "notes": [
     "Phase-1 eval-first: hard verifier only (no LoRA / soft judge).",
     "Soft-judge calibration blocked until live non-synthetic L1/L4.",
-    "Operator path remains Portage/Harbor + LangSmith for agent trials."
+    "Operator path remains Portage/Harbor + Langfuse for agent trials."
   ]
 }
