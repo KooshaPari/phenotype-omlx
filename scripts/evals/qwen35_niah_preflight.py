@@ -43,10 +43,44 @@ def _int_value(job: str, key: str) -> int:
         raise PreflightError(f"invalid {key}") from error
 
 
-def _port(job: str) -> int:
-    match = re.search(r"http://[^/:]+:(\d+)(?:/|\")", job)
+def _environment_env(job: str) -> dict[str, str]:
+    """Read the known ``environment.env`` scalar mapping without a YAML dependency."""
+    values: dict[str, str] = {}
+    in_environment = False
+    in_env = False
+    for raw_line in job.splitlines():
+        if not raw_line or raw_line.lstrip().startswith("#"):
+            continue
+        indent = len(raw_line) - len(raw_line.lstrip())
+        stripped = raw_line.strip()
+        if indent == 0 and stripped == "environment:":
+            in_environment = True
+            in_env = False
+            continue
+        if indent == 0:
+            in_environment = False
+            in_env = False
+            continue
+        if in_environment and indent == 2 and stripped == "env:":
+            in_env = True
+            continue
+        if in_environment and indent == 2:
+            in_env = False
+            continue
+        if not in_env or indent != 4 or ":" not in stripped:
+            continue
+        key, raw_value = stripped.split(":", 1)
+        value = raw_value.strip().split(" #", 1)[0].strip()
+        if len(value) >= 2 and value[0] in "\"'" and value[-1] == value[0]:
+            value = value[1:-1]
+        values[key] = value
+    return values
+
+
+def _endpoint_port(endpoint: str) -> int:
+    match = re.fullmatch(r"http://host\.docker\.internal:(\d+)/v1", endpoint)
     if match is None:
-        raise PreflightError("missing local adapter port")
+        raise PreflightError("invalid local adapter endpoint")
     return int(match.group(1))
 
 
@@ -82,12 +116,26 @@ def preflight(
     port_available: Callable[[int], bool],
     job_text: str | None = None,
     port: int | None = None,
+    endpoint: str | None = None,
+    openai_model: str | None = None,
+    ready_model: str | None = None,
 ) -> LaunchPlan:
     """Validate a job without creating processes, network calls, or model loads."""
     job = job_path.read_text(encoding="utf-8") if job_text is None else job_text
-    model = _value(job, "OPENAI_MODEL")
-    ready_model = _value(job, "OMLX_READY_MODEL")
-    if model != APPROVED_MODEL or ready_model != APPROVED_MODEL:
+    environment = _environment_env(job)
+    model = environment.get("OPENAI_MODEL")
+    job_ready_model = environment.get("OMLX_READY_MODEL")
+    job_endpoint = environment.get("OPENAI_BASE_URL")
+    if model is None or job_ready_model is None or job_endpoint is None:
+        raise PreflightError("missing environment.env Qwen3.5 contract")
+    effective_openai_model = model if openai_model is None else openai_model
+    effective_ready_model = job_ready_model if ready_model is None else ready_model
+    if (
+        model != APPROVED_MODEL
+        or job_ready_model != APPROVED_MODEL
+        or effective_openai_model != APPROVED_MODEL
+        or effective_ready_model != APPROVED_MODEL
+    ):
         raise PreflightError("approved Qwen3.5 model required")
     if _int_value(job, "n_attempts") != 1:
         raise PreflightError("n_attempts must be 1")
@@ -97,7 +145,9 @@ def preflight(
         raise PreflightError("max_retries must be 0")
     if available_memory_bytes < MIN_AVAILABLE_MEMORY_BYTES:
         raise PreflightError("available memory is below 4 GiB")
-    declared_port = _port(job)
+    declared_port = _endpoint_port(job_endpoint)
+    if endpoint is not None and endpoint != job_endpoint:
+        raise PreflightError("endpoint mismatch between job and launcher")
     if port is not None and port != declared_port:
         raise PreflightError(
             f"port mismatch: job declares {declared_port}, launcher requested {port}"
@@ -112,6 +162,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--job", type=Path, required=True)
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--endpoint", required=True)
+    parser.add_argument("--openai-model", required=True)
+    parser.add_argument("--ready-model", required=True)
     args = parser.parse_args()
     try:
         plan = preflight(
@@ -119,6 +172,9 @@ def main() -> int:
             available_memory_bytes=_available_memory_bytes(),
             port_available=_port_available,
             port=args.port,
+            endpoint=args.endpoint,
+            openai_model=args.openai_model,
+            ready_model=args.ready_model,
         )
     except PreflightError as error:
         print(f"Qwen3.5 NIAH preflight: {error}", file=sys.stderr)
