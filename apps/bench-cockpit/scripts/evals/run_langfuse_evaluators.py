@@ -12,6 +12,7 @@ Canonical observability backend (OSS / self-hostable). LangSmith removed.
   python3 scripts/evals/setup_langfuse_judges.py
   python3 scripts/evals/run_langfuse_evaluators.py sync|seed|judge --limit 40
 """
+
 from __future__ import annotations
 
 import argparse
@@ -36,7 +37,12 @@ ROOT = Path(__file__).resolve().parents[2]
 # (OPENAI_API_KEY / ANTHROPIC_API_KEY / MLX_SERVER_URL / etc.) must NOT
 # be inherited from a local .env into the harbor subprocess unless the
 # user explicitly exports them. Keep this list short and additive.
-_DOTENV_ALLOWED_PREFIXES = ("PORTAGE_", "LANGFUSE_", "HARBOR_LANGFUSE_", "OBSERVABILITY_BACKEND")
+_DOTENV_ALLOWED_PREFIXES = (
+    "PORTAGE_",
+    "LANGFUSE_",
+    "HARBOR_LANGFUSE_",
+    "OBSERVABILITY_BACKEND",
+)
 _DOTENV_PERMISSIVE_MASK = 0o077  # refuse .env that is group/other writable
 
 
@@ -73,30 +79,40 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-BASE = os.environ.get("LANGFUSE_BASE_URL") or os.environ.get("LANGFUSE_HOST") or "https://cloud.langfuse.com"
+BASE = (
+    os.environ.get("LANGFUSE_BASE_URL")
+    or os.environ.get("LANGFUSE_HOST")
+    or "https://cloud.langfuse.com"
+)
 BASE = BASE.rstrip("/")
 PUB = os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
 SEC = os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
 MINIMAX_ENDPOINT = "https://api.minimax.io/anthropic/v1/messages"
 MINIMAX_MODEL = os.environ.get("MINIMAX_JUDGE_MODEL", "MiniMax-M3")
 
-LLM_RUBRICS = [
+LLM_RUBRICS = (
     (
         "correctness",
-        "Score 1 only if the reply correctly solves the task; 0 if it echoes the prompt, "
-        "repeats blocks, or fails the task. Partial credit 0.3-0.7 for partial solutions.",
+        (
+            "Score 1 only if the reply correctly solves the task; 0 if it echoes the prompt, "
+            "repeats blocks, or fails the task. Partial credit 0.3-0.7 for partial solutions."
+        ),
     ),
     (
         "hallucination",
-        "Score 1 if the reply does not invent APIs/paths/facts; 0 if it fabricates. "
-        "Echoing instructions is hallucination of competence — score low.",
+        (
+            "Score 1 if the reply does not invent APIs/paths/facts; 0 if it fabricates. "
+            "Echoing instructions is hallucination of competence — score low."
+        ),
     ),
     (
         "code_checker",
-        "If the task needs code/bash/diff, score whether the code would run/solve it. "
-        "Repeated identical snippets score 0. Non-code tasks: score 0.5.",
+        (
+            "If the task needs code/bash/diff, score whether the code would run/solve it. "
+            "Repeated identical snippets score 0. Non-code tasks: score 0.5."
+        ),
     ),
-]
+)
 
 
 def die(msg: str) -> None:
@@ -177,7 +193,7 @@ def default_data_path() -> Path:
 
 def parse_judge_payload(text: str) -> tuple[float, str]:
     """Extract ``score`` / ``reason`` from a judge model response body."""
-    m = re.search(r"\{[^{}]+\}", text, re.S)
+    m = re.search(r"\{[^{}]+\}", text, re.DOTALL)
     if not m:
         return 0.0, f"unparseable:{text[:120]}"
     try:
@@ -202,7 +218,9 @@ def seed(limit: int, data_path: Path) -> dict[str, Any]:
         tid = str(uuid.uuid4())
         oid = str(uuid.uuid4())
         traces.append(tid)
-        gen_ok = float(c.get("gen_ok") if c.get("gen_ok") is not None else c.get("pass_at_1") or 0)
+        gen_ok = float(
+            c.get("gen_ok") if c.get("gen_ok") is not None else c.get("pass_at_1") or 0
+        )
         prompt = (c.get("prompt") or "")[:2000]
         reply = (c.get("reply") or "")[:2000]
         inp = {
@@ -226,7 +244,11 @@ def seed(limit: int, data_path: Path) -> dict[str, Any]:
                 "body": {
                     "id": tid,
                     "name": f"{c.get('suite')}/{c.get('task_id')}/{c.get('variant')}",
-                    "tags": ["bench-cockpit", str(c.get("suite")), str(c.get("variant"))],
+                    "tags": [
+                        "bench-cockpit",
+                        str(c.get("suite")),
+                        str(c.get("variant")),
+                    ],
                     "metadata": {
                         "suite": c.get("suite"),
                         "task_id": c.get("task_id"),
@@ -343,7 +365,12 @@ def minimax_judge(prompt: str, reply: str, rubric: str) -> tuple[float, str]:
     try:
         with urllib.request.urlopen(req, timeout=90) as resp:
             data = json.loads(resp.read().decode())
-    except Exception as e:
+    except (
+        urllib.error.URLError,
+        urllib.error.HTTPError,
+        TimeoutError,
+        json.JSONDecodeError,
+    ) as e:
         return 0.0, f"judge_error:{e}"
     text = ""
     for block in data.get("content") or []:
@@ -387,7 +414,7 @@ def judge(limit: int, trace_ids: list[str] | None = None) -> dict[str, Any]:
         reply = str(out.get("reply") or json.dumps(out)[:2000])
         for key, rubric in LLM_RUBRICS:
             score, reason = minimax_judge(prompt, reply, rubric)
-            if reason.startswith("no_minimax_key") or reason.startswith("judge_error:"):
+            if reason.startswith(("no_minimax_key", "judge_error:")):
                 die(f"judge failed for trace {tid} / {key}: {reason}")
             batch.append(
                 {
@@ -446,6 +473,7 @@ def sync_hosted() -> dict[str, Any]:
         capture_output=True,
         text=True,
         timeout=300,
+        check=False,
     )
     out: dict[str, Any] = {"returncode": proc.returncode}
     try:

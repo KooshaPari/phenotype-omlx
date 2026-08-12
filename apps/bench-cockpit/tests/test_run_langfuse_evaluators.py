@@ -92,7 +92,9 @@ def test_load_dotenv_namespace_filter(tmp_path: Path, monkeypatch: pytest.Monkey
         assert k not in os.environ, f"{k} must not be loaded from .env"
 
 
-def test_load_dotenv_refuses_permissive_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_dotenv_refuses_permissive_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     mod = _load_mod()
     _write_dotenv(
         tmp_path,
@@ -108,13 +110,13 @@ def test_load_dotenv_refuses_permissive_mode(tmp_path: Path, monkeypatch: pytest
     assert "PORTAGE_ROOT" not in os.environ
 
 
-def test_load_dotenv_warns_on_empty_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_dotenv_warns_on_empty_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     mod = _load_mod()
     _write_dotenv(
         tmp_path,
-        "PORTAGE_ROOT=\n"
-        "LANGFUSE_PUBLIC_KEY=pk-test\n"
-        "LANGFUSE_SECRET_KEY=sk-test\n",
+        "PORTAGE_ROOT=\nLANGFUSE_PUBLIC_KEY=pk-test\nLANGFUSE_SECRET_KEY=sk-test\n",
     )
     monkeypatch.setattr(mod, "ROOT", tmp_path)
     for k in ("PORTAGE_ROOT", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
@@ -127,12 +129,13 @@ def test_load_dotenv_warns_on_empty_token(tmp_path: Path, monkeypatch: pytest.Mo
     assert os.environ.get("LANGFUSE_PUBLIC_KEY") == "pk-test"
 
 
-def test_load_dotenv_does_not_clobber_existing_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_dotenv_does_not_clobber_existing_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     mod = _load_mod()
     _write_dotenv(
         tmp_path,
-        "LANGFUSE_PUBLIC_KEY=pk-from-dotenv\n"
-        "LANGFUSE_SECRET_KEY=sk-test\n",
+        "LANGFUSE_PUBLIC_KEY=pk-from-dotenv\nLANGFUSE_SECRET_KEY=sk-test\n",
     )
     monkeypatch.setattr(mod, "ROOT", tmp_path)
     monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-already-set")
@@ -142,7 +145,9 @@ def test_load_dotenv_does_not_clobber_existing_env(tmp_path: Path, monkeypatch: 
     assert os.environ["LANGFUSE_SECRET_KEY"] == "sk-test"
 
 
-def test_load_dotenv_skips_comments_and_blanks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_load_dotenv_skips_comments_and_blanks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     mod = _load_mod()
     _write_dotenv(
         tmp_path,
