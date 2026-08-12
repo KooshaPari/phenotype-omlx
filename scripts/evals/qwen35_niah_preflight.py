@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 MIN_AVAILABLE_MEMORY_BYTES = 4 * 1024**3
+APPROVED_MODEL = "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
 
 
 class PreflightError(ValueError):
@@ -85,8 +86,9 @@ def preflight(
     """Validate a job without creating processes, network calls, or model loads."""
     job = job_path.read_text(encoding="utf-8") if job_text is None else job_text
     model = _value(job, "OPENAI_MODEL")
-    if "Qwen3.5" not in model:
-        raise PreflightError("Qwen3.5-only model required")
+    ready_model = _value(job, "OMLX_READY_MODEL")
+    if model != APPROVED_MODEL or ready_model != APPROVED_MODEL:
+        raise PreflightError("approved Qwen3.5 model required")
     if _int_value(job, "n_attempts") != 1:
         raise PreflightError("n_attempts must be 1")
     if _int_value(job, "n_concurrent_trials") != 1:
@@ -95,7 +97,12 @@ def preflight(
         raise PreflightError("max_retries must be 0")
     if available_memory_bytes < MIN_AVAILABLE_MEMORY_BYTES:
         raise PreflightError("available memory is below 4 GiB")
-    selected_port = _port(job) if port is None else port
+    declared_port = _port(job)
+    if port is not None and port != declared_port:
+        raise PreflightError(
+            f"port mismatch: job declares {declared_port}, launcher requested {port}"
+        )
+    selected_port = declared_port
     if not port_available(selected_port):
         raise PreflightError(f"port {selected_port} is unavailable")
     return LaunchPlan(model=model, port=selected_port)

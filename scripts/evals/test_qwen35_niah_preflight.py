@@ -30,12 +30,12 @@ class Qwen35NiahPreflightTests(unittest.TestCase):
         )
 
         self.assertEqual(plan.model, "mlx-community/Qwen3.5-0.8B-OptiQ-4bit")
-        self.assertEqual(plan.port, 8081)
+        self.assertEqual(plan.port, 8766)
         self.assertFalse(plan.workload_executed)
         self.assertFalse(plan.model_loaded)
 
     def test_rejects_unavailable_port_without_starting_workload(self) -> None:
-        with self.assertRaisesRegex(PreflightError, "port 8081 is unavailable"):
+        with self.assertRaisesRegex(PreflightError, "port 8766 is unavailable"):
             preflight(
                 ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml",
                 available_memory_bytes=8 * 1024**3,
@@ -62,14 +62,40 @@ class Qwen35NiahPreflightTests(unittest.TestCase):
                 ),
             )
 
-    def test_rejects_non_qwen35_model(self) -> None:
+    def test_rejects_launcher_port_that_disagrees_with_job_endpoint(self) -> None:
         job = ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml"
-        with self.assertRaisesRegex(PreflightError, "Qwen3.5-only"):
+        with self.assertRaisesRegex(PreflightError, "port mismatch"):
             preflight(
                 job,
                 available_memory_bytes=8 * 1024**3,
                 port_available=lambda _: True,
-                job_text=job.read_text(encoding="utf-8").replace("Qwen3.5", "Qwen2.5"),
+                port=8081,
+            )
+
+    def test_rejects_qwen35_lookalike_model(self) -> None:
+        job = ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml"
+        with self.assertRaisesRegex(PreflightError, "approved Qwen3.5 model"):
+            preflight(
+                job,
+                available_memory_bytes=8 * 1024**3,
+                port_available=lambda _: True,
+                job_text=job.read_text(encoding="utf-8").replace(
+                    "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+                    "mlx-community/Qwen3.5-0.8B-OptiQ-4bit-unapproved",
+                ),
+            )
+
+    def test_rejects_disagreement_between_job_model_fields(self) -> None:
+        job = ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml"
+        with self.assertRaisesRegex(PreflightError, "approved Qwen3.5 model"):
+            preflight(
+                job,
+                available_memory_bytes=8 * 1024**3,
+                port_available=lambda _: True,
+                job_text=job.read_text(encoding="utf-8").replace(
+                    'OMLX_READY_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"',
+                    'OMLX_READY_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit-unapproved"',
+                ),
             )
 
 

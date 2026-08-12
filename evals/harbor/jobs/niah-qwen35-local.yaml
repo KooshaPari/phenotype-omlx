@@ -1,5 +1,5 @@
 # Harbor JobConfig — OMLX NIAH via Docker (host.docker.internal → host MLX)
-# Uses Qwen3.5-0.8B-OptiQ-4bit served on http://127.0.0.1:8081/v1
+# Uses Qwen3.5-0.8B-OptiQ-4bit served on http://127.0.0.1:8766/v1
 # All secrets sourced from Infisical via `source ~/.config/phenotype/portage.env`
 
 jobs_dir: jobs/omlx-niah-local
@@ -23,8 +23,8 @@ environment:
   memory_enforcement_policy: auto
   env:
     # The container reaches the host's MLX server via host.docker.internal.
-    # Port 8081 is the local mlx_lm.server bound to 0.0.0.0.
-    OPENAI_BASE_URL: "http://host.docker.internal:8081/v1"
+    # Port 8766 is the dedicated local Qwen3.5 Harbor adapter bound to 0.0.0.0.
+    OPENAI_BASE_URL: "http://host.docker.internal:8766/v1"
     OPENAI_API_KEY: "omlx-local"
     OPENAI_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
     OMLX_READY_MODEL: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
