@@ -1,0 +1,5 @@
+# Cargo lockfiles are byte-fingerprinted by the cross-platform reproducibility gate.
+# Keep checkout bytes identical on Windows, macOS, and Linux.
+perf-core/Cargo.lock text eol=lf
+perf-core/lockfile.lock text eol=lf
+python/ffi/Cargo.lock text eol=lf
