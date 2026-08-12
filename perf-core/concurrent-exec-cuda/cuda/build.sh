@@ -57,9 +57,14 @@ case "${CUDA_PROFILE}" in
 esac
 
 CUDA_MAJOR="$(printf '%s\n' "${NVCC_VERSION}" | sed -n 's/.*release \([0-9][0-9]*\)\..*/\1/p' | head -n 1)"
-if [[ "${CUDA_MAJOR}" =~ ^[0-9]+$ ]] && (( CUDA_MAJOR >= 13 )) && [[ ";${CUDA_ARCH};" == *";61;"* ]]; then
-    echo "CUDA_ARCH=${CUDA_ARCH} includes sm_61, but CUDA ${CUDA_MAJOR} no longer compiles Pascal; use CUDA 12.x." >&2
-    exit 2
+# sm_61 (Pascal) is no longer supported by nvcc in CUDA 13.x. Reject the
+# combination whenever CUDA_PROFILE names Pascal explicitly OR CUDA_ARCH
+# includes 61 (semicolon-delimited arch list), and we're on a 13.x toolkit.
+if [[ "${CUDA_MAJOR}" =~ ^[0-9]+$ ]] && (( CUDA_MAJOR >= 13 )); then
+    if [[ "${CUDA_PROFILE}" =~ ^(pascal|sm61|1080ti)$ ]] || [[ ";${CUDA_ARCH};" == *";61;"* ]]; then
+        echo "CUDA_PROFILE=${CUDA_PROFILE} CUDA_ARCH=${CUDA_ARCH}: sm_61/Pascal is not supported by CUDA ${CUDA_MAJOR}; use CUDA 12.x." >&2
+        exit 2
+    fi
 fi
 
 echo "[phenotype_omlx_cuda] profile=${CUDA_PROFILE} arch=${CUDA_ARCH} toolkit_major=${CUDA_MAJOR:-unknown}"
