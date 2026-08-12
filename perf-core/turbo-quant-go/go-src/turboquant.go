@@ -2,7 +2,6 @@ package turboquant
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/../../turbo-quant-c/c-src -I${SRCDIR}/../../native-abi/include
-#cgo LDFLAGS: -L${SRCDIR}/../../target/release -lturbo_quant_c
 #include "turbo_quant.h"
 #include <stdlib.h>
 */
@@ -42,17 +41,28 @@ func Encode(data []float32, bits uint8, groupSize int) (*Tensor, error) {
 	if !bool(ok) {
 		return nil, fmt.Errorf("tq_c_encode failed")
 	}
+	shape := make([]int, int(outShapeLen))
+	for i, value := range unsafe.Slice((*C.size_t)(unsafe.Pointer(outShape)), int(outShapeLen)) {
+		shape[i] = int(value)
+	}
 	packed := C.GoBytes(unsafe.Pointer(outPacked), C.int(outPackedLen))
-	scales := C.GoBytes(unsafe.Pointer(outScales), C.int(outScalesLen))
-	zeros := C.GoBytes(unsafe.Pointer(outZeros), C.int(outZerosLen))
+	scales := make([]float32, int(outScalesLen))
+	for i, value := range unsafe.Slice((*C.float)(unsafe.Pointer(outScales)), int(outScalesLen)) {
+		scales[i] = float32(value)
+	}
+	zeros := make([]float32, int(outZerosLen))
+	for i, value := range unsafe.Slice((*C.float)(unsafe.Pointer(outZeros)), int(outZerosLen)) {
+		zeros[i] = float32(value)
+	}
 	C.tq_c_free(unsafe.Pointer(outShape))
 	C.tq_c_free(unsafe.Pointer(outPacked))
 	C.tq_c_free(unsafe.Pointer(outScales))
 	C.tq_c_free(unsafe.Pointer(outZeros))
 	return &Tensor{
+		Shape:  shape,
 		Packed: packed,
-		Scales: unsafe.Slice((*float32)(unsafe.Pointer(&scales[0])), len(scales)/4),
-		Zeros:  unsafe.Slice((*float32)(unsafe.Pointer(&zeros[0])), len(zeros)/4),
+		Scales: scales,
+		Zeros:  zeros,
 	}, nil
 }
 

@@ -13,7 +13,7 @@ use crate::RuntimeMode;
 
 use super::budget::CompileBudget;
 use super::msl_stub::{
-    emit_msl_stub, plan_revision, synthesize_compile_work, synthetic_compile_time_ms,
+    emit_msl_bundle, plan_revision, synthesize_compile_work, synthetic_compile_time_ms,
 };
 
 /// Bounded shader compiler. Cheap to clone — all state is the budget.
@@ -63,7 +63,7 @@ impl BoundedCompiler {
             .map_err(|e| CompileError::InvalidPlan(e.to_string()))?;
 
         // 2. Emit the MSL shader source (stub string for now).
-        let shader_source = emit_msl_stub(plan, fingerprint);
+        let shader_source = emit_msl_bundle(plan, fingerprint);
         let shader_bytes = shader_source.len();
 
         // 3. Simulate wall-clock compile. The real compiler will be a

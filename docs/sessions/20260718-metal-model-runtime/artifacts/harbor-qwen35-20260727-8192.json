@@ -1,0 +1,63 @@
+{
+  "schema_version": "0.1",
+  "evidence_label": "live_verified",
+  "recorded_at": "2026-07-27T02:18:17Z",
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "candidate": {
+    "source_head": "25f0df6b87d0aaf0aab09e492fd2d1b5eb460e30",
+    "manifest_commit": "5745095c",
+    "branch": "recovery/phenotype-omlx-local-20260726"
+  },
+  "harbor": {
+    "job_id": "cc28fa47-6767-4504-bfa3-e9658276c27e",
+    "trial_name": "omlx-niah-api-smoke__aA7r5zr",
+    "task": "omlx/niah-api-smoke",
+    "environment": "apple-container",
+    "endpoint": "http://192.168.1.144:8766/v1",
+    "n_trials": 1,
+    "n_errors": 0,
+    "n_retries": 0,
+    "fallback_applied": false,
+    "reward": 1.0,
+    "pass_at_1": 1.0,
+    "requested_context_tokens": 8192,
+    "prompt_tokens": 8192,
+    "context_tokens_exact": true,
+    "chat_template_overhead_tokens": 27,
+    "thinking_enabled": false,
+    "prompt_sha256": "6c0c0e78ab0e4424031f0e6f7b72299a1416e5492bb9e7baf7918f6ec3a3e044"
+  },
+  "artifacts": [
+    {
+      "path": ".runs/harbor-eval-20260727-8192-final7/2026-07-26__19-18-04/result.json",
+      "sha256": "1e8b656aaca167ed4dfa6f7fe8873c631be134816faa548a6b4e53a7fd079d63"
+    },
+    {
+      "path": ".runs/harbor-eval-20260727-8192-final7/2026-07-26__19-18-04/omlx-niah-api-smoke__aA7r5zr/result.json",
+      "sha256": "3ddd157793b9ecd5c3d428d22ff1a112ba3a39693e89c5db3b346403d5d7992a"
+    },
+    {
+      "path": ".runs/harbor-eval-20260727-8192-final7/2026-07-26__19-18-04/omlx-niah-api-smoke__aA7r5zr/verifier/reward.txt",
+      "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+    },
+    {
+      "path": ".runs/harbor-eval-20260727-8192-final7/2026-07-26__19-18-04/config.json",
+      "sha256": "1c0da074057a24b509f0c8e35a5de481f4a919c6bf1dfbc3b259d86742960d1b"
+    },
+    {
+      "path": ".runs/harbor-eval-20260727-8192-final7/2026-07-26__19-18-04/lock.json",
+      "sha256": "960373b1dd516d5e29da642c8d55e34949f1407f67f47d33fed6701e7817fc41"
+    },
+    {
+      "path": ".runs/harbor-eval-20260727-8192-final7/2026-07-26__19-18-04/omlx-niah-api-smoke__aA7r5zr/agent/oracle.txt",
+      "sha256": "4def6a1f456bd95d712a65519a9e3e79a2916a65ab17b06bb7384c0953050bd8"
+    }
+  ],
+  "promotion": {
+    "status": "review",
+    "remaining_gates": [
+      "full benchmark evidence envelope",
+      "final local promotion review"
+    ]
+  }
+}

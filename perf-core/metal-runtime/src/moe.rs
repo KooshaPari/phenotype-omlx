@@ -97,9 +97,9 @@ pub fn grouped_gemm_metal(
         ));
     }
     let assignments = assignment_tokens.len();
-    crate::metal_cache::with_pipeline(
+    crate::metal_cache::with_catalogued_pipeline(
         artifact,
-        "moe_grouped_gemm_f32",
+        "moe_dispatch",
         |device, queue, pipeline| {
             let shared = MTLResourceOptions::StorageModeShared;
             let input = device.new_buffer_with_data(
@@ -258,61 +258,67 @@ impl MoeRouter {
         self.validate_logits(logits)?;
         let token_count = u64::try_from(self.shape.tokens)
             .map_err(|_| MoeRouterError::Metal("token count exceeds Metal NSUInteger".into()))?;
-        crate::metal_cache::with_pipeline(artifact, "moe_topk_f32", |device, queue, pipeline| {
-            let shared = MTLResourceOptions::StorageModeShared;
-            let input = device.new_buffer_with_data(
-                logits.as_ptr().cast::<c_void>(),
-                std::mem::size_of_val(logits) as u64,
-                shared,
-            );
-            let output_len = self.shape.tokens * self.top_k;
-            let ids = device.new_buffer((output_len * std::mem::size_of::<u32>()) as u64, shared);
-            let weights =
-                device.new_buffer((output_len * std::mem::size_of::<f32>()) as u64, shared);
-            let experts = self.shape.experts as u32;
-            let top_k = self.top_k as u32;
-            let command = queue.new_command_buffer();
-            let encoder = command.new_compute_command_encoder();
-            encoder.set_compute_pipeline_state(pipeline);
-            encoder.set_buffer(0, Some(&input), 0);
-            encoder.set_buffer(1, Some(&ids), 0);
-            encoder.set_buffer(2, Some(&weights), 0);
-            encoder.set_bytes(
-                3,
-                std::mem::size_of::<u32>() as u64,
-                (&experts as *const u32).cast(),
-            );
-            encoder.set_bytes(
-                4,
-                std::mem::size_of::<u32>() as u64,
-                (&top_k as *const u32).cast(),
-            );
-            encoder.dispatch_threads(
-                MTLSize::new(token_count, 1, 1),
-                MTLSize::new(pipeline.thread_execution_width().min(token_count), 1, 1),
-            );
-            encoder.end_encoding();
-            command.commit();
-            command.wait_until_completed();
-            if command.status() != MTLCommandBufferStatus::Completed {
-                return Err(format!(
-                    "command buffer completed with status {:?}",
-                    command.status()
-                ));
-            }
+        crate::metal_cache::with_catalogued_pipeline(
+            artifact,
+            "moe_router",
+            |device, queue, pipeline| {
+                let shared = MTLResourceOptions::StorageModeShared;
+                let input = device.new_buffer_with_data(
+                    logits.as_ptr().cast::<c_void>(),
+                    std::mem::size_of_val(logits) as u64,
+                    shared,
+                );
+                let output_len = self.shape.tokens * self.top_k;
+                let ids =
+                    device.new_buffer((output_len * std::mem::size_of::<u32>()) as u64, shared);
+                let weights =
+                    device.new_buffer((output_len * std::mem::size_of::<f32>()) as u64, shared);
+                let experts = self.shape.experts as u32;
+                let top_k = self.top_k as u32;
+                let command = queue.new_command_buffer();
+                let encoder = command.new_compute_command_encoder();
+                encoder.set_compute_pipeline_state(pipeline);
+                encoder.set_buffer(0, Some(&input), 0);
+                encoder.set_buffer(1, Some(&ids), 0);
+                encoder.set_buffer(2, Some(&weights), 0);
+                encoder.set_bytes(
+                    3,
+                    std::mem::size_of::<u32>() as u64,
+                    (&experts as *const u32).cast(),
+                );
+                encoder.set_bytes(
+                    4,
+                    std::mem::size_of::<u32>() as u64,
+                    (&top_k as *const u32).cast(),
+                );
+                encoder.dispatch_threads(
+                    MTLSize::new(token_count, 1, 1),
+                    MTLSize::new(pipeline.thread_execution_width().min(token_count), 1, 1),
+                );
+                encoder.end_encoding();
+                command.commit();
+                command.wait_until_completed();
+                if command.status() != MTLCommandBufferStatus::Completed {
+                    return Err(format!(
+                        "command buffer completed with status {:?}",
+                        command.status()
+                    ));
+                }
 
-            // StorageModeShared buffers are CPU-visible after command completion.
-            let expert_ids = unsafe {
-                std::slice::from_raw_parts(ids.contents().cast::<u32>(), output_len).to_vec()
-            };
-            let weights = unsafe {
-                std::slice::from_raw_parts(weights.contents().cast::<f32>(), output_len).to_vec()
-            };
-            Ok(MoeRouterOutput {
-                expert_ids,
-                weights,
-            })
-        })
+                // StorageModeShared buffers are CPU-visible after command completion.
+                let expert_ids = unsafe {
+                    std::slice::from_raw_parts(ids.contents().cast::<u32>(), output_len).to_vec()
+                };
+                let weights = unsafe {
+                    std::slice::from_raw_parts(weights.contents().cast::<f32>(), output_len)
+                        .to_vec()
+                };
+                Ok(MoeRouterOutput {
+                    expert_ids,
+                    weights,
+                })
+            },
+        )
         .map_err(MoeRouterError::Metal)
     }
 }

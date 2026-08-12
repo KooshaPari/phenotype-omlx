@@ -53,6 +53,9 @@ pub enum StateKind {
     /// Diffusion active-token mask and confidence buffer.
     DiffusionMask,
 
+    /// Diffusion confidence, entropy, momentum, and convergence trajectory.
+    DiffusionTrajectory,
+
     /// Sparse slot map (block-sparse MoE activations, etc.).
     SparseSlotMap,
 }
@@ -68,6 +71,7 @@ impl StateKind {
             StateKind::RnnState => "rnn_state",
             StateKind::MoERouterState => "moe_router_state",
             StateKind::DiffusionMask => "diffusion_mask",
+            StateKind::DiffusionTrajectory => "diffusion_trajectory",
             StateKind::SparseSlotMap => "sparse_slot_map",
         }
     }
@@ -158,6 +162,7 @@ mod tests {
         assert_eq!(StateKind::RnnState.tag(), "rnn_state");
         assert_eq!(StateKind::MoERouterState.tag(), "moe_router_state");
         assert_eq!(StateKind::DiffusionMask.tag(), "diffusion_mask");
+        assert_eq!(StateKind::DiffusionTrajectory.tag(), "diffusion_trajectory");
         assert_eq!(StateKind::SparseSlotMap.tag(), "sparse_slot_map");
     }
 

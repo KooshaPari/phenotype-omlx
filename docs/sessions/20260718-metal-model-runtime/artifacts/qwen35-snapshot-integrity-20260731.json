@@ -1,0 +1,92 @@
+{
+  "evidence_label": "snapshot_integrity",
+  "integrity": {
+    "errors": [],
+    "status": "verified_with_sidecar_scope",
+    "warnings": [
+      "index:metadata_scope_excludes_declared_sidecars:optiq/optiq_vision.safetensors"
+    ]
+  },
+  "model": "mlx-community/Qwen3.5-0.8B-OptiQ-4bit",
+  "recorded_at": "2026-08-01T01:12:23.566159Z",
+  "schema_version": "0.1",
+  "snapshot": {
+    "cache_relative": "$CACHE/models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit/snapshots/ef60586933bd2cc02b763f77eb8839a5114bbec1",
+    "config_model_type": "qwen3_5",
+    "declared_sidecars": [
+      "optiq/optiq_vision.safetensors"
+    ],
+    "index_scope": "declared_sidecars_excluded",
+    "index_total_size_bytes": 650168512,
+    "indexed_files": [
+      "model.safetensors",
+      "optiq/optiq_vision.safetensors"
+    ],
+    "indexed_files_size_bytes": 851459620,
+    "indexed_payload_size_bytes": 851354304,
+    "indexed_payloads_bytes": {
+      "model.safetensors": 650168512,
+      "optiq/optiq_vision.safetensors": 201185792
+    },
+    "optional_files": {
+      "optiq/mtp.safetensors": {
+        "resolved_path": "optiq/mtp.safetensors",
+        "sha256": "a336650761924a134ddc7aaffc90858904cbe2b5eb05c007094e6acb728a558a",
+        "size_bytes": 14530491
+      }
+    },
+    "required_files": {
+      "chat_template.jinja": {
+        "resolved_path": "chat_template.jinja",
+        "sha256": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+        "size_bytes": 7755
+      },
+      "config.json": {
+        "resolved_path": "config.json",
+        "sha256": "b3427c819dd8a53bc9099afb52ec51c0907862770ca7d5ba02c0ae0bc1f31a72",
+        "size_bytes": 42307
+      },
+      "generation_config.json": {
+        "resolved_path": "generation_config.json",
+        "sha256": "f2130efdf66df1834aa4f7a6e48752e88a8dff41965739c6ffb2bb26c841615e",
+        "size_bytes": 148
+      },
+      "kv_config.json": {
+        "resolved_path": "kv_config.json",
+        "sha256": "83ff47c3225c04a211ffc8d10253e4b36fa938381c9c0f4d153723d96bd6c519",
+        "size_bytes": 396
+      },
+      "model.safetensors": {
+        "resolved_path": "model.safetensors",
+        "sha256": "9bd244c6ab7154c2bca10f982e1bdcd32cb7b362985284de257f03effe411678",
+        "size_bytes": 650257188
+      },
+      "model.safetensors.index.json": {
+        "resolved_path": "model.safetensors.index.json",
+        "sha256": "dd50d28faec94d266bab561f904f4f9f354571ad2a3751dbb284ff04087e117c",
+        "size_bytes": 70097
+      },
+      "optiq/optiq_vision.safetensors": {
+        "resolved_path": "optiq/optiq_vision.safetensors",
+        "sha256": "d53b77b0c6673925369f5c067550dff8768ff7bb334e5a7a5e5d579660159bd8",
+        "size_bytes": 201202432
+      },
+      "optiq_metadata.json": {
+        "resolved_path": "optiq_metadata.json",
+        "sha256": "8b4ce7efe467cbf68e363b89755c2fdf0e5a1b956402c2c1206f80861132f9d1",
+        "size_bytes": 19711
+      },
+      "tokenizer.json": {
+        "resolved_path": "tokenizer.json",
+        "sha256": "87a7830d63fcf43bf241c3c5242e96e62dd3fdc29224ca26fed8ea333db72de4",
+        "size_bytes": 19989343
+      },
+      "tokenizer_config.json": {
+        "resolved_path": "tokenizer_config.json",
+        "sha256": "b2bed5e033438f09f22b0ce9522115b4807d9bbcc3b82bf23372cb74d93ed081",
+        "size_bytes": 1135
+      }
+    }
+  },
+  "workload_executed": false
+}

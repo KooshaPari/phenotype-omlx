@@ -22,12 +22,29 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 NEEDLE = "42-alpha"
-PROMPT = (
+SHORT_PROMPT = (
     "Read the passage and reply with ONLY the secret code (no thinking, no quotes).\n\n"
     f"Passage: Notes about weather and tea. The secret code is {NEEDLE}. "
     "More filler about cats.\n\n"
     "Secret code:"
 )
+
+
+def build_prompt(context_tokens: int) -> str:
+    """Build the short smoke or an exact Qwen3.5-token 8192-token prompt."""
+    if context_tokens <= 0:
+        return SHORT_PROMPT
+    intro = "Read the following passage and reply with ONLY the secret code.\n\n"
+    needle = f"Important context: {NEEDLE}. This fact is critical."
+    fixed_tokens = 26
+    # With Qwen3.5 non-thinking chat-template kwargs, mlx-lm adds 27 tokens
+    # (the kwargs alter the generation marker by two tokens).
+    chat_template_overhead = 27
+    filler_tokens = context_tokens - fixed_tokens - chat_template_overhead
+    if filler_tokens <= 0:
+        raise SystemExit(f"error: NIAH_CONTEXT_TOKENS too small: {context_tokens}")
+    before = (filler_tokens * 3) // 4
+    return intro + (" the" * before) + needle + (" the" * (filler_tokens - before))
 
 
 def _extract_reply(payload: dict) -> str:
@@ -92,6 +109,8 @@ def run_niah() -> dict:
         raise SystemExit(f"error: NIAH smoke requires Qwen3.5 model id (got {model!r})")
 
     key = os.environ.get("OPENAI_API_KEY", "omlx")
+    requested_tokens = int(os.environ.get("NIAH_CONTEXT_TOKENS", "0"))
+    prompt = build_prompt(requested_tokens)
     body = {
         "model": model,
         "messages": [
@@ -99,10 +118,20 @@ def run_niah() -> dict:
                 "role": "system",
                 "content": "Reply with only the secret code. No analysis.",
             },
-            {"role": "user", "content": PROMPT},
+            {"role": "user", "content": prompt},
         ],
         "temperature": 0,
-        "max_tokens": 128,
+        # Qwen3.5's supported hard switch prevents a long reasoning trace
+        # from consuming the bounded completion before the needle answer.
+        "chat_template_kwargs": {"enable_thinking": False},
+        # mlx-lm uses a request with a seed as the deterministic sequential
+        # path. This avoids the 0.31.2 BatchGenerator worker-stream crash and
+        # keeps this one-request NIAH oracle reproducible.
+        "seed": 0,
+        # Qwen3.5 may emit a short reasoning preamble before the answer on
+        # long-context requests; keep enough budget to reach the code while
+        # retaining a bounded deterministic completion.
+        "max_tokens": 512,
     }
     req = urllib.request.Request(
         url,
@@ -125,12 +154,20 @@ def run_niah() -> dict:
         text = json.dumps(payload)[:500]
 
     hit = NEEDLE in (text or "")
+    usage = payload.get("usage") if isinstance(payload.get("usage"), dict) else {}
+    prompt_tokens = usage.get("prompt_tokens")
     result = {
         "kind": "omlx_niah_api_smoke",
         "ts": t0.isoformat(),
         "model": model,
         "openai_base_url": base,
         "needle": NEEDLE,
+        "requested_context_tokens": requested_tokens or None,
+        "chat_template_overhead_tokens": 27 if requested_tokens else None,
+        "thinking_enabled": False,
+        "prompt_tokens": prompt_tokens,
+        "context_tokens_exact": requested_tokens > 0 and prompt_tokens == requested_tokens,
+        "prompt_sha256": __import__("hashlib").sha256(prompt.encode()).hexdigest(),
         "reply": text,
         "exact_match": hit,
         "evidence_class": "live_api" if hit else "live_api_miss",

@@ -1,0 +1,43 @@
+{
+  "schema_version": "0.1",
+  "evidence_label": "reviewed",
+  "recorded_at": "2026-07-26T10:45:00Z",
+  "candidate": {
+    "manifest": "docs/sessions/20260718-metal-model-runtime/candidate-manifest.json",
+    "manifest_head": "d4c0def",
+    "current_head": "c71bc6228d0c2e5b7ebb392e7e36ee620a8974f8",
+    "current_branch": "recovery/phenotype-omlx-local-20260726",
+    "manifest_is_stale": true
+  },
+  "review": {
+    "verdict": "blocked",
+    "current_head_reproduced_manifest_verification": false,
+    "reason": "The frozen manifest names a different branch and head; its Mojo artifact and 64-test result cannot be promoted as evidence for the current candidate without a fresh exact-HEAD review.",
+    "stale_manifest_untouched": true
+  },
+  "independent_evidence": {
+    "harbor_qwen35": "docs/sessions/20260718-metal-model-runtime/artifacts/harbor-qwen35-20260726.json",
+    "polyglot_ffi": "docs/sessions/20260718-metal-model-runtime/artifacts/polyglot-ffi-20260726.json",
+    "current_workspace_check": "cargo check --workspace: pass",
+    "current_native_tests": {
+      "c": "cargo test -p turbo-quant-c --tests: 10 passed",
+      "zig": "cargo test -p turbo-quant-zig --features zig --test abi_v1: 3 passed",
+      "go": "go test ./...: 1 passed",
+      "nim": "nim c -r --path:nim-src nim-src/turboquant_test.nim: 3 passed",
+      "mojo": "cargo test -p turbo-quant-mojo --all-features: 64 passed"
+    },
+    "mojo_artifact": {
+      "path": "perf-core/target/debug/libturbo_quant_mojo.dylib",
+      "format": "Mach-O 64-bit dynamically linked shared library arm64",
+      "sha256": "f2e3e3b60186bc76b9e43d1b59d04a1c1fd746cf75423de1ccf6aaecfcecc9c4"
+    }
+  },
+  "remaining_gates": [
+    "fresh Mojo candidate review at current HEAD",
+    "manifest refresh and commit after review",
+    "Salmon promotion decision on the refreshed manifest"
+  ],
+  "integrity": {
+    "canonical_sha256": "f83759ef1dfaf568f8f330b168074b98eb48d653fed1b056c1f900791b71b3ae"
+  }
+}

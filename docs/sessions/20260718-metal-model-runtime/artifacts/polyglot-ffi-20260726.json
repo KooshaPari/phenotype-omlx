@@ -1,0 +1,58 @@
+{
+  "schema_version": "0.1",
+  "evidence_label": "live_verified",
+  "recorded_at": "2026-07-26T05:59:45Z",
+  "candidate": {
+    "repository": "phenotype-omlx",
+    "head": "c71bc6228d0c2e5b7ebb392e7e36ee620a8974f8",
+    "branch": "recovery/phenotype-omlx-local-20260726",
+    "working_tree": "dirty; evidence records only the tested source paths"
+  },
+  "contract": {
+    "abi": "native-abi v1",
+    "implementations": ["C", "Go/cgo", "Nim", "Zig"],
+    "qwen_policy": "not applicable"
+  },
+  "tests": [
+    {
+      "implementation": "C",
+      "command": "cargo test -p turbo-quant-c --tests",
+      "result": "pass",
+      "tests_passed": 10,
+      "tests_failed": 0
+    },
+    {
+      "implementation": "Go/cgo",
+      "command": "cd perf-core/turbo-quant-go/go-src && go test -v",
+      "result": "pass",
+      "tests_passed": 1,
+      "tests_failed": 0,
+      "linkage": "canonical C implementation compiled by go-src/turbo_quant_c_bridge.c"
+    },
+    {
+      "implementation": "Nim",
+      "command": "cd perf-core/turbo-quant-nim && nim c -r --path:nim-src nim-src/turboquant_test.nim",
+      "result": "pass",
+      "tests_passed": 3,
+      "tests_failed": 0
+    },
+    {
+      "implementation": "Zig",
+      "command": "cargo test -p turbo-quant-zig --features zig --test abi_v1",
+      "result": "pass",
+      "tests_passed": 3,
+      "tests_failed": 0
+    }
+  ],
+  "fixes_verified": [
+    "Go copies shape, scales, and zeros before freeing C-owned buffers",
+    "Go cgo package compiles the canonical C implementation directly",
+    "Zig wrapper calls the declared _tq_zig_free symbol",
+    "Zig ABI v1 uses contiguous global bit offsets across groups",
+    "Zig build reruns when turbo_quant.zig changes"
+  ],
+  "promotion": {
+    "candidate_manifest_refreshed": false,
+    "remaining_gates": ["candidate review against current HEAD", "manifest commit after review"]
+  }
+}

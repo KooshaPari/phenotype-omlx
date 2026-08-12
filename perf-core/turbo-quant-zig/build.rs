@@ -16,6 +16,10 @@ fn main() {
     let obj_path = out_dir.join("turbo_quant_zig.o");
 
     println!("cargo:rerun-if-changed={}", zig_file.display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        zig_src.join("turbo_quant.zig").display()
+    );
     println!("cargo:rerun-if-env-changed=ZIG_PATH");
     println!("cargo:rerun-if-env-changed=TURBO_QUANT_ZIG_SKIP");
 

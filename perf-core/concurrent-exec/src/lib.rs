@@ -1,6 +1,7 @@
 //! Concurrent execution — fan-out / chain / fallback scheduling over
 //! heterogeneous execution backends (LatentMAS, TiDAR, JetSpec, SSD, …).
 
+pub mod governor;
 pub mod jetspec;
 pub mod latentmas;
 pub mod plan;
@@ -19,6 +20,10 @@ pub enum JobError {
     Timeout,
     #[error("cancelled")]
     Cancelled,
+    #[error("scheduler queue is full")]
+    QueueFull,
+    #[error("fan-out exceeds scheduler limit ({0})")]
+    FanoutLimit(usize),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,4 +63,5 @@ pub trait ExecBackend: Send + Sync {
     async fn run(&self, id: plan::AgentId, req: ExecRequest) -> Result<ExecResult, JobError>;
 }
 
+pub use governor::{GovernorConfig, GovernorError, GovernorPermit, ResourceGovernor};
 pub use plan::{fan_out, first_success, AgentId, Job, JobOutput, ScheduleStrategy, Scheduler};

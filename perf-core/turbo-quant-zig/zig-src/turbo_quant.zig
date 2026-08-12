@@ -284,7 +284,10 @@ pub fn tq_abi_encode(req: *const TqAbiEncodeRequest) TqAbiEncodeResult {
         @as([*]f32, @ptrCast(mreq.out_scales[0]))[g] = scale;
         @as([*]f32, @ptrCast(mreq.out_zeros[0]))[g] = lo;
 
-        var bit_off: usize = 0;
+        // The ABI uses one contiguous bitstream across groups, matching the
+        // C/Rust native-abi implementations. Start at this group's global
+        // element offset rather than resetting to byte zero per group.
+        var bit_off: usize = g * req.group_size * @as(usize, @intCast(req.bits));
         i = start;
         while (i < end) : (i += 1) {
             const qf = (data[i] - lo) / scale;
@@ -351,7 +354,8 @@ pub fn tq_abi_decode(req: *const TqAbiDecodeRequest) c_int {
         const start = g * req.group_size;
         const end = @min(start + req.group_size, req.n);
 
-        var bit_off: usize = 0;
+        // Decode from the same contiguous stream offset used by encode.
+        var bit_off: usize = g * req.group_size * @as(usize, @intCast(req.bits));
         var i: usize = start;
         while (i < end) : (i += 1) {
             const q = read_bits_zig(packed_ptr, bit_off, req.bits);

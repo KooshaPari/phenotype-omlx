@@ -22,6 +22,11 @@ pub enum KernelError {
         got: usize,
     },
 
+    /// A product or rounded size derived from caller-supplied dimensions
+    /// overflowed `usize` before any buffer was indexed or allocated.
+    #[error("dimension arithmetic overflowed usize for {what}")]
+    DimensionOverflow { what: &'static str },
+
     /// `q_heads` is not evenly divisible by `kv_heads` (GQA group size
     /// must be an integer).
     #[error("q_heads ({q_heads}) must be a positive multiple of kv_heads ({kv_heads})")]
@@ -45,6 +50,12 @@ pub enum KernelError {
     /// zero-or-negative per-expert bucket).
     #[error("capacity_factor must be > 0, got {got}")]
     BadCapacityFactor { got: f32 },
+
+    /// A routing or kernel input contained NaN or infinity.  Rejecting these
+    /// before sorting/softmax keeps the scalar router's contract aligned with
+    /// the Metal facade and prevents NaN weights from reaching expert GEMMs.
+    #[error("non-finite value in {what} at index {index}")]
+    NonFiniteValue { what: &'static str, index: usize },
 
     /// A row / column / index referenced inside a MoE dispatch plan was
     /// out of range.
