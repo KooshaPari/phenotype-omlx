@@ -433,10 +433,7 @@ def record_fixture(
         "promotable": False,
         "stdout_sha256": hashlib.sha256(completed.stdout.encode("utf-8")).hexdigest(),
     }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(record, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    _write_json_atomically(output, record)
     return record
 
 

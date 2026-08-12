@@ -307,6 +307,7 @@ def test_preflight_records_missing_fixture_contract_without_dispatch(
             repo,
             output,
             "diffusion",
+
             resource_observer=lambda: recorder.ResourceSnapshot(
                 logical_cpu_count=8,
                 load_average_1m=1.0,
@@ -320,6 +321,37 @@ def test_preflight_records_missing_fixture_contract_without_dispatch(
     assert "fixture source contract unavailable" in record["rejection_reason"]
     assert record["device_dispatch_executed"] is False
     assert record["promotable"] is False
+
+
+def test_record_fixture_refuses_a_race_created_output(tmp_path: Path) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+
+    def race_runner(*args, **kwargs):
+        output.write_text("preserve-raced-evidence", encoding="utf-8")
+        return subprocess.CompletedProcess(
+            args[0], 0, stdout="fixture passed", stderr=""
+        )
+
+    with pytest.raises(RuntimeError, match="output already exists"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=race_runner,
+        )
+
+    assert output.read_text(encoding="utf-8") == "preserve-raced-evidence"
 
 
 def test_rejects_compile_provenance_from_a_different_head(tmp_path: Path) -> None:
