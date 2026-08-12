@@ -12,6 +12,29 @@ pub enum DiffusionConfidenceError {
     Metal(String),
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_dimensions_and_output_sizes_before_metal_work() {
+        let too_large_for_metal = u32::MAX as usize + 1;
+        assert_eq!(
+            validate_diffusion_confidence_layout(too_large_for_metal, 1, too_large_for_metal),
+            Err(DiffusionConfidenceError::DimensionOutOfRange {
+                dimension: "tokens",
+                value: too_large_for_metal,
+            })
+        );
+
+        let too_large_for_output = usize::MAX / std::mem::size_of::<u32>() + 1;
+        assert_eq!(
+            validate_diffusion_confidence_layout(too_large_for_output, 1, too_large_for_output),
+            Err(DiffusionConfidenceError::OutputByteSizeOverflow)
+        );
+    }
+}
+
 #[cfg(all(feature = "metal", target_os = "macos"))]
 pub fn diffusion_argmax_confidence_metal(
     logits: &[f32],
