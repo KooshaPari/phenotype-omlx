@@ -282,3 +282,11 @@ are fail-closed rather than allowing an underflow/panic path.
   SHA-256 `ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`; the temporary
   directory was moved to Trash after capture. This is compile evidence only: no Metal device,
   model load, Harbor task, or benchmark was executed.
+
+### 2026-07-28 diffusion non-finite contract
+
+`diffusion_confidence.rs` now includes an artifact-backed regression for an all-`-inf` masked row
+and a row containing NaNs. The expected contract is deterministic argmax index `0` with confidence
+`0.0` for a fully invalid row; NaNs are ignored when finite logits are present. The Metal shader
+was compiled with the installed Xcode Metal toolchain after this change. A live artifact-backed
+test still requires `DIFFUSION_CONFIDENCE_METALLIB`; it is not replaced by a source-only check.
