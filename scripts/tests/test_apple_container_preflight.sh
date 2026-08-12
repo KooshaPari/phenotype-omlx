@@ -16,19 +16,14 @@ set -euo pipefail
 case "${1:-} ${2:-}" in
   "system status")
     if [[ -f "${APPLE_CONTAINER_TEST_STATE:?}" ]]; then
-      if [[ "$(cat "${APPLE_CONTAINER_TEST_STATE}")" == starting ]]; then
-        printf 'status: starting\n'
-        printf 'running' >"${APPLE_CONTAINER_TEST_STATE}"
-      else
-        printf '{"status":"running"}\n'
-      fi
+      printf 'FIELD VALUE\nstatus running\n'
     else
-      printf '{"status":"stopped"}\n'
+      printf 'FIELD VALUE\nstatus stopped\n'
     fi
     ;;
   "system start")
     printf 'start\n' >>"${APPLE_CONTAINER_TEST_LOG:?}"
-    printf 'starting' >"${APPLE_CONTAINER_TEST_STATE:?}"
+    : >"${APPLE_CONTAINER_TEST_STATE:?}"
     ;;
   *)
     printf 'unexpected fake container args: %s\n' "$*" >&2
@@ -41,7 +36,6 @@ chmod +x "$FAKE_CONTAINER"
 export APPLE_CONTAINER_TEST_STATE="$STATE"
 export APPLE_CONTAINER_TEST_LOG="$LOG"
 export CONTAINER_BIN="$FAKE_CONTAINER"
-export APPLE_CONTAINER_START_DELAY=0
 
 # The helper is expected to start a stopped service and verify the resulting state.
 # This test intentionally fails until the helper exists and is sourced by the runner.
