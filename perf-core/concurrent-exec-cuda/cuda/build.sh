@@ -57,8 +57,8 @@ case "${CUDA_PROFILE}" in
 esac
 
 CUDA_MAJOR="$(printf '%s\n' "${NVCC_VERSION}" | sed -n 's/.*release \([0-9][0-9]*\)\..*/\1/p' | head -n 1)"
-if [[ "${CUDA_PROFILE}" =~ ^(pascal|sm61|1080ti)$ ]] && [[ "${CUDA_MAJOR}" =~ ^[0-9]+$ ]] && (( CUDA_MAJOR >= 13 )); then
-    echo "CUDA_PROFILE=${CUDA_PROFILE} targets sm_61, but CUDA ${CUDA_MAJOR} no longer compiles Pascal; use CUDA 12.x." >&2
+if [[ "${CUDA_MAJOR}" =~ ^[0-9]+$ ]] && (( CUDA_MAJOR >= 13 )) && [[ ";${CUDA_ARCH};" == *";61;"* ]]; then
+    echo "CUDA_ARCH=${CUDA_ARCH} includes sm_61, but CUDA ${CUDA_MAJOR} no longer compiles Pascal; use CUDA 12.x." >&2
     exit 2
 fi
 

@@ -8,10 +8,11 @@ if [[ -f /app/niah_answer.txt ]] && grep -q '42-alpha' /app/niah_answer.txt \
   if python3 - <<'PY'
 import json, sys
 d=json.load(open("/app/niah_result.json"))
-ok = d.get("exact_match") and "qwen3.5" in d.get("model", "").lower()
-requested = d.get("requested_context_tokens")
-if requested:
-    ok = ok and requested == 8192 and d.get("prompt_tokens") == 8192
+model = d.get("model")
+ok = d.get("exact_match") is True and isinstance(model, str) and "qwen3.5" in model.lower()
+ok = ok and d.get("requested_context_tokens") == 8192
+ok = ok and d.get("prompt_tokens") == 8192
+ok = ok and d.get("context_tokens_exact") is True
 sys.exit(0 if ok else 1)
 PY
   then

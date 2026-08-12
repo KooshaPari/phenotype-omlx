@@ -26,21 +26,22 @@ gpus = 0
 mcp_servers = []
 
 # Host templates → container persistent env (Harbor resolve_env_vars).
-# Per-context overrides (e.g. NIAH_CONTEXT_TOKENS_32K=32768) win when set;
-# otherwise NIAH_CONTEXT_TOKENS or 0 (short smoke).
+# The 32k task is an exact contract, so keep the value literal. Portage resolves
+# task templates from the host before applying job-level container environment.
 [environment.env]
 OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
 OPENAI_MODEL = "${OPENAI_MODEL}"
 OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
-NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS_32K:-${NIAH_CONTEXT_TOKENS:-0}}"
+NIAH_CONTEXT_TOKENS = "32768"
+
 # Oracle solve.sh only inherits solution.env (not agent.env) — keep in sync.
 [solution.env]
 OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
 OPENAI_MODEL = "${OPENAI_MODEL}"
 OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
-NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS_32K:-${NIAH_CONTEXT_TOKENS:-0}}"
+NIAH_CONTEXT_TOKENS = "32768"
 
 [verifier.env]
 
@@ -49,4 +50,4 @@ OPENAI_BASE_URL = "${OPENAI_BASE_URL}"
 OPENAI_API_KEY = "${OPENAI_API_KEY:-omlx}"
 OPENAI_MODEL = "${OPENAI_MODEL}"
 OMLX_READY_MODEL = "${OMLX_READY_MODEL}"
-NIAH_CONTEXT_TOKENS = "${NIAH_CONTEXT_TOKENS_32K:-${NIAH_CONTEXT_TOKENS:-0}}"
+NIAH_CONTEXT_TOKENS = "32768"

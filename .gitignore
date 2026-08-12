@@ -50,3 +50,7 @@ research/.archive/*.json
 
 # Nested worktrees (not source)
 worktrees/
+
+# Harbor docker env build dirs (per-task `environment/<task>__<hash>__env/`)
+evals/harbor/tasks/**/environment/*__*__env/
+evals/harbor/tasks/**/environment/*__*__env/**

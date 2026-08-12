@@ -50,23 +50,16 @@ def test_current_head_provenance_is_explicitly_non_promotable() -> None:
     assert candidate["head"] == candidate["provenance_commit"]
     assert len(candidate["head"]) == 40
     assert candidate["evidence_complete"] is False
-    metallib = document["artifacts"]["metallib_manifest"]
-    # A checked-in compile-only bundle is useful provenance, but is not live
-    # Metal/device evidence and must not make the candidate promotable.
-    assert metallib["status"] == "compile_only"
-    assert len(metallib["sha256"]) == 64
-    assert metallib["artifact_bound_to_head"] is True
-    assert document["artifacts"]["compile_provenance"]["status"] == (
-        "verified_compile_only"
-    )
+    assert document["artifacts"]["metallib_manifest"]["status"] == "compile_only"
+    assert document["artifacts"]["metallib_manifest"]["sha256"]
     assert document["artifacts"]["device_fingerprint"]["status"] == "unknown"
     assert document["qwen35_harbor"]["status"] == "pending"
     assert document["promotion"]["verdict"] == "blocked"
 
 
-def test_current_manifest_is_exact_head_and_holds_runtime_gate() -> None:
+def test_current_manifest_records_source_head_and_holds_runtime_gate() -> None:
     document = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert document["candidate"]["head"] == "d0a67808c6db3af5bc111b1680ed554fce0c0e03"
+    assert document["candidate"]["head"] == "8a50efc0cadbe11603403e43d27d0e79df6f723a"
     assert document["candidate"]["freeze_status"] == "current-head-integrity-reviewed-canonical-dirty"
     assert document["changes"]["working_tree_at_review"] == "canonical_checkout_dirty_untracked"
     assert document["changes"]["working_tree_dirty_paths"] == [
@@ -74,17 +67,36 @@ def test_current_manifest_is_exact_head_and_holds_runtime_gate() -> None:
     ]
     assert document["candidate"]["evidence_complete"] is False
     assert document["verification"]["workload_executed"] is False
-    assert document["verification"]["metal_compile_provenance"]["artifact_commit"] == (
-        "55b2af6c04ebff1261364c709582c031bed451d2"
+    metal = document["verification"]["metal_compile_provenance"]
+    assert metal["artifact"] == (
+        "docs/sessions/20260718-metal-model-runtime/artifacts/"
+        "metal-compile-provenance-20260802.json"
     )
-    assert document["verification"]["metal_compile_provenance"]["artifact_bound_to_candidate_head"] is False
-    assert document["verification"]["metal_compile_provenance"]["status"] == "stale_compile_only"
+    assert metal["artifact_commit"] == "281a611822a6721e4d9a1b083ddeaac3c3314ea7"
+    assert metal["artifact_bound_to_candidate_head"] is True
+    assert metal["status"] == "current_head_compile_only"
     assert document["promotion"]["verdict"] == "blocked"
-    assert "fresh current-head Metal compile/device evidence" in document["promotion"]["remaining_gates"]
+    assert "fresh current-head Metal compile/device evidence" not in document["promotion"]["remaining_gates"]
+    assert "Qwen3.5 runtime readiness on the RTX 3090 Ti without disturbing the existing service" in document["promotion"]["remaining_gates"]
     assert "authorized Qwen3.5 Harbor/device evidence at current HEAD" in document["promotion"]["remaining_gates"]
     payload = {key: value for key, value in document.items() if key != "integrity"}
     canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
     assert document["integrity"]["canonical_sha256"] == hashlib.sha256(canonical).hexdigest()
+
+
+def test_current_metal_compile_artifact_matches_manifest_binding() -> None:
+    document = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    metal = document["verification"]["metal_compile_provenance"]
+    artifact = json.loads((ROOT / metal["artifact"]).read_text(encoding="utf-8"))
+
+    assert artifact["candidate_source_head"] == document["candidate"]["head"]
+    assert artifact["build_checkout_head"] == metal["head"]
+    assert artifact["build_checkout_head"] == metal["artifact_commit"]
+    assert artifact["metallib_sha256"] == metal["metallib_sha256"]
+    assert artifact["shader_count"] == metal["shader_count"] == 20
+    assert artifact["workload_executed"] is False
+    assert artifact["device_dispatch_executed"] is False
+    assert artifact["model_loaded"] is False
 
 
 def test_latest_harbor_evidence_is_positive_but_not_8192_completion() -> None:

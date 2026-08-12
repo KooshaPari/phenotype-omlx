@@ -178,78 +178,300 @@ dispatches. `python/omlx_research/backends/qwen_gated_delta_kernel.py` now mirro
 behind an opt-in replacement and records dispatch/fallback counts; promotion still requires a
 clean native-vs-custom parity run.
 
-### Local-only Harbor provenance (2026-07-26)
+### 2026-07-27 - exact Harbor NIAH generation contract
 
-The canonical `scripts/evals/run_via_harbor.sh` remains the remote-observability
-operator path: it requires both Langfuse credentials and installs the
-`harbor_langfuse:LangfusePlugin`. A separately named local runner is appropriate
-only for evidence collection when remote telemetry must not be emitted. It is not
-a fallback for the canonical path.
+Qwen's deployment guidance documents `chat_template_kwargs: {"enable_thinking": false}` as the
+hard switch for direct responses, and the Qwen3.5 model card explicitly says `/think` and
+`/nothink` are not the supported control surface. The Harbor smoke therefore sends the hard
+switch and records `thinking_enabled=false` in its oracle envelope. With mlx-lm 0.31.3 this
+switch adds 27 chat-template tokens; the prompt builder subtracts that measured overhead so the
+API reports exactly 8192 prompt tokens. Live Apple Container evidence is recorded in
+`artifacts/harbor-qwen35-20260727-8192.json`: reward 1.0, exact needle match, no errors or
+retries, and `context_tokens_exact=true`.
 
-<<<<<<< Updated upstream
-The local runner therefore accepts only the Qwen3.5 NIAH task, requires an explicit
-Qwen3.5 model and an OpenAI endpoint on dedicated `:8766/v1`, invokes Harbor with
-no plugin argument, unsets inherited Langfuse variables, leaves Harbor's `result.json`
-unchanged, and emits a separately named validated EvaluationReport. Its provenance is
-explicit: `telemetry.mode=local_only` and `telemetry.remote_exported=false`; it must
-not contain Langfuse trace/session identifiers. The evidence label is
-`live_verified` only for a completed Harbor result, never for a fabricated report.
-
-### macOS Bash portability (2026-07-26)
-
-`/bin/bash` on the macOS host is Bash 3.2, whereas Homebrew supplies a newer Bash
-on `PATH`. Bash 4's `${parameter,,}` lowercasing expansion therefore cannot be used
-in the local Harbor runner: it fails with `bad substitution` under the shebang's
-system interpreter. The model-policy comparison instead normalizes with portable
-`tr '[:upper:]' '[:lower:]'`. The shell contract test invokes `/bin/bash`
-explicitly, so CI or developer shells that resolve `bash` to Homebrew Bash cannot
-mask a regression. This preserves the Qwen3.5-only policy without adding an
-alternate runtime, plugin, endpoint, or telemetry path.
-
-### Harbor timestamped output discovery (2026-07-26)
-
-Harbor treats `-o` as an output root and writes the completed job under a
-timestamped child directory. The local wrapper originally passed that root
-directly to the provenance converter, which expects a job-level `result.json`.
-That caused an exit status of 2 after a completed Harbor evaluation, without
-altering the underlying result. `resolve_harbor_job_dir` now accepts either a
-job directory or an output root with exactly one immediate completed job. It
-does not recursively scan, and rejects multiple candidates so an operator
-cannot accidentally convert a stale or unrelated result. Python and shell
-contracts cover the actual timestamped shape; the shell contract still proves
-the no-plugin, Qwen3.5-only, dedicated-`:8766`, local-only telemetry path.
-=======
 References: https://github.com/QwenLM/Qwen3/blob/main/docs/source/deployment/vllm.md and
 https://huggingface.co/Qwen/Qwen3.5-35B-A3B-GPTQ-Int4.
 
-### 2026-07-28 - diffusion and recurrent kernel research
+### 2026-07-28 - MoE, ternary, and non-Qwen reference gap matrix
 
-The implementation should treat masked/discrete diffusion and continuous flow matching as
-different execution contracts. LLaDA (Large Language Diffusion Models,
-https://arxiv.org/abs/2502.09992), MDLM (https://arxiv.org/abs/2406.07524), and SEDD
-(https://arxiv.org/abs/2310.16834) all require a parallel token-state update plus a confidence or
-score-derived remask policy; a left-to-right attention kernel is not a substitute. LLaDA-MoE
-(https://arxiv.org/abs/2509.24389) combines this with sparse expert routing, so the future fused
-path should preserve an active-token mask into the router rather than materializing inactive
-rows.
+The current `model-kernels` and `metal-runtime` layers have scalar contracts plus optional
+Metal implementations for top-k routing, assignment-list grouped GEMM, and packed 2-bit
+ternary GEMM. The following references sharpen the optimization target without changing the
+Qwen3.5-only production model policy:
 
-Block Diffusion (https://arxiv.org/abs/2503.09573) is the useful bridge for agent workloads: it
-allows block-parallel denoising while retaining an autoregressive boundary. The Metal runtime can
-reuse the existing confidence kernel for block acceptance, but needs a separate block mask and
-rollback contract before claiming lossless speculative decoding. DFlash's public MLX reference
-(https://github.com/bstnxbt/dflash-mlx) is an implementation lead only, not acceptance evidence.
+| Family/reference | Useful systems implication | Current coverage | Gap / next experiment |
+|---|---|---|---|
+| [ToMoE](https://arxiv.org/html/2501.15316v1) | Fixed-budget top-1 MLP routing, deterministic structural selection, and load regularization | top-k router + capacity buckets | expose route/load histograms and benchmark top-1 dispatch separately from top-2 |
+| [LFM2](https://arxiv.org/abs/2511.23404) | Hardware-in-the-loop hybrid short-convolution/GQA and an 8.3B/1.5B-active MoE reference | recurrent and MoE kernel families exist | add decode-shaped grouped-GEMM measurements at one-token and short-prefill regimes |
+| [ZAYA1-8B](https://arxiv.org/abs/2605.05365) | 700M-active/8B-total MoE with bounded recurrent test-time state | ZAYA and LFM contracts/tests exist | keep bounded-state routing and expert-load telemetry separate from dense Qwen3.5 evidence |
+| [Ternary Bonsai 8B](https://huggingface.co/prism-ml/Ternary-Bonsai-8B-mlx-2bit) | 2-bit packed ternary weights with MLX/Metal deployment | packed CPU and Metal GEMM paths exist | verify group-scale layout parity; benchmark zero-elision and byte-aligned K tails |
+| [Scaling Laws and Efficient Inference for Ternary LMs](https://aclanthology.org/2025.acl-long.1294/) | Ternary quality/performance trade-offs must be measured, not inferred from byte reduction | byte-level pack/unpack tests | add quality/perplexity envelopes before promoting ternary kernels |
 
-For image/video and other continuous models, DiT-style AdaLN and flow matching remain the native
-contract; the existing `adaln_rms` and `flow_cfg_step` kernels are the right primitives. For
-long-sequence state-space alternatives, Mamba (https://arxiv.org/abs/2312.00752), VMamba
-(https://arxiv.org/abs/2401.10166), and xLSTM-metal (https://github.com/MLXPorts/xLSTM-metal)
-motivate scan/chunk fusion and explicit recurrent-state continuity. Existing Mamba, DeltaNet,
-RWKV, RetNet, and short-convolution kernels cover those operators; future work should benchmark
-chunk sizes and state traffic rather than add another model-specific shader.
+Hardening decision: `router_topk` now rejects NaN and +/-infinity before sorting or softmax,
+matching the Metal facade's finite-logit contract. This prevents non-finite weights from
+reaching grouped GEMM and is covered by a regression test. No benchmark or model-quality claim
+is made from this contract hardening alone.
 
-Research conclusion: the immediate correctness gap was non-finite diffusion logits. The previous
-shader produced NaN confidence for an all-`-inf` masked row (`-inf - -inf`) and for rows containing
-NaN. The patched shader ignores NaNs, handles tied `+inf` maxima deterministically, and returns
-zero confidence for fully invalid rows. This matches the CPU `softmax_max` contract and gives the
-remask scheduler a deterministic low-confidence signal.
->>>>>>> Stashed changes
+### 2026-07-28 - MLA and agentic decode kernel targets
+
+DeepSeek's official V2 implementation and FlashInfer's MLA API both treat latent-cache
+attention as a distinct path rather than dense GQA. The hardware-centric MLA study further
+motivates minimizing cache traversals and keeping latent/RoPE dimensions explicit:
+
+- https://github.com/deepseek-ai/DeepSeek-V2
+- https://docs.flashinfer.ai/api/attention.html
+- https://arxiv.org/abs/2506.02523
+
+The MLA Metal shader now uses a numerically stable online log-sum-exp recurrence. It computes
+each cache-entry score once, updates the running maximum/norm, and accumulates values in the
+same pass. A source contract test pins the one-traversal invariant. This is a kernel-level
+optimization only: native Metal compilation, device parity, and Qwen3.5 end-to-end dispatch
+remain separate evidence gates and must not be inferred from the source test.
+
+### 2026-07-29 - diffusion decoding acceleration targets
+
+Recent diffusion-language-model work changes the kernel target from a single argmax pass to a
+stateful denoising scheduler:
+
+| Reference | Kernel implication | Planned contract |
+|---|---|---|
+| [TSPD + Confidence Extrapolation](https://arxiv.org/abs/2605.30753) | Track per-token confidence, entropy, momentum, position, and convergence state | fused confidence/entropy reduction plus active-position compaction; preserve uncertainty metadata |
+| [S2D2](https://arxiv.org/abs/2603.25702) | Mix block-parallel diffusion proposals with autoregressive self-verification | remask/proposal buffers and bounded verifier dispatch, sharing the existing speculative governor |
+| [Not All Denoising Steps Are Equal](https://arxiv.org/abs/2604.02340) | Early/late steps can use a smaller denoiser while middle steps retain full capacity | step-class schedule in `StatePlan`; benchmark FLOP reduction separately from quality |
+| [Discrete Diffusion Survey](https://arxiv.org/abs/2506.13759) | Masked diffusion requires active-token masks and repeated full-sequence attention | keep remask, mask compaction, and denoise logits as separate Metal kernels |
+
+Implementation consequence: the existing `diffusion_argmax_confidence_f32` kernel is a useful
+leaf, but it is not a complete diffusion runtime. The next source-level additions should be
+confidence trajectory state, active-position compaction, and remask scheduling; none should be
+promoted from source tests without live parity and quality envelopes.
+
+### 2026-07-29 - active-position and remask source contracts
+
+The first two scheduler leaves are now concrete: Rust `active_positions`/`compact_active`
+preserve ascending scatter indices and reject value/mask shape mismatches, while Metal provides
+`diffusion_active_compact_u32` and `diffusion_remask_confidence_f32`. Both are catalogued by
+stable tag and concrete function symbol. The Xcode-beta source bundle compiles 19/19 shaders;
+this remains source/artifact evidence, not device or Qwen3.5 quality evidence.
+
+Trajectory state is now concrete as well: Rust tracks confidence, entropy, per-position
+confidence momentum, decode step, and convergence; the Metal leaf is
+`diffusion_trajectory_update_f32`. Focused oracle tests pass and the source bundle compiles
+20/20 shaders. The contract intentionally keeps trajectory metadata separate from token values
+so active compaction can scatter updates without losing uncertainty history.
+
+### 2026-07-31 - state continuity, heterogeneous memory, and governed evaluation
+
+The SSD/HW Stream research makes exact state continuity the first optimization gate: bind
+every reusable KV/state block to model revision, tokenizer revision, canonical prompt order,
+position range, dtype, and kernel-plan version. Output KV should be promoted only after an
+authoritative decode, while semantic retrieval remains a proposer and never substitutes for
+exact KV provenance. Recommended storage is content-addressed state blocks with RAM as the hot
+tier and NVMe as a bounded cold/prefetch tier; cross-device transfers should carry IDs and
+compact projections rather than unrestricted tensors.
+
+Hardware roles remain asymmetric: the RTX 3090 Ti is the primary high-memory execution target;
+the GTX 1080 Ti is drafter-only/low-priority unless an experiment proves otherwise. Each run
+must record token fate (compute, cache hit/miss, state movement, and critical-path delay),
+prefill amplification, speculative acceptance, novel-edge acceptance, peak memory, and
+fallback/rollback counts. A governor must cap concurrency, queue depth, context length, and
+retry count before any live experiment.
+
+Primary references: MLX-LM model loading and prompt-cache guidance
+(https://github.com/ml-explore/mlx-lm), Apple Metal compute/resource synchronization
+(https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/ and
+https://developer.apple.com/documentation/metal/resource-synchronization), Harbor's eval
+and adapter contracts (https://www.harborframework.com/docs/run-jobs/run-evals and
+https://www.harborframework.com/docs/datasets/adapters), BitNet b1.58
+(https://arxiv.org/abs/2402.17764), KVQuant (https://arxiv.org/abs/2401.18079), TurboQuant
+(https://arxiv.org/abs/2504.19874), and LLaDA diffusion language modeling
+(https://arxiv.org/abs/2502.09992). These references guide experiments only; acceptance
+remains tied to the exact local Qwen3.5 snapshot and immutable Harbor/Portage evidence.
+
+### 2026-07-31 - VRAM note: tiered state and Qwen3.5 serving boundaries
+
+The supplied 3090 Ti VRAM note rules out treating a consumer-board memory mod as the runtime
+plan: capacity changes are controller/firmware/layout problems, not a safe path to promotion.
+For Qwen3.5, use a hierarchical object fabric instead. Keep the shared dense path, router,
+attention, KV/GDN state, and hot experts resident on the 3090 Ti; assign only measured coarse
+stages or permanently resident warm experts to the 1080 Ti. Do not copy dense weights or a full
+active KV to either GPU every token.
+
+The actionable cache policy is: NVMe is the cold content-addressed catalog, host DRAM/page cache
+is the warm tier, and GPU memory is the hot working set. Compare cold versus warm cache, mmap
+versus concurrent `pread`, and kernel-ready versus transformed layouts; record physical disk
+bytes/page faults rather than treating a warm page-cache hit as NVMe bandwidth. For MoE, trace
+expert IDs, reuse distance, union size, and prediction accuracy; use protected hot residency,
+probationary prefill entries, activation-aware prefetch, and grouped activation transfer. KV and
+recurrent state instead require session hibernate/thaw, prefix reuse, and persistent ownership.
+
+Admission should use a slack-bytes check (`object_size <= measured_path_bandwidth * deadline_slack`)
+after queueing and contention. Separate prefill/decode policies and sweep 3090/1080 stage shares
+only after exact state replay is green. These findings are design inputs, not Qwen3.5 evidence;
+the acceptance model remains Qwen3.5-only and must report token fate, state hashes, cache tier,
+device role, and fallback/rollback.
+
+Sources: [NVIDIA RTX 3090 Ti specifications](https://www.nvidia.com/en-us/geforce/graphics-cards/30-series/rtx-3090-3090ti/),
+[vLLM KV/offload documentation](https://docs.vllm.ai/en/latest/), [LMCache](https://github.com/LMCache/LMCache),
+[MoE-Infinity](https://github.com/EfficientMoE/MoE-Infinity), and
+[LLM in a Flash](https://arxiv.org/abs/2312.11514). The note's market/mod claims are not
+promotion evidence and are intentionally excluded from the Qwen3.5 gate.
+
+### 2026-08-03 - immutable current-head evidence rebind preparation
+
+The historical candidate manifest cannot be refreshed by editing its claimed source head: its
+canonical digest, source compatibility, and runtime-evidence booleans are independent gates.
+The Harbor envelope and Metal compile provenance must each bind to the exact current full Git
+HEAD. A preparation artifact therefore records only validated input identities and SHA-256
+digests, and terminates at `promotion.verdict=review_required`; it never marks evidence complete
+or accepts promotion. This keeps the final local promotion review as a separate authority and
+prevents a compile-only artifact from being mistaken for a workload result.
+
+The preparer resolves the exact readiness model from `config/smoke_models.json` rather than
+matching a Qwen3.5 substring. It also requires the bounded `omlx/niah-api-smoke` one-trial
+contract, an authorization window plus sidecar digest, a clean branch, and locally present,
+repository-relative Harbor artifacts whose bytes match the envelope SHA-256 values.
+
+### 2026-08-04 - P1/P2 immutable input pinning
+
+P1: validating JSON and later re-reading its path creates a time-of-check/time-of-use gap: a
+replacement can make a review record name a digest that was never validated. The preparer now
+opens each Harbor and Metal input once as a non-symlink regular file, validates the parsed bytes,
+and records the SHA-256 from that same in-memory snapshot. P2: the review record preserves the
+validated input descriptors as well as the authorization sidecar and every Harbor artifact
+descriptor, allowing an independent reviewer to distinguish validated bytes from a later path
+replacement. This is local provenance hardening only; it does not create workload evidence.
+
+The authorization sidecar must additionally name the same `window_id` as the Harbor envelope.
+This matches the canonical Harbor authorization record without inventing a separate `approved`
+flag or treating a window marker as proof that a workload ran.
+
+Repository-relative descriptor reads are now anchored at an opened repository-root descriptor.
+The root requests `O_NOFOLLOW_ANY` where the platform exposes it, while every relative component
+is opened with `O_NOFOLLOW` from the already-open parent descriptor; the terminal descriptor must
+be a regular file. This rejects root, leaf, and intermediate symlink traversal without resolving
+and reopening a string path. It does not address the separate Git-root identity TOCTOU between
+repository discovery and Git metadata checks.
+
+### 2026-08-05 - Harbor root hygiene and attestation boundary
+
+The Harbor launcher now rejects a `PORTAGE_ROOT` that is not a Git checkout with a valid `HEAD`,
+or whose tracked `HEAD` contains an unresolved merge-conflict marker, before Apple Container
+preflight or the Harbor CLI can run. This prevents the launcher from using the conflicted
+canonical Portage checkout as an accidental execution root. A separate clean Harbor-Langfuse
+worktree is only a future hygiene candidate; it is not execution authorization or evidence.
+
+Portage's local job, trial, task-lock, archive, and Hub records support cross-record consistency,
+but the examined code has no result-artifact signature or server-issued provenance envelope.
+Canonical JSON and SHA-256 protect an asserted byte sequence, not who executed it. Promotion-grade
+evidence therefore needs an upstream Portage/Hub signer over immutable artifact identities. OMLX
+can consume such an envelope fail-closed, but must reject unsigned Harbor output rather than
+misrepresent local consistency as attestation.
+
+The OMLX consumer boundary is `evals/harbor/interchange/trusted.py`, deliberately before the
+permissive generic interchange loader and aggregate synthesizer. It accepts only the fixed
+`trusted-harbor-envelope/v1` shape, an injected Ed25519 public-key policy, canonical signed
+payload bytes, exact Qwen3.5 model/config/task/environment/context bindings, Harbor-to-Langfuse
+identifier binding, UTC run ordering, and `harbor://` immutable identifiers. Result identifiers
+must bind the Harbor job/trial, while each artifact carries a non-negative byte count and SHA-256.
+The in-repository key is a deterministic test fixture only. Until Portage or Hub publishes a real
+issuer/key policy and immutable signed envelope, all actual Harbor output remains untrusted for
+promotion.
+
+The trusted consumer now owns a separate file-ingress boundary rather than inheriting the generic
+interchange loader's permissive path read. It opens the candidate envelope once with no-follow
+semantics, requires a regular file after descriptor inspection, decodes UTF-8, rejects duplicate
+keys and non-finite JSON constants, then verifies that same in-memory document. This closes a
+path-substitution and parser-ambiguity gap without claiming that local bytes are issuer-attested.
+
+The trusted policy also binds `run.candidate_repo`, `run.branch`, and `run.source_head` to the
+consumer's expected current candidate. A valid issuer signature over an older checkout is now
+rejected as stale evidence instead of being accepted merely because its model and task fields
+match.
+
+The candidate-manifest verifier now independently reads the referenced Metal compile provenance
+file and checks its schema, candidate source head, build checkout head, shader count, and recorded
+Metal/build-log digests against the manifest. It also compares the manifest repository and branch
+to the actual checkout. The existing candidate remains blocked because its source head is stale
+and its workload/evidence gates are false; these checks strengthen the rejection path only.
+
+The verifier resolves relative repository roots before identity checks, so its CLI behaves the same
+for `--repo-root .` and an absolute checkout path. A current manifest still reports `blocked` and
+exit code 1; no verifier result is a promotion claim.
+
+The read-only candidate-manifest verifier now uses the same descriptor-level no-follow rule for
+its manifest input and fails closed when the platform cannot provide that primitive. This keeps
+the promotion report from validating bytes after a path replacement or silently following a
+symlink.
+
+### 2026-08-05 - Bonsai host/device packed-layout audit
+
+The host `model-kernels` ternary packer emits a flat row-major `[k, n]` stream, grouping four
+adjacent output columns into each byte. The Metal ternary GEMM shader consumes output-major
+`[n, ceil(k/4)]` bytes, grouping four K lanes per output column. These layouts are not equivalent:
+for `k=5,n=3`, the host stream is 4 bytes while the Metal stream is 6 bytes. The ignored device
+tests previously used a private output-major helper, so they did not prove host-to-device
+conformance. A checked host repack helper and an explicit Metal entry point now make the boundary
+visible; the raw Metal API remains for callers that already hold canonical device bytes.
+
+The Harbor launcher now supports `--preflight` as a non-executing readiness check. It validates
+the window, Portage Git root, Langfuse plugin presence, task selection, and exact Qwen3.5 model
+binding, then exits before Apple Container or Harbor invocation. This creates a reproducible final
+operator check without turning a preflight into workload evidence. For `--niah-8192`, the check
+also constructs the exact `NIAH_CONTEXT_TOKENS=8192` agent binding before exiting.
+
+The NIAH task verifier had a conditional context check that accepted a zero-token result whenever
+the field was falsey. It now requires `requested_context_tokens=8192`, `prompt_tokens=8192`, and
+`context_tokens_exact=true` for reward 1, matching the bounded promotion contract.
+
+The same verifier now requires `exact_match` to be the JSON boolean `true` and `model` to be a
+string containing Qwen3.5, preventing truthy strings or malformed model fields from becoming
+passing evidence.
+
+### 2026-08-05 - Signed Harbor intake and desktop-first cross-platform topology
+
+The local operator environment file exists at `~/.config/phenotype/portage.env` and resolves a
+Portage checkout, but it contains no envelope path, execution-window identifier, authorization
+sidecar, signer public key, or trusted key identifier. No file matching the trusted Harbor schema
+was found in the OMLX checkout, Portage root, local runs, or temporary evidence locations.
+
+The checked-in `qwen35-niah-20260727-envelope.json` is an unsigned historical `schema_version: 2`
+record marked `evidence_label: live_failed` and `reported: false`; it is not admissible live
+evidence. The historical 8192-token result and Metal provenance are likewise not current-head,
+issuer-signed authorization envelopes. Therefore no Harbor or model workload is launched.
+
+The cross-platform boundary is explicit: OMLX owns model/runtime research and native perf-core;
+pheno-harness owns policy, evaluation, proxy, events, and metrics; Portage/Harbor owns execution;
+Forgecode and Helios-CLI own agent/harness orchestration. Existing provider registries already
+cover Ollama, LM Studio, llama.cpp, vLLM, and SGLang ingress. This avoids a second bespoke server
+layer. The current program remains Qwen3.5-only; stale Qwen2.5 examples in Portage are excluded
+from the active matrix. Desktop dual-GPU work is a later bounded 3090 Ti/Qwen3.5 lane, not a
+Mac/Metal prerequisite.
+
+### 2026-08-07 - Preserve-first disk and checkout audit
+
+The Data volume was observed at 98-100% utilization during the audit, with free space varying
+from roughly 170 MiB to 19 GiB as local processes reclaimed temporary space. Airlock reports 175
+registered paths, 138 never pushed, 64 dirty, and 14 without remotes; its persistence log contains
+`No space left on device`. Airlock Git snapshots are provenance preservation, not a complete system
+or configuration backup.
+
+The host has no configured Time Machine destination and no verified restic, Borg, Nix, chezmoi,
+duplicity, or rclone backup path. Therefore deleting worktrees, Airlock state, stashes, Codex
+databases, LaunchAgents, or config backups is unsafe until an off-host restore path and a small
+restore drill exist. The safe order is: inventory and push recoverable Git state, snapshot config
+metadata, disable only duplicate/stale writers if necessary, then remove only verified caches or
+build outputs.
+
+Relevant large files include Qwen3.5 model blobs in both legacy and Hub cache roots. They are
+currently treated as active model assets, not cleanup candidates; duplicate-byte deduplication
+requires reference and inode verification before any mutation.
+
+The first safe reclaim pass removed only rebuildable Rust `target/` directories from seven stale or
+archived phenotype-omlx worktrees plus the 12 GiB hwLedger model-explorer worktree target. Git
+source trees, branches, archives, and untracked bundles were preserved. Data-volume free space
+rose to approximately 53 GiB; the current OMLX target and active build outputs remain intact.
+
+The direct estate inventory found 51 Git roots, 355 summed worktree entries (nested overlap is
+possible), 11 dirty roots, 23 ahead of upstream, 21 behind, and 84 standalone `.git` directories.
+This is a triage inventory, not authorization to delete branches. The next safe candidates are
+only rebuildable caches; dirty/ahead roots require remote preservation and branch-level review.

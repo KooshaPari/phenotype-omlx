@@ -107,7 +107,7 @@ pub fn turbo_quant_encode(
     data: Vec<f32>,
     group_size: usize,
     bits: u8,
-) -> PyResult<Py<PyAny>> {
+) -> PyResult<PyObject> {
     if data.is_empty() {
         return Err(PyValueError::new_err("data must be non-empty"));
     }
@@ -127,7 +127,7 @@ pub fn turbo_quant_encode(
     dict.set_item("zeros", q.zeros.clone())?;
     dict.set_item("bits", q.bits)?;
     dict.set_item("group_size", q.group_size)?;
-    Ok(dict.into_any().unbind())
+    Ok(dict.into())
 }
 
 #[pyfunction]
@@ -140,7 +140,7 @@ pub fn turbo_quant_decode(
     n: usize,
     group_size: usize,
     bits: u8,
-) -> PyResult<Py<PyAny>> {
+) -> PyResult<PyObject> {
     validate_dimensions(
         n,
         n,
@@ -168,8 +168,8 @@ pub fn turbo_quant_decode(
         q.decode_uniform(&mut buf);
         Ok(())
     })?;
-    let lst = PyList::new(py, buf.iter().copied())?;
-    Ok(lst.into_any().unbind())
+    let lst = PyList::new(py, buf.iter().copied());
+    Ok(lst.into())
 }
 
 #[cfg(test)]
@@ -201,7 +201,7 @@ mod tests {
 
     #[test]
     fn exported_decode_rejects_non_positive_scales_as_value_error() {
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             for scale in [0.0, -0.25] {
                 let error = turbo_quant_decode(py, vec![0], vec![scale], vec![0.0], 2, 2, 4)
                     .expect_err("non-positive scale must be rejected");
@@ -212,10 +212,10 @@ mod tests {
 
     #[test]
     fn exported_encode_decode_round_trip_preserves_metadata_and_values() {
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             let encoded =
                 turbo_quant_encode(py, vec![-1.0, 0.0, 1.0], 2, 4).expect("encode succeeds");
-            let encoded = encoded.bind(py).cast::<PyDict>().expect("dict payload");
+            let encoded = encoded.bind(py).downcast::<PyDict>().expect("dict payload");
             let packed = encoded
                 .get_item("packed")
                 .unwrap()
@@ -257,7 +257,7 @@ mod tests {
                 turbo_quant_decode(py, packed, scales, zeros, 3, 2, 4).expect("decode succeeds");
             let values = decoded
                 .bind(py)
-                .cast::<PyList>()
+                .downcast::<PyList>()
                 .unwrap()
                 .extract::<Vec<f32>>()
                 .unwrap();
@@ -270,7 +270,7 @@ mod tests {
 
     #[test]
     fn exported_validation_errors_use_value_error() {
-        Python::attach(|py| {
+        Python::with_gil(|py| {
             let encode_error = turbo_quant_encode(py, vec![], 64, 4).unwrap_err();
             assert!(encode_error.is_instance_of::<PyValueError>(py));
             let label_error = turbo_quant_label_for_bits(1).unwrap_err();

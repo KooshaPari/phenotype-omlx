@@ -1,5 +1,23 @@
 # Known Issues
 
+Update 2026-08-05: host diffusion self-verification now exposes
+`DiffusionVerificationSession`, which rejects duplicate planned blocks and rejects incomplete
+coverage at `finish()`. The stateless plan primitive remains available for individual block
+checks. This closes a host-contract gap; it is not Metal device execution or Qwen3.5 evidence.
+
+Update 2026-08-05: the no-model Qwen3.5 snapshot verifier now rejects symlinked refs, path-bearing
+snapshot revisions, snapshot-root escapes, and symlinked snapshot directories. This protects the
+integrity preflight from following a tampered cached `refs/main` outside the intended repository.
+
+Update 2026-08-05: Python promotion now rejects synthetic evidence and evidence whose
+`source_revision` does not exactly match the candidate record. This aligns the CLI with the Rust
+production evaluator and prevents `promote --gates ...` from signing a record without benchmark
+provenance. Promotion tests pass 28/28.
+
+Update 2026-08-05: `HybridDispatch` no longer returns an empty list when a requested backend is
+unavailable, and AUTO now selects only an actually available backend or raises a structured error.
+This prevents silent no-op inference responses while preserving deferred GPU/Metal execution.
+
 | Priority | Area | Evidence and required resolution |
 |---|---|---|
 | P0 | eval-harness | RESOLVED (commit 2fafb76): ownership-safe ABI, deterministic suite ordering, GPQA/MMLU flexible readers, sentinel-preserved decode contract. 49 tests pass. |
@@ -229,3 +247,71 @@ Update 2026-08-01b (Metal compile manifest): the 20-source Metal bundle was rebu
 HEAD and its allowlisted manifest was verified (`metallib` SHA-256
 `ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`). This closes the compile
 artifact gate only; device execution and Qwen3.5 Harbor evidence remain absent.
+
+Update 2026-08-02 (desktop Pascal runtime gate): a bounded, single-worker vLLM 0.26.0
+Qwen3.5-0.8B readiness attempt on `kooshapari-desk` with `CUDA_VISIBLE_DEVICES=0`,
+`max_model_len=1024`, and 40% VRAM cap resolved the model architecture but failed before server
+readiness with `CUDA error: no kernel image is available for execution on the device`. The GTX
+1080 Ti is compute capability 6.1, while the installed PyTorch build advertises support from
+7.5 upward. No completion, benchmark, Harbor task, or model mutation occurred. The exact
+diagnostic is recorded in `pheno-harness/state/desktop_qwen35_vllm_readiness_20260801T2337Z.json`
+and the current candidate remains blocked pending a safe RTX 3090 Ti window.
+
+Update 2026-08-02 (current-head Metal compile): the Xcode-beta Metal toolchain rebuilt all 20
+checked-in shaders at checkout `281a611822a6721e4d9a1b083ddeaac3c3314ea7`, producing the
+deterministic `metallib` digest
+`ff53ce9e3d21244e4799887f72211133a4173c3671552555dfa7336bc7aa3d83`. The provenance artifact is
+`artifacts/metal-compile-provenance-20260802.json` and is bound to the candidate's compatible
+source head. This closes the fresh compile gate only; no Metal device dispatch, model load,
+Qwen3.5 completion, Harbor task, or benchmark was executed.
+
+Update 2026-08-02 (Harbor window fail-closed): `scripts/evals/run_via_harbor.sh` now requires a
+bounded `PHENO_EXECUTION_WINDOW_ID` matching the operator-issued ID grammar and passes it into
+the Harbor agent environment. Missing or malformed IDs are rejected before Portage validation,
+Apple Container preflight, or `uv run harbor`; the contract test passes. Because this changes a
+declared production path after the compile-only candidate head, the candidate verifier correctly
+reports source-head incompatibility until a fresh artifact/candidate rebind is performed. This
+does not authorize or claim any live workload.
+
+Update 2026-08-03 (Harbor model binding): the same entrypoint now rejects Qwen2.5 and any model
+outside the Qwen3.5 SSOT, and requires `OPENAI_MODEL` to exactly equal `OMLX_READY_MODEL`. This
+prevents a pre-set OpenAI-compatible model variable from bypassing the Qwen3.5 policy before
+Portage or Apple Container is touched. The execution-window contract test passes; no workload
+was launched.
+
+Update 2026-08-02 (candidate JSON hardening): `scripts/verify_candidate_manifest.py` now rejects
+duplicate object members and non-finite JSON constants before canonical SHA-256 verification.
+Focused candidate-manifest and review tests pass 14/14; the historical manifest remains blocked
+for its stale source head and absent workload evidence. Native diffusion/ternary validation also
+passes 69 metal-runtime tests plus 211 model-kernel unit tests; no device or model workload ran.
+
+Update 2026-08-05 (trusted envelope intake): `~/.config/phenotype/portage.env` is present, but
+the local filesystem has no issuer-signed trusted Harbor envelope, matching authorization sidecar,
+execution window ID, signer public key/key ID, or current candidate manifest. The historical NIAH
+JSON is explicitly live-failed/unsigned and cannot be promoted. This is an external artifact
+blocker, not a code defect; the fail-closed behavior is intentional.
+
+Update 2026-08-05 (cross-platform scope): no standalone Unsloth Studio, LM Studio, Ollama,
+phenotype-gpu, or phenocli checkout was found under the local repo container. Existing provider
+implementations in Portage, Forgecode, and Helios-CLI are the authoritative ingress surfaces.
+Stale Qwen2.5 examples must remain excluded from the active Qwen3.5-only matrix. Desktop dual-GPU
+execution remains pending a signed window and a bounded RTX 3090 Ti run; no broad serving or
+benchmark workload is permitted.
+
+Update 2026-08-07 (subtractive disk pass): verified no `cargo`/`rustc` process was active, then
+moved only ignored, rebuildable Rust build trees to macOS Trash: the primary
+`perf-core/target/debug` tree (7.6 GiB), the clean pushed `hwLedger` model-explorer Rust target
+(25 GiB), and 12 smaller ignored targets under preserved phenotype-omlx superpower worktrees.
+Source files, dirty worktrees, branches, model blobs, and evidence were not deleted. Trash remains
+reversible; emptying these exact items is a separate operator decision. Free space improved from
+about 11 GiB to about 13 GiB. Xcode was opened through `xed` because LaunchServices could not
+open Markdown directly with `open -a Xcode`.
+
+Update 2026-08-08 (Harbor preflight): `~/.config/phenotype/portage.env` previously evaluated
+Infisical's interactive colored region prompt as shell code, leaving Harbor/Langfuse variables
+unset. The loader now requests token-authenticated `dotenv-export` with plain, silent output;
+sanitized sourcing confirms `PORTAGE_ROOT`, Langfuse variables, `OPENAI_BASE_URL`, and the
+Qwen3.5 readiness model are set. The Harbor gate also no longer treats ordinary `=======`
+Markdown/report separators as merge conflicts; its contract test passes and a real Portage
+Qwen3.5 8192 preflight passes without invoking Apple Container or Harbor. A signed execution
+window is still required before any workload.

@@ -23,6 +23,7 @@ export HARBOR_ENV=apple-container
 export LANGFUSE_PUBLIC_KEY=pk-lf-...
 export LANGFUSE_SECRET_KEY=sk-lf-...
 export LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # or self-host
+export PHENO_EXECUTION_WINDOW_ID=qwen35-20260802T0700Z-3090ti  # operator-issued, bounded window
 
 # Harbor hello-world (oracle) — always attaches Langfuse
 bash scripts/evals/run_via_harbor.sh
@@ -40,6 +41,15 @@ bash scripts/evals/run_via_harbor.sh --niah
 # TurboQuant SSOT gate
 bash scripts/evals/run_via_harbor.sh --turbo
 ```
+
+`PHENO_EXECUTION_WINDOW_ID` is mandatory for every Harbor invocation. The runner
+rejects missing or malformed IDs before checking Portage, starting Apple Container,
+or invoking `uv run harbor`; this is an authorization marker, not proof that a
+runtime workload was executed. Do not invent one or reuse a stale window.
+
+The runner also binds `OPENAI_MODEL` exactly to the Qwen3.5 SSOT resolved as
+`OMLX_READY_MODEL`; Qwen2.5 and any independent model override are rejected
+before Portage or Apple Container is touched.
 
 `--langsmith` is **rejected** (exit 2). `--langfuse` is accepted for back-compat but redundant.
 

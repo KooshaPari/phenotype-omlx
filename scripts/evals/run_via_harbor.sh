@@ -14,11 +14,13 @@
 #   export LANGFUSE_PUBLIC_KEY=pk-lf-...
 #   export LANGFUSE_SECRET_KEY=sk-lf-...
 #   export LANGFUSE_BASE_URL=https://us.cloud.langfuse.com   # optional
+#   export PHENO_EXECUTION_WINDOW_ID=qwen35-20260802T0700Z-3090ti
 #   bash scripts/evals/run_via_harbor.sh              # hello-world oracle + Langfuse
 #   bash scripts/evals/run_via_harbor.sh --policy
 #   bash scripts/evals/run_via_harbor.sh --niah
 #   bash scripts/evals/run_via_harbor.sh --niah-8192
 #   bash scripts/evals/run_via_harbor.sh --turbo
+#   bash scripts/evals/run_via_harbor.sh --preflight --niah-8192
 set -euo pipefail
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:${PATH:-}"
 
@@ -26,6 +28,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="${HARBOR_OUT:-$ROOT/.runs/harbor-eval}"
 HARBOR_ENV="${HARBOR_ENV:-apple-container}"
 MODE="hello"
+PREFLIGHT=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -42,6 +45,7 @@ for arg in "$@"; do
     --niah) MODE="niah" ;;
     --niah-8192) MODE="niah_8192" ;;
     --turbo) MODE="turbo" ;;
+    --preflight) PREFLIGHT=1 ;;
     --help|-h)
       sed -n '2,22p' "$0"
       exit 0
@@ -55,6 +59,15 @@ done
 
 if [[ -z "${PORTAGE_ROOT:-}" ]]; then
   echo "ERROR: PORTAGE_ROOT required (portage-TEMP / Harbor). No hardcoded worktree paths." >&2
+  exit 2
+fi
+if [[ -z "${PHENO_EXECUTION_WINDOW_ID:-}" ]]; then
+  echo "ERROR: PHENO_EXECUTION_WINDOW_ID required; Harbor workloads need a bounded authorization window." >&2
+  echo "  Set an operator-issued window ID before invoking Portage/Apple Container." >&2
+  exit 2
+fi
+if [[ ! "${PHENO_EXECUTION_WINDOW_ID}" =~ ^[A-Za-z0-9._:-]{8,128}$ ]]; then
+  echo "ERROR: PHENO_EXECUTION_WINDOW_ID must match [A-Za-z0-9._:-]{8,128}." >&2
   exit 2
 fi
 if [[ ! -d "$PORTAGE_ROOT" ]]; then
@@ -74,12 +87,20 @@ if [[ ! -d "$PORTAGE_ROOT/packages/harbor-langfuse/src" ]]; then
   echo "  Fix Portage — LangSmith is not an allowed fallback." >&2
   exit 2
 fi
-# Apple Container's apiserver is an explicit user service, not a daemon that
-# Harbor may assume is present. Start/verify it before creating any trials so
-# XPC failures are diagnosed at the boundary.
-source "$ROOT/scripts/evals/apple_container_preflight.sh"
-ensure_apple_container_service
-
+# Harbor execution depends on the checked-out Portage source. Reject a path
+# that cannot identify a committed revision, or one whose tracked revision
+# still contains merge-conflict markers, before contacting Apple Container.
+if ! git -C "$PORTAGE_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
+  echo "ERROR: PORTAGE_ROOT must be a Git checkout with a valid HEAD." >&2
+  exit 2
+fi
+# A bare `=======` is common in Markdown and generated test reports.  Only
+# conflict-arm markers carry the required branch-marker prefixes; rejecting
+# every separator line would incorrectly block otherwise clean Portage heads.
+if git -C "$PORTAGE_ROOT" grep -I -q -E '^(<<<<<<<|>>>>>>>)' HEAD -- .; then
+  echo "ERROR: PORTAGE_ROOT tracked HEAD contains an unresolved conflict marker." >&2
+  exit 2
+fi
 mkdir -p "$OUT"
 case "$MODE" in
   hello) TASK="$PORTAGE_ROOT/examples/tasks/hello-world" ;;
@@ -96,7 +117,7 @@ case "$MODE" in
       else
         echo "ERROR: OPENAI_BASE_URL required for --niah" >&2
         echo "  Self-host any OpenAI-compatible server and point here, e.g.:" >&2
-        echo "    PYTHONPATH=\"$ROOT/python\${PYTHONPATH:+:\$PYTHONPATH}\" python3 -m omlx_research.harbor_mlx_server --model \$OMLX_READY_MODEL --host 0.0.0.0 --port 8766" >&2
+        echo "    mlx_lm server --model \$OMLX_READY_MODEL --host 0.0.0.0 --port 8766" >&2
         echo "    export OPENAI_BASE_URL=http://\$(ipconfig getifaddr en0):8766/v1" >&2
         exit 2
       fi
@@ -117,8 +138,24 @@ echo "langfuse base=$LANGFUSE_BASE_URL session=harbor_job_id (canonical)"
 export OMLX_READY_MODEL="${OMLX_READY_MODEL:-$(PYTHONPATH="$ROOT/python${PYTHONPATH:+:$PYTHONPATH}" python3 -m omlx_research.smoke_models readiness)}"
 export OPENAI_MODEL="${OPENAI_MODEL:-$OMLX_READY_MODEL}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-omlx}"
+case "$OMLX_READY_MODEL" in
+  *Qwen2.5*|*qwen2.5*)
+    echo "ERROR: Qwen2.5 is quarantined; Harbor requires Qwen3.5." >&2
+    exit 2
+    ;;
+  *Qwen3.5*|*qwen3.5*)
+    ;;
+  *)
+    echo "ERROR: Harbor model must be Qwen3.5 (got $OMLX_READY_MODEL)." >&2
+    exit 2
+    ;;
+esac
+if [[ "$OPENAI_MODEL" != "$OMLX_READY_MODEL" ]]; then
+  echo "ERROR: OPENAI_MODEL must exactly match OMLX_READY_MODEL for provenance." >&2
+  exit 2
+fi
 
-AGENT_ENV_ARGS=()
+AGENT_ENV_ARGS=(--ae "PHENO_EXECUTION_WINDOW_ID=${PHENO_EXECUTION_WINDOW_ID}")
 if [[ "$MODE" == "niah" || "$MODE" == "niah_8192" ]]; then
   AGENT_ENV_ARGS+=(
     --ae "OPENAI_BASE_URL=${OPENAI_BASE_URL}"
@@ -131,6 +168,22 @@ if [[ "$MODE" == "niah_8192" ]]; then
   export NIAH_CONTEXT_TOKENS=8192
   AGENT_ENV_ARGS+=(--ae "NIAH_CONTEXT_TOKENS=8192")
 fi
+
+if [[ "$PREFLIGHT" -eq 1 ]]; then
+  context="default"
+  if [[ "$MODE" == "niah_8192" ]]; then
+    context="$NIAH_CONTEXT_TOKENS"
+  fi
+  echo "preflight ok: env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL context=$context window=$PHENO_EXECUTION_WINDOW_ID"
+  echo "preflight only: Apple Container and Harbor were not invoked"
+  exit 0
+fi
+
+# Apple Container's apiserver is an explicit user service, not a daemon that
+# Harbor may assume is present. Start/verify it before creating any trials so
+# XPC failures are diagnosed at the boundary.
+source "$ROOT/scripts/evals/apple_container_preflight.sh"
+ensure_apple_container_service
 
 cd "$PORTAGE_ROOT"
 echo "harbor env=$HARBOR_ENV mode=$MODE task=$TASK model=$OMLX_READY_MODEL out=$OUT"

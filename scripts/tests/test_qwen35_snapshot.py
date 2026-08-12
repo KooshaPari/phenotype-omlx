@@ -86,3 +86,18 @@ def test_index_rejects_path_traversal(tmp_path: Path) -> None:
 def test_mtp_is_optional() -> None:
     assert "optiq/mtp.safetensors" not in MODULE.REQUIRED
     assert "optiq/mtp.safetensors" in MODULE.OPTIONAL
+
+
+def test_snapshot_ref_cannot_escape_cache_root(tmp_path: Path) -> None:
+    (tmp_path / "outside").mkdir()
+    repo = tmp_path / "models--mlx-community--Qwen3.5-0.8B-OptiQ-4bit"
+    ref = repo / "refs" / "main"
+    ref.parent.mkdir(parents=True)
+    (repo / "snapshots").mkdir()
+    ref.write_text("../../outside\n", encoding="utf-8")
+    try:
+        MODULE._snapshot_dir("mlx-community/Qwen3.5-0.8B-OptiQ-4bit", tmp_path)
+    except (FileNotFoundError, ValueError) as exc:
+        assert "snapshot" in str(exc) or "ref" in str(exc)
+    else:
+        raise AssertionError("snapshot ref traversal must fail closed")

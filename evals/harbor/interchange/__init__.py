@@ -20,6 +20,13 @@ from .ingest import (
     ingest_report,
 )
 from .loader import load_report
+from .trusted import (
+    TrustedHarborEnvelopeError,
+    TrustedHarborPolicy,
+    VerifiedTrustedHarborEnvelope,
+    load_verified_envelope,
+    verify_envelope,
+)
 from .validator import ValidationResult, validate
 
 __all__ = [
@@ -35,10 +42,15 @@ __all__ = [
     "SuiteResult",
     "TaskResult",
     "Totals",
+    "TrustedHarborEnvelopeError",
+    "TrustedHarborPolicy",
     "ValidationResult",
+    "VerifiedTrustedHarborEnvelope",
     "ingest_from_dict",
     "ingest_from_file",
     "ingest_report",
+    "load_verified_envelope",
     "load_report",
     "validate",
+    "verify_envelope",
 ]

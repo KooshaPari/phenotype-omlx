@@ -297,3 +297,96 @@ This is an evidence correction, not a runtime result; no model or device workloa
 The current-head Metal compile manifest is now present in the candidate record with shader count,
 metallib SHA-256, manifest SHA-256, and `verified_compile_only` status. It must not be promoted to
 device evidence without an authorized bounded execution.
+
+## Evidence-attestation prerequisite (2026-08-05)
+
+    clean Portage Git root
+      -> signed immutable Harbor/Hub envelope from an upstream issuer
+      -> strict OMLX trusted-envelope verification
+      -> current-head Qwen3.5 bounded execution evidence
+      -> independent promotion review
+
+The OMLX verifier and its fixture-only Ed25519 policy are ready to reject malformed or unsigned
+evidence, but Portage/Hub does not yet publish a signer-backed export. The trusted verifier is
+therefore a prerequisite enforcer, not a route around that missing upstream issuer. A future
+window must use a conflict-free Portage root, currently the hygiene candidate
+`worktrees/portage/fix-langsmith-importerror`, and must remain subject to the one-trial overload
+governor.
+
+## Bonsai ternary layout gate (2026-08-05)
+
+    host row-major ternary pack
+      -> checked [k,n] to [n,ceil(k/4)] repack
+      -> Metal upload entry point
+      -> device parity fixture
+
+The host scalar matmul now accepts arbitrary positive `n` (including an output-column tail), while
+the repack helper validates exact host byte length and preserves every 2-bit code. Device
+execution remains pending an authorized, bounded Qwen3.5/Metal fixture and signed evidence.
+
+The Harbor execution lane now has an explicit non-executing preflight node. It must pass before
+any future Apple Container invocation, but its output is configuration evidence only and cannot
+satisfy the live workload or promotion gates.
+For the 8192-token NIAH mode, the preflight additionally proves the exact context binding and
+OpenAI-compatible endpoint are present before the future container boundary.
+
+The NIAH verifier gate is now strict on all three exact-context fields; a zero-token or missing
+context result cannot receive a passing reward. This is a task-contract hardening step, not live
+model evidence.
+
+Result typing is strict as well: non-boolean `exact_match` and non-string model identifiers are
+rejected before reward calculation.
+
+## Diffusion boundary finiteness gate (2026-08-05)
+
+    host trajectory oracle finiteness rules
+      -> shared Metal-boundary value validator
+      -> remask/trajectory dispatch rejection before pipeline lookup
+      -> bounded device fixture
+
+The Metal dispatch boundary now rejects non-finite confidence and non-finite or negative entropy
+before allocation or catalogued pipeline lookup. This aligns the device boundary with the host
+trajectory oracle; it is host-only contract evidence and not device or Qwen3.5 execution evidence.
+
+## Signed Harbor and desktop execution DAG (2026-08-05)
+
+    [A] locate signed envelope + authorization sidecar
+      -> [B] verify issuer signature, policy, model, repo, branch, head, window
+      -> [C] verify Portage root and clean conflict-free checkout
+      -> [D] non-executing exact-Qwen3.5/NIAH-8192 preflight
+      -> [E] bounded authorized desktop 3090 Ti run (only if window permits)
+      -> [F] immutable result/artifact digests + Langfuse trace
+      -> [G] candidate rebind + verifier 64/64 + promotion review
+
+    [R1] OMLX native runtime/perf-core
+    [R2] pheno-harness policy/eval/proxy/events/metrics
+    [R3] Portage/Harbor execution substrate
+    [R4] Forgecode/Helios agent harness
+    [R5] existing Ollama/LM Studio/llama.cpp/vLLM/SGLang provider ingress
+
+Current state: [A] failed closed locally because no trusted signed envelope or authorization
+sidecar was present. Historical unsigned artifacts cannot advance [B]. The cross-platform plan
+keeps OMLX as the client/runtime layer, pheno-harness as the mature evaluation/control layer,
+and Portage/Harbor as the execution substrate; no bespoke duplicate serving stack is introduced.
+The next executable lane is a bounded Qwen3.5 desktop run on the RTX 3090 Ti after [A]-[D], with
+the GTX 1080 Ti treated as a separate capability probe because its prior vLLM readiness failed
+with `no kernel image is available`.
+
+## Preserve-first estate cleanup DAG (2026-08-07)
+
+    [P0] maintain free-space safety margin
+      -> [P1] inventory every checkout/worktree and Git preservation state
+      -> [P2] push or PR recoverable dirty/ahead branches (no force-push)
+      -> [P3] establish encrypted off-host config/recovery backup + restore drill
+      -> [P4] snapshot LaunchAgents/Airlock/Codex metadata
+      -> [P5] disable duplicate writers only after snapshot
+      -> [P6] remove verified caches/build outputs only
+      -> [P7] remeasure disk, Airlock, Git, and restore health
+
+    MUST NOT DELETE: dirty worktrees, unpushed branches, stashes, Airlock state, Codex DB/WAL,
+    recovery directories, model blobs, or config backups before P2-P4 evidence.
+
+Current blockers are preservation-related rather than OMLX code-related: no configured off-host
+backup/restore path, many Airlock paths not pushed, and duplicate LaunchAgent writers. This lane
+is intentionally subtractive and does not create new checkouts, repositories, tar dumps, or model
+workloads.
