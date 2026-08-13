@@ -58,6 +58,10 @@ impl ExecResult {
     }
 }
 
+#[allow(
+    clippy::double_must_use,
+    reason = "async_trait generates a Future that is already #[must_use]"
+)]
 #[async_trait]
 pub trait ExecBackend: Send + Sync {
     async fn run(&self, id: plan::AgentId, req: ExecRequest) -> Result<ExecResult, JobError>;

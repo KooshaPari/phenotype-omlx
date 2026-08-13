@@ -28,6 +28,10 @@ pub struct BackendInfo {
 
 /// Trait implemented by every target-model backend (MLX, Metal, CUDA,
 /// vLLM, SGLang, llama.cpp, custom).
+#[allow(
+    clippy::double_must_use,
+    reason = "async_trait generates a Future that is already #[must_use]"
+)]
 #[async_trait]
 pub trait TargetBackend: Send + Sync {
     /// Run a forward pass over `token_ids` and return next-token logits.
@@ -58,6 +62,10 @@ pub trait TargetBackend: Send + Sync {
 }
 
 /// Trait implemented by draft-model backends.
+#[allow(
+    clippy::double_must_use,
+    reason = "async_trait generates a Future that is already #[must_use]"
+)]
 #[async_trait]
 pub trait DraftBackend: Send + Sync {
     /// Propose up to `max_tokens` continuation tokens after `prefix`.
