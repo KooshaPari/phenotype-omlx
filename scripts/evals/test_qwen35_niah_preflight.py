@@ -98,6 +98,73 @@ class Qwen35NiahPreflightTests(unittest.TestCase):
                 ),
             )
 
+    def test_uses_environment_env_endpoint_not_a_comment_url(self) -> None:
+        job = ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml"
+        comment_spoofed = (
+            '# OPENAI_BASE_URL: "http://127.0.0.1:1234/v1"\n'
+            + job.read_text(encoding="utf-8")
+        )
+        plan = preflight(
+            job,
+            available_memory_bytes=8 * 1024**3,
+            port_available=lambda _: True,
+            job_text=comment_spoofed,
+        )
+        self.assertEqual(plan.port, 8766)
+
+    def test_wrapper_passes_effective_endpoint_and_models_to_preflight(self) -> None:
+        wrapper = (ROOT / "scripts/evals/run_via_harbor_local.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('--endpoint "$OPENAI_BASE_URL"', wrapper)
+        self.assertIn('--openai-model "$OPENAI_MODEL"', wrapper)
+        self.assertIn('--ready-model "$OMLX_READY_MODEL"', wrapper)
+
+    def test_wrapper_requires_exact_approved_model_values(self) -> None:
+        wrapper = (ROOT / "scripts/evals/run_via_harbor_local.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('APPROVED_MODEL="mlx-community/Qwen3.5-0.8B-OptiQ-4bit"', wrapper)
+        self.assertIn('"${OMLX_READY_MODEL:-}" != "$APPROVED_MODEL"', wrapper)
+        self.assertIn('"$OPENAI_MODEL" != "$APPROVED_MODEL"', wrapper)
+
+    def test_rejects_actual_environment_endpoint_that_disagrees_with_launcher(self) -> None:
+        job = ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml"
+        with self.assertRaisesRegex(PreflightError, "port mismatch"):
+            preflight(
+                job,
+                available_memory_bytes=8 * 1024**3,
+                port_available=lambda _: True,
+                job_text=job.read_text(encoding="utf-8").replace(
+                    'OPENAI_BASE_URL: "http://host.docker.internal:8766/v1"',
+                    'OPENAI_BASE_URL: "http://host.docker.internal:8081/v1"',
+                ),
+                port=8766,
+            )
+
+    def test_rejects_launcher_models_that_disagree_with_approved_job(self) -> None:
+        job = ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml"
+        for field in ("openai_model", "ready_model"):
+            with self.subTest(field=field), self.assertRaisesRegex(
+                PreflightError, "approved Qwen3.5 model"
+            ):
+                preflight(
+                    job,
+                    available_memory_bytes=8 * 1024**3,
+                    port_available=lambda _: True,
+                    **{field: "mlx-community/Qwen3.5-0.8B-OptiQ-4bit-unapproved"},
+                )
+
+    def test_rejects_launcher_endpoint_that_disagrees_with_approved_job(self) -> None:
+        job = ROOT / "evals/harbor/jobs/niah-qwen35-local.yaml"
+        with self.assertRaisesRegex(PreflightError, "endpoint mismatch"):
+            preflight(
+                job,
+                available_memory_bytes=8 * 1024**3,
+                port_available=lambda _: True,
+                endpoint="http://host.docker.internal:8081/v1",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
