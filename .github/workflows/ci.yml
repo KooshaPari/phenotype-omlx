@@ -116,7 +116,7 @@ jobs:
         if: steps.rust-changes.outputs.changed == 'true'
         run: |
           while IFS= read -r file; do
-            rustfmt --check "$file"
+            rustfmt --edition 2021 --check "$file"
           done < "$RUNNER_TEMP/rust-files"
       - name: cargo clippy
         if: steps.rust-changes.outputs.changed == 'true'
