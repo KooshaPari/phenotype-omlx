@@ -17,7 +17,7 @@
 #
 # This workflow now does the two checks that trunk was uniquely responsible for
 # and that the rest of CI does NOT cover:
-#   - prettier on changed files in the PR (scoped, fast)
+#   - prettier on the entire repo
 #   - actionlint on .github/workflows/*.yml
 #
 # Both use pinned, deterministic installs. No third-party orchestrator.
@@ -74,43 +74,30 @@ jobs:
           set -euo pipefail
           actionlint -color
 
-      - name: Prettier (changed files in PR/push)
+      - name: prettier check
         shell: bash
         run: |
           set -euo pipefail
-          case "${{ github.event_name }}" in
-            schedule)
-              echo "No comparison base for a scheduled run; prettier check skipped."
-              exit 0
-              ;;
-            pull_request)
-              base_ref="${{ github.event.pull_request.base.sha }}"
-              ;;
-            merge_group)
-              base_ref="${{ github.event.merge_group.base_sha }}"
-              ;;
-            push)
-              base_ref="${{ github.event.before }}"
-              ;;
-          esac
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "No comparison base for a scheduled run; actionlint completed above."
+            exit 0
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_ref="${{ github.event.pull_request.base.sha }}"
+          elif [[ "${{ github.event_name }}" == "merge_group" ]]; then
+            base_ref="${{ github.event.merge_group.base_sha }}"
+          else
+            base_ref="${{ github.event.before }}"
+          fi
 
           git fetch --no-tags --depth=1 origin "$base_ref"
           mapfile -t files < <(
             git diff --diff-filter=ACMR --name-only FETCH_HEAD HEAD -- \
-              '*.md' '*.yml' '*.yaml' '*.json' '*.jsonc' '*.mdx' \
-              ':!research/baselines/' \
-              ':!.agileplus/' \
-              ':!.archive/' \
-              ':!.cargo-target/' \
-              ':!worktrees/' \
-              ':!phenotype-omlx/worktrees/'
+              '*.md' '*.yml' '*.yaml' '*.json' '*.jsonc' '*.mdx'
           )
           if (( ${#files[@]} == 0 )); then
             echo "No changed Prettier-supported files to check."
             exit 0
           fi
-          echo "Checking ${#files[@]} changed file(s) with prettier:"
-          printf '  %s\n' "${files[@]}"
           if ! prettier --check "${files[@]}" --ignore-path .gitignore; then
             echo "::error::prettier --check failed on changed files; run prettier --write"
             exit 1
