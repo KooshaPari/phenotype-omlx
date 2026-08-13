@@ -4,8 +4,10 @@ use crate::{PolyglotQuantizer, QuantizedTensor};
 pub enum PolyglotBackend {
     Cpu,
     C,
-    Zig,
     Nim,
+    #[cfg(feature = "zig")]
+    Zig,
+    #[cfg(feature = "mojo")]
     Mojo,
 }
 
@@ -14,8 +16,10 @@ impl PolyglotBackend {
         &[
             PolyglotBackend::Cpu,
             PolyglotBackend::C,
-            PolyglotBackend::Zig,
             PolyglotBackend::Nim,
+            #[cfg(feature = "zig")]
+            PolyglotBackend::Zig,
+            #[cfg(feature = "mojo")]
             PolyglotBackend::Mojo,
         ]
     }
@@ -24,8 +28,10 @@ impl PolyglotBackend {
         match self {
             PolyglotBackend::Cpu => "Cpu",
             PolyglotBackend::C => "C",
-            PolyglotBackend::Zig => "Zig",
             PolyglotBackend::Nim => "Nim",
+            #[cfg(feature = "zig")]
+            PolyglotBackend::Zig => "Zig",
+            #[cfg(feature = "mojo")]
             PolyglotBackend::Mojo => "Mojo",
         }
     }
@@ -63,6 +69,7 @@ impl PolyglotQuantizer for PolyglotBackend {
                     Err(st) => Err(format!("C backend encode failed with status {:?}", st)),
                 }
             }
+            #[cfg(feature = "zig")]
             PolyglotBackend::Zig => {
                 let z_res = turbo_quant_zig::ZigQuantizedTensor::encode_v1(data, bits, group_size);
                 match z_res {
@@ -91,6 +98,7 @@ impl PolyglotQuantizer for PolyglotBackend {
                     Err(err) => Err(format!("Nim backend encode failed: {err}")),
                 }
             }
+            #[cfg(feature = "mojo")]
             PolyglotBackend::Mojo => {
                 let m_res = turbo_quant_mojo::MojoQuantizedTensor::encode(data, bits, group_size);
                 match m_res {
@@ -139,6 +147,7 @@ impl PolyglotQuantizer for PolyglotBackend {
                     Err(format!("C backend decode failed with status {:?}", status))
                 }
             }
+            #[cfg(feature = "zig")]
             PolyglotBackend::Zig => {
                 let zt = turbo_quant_zig::ZigQuantizedTensor {
                     shape: tensor.shape.clone(),
@@ -175,6 +184,7 @@ impl PolyglotQuantizer for PolyglotBackend {
                     ))
                 }
             }
+            #[cfg(feature = "mojo")]
             PolyglotBackend::Mojo => {
                 let mt = turbo_quant_mojo::MojoQuantizedTensor {
                     shape: tensor.shape.clone(),

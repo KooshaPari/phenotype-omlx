@@ -16,7 +16,7 @@ fn main() {
     if std::env::var_os("CARGO_CFG_TARGET_OS").as_deref() == Some(std::ffi::OsStr::new("macos")) {
         let target =
             std::env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or_else(|_| "11.0".to_owned());
-        build.flag(&format!("-mmacosx-version-min={target}"));
+        build.flag(format!("-mmacosx-version-min={target}"));
     }
 
     build.compile("turbo_quant_c");

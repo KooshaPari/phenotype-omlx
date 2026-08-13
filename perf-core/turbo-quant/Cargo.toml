@@ -9,6 +9,13 @@ license.workspace = true
 name = "turbo_quant"
 path = "src/lib.rs"
 
+[features]
+default = []
+# Native backends are opt-in: ordinary workspace tests must not require a
+# machine-local Zig object or Mojo shared library.
+zig = ["dep:turbo-quant-zig", "turbo-quant-zig/zig"]
+mojo = ["dep:turbo-quant-mojo", "turbo-quant-mojo/mojo"]
+
 [[bench]]
 name = "echokv_bench"
 harness = false
@@ -21,6 +28,6 @@ half = "2"
 kernel-registry = { path = "../kernel-registry" }
 native-abi = { path = "../native-abi" }
 turbo-quant-c = { path = "../turbo-quant-c" }
-turbo-quant-zig = { path = "../turbo-quant-zig", features = ["zig"] }
+turbo-quant-zig = { path = "../turbo-quant-zig", optional = true }
 turbo-quant-nim = { path = "../turbo-quant-nim" }
-turbo-quant-mojo = { path = "../turbo-quant-mojo" }
+turbo-quant-mojo = { path = "../turbo-quant-mojo", default-features = false, optional = true }
