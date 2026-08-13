@@ -346,7 +346,7 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(policy.decide(&report), DiffusionDispatchDecision::Fallback);
-        let strict = DiffusionRollbackPolicy::bounded(0 + 1, false).unwrap();
+        let strict = DiffusionRollbackPolicy::bounded(1, false).unwrap();
         assert_eq!(strict.decide(&report), DiffusionDispatchDecision::Rollback);
     }
 

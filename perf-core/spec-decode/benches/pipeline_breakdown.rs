@@ -39,7 +39,7 @@ fn bench_pipeline_breakdown(c: &mut Criterion) {
     // 4. Subsequence search
     group.bench_function("find_subseq_1k", |b| {
         let hay: Vec<u32> = (0..1000).collect();
-        let needle = vec![500u32, 501, 502];
+        let needle = [500u32, 501, 502];
         b.iter(|| {
             let mut ml = 0usize;
             let mut s = 0usize;

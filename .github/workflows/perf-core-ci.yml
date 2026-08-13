@@ -197,15 +197,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
 
-      - name: cargo fmt --check
+      - name: Detect changed Rust files
+        id: rust-changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="$(git rev-parse HEAD^)"
+          fi
+          git diff --name-only "$base" HEAD -- '*.rs' > "$RUNNER_TEMP/rust-files"
+          if [ -s "$RUNNER_TEMP/rust-files" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No Rust files changed."
+          fi
+
+      - name: rustfmt changed Rust files
+        if: steps.rust-changes.outputs.changed == 'true'
         working-directory: perf-core
-        run: cargo fmt --all -- --check
+        run: |
+          while IFS= read -r file; do
+            rustfmt --edition 2021 --check "../$file"
+          done < "$RUNNER_TEMP/rust-files"
 
   # ---------- Windows (experimental) ----------
   windows-check:

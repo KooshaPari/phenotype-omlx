@@ -11,14 +11,13 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use concurrent_exec::{
-    ExecBackend, ExecRequest as RustExecRequest, ExecResult as RustExecResult,
-    jetspec::JetSpecBackend, latentmas::LatentMasBackend, plan::AgentId,
-    ssd::SsdBackend, tidar::TidarAgent,
+    jetspec::JetSpecBackend, latentmas::LatentMasBackend, plan::AgentId, ssd::SsdBackend,
+    tidar::TidarAgent, ExecBackend, ExecRequest as RustExecRequest, ExecResult as RustExecResult,
 };
 use spec_decode::{
     backend::{BackendInfo, DraftBackend, NullDraftBackend, TargetBackend, TargetOutput},
-    DraftMode as RustDraftMode, SpecDecodeConfig as RustSpecDecodeConfig,
-    SpecDecodeEngine, build_engine,
+    build_engine, DraftMode as RustDraftMode, SpecDecodeConfig as RustSpecDecodeConfig,
+    SpecDecodeEngine,
 };
 use tree_attention::{tree_causal_mask, TreePlan};
 
@@ -34,12 +33,26 @@ struct PyDraftMode {
 #[pymethods]
 impl PyDraftMode {
     #[staticmethod]
-    fn same_model() -> Self { Self { inner: RustDraftMode::SameModel } }
+    fn same_model() -> Self {
+        Self {
+            inner: RustDraftMode::SameModel,
+        }
+    }
     #[staticmethod]
-    fn draft_model() -> Self { Self { inner: RustDraftMode::DraftModel } }
+    fn draft_model() -> Self {
+        Self {
+            inner: RustDraftMode::DraftModel,
+        }
+    }
     #[staticmethod]
-    fn medusa() -> Self { Self { inner: RustDraftMode::Medusa } }
-    fn __repr__(&self) -> String { format!("{:?}", self.inner) }
+    fn medusa() -> Self {
+        Self {
+            inner: RustDraftMode::Medusa,
+        }
+    }
+    fn __repr__(&self) -> String {
+        format!("{:?}", self.inner)
+    }
 }
 
 #[pyclass]
@@ -63,12 +76,24 @@ impl PySpecDecodeConfig {
         fallback_on_reject: Option<bool>,
     ) -> Self {
         let mut cfg = RustSpecDecodeConfig::default();
-        if let Some(m) = mode { cfg.mode = m.inner; }
-        if let Some(v) = max_draft_tokens { cfg.max_draft_tokens = v; }
-        if let Some(v) = tree_width { cfg.tree_width = v; }
-        if let Some(v) = tree_depth { cfg.tree_depth = v; }
-        if let Some(v) = temperature { cfg.temperature = v; }
-        if let Some(v) = fallback_on_reject { cfg.fallback_on_reject = v; }
+        if let Some(m) = mode {
+            cfg.mode = m.inner;
+        }
+        if let Some(v) = max_draft_tokens {
+            cfg.max_draft_tokens = v;
+        }
+        if let Some(v) = tree_width {
+            cfg.tree_width = v;
+        }
+        if let Some(v) = tree_depth {
+            cfg.tree_depth = v;
+        }
+        if let Some(v) = temperature {
+            cfg.temperature = v;
+        }
+        if let Some(v) = fallback_on_reject {
+            cfg.fallback_on_reject = v;
+        }
         Self { inner: cfg }
     }
 }
@@ -87,7 +112,7 @@ impl MlxTargetBackend {
     /// Build a new MlxTargetBackend from a model id / local path.
     fn build(model_id: &str, kv_cache_kind: Option<String>) -> PyResult<Self> {
         Python::with_gil(|py| {
-            let mlx_lm = py.import("mlx_lm")?;
+            let mlx_lm = py.import_bound("mlx_lm")?;
             let load = mlx_lm.getattr("load")?;
             let pair = load.call1((model_id,))?;
             let model: PyObject = pair.get_item(0)?.into();
@@ -137,11 +162,13 @@ impl TargetBackend for MlxTargetBackend {
 
         tokio::task::spawn_blocking(move || -> Result<TargetOutput, String> {
             Python::with_gil(|py| -> Result<TargetOutput, String> {
-                let mx = py.import("mlx.core")
+                let mx = py
+                    .import_bound("mlx.core")
                     .map_err(|e| format!("import mlx.core: {e}"))?;
-                let ids_py = PyList::new(py, ids.iter().copied());
+                let ids_py = PyList::new_bound(py, ids.iter().copied());
                 // mx.array(ids) -> shape [seq]
-                let prompt = mx.call_method1("array", (ids_py,))
+                let prompt = mx
+                    .call_method1("array", (ids_py,))
                     .map_err(|e| format!("mx.array: {e}"))?;
                 // prompt[None] -> shape [1, seq] for batched forward
                 let none = py.None();
@@ -154,7 +181,7 @@ impl TargetBackend for MlxTargetBackend {
                     .bind(py)
                     .call1((batched,))
                     .map_err(|e| format!("model forward: {e}"))?;
-                let index = PyTuple::new(py, [0_i32, -1_i32]);
+                let index = PyTuple::new_bound(py, [0_i32, -1_i32]);
                 let last = logits
                     .call_method1("__getitem__", (index,))
                     .map_err(|e| format!("logits[0, -1]: {e}"))?;
@@ -172,9 +199,7 @@ impl TargetBackend for MlxTargetBackend {
                 let next_token = logits_vec
                     .iter()
                     .enumerate()
-                    .max_by(|(_, a), (_, b)| {
-                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
-                    })
+                    .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
                     .map(|(i, _)| i as u32)
                     .unwrap_or(0);
 
@@ -215,7 +240,9 @@ impl PyMlxTargetBackend {
     #[pyo3(signature = (model_id, kv_cache_kind=None))]
     fn new(model_id: &str, kv_cache_kind: Option<String>) -> PyResult<Self> {
         let be = MlxTargetBackend::build(model_id, kv_cache_kind)?;
-        Ok(Self { inner: Arc::new(be) })
+        Ok(Self {
+            inner: Arc::new(be),
+        })
     }
 
     fn info_json(&self) -> PyResult<String> {
@@ -348,7 +375,9 @@ struct PyTreePlan {
 impl PyTreePlan {
     #[new]
     fn new(width: usize, depth: usize) -> Self {
-        Self { inner: std::sync::Mutex::new(TreePlan::new(width, depth)) }
+        Self {
+            inner: std::sync::Mutex::new(TreePlan::new(width, depth)),
+        }
     }
     fn total_nodes(&self) -> PyResult<usize> {
         Ok(self.inner.lock().unwrap().total_nodes())
@@ -364,9 +393,9 @@ fn tree_attn_causal_mask(
     offset: usize,
 ) -> PyResult<PyObject> {
     let m = tree_causal_mask(seq_len, tree_width, tree_depth, offset);
-    let outer = pyo3::types::PyList::empty(py);
+    let outer = pyo3::types::PyList::empty_bound(py);
     for row in m {
-        let inner = pyo3::types::PyList::new(py, row.iter().copied());
+        let inner = pyo3::types::PyList::new_bound(py, row.iter().copied());
         outer.append(inner)?;
     }
     Ok(outer.into())
@@ -378,13 +407,16 @@ fn py_to_exec_request(req: &Bound<'_, PyDict>) -> PyResult<RustExecRequest> {
         None => Vec::new(),
     };
     Ok(RustExecRequest {
-        prompt: req.get_item("prompt")?
+        prompt: req
+            .get_item("prompt")?
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("prompt"))?
             .extract()?,
-        max_tokens: req.get_item("max_tokens")?
+        max_tokens: req
+            .get_item("max_tokens")?
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("max_tokens"))?
             .extract()?,
-        temperature: req.get_item("temperature")?
+        temperature: req
+            .get_item("temperature")?
             .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err("temperature"))?
             .extract()?,
         stop,
@@ -392,7 +424,7 @@ fn py_to_exec_request(req: &Bound<'_, PyDict>) -> PyResult<RustExecRequest> {
 }
 
 fn exec_result_to_py(py: Python, r: RustExecResult) -> PyResult<PyObject> {
-    let d = PyDict::new(py);
+    let d = PyDict::new_bound(py);
     d.set_item("text", r.text)?;
     d.set_item("tokens", r.tokens)?;
     d.set_item("elapsed_ms", r.elapsed_ms)?;
@@ -422,7 +454,8 @@ fn run_latentmas(
     let backend = LatentMasBackend::new(n_agents, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;
-    let res = rt.block_on(backend.run(AgentId::new("latentmas"), exec_req))
+    let res = rt
+        .block_on(backend.run(AgentId::new("latentmas"), exec_req))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     exec_result_to_py(py, res)
 }
@@ -440,7 +473,8 @@ fn run_tidar(
     let backend = TidarAgent::drafter(draft_len, diff_steps, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;
-    let res = rt.block_on(backend.run(AgentId::new("tidar"), exec_req))
+    let res = rt
+        .block_on(backend.run(AgentId::new("tidar"), exec_req))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     exec_result_to_py(py, res)
 }
@@ -458,7 +492,8 @@ fn run_jetspec(
     let backend = JetSpecBackend::new(tree_width, tree_depth, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;
-    let res = rt.block_on(backend.run(AgentId::new("jetspec"), exec_req))
+    let res = rt
+        .block_on(backend.run(AgentId::new("jetspec"), exec_req))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     exec_result_to_py(py, res)
 }
@@ -475,7 +510,8 @@ fn run_ssd(
     let backend = SsdBackend::new(gamma, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;
-    let res = rt.block_on(backend.run(AgentId::new("ssd"), exec_req))
+    let res = rt
+        .block_on(backend.run(AgentId::new("ssd"), exec_req))
         .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     exec_result_to_py(py, res)
 }

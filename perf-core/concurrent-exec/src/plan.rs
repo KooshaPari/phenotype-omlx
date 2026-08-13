@@ -167,6 +167,17 @@ pub async fn fan_out(
     Ok(outs)
 }
 
+/// Like `fan_out`, but returns the first `Some(...)` result.
+pub async fn first_success(
+    scheduler: &Scheduler,
+    payload: ExecRequest,
+) -> Result<ExecResult, JobError> {
+    let r = fan_out(scheduler, payload).await?;
+    r.into_iter()
+        .next()
+        .ok_or_else(|| JobError::Backend("no backends registered".into()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,15 +243,4 @@ mod tests {
             Err(JobError::FanoutLimit(1))
         ));
     }
-}
-
-/// Like `fan_out`, but returns the first `Some(...)` result.
-pub async fn first_success(
-    scheduler: &Scheduler,
-    payload: ExecRequest,
-) -> Result<ExecResult, JobError> {
-    let r = fan_out(scheduler, payload).await?;
-    r.into_iter()
-        .next()
-        .ok_or_else(|| JobError::Backend("no backends registered".into()))
 }

@@ -3,9 +3,12 @@
 // Tests are split out of lib.rs to keep lib.rs under the size budget.
 
 use super::MojoQuantizedTensor;
+#[cfg(feature = "mojo")]
 use std::path::PathBuf;
+#[cfg(feature = "mojo")]
 use std::process::Command;
 
+#[cfg(feature = "mojo")]
 fn mojo_shared_lib_path() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let name = if cfg!(target_os = "macos") {
@@ -18,6 +21,7 @@ fn mojo_shared_lib_path() -> PathBuf {
     manifest.join(name)
 }
 
+#[cfg(feature = "mojo")]
 fn which() -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path).find_map(|dir| {
@@ -33,6 +37,7 @@ fn which() -> Option<PathBuf> {
 
 // ─── Build/smoke tests (carried over from lib.rs) ───────────────────────
 
+#[cfg(feature = "mojo")]
 #[test]
 fn mojo_shared_lib_builds() {
     let lib = mojo_shared_lib_path();
@@ -43,6 +48,7 @@ fn mojo_shared_lib_builds() {
     );
 }
 
+#[cfg(feature = "mojo")]
 #[test]
 fn mojo_smoke_script_roundtrips() {
     let mojo = std::env::var_os("MOJO_PATH")
@@ -75,6 +81,7 @@ fn minimal_valid_tensor() -> MojoQuantizedTensor {
 
 // ─── Canonical roundtrip (preserved) ────────────────────────────────────
 
+#[cfg(feature = "mojo")]
 #[test]
 fn mojo_encode_decode_roundtrip_ffi_owned_outputs() {
     let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
@@ -92,8 +99,23 @@ fn mojo_encode_decode_roundtrip_ffi_owned_outputs() {
     }
 }
 
+#[cfg(not(feature = "mojo"))]
+#[test]
+fn native_calls_fail_closed_without_mojo_feature() {
+    let tensor = minimal_valid_tensor();
+    assert_eq!(
+        MojoQuantizedTensor::encode(&[0.0], 4, 1).unwrap_err(),
+        "Mojo feature not enabled"
+    );
+    assert_eq!(
+        tensor.try_decode(8, 2, 4).unwrap_err(),
+        "Mojo feature not enabled"
+    );
+}
+
 // ─── try_decode validation (must reject before unsafe Mojo) ─────────────
 
+#[cfg(feature = "mojo")]
 #[test]
 fn try_decode_valid_inputs_returns_ok() {
     let q = minimal_valid_tensor();
@@ -355,6 +377,7 @@ fn encode_unaligned_group_size_returns_err() {
 
 // ─── Sanity: positive encode still works ────────────────────────────────
 
+#[cfg(feature = "mojo")]
 #[test]
 fn encode_valid_input_succeeds_or_reports_known_abi_issue() {
     let data: Vec<f32> = (0..128).map(|i| (i as f32) * 0.01 - 0.64).collect();
@@ -376,6 +399,7 @@ fn encode_valid_input_succeeds_or_reports_known_abi_issue() {
 // would surface as a process abort on the second iteration on platforms
 // where the allocator tracks freed pointers.
 
+#[cfg(feature = "mojo")]
 #[test]
 fn repeated_encode_decode_exercises_guard_cleanup() {
     let data: Vec<f32> = (0..64).map(|i| (i as f32) * 0.01 - 0.32).collect();

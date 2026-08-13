@@ -16,19 +16,43 @@ pub struct MojoQuantizedTensor {
 
 impl MojoQuantizedTensor {
     pub fn encode(data: &[f32], bits: u8, group_size: usize) -> Result<Self, String> {
-        native::mojo_encode(data, bits, group_size)
+        #[cfg(feature = "mojo")]
+        {
+            native::mojo_encode(data, bits, group_size)
+        }
+        #[cfg(not(feature = "mojo"))]
+        {
+            validation::validate_encode_inputs(data.len(), bits, group_size)?;
+            Err("Mojo feature not enabled".to_string())
+        }
     }
 
     pub fn try_decode(&self, n: usize, group_size: usize, bits: u8) -> Result<Vec<f32>, String> {
-        native::mojo_try_decode(
-            &self.shape,
-            &self.packed,
-            &self.scales,
-            &self.zeros,
-            n,
-            group_size,
-            bits,
-        )
+        #[cfg(feature = "mojo")]
+        {
+            native::mojo_try_decode(
+                &self.shape,
+                &self.packed,
+                &self.scales,
+                &self.zeros,
+                n,
+                group_size,
+                bits,
+            )
+        }
+        #[cfg(not(feature = "mojo"))]
+        {
+            validation::validate_decode_inputs(
+                &self.shape,
+                self.packed.len(),
+                self.scales.len(),
+                self.zeros.len(),
+                n,
+                group_size,
+                bits,
+            )?;
+            Err("Mojo feature not enabled".to_string())
+        }
     }
 
     pub fn decode(&self, n: usize, group_size: usize, bits: u8) -> Vec<f32> {
@@ -108,6 +132,7 @@ pub fn gemv_decode_rust_simd(
     }
 }
 
+#[cfg(feature = "mojo")]
 mod native;
 mod validation;
 

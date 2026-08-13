@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn exported_runners_reject_synthetic_execution() {
         Python::attach(|py| {
-            let request = PyDict::new(py);
+            let request = PyDict::new_bound(py);
             request
                 .set_item("prompt", "must not be fabricated")
                 .expect("request accepts prompt");

@@ -147,6 +147,7 @@ pub(crate) fn validate_decode_inputs(
 
 /// Validate the lengths returned by `tq_mojo_encode` against what Rust expects.
 /// All four returned lengths must be non-negative `isize` and match exactly.
+#[cfg(any(feature = "mojo", test))]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn validate_encode_outputs(
     shape_len: isize,
@@ -194,6 +195,7 @@ pub(crate) fn validate_encode_outputs(
 
 /// Convert a validated non-negative `usize` into `isize` for the FFI boundary.
 /// Returns an error if the value would overflow.
+#[cfg(any(feature = "mojo", test))]
 pub(crate) fn usize_to_isize(name: &str, value: usize) -> Result<isize, String> {
     isize::try_from(value).map_err(|_| format!("{name}: usize value {value} exceeds isize range"))
 }
