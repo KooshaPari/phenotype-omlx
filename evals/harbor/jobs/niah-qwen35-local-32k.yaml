@@ -43,6 +43,6 @@ verifier:
   disable: false
 
 datasets:
-  - path: /Users/kooshapari/CodeProjects/Phenotype/repos/phenotype-omlx/evals/harbor/tasks
+  - path: evals/harbor/tasks
     task_names:
       - omlx-niah-32k-api-smoke
