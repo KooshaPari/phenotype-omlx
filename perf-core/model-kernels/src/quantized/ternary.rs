@@ -160,6 +160,38 @@ pub fn ternary_unpack(
             got: zeros.len(),
         });
     }
+    for (index, &scale) in scales.iter().enumerate() {
+        if !scale.is_finite() {
+            return Err(KernelError::NonFiniteValue {
+                what: "scales",
+                index,
+            });
+        }
+        if scale != 1.0 {
+            return Err(KernelError::OutOfRange {
+                what: "scales",
+                min: 1.0,
+                max: 1.0,
+                got: scale,
+            });
+        }
+    }
+    for (index, &zero) in zeros.iter().enumerate() {
+        if !zero.is_finite() {
+            return Err(KernelError::NonFiniteValue {
+                what: "zeros",
+                index,
+            });
+        }
+        if zero != 0.0 {
+            return Err(KernelError::OutOfRange {
+                what: "zeros",
+                min: 0.0,
+                max: 0.0,
+                got: zero,
+            });
+        }
+    }
     for i in 0..n {
         let byte = packed[i / 4];
         let bit_off = (i % 4) * 2;

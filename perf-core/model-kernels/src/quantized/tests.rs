@@ -118,6 +118,35 @@ fn ternary_unpack_rejects_missing_group_metadata() {
 }
 
 #[test]
+fn ternary_unpack_rejects_noncanonical_group_metadata() {
+    let values = vec![SignedTernary::Pos, SignedTernary::Neg, SignedTernary::Zero];
+    let (packed, mut scales, mut zeros) = ternary_pack(&values, 4).unwrap();
+    let mut out = vec![SignedTernary::Zero; values.len()];
+
+    scales[0] = 0.5;
+    let error = ternary_unpack(&packed, &scales, &zeros, values.len(), 4, &mut out).unwrap_err();
+    assert!(matches!(
+        error,
+        KernelError::OutOfRange {
+            what: "scales",
+            min: 1.0,
+            max: 1.0,
+            got: 0.5,
+        }
+    ));
+
+    zeros[0] = f32::NAN;
+    let error = ternary_unpack(&packed, &[1.0], &zeros, values.len(), 4, &mut out).unwrap_err();
+    assert!(matches!(
+        error,
+        KernelError::NonFiniteValue {
+            what: "zeros",
+            index: 0,
+        }
+    ));
+}
+
+#[test]
 fn subbyte_round_trip_bits_2_3_4() {
     for &bits in &[2u8, 3, 4] {
         let n = 8;
