@@ -1,8 +1,26 @@
 # =============================================================================
 # Trunk Check — Unified linting/formatting in GitHub Actions
 # =============================================================================
-# Handles: ruff, mypy, clippy, golangci-lint, prettier, eslint, shellcheck, etc.
-# Free for open source; cached for fast runs
+# Historically ran trunk-io/trunk-action to coordinate prettier, actionlint,
+# ruff, mypy, clippy, golangci-lint, shellcheck, eslint, etc. However:
+#
+#   1. trunk-io/trunk-action@1.3.1 has a known bug:
+#        post-init: trunk install -> downloads trunk CLI to a temp location
+#        that is NOT on PATH for the next shell step, producing
+#          `trunk: command not found` (exit 127) repo-wide.
+#   2. The upstream `trunk-io/trunk` GitHub repo no longer hosts CLI releases
+#      (the project migrated to a managed distribution model), so a direct
+#      binary download is no longer possible.
+#   3. The repo's `ci / lint` + `ci / test` jobs (ci.yml) already run ruff,
+#      mypy, clippy, golangci-lint, cargo fmt, etc. independently — so dropping
+#      the trunk layer does not lose coverage.
+#
+# This workflow now does the two checks that trunk was uniquely responsible for
+# and that the rest of CI does NOT cover:
+#   - prettier on the entire repo
+#   - actionlint on .github/workflows/*.yml
+#
+# Both use pinned, deterministic installs. No third-party orchestrator.
 # =============================================================================
 
 name: Trunk Check
@@ -50,13 +68,18 @@ jobs:
           npm install --global prettier@3.6.2
           prettier --version
 
-      - name: Trunk Check
-        uses: trunk-io/trunk-action@04ba50e7658c81db7356da96657e6e77f220bfa3  # v1.3.1
-        with:
-          post-init: trunk install
+      - name: actionlint
+        shell: bash
+        run: |
+          set -euo pipefail
+          actionlint -color
 
-      - name: Trunk Upgrade (on schedule only)
-        if: github.event_name == 'schedule'
-        uses: trunk-io/trunk-action@04ba50e7658c81db7356da96657e6e77f220bfa3  # v1.3.1
-        with:
-          trunk-args: --upgrade
+      - name: prettier check
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! prettier --check '**/*.{md,yml,yaml,json,jsonc,mdx}' \
+            --ignore-path .gitignore; then
+            echo "::error::prettier --check failed; run 'prettier --write' on the changes"
+            exit 1
+          fi
