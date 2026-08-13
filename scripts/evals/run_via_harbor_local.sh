@@ -8,6 +8,7 @@ OUT="${HARBOR_LOCAL_OUT:-$ROOT/.runs/harbor-local}"
 HARBOR_ENV="${HARBOR_ENV:-apple-container}"
 HARBOR_UV_BIN="${HARBOR_UV_BIN:-uv}"
 HARBOR_PYTHON_BIN="${HARBOR_PYTHON_BIN:-python3}"
+APPROVED_MODEL="mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
 
 if [[ $# -ne 1 || "$1" != "--niah" ]]; then
   echo "usage: $0 --niah" >&2
@@ -21,21 +22,29 @@ if [[ "$HARBOR_ENV" != "apple-container" ]]; then
   echo "ERROR: HARBOR_ENV must be apple-container" >&2
   exit 2
 fi
-MODEL_LOWER="$(printf '%s' "${OMLX_READY_MODEL:-}" | tr '[:upper:]' '[:lower:]')"
-if [[ -z "${OMLX_READY_MODEL:-}" || "$MODEL_LOWER" != *qwen3.5* ]]; then
-  echo "ERROR: OMLX_READY_MODEL must be an explicit Qwen3.5 model" >&2
+if [[ "${OMLX_READY_MODEL:-}" != "$APPROVED_MODEL" ]]; then
+  echo "ERROR: OMLX_READY_MODEL must equal the approved Qwen3.5 model" >&2
   exit 2
 fi
-if [[ "${OPENAI_BASE_URL:-}" != http*":8766/v1" ]]; then
-  echo "ERROR: OPENAI_BASE_URL must target the dedicated Qwen3.5 Harbor adapter on :8766/v1" >&2
+export OPENAI_MODEL="${OPENAI_MODEL:-$OMLX_READY_MODEL}"
+if [[ "$OPENAI_MODEL" != "$APPROVED_MODEL" ]]; then
+  echo "ERROR: OPENAI_MODEL must equal the approved Qwen3.5 model" >&2
+  exit 2
+fi
+if [[ "${OPENAI_BASE_URL:-}" != "http://host.docker.internal:8766/v1" ]]; then
+  echo "ERROR: OPENAI_BASE_URL must equal the dedicated Qwen3.5 Harbor adapter endpoint" >&2
   exit 2
 fi
 
 # This path is intentionally neither a fallback nor a remote observability run.
 unset LANGFUSE_PUBLIC_KEY LANGFUSE_SECRET_KEY LANGFUSE_BASE_URL LANGFUSE_HOST OBSERVABILITY_BACKEND
-export OPENAI_MODEL="${OPENAI_MODEL:-$OMLX_READY_MODEL}"
 export OPENAI_API_KEY="${OPENAI_API_KEY:-omlx}"
 mkdir -p "$OUT"
+
+"$HARBOR_PYTHON_BIN" "$ROOT/scripts/evals/qwen35_niah_preflight.py" \
+  --job "$ROOT/evals/harbor/jobs/niah-qwen35-local.yaml" --port 8766 \
+  --endpoint "$OPENAI_BASE_URL" --openai-model "$OPENAI_MODEL" \
+  --ready-model "$OMLX_READY_MODEL"
 
 TASK="$ROOT/evals/harbor/tasks/omlx-niah-api-smoke"
 cd "$PORTAGE_ROOT"
