@@ -97,6 +97,8 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "perf-core -> target"
       - name: Detect changed Rust files
         id: rust-changes
         shell: bash
@@ -118,22 +120,21 @@ jobs:
           done < "$RUNNER_TEMP/rust-files"
       - name: cargo clippy
         if: steps.rust-changes.outputs.changed == 'true'
-        run: >-
-          cargo clippy --manifest-path perf-core/Cargo.toml --workspace
-          --all-targets --exclude turbo-quant-mojo \
-          --exclude concurrent-exec-cuda
-          -- -D warnings
+        run: |
+          cargo clippy --manifest-path perf-core/Cargo.toml --workspace \
+            --all-targets --exclude turbo-quant-mojo \
+            --exclude concurrent-exec-cuda -- -D warnings
       - name: cargo build
         if: steps.rust-changes.outputs.changed == 'true'
-        run: >-
-          cargo build --manifest-path perf-core/Cargo.toml --workspace
-          --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
+        run: |
+          cargo build --manifest-path perf-core/Cargo.toml --workspace \
+            --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
       - name: cargo test
         if: steps.rust-changes.outputs.changed == 'true'
-        run: >-
-          cargo test --manifest-path perf-core/Cargo.toml --workspace
-          --exclude turbo-quant-mojo --exclude concurrent-exec-cuda
-          --no-fail-fast
+        run: |
+          cargo test --manifest-path perf-core/Cargo.toml --workspace \
+            --exclude turbo-quant-mojo --exclude concurrent-exec-cuda \
+            --no-fail-fast
 
   cargo-deny:
     name: Cargo Deny (Advisories + Licenses)

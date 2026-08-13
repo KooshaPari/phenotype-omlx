@@ -17,6 +17,10 @@ impl DiffusionVerificationBlock {
     pub const fn len(self) -> usize {
         self.end.saturating_sub(self.start)
     }
+
+    pub const fn is_empty(self) -> bool {
+        self.len() == 0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,7 +68,10 @@ impl fmt::Display for DiffusionSelfVerifyError {
                 )
             }
             Self::InvalidBlockRange { start, end, tokens } => {
-                write!(f, "invalid self-verification block {start}..{end} for {tokens} tokens")
+                write!(
+                    f,
+                    "invalid self-verification block {start}..{end} for {tokens} tokens"
+                )
             }
             Self::DuplicateBlock { start, end } => {
                 write!(
@@ -292,6 +299,13 @@ mod tests {
                 tokens: 8
             }
         );
+    }
+
+    #[test]
+    fn verification_block_empty_tracks_its_saturating_length() {
+        assert!(DiffusionVerificationBlock { start: 4, end: 4 }.is_empty());
+        assert!(DiffusionVerificationBlock { start: 6, end: 4 }.is_empty());
+        assert!(!DiffusionVerificationBlock { start: 4, end: 6 }.is_empty());
     }
 
     #[test]
