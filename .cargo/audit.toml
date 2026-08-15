@@ -1,0 +1,8 @@
+# Cargo audit configuration
+# This file is read by cargo-audit
+
+[advisories]
+ignore = [
+    # Add vulnerability IDs to ignore here
+    # e.g., "RUSTSEC-0000-0000"
+]
