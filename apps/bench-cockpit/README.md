@@ -50,6 +50,27 @@ second → `ours`. All-synthetic reports raise a `synthetic_100pct` lint error.
 
 Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
 
+## Windows (this box)
+
+```powershell
+# launch / reuse (builds once to .run\cockpit.exe, waits for /api/health,
+# writes .run\cockpit.pid, opens the dashboard)
+powershell -ExecutionPolicy Bypass -File scripts\start-dev-windows.ps1
+# or with overrides:
+$env:BENCH_DATA='C:\path\results.json'; $env:BENCH_EXTRA_DATA='C:\path\matrix.json'
+powershell -ExecutionPolicy Bypass -File scripts\start-dev-windows.ps1
+
+# stop the instance started by the script (refuses to touch a :8090 that
+# has no pid file — may belong to another launch path)
+powershell -ExecutionPolicy Bypass -File scripts\stop-dev-windows.ps1
+```
+
+The Go server now auto-resolves data when `-data` is omitted: `BENCH_DATA` env →
+canonical `C:\Users\koosh\pheno-harness\bench\results\minimax-m3-full\matrix.json`
+→ repo `data/` V5 copies → `fixtures/smoke_results.json`; extras default to the
+minimax-m3 matrix (deduped against the resolved data file). `go run .` with no
+flags just works.
+
 ## Suite coverage (stock + experiment arms)
 
 Default load: V5 `stock`/`ours` (10 suites) **plus** `minimax-m3-full/matrix.json`

@@ -756,23 +756,123 @@ func startWatcher(ctx context.Context, hub *Hub, ring *RingBuffer) {
 }
 
 // ---------------------------------------------------------------------------
+// Default data resolution — `go run .` (no flags) must just work on this box.
+// Precedence: -data flag > BENCH_DATA env > canonical pheno-harness results
+// > repo-local data/ copies > fixtures smoke report.
+// ---------------------------------------------------------------------------
+
+// Canonical pheno-harness results that exist on this box. stock-vs-ours was
+// moved out of bench/results, so the minimax-m3 matrix is the live default;
+// repo-local data/ copies cover the V5 stock/ours reports.
+var defaultDataCandidates = []string{
+	`C:\Users\koosh\pheno-harness\bench\results\minimax-m3-full\matrix.json`,
+}
+
+var defaultExtraCandidates = []string{
+	`C:\Users\koosh\pheno-harness\bench\results\minimax-m3-full\matrix.json`,
+}
+
+// repoCandidates maps repo-relative paths onto plausible working roots so the
+// resolver works from the server/ dir (dev) and the exe dir (.run/ deployed),
+// plus their parent dirs (server/ -> ../data, .run/ -> ../data).
+func repoCandidates(rels ...string) []string {
+	var out []string
+	roots := []string{}
+	if wd, err := os.Getwd(); err == nil {
+		roots = append(roots, wd, filepath.Dir(wd))
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		roots = append(roots, exeDir, filepath.Dir(exeDir))
+	}
+	for _, root := range roots {
+		for _, r := range rels {
+			out = append(out, filepath.Join(root, r))
+		}
+	}
+	return out
+}
+
+func firstExisting(paths []string) string {
+	for _, p := range paths {
+		if p == "" {
+			continue
+		}
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
+}
+
+func resolveDataPath() string {
+	if v := os.Getenv("BENCH_DATA"); v != "" {
+		return v
+	}
+	if p := firstExisting(defaultDataCandidates); p != "" {
+		return p
+	}
+	return firstExisting(repoCandidates(
+		"data/run-v5-qwen35-08b.json",
+		"data/run-v5-qwen35-08b-contract.json",
+		"data/run-v5-interim-eval_report_mini.json",
+		"fixtures/smoke_results.json",
+	))
+}
+
+// resolveExtraDefaults: BENCH_EXTRA_DATA > canonical minimax-m3 matrix.
+// A path identical to the resolved data file is skipped (no self-extra);
+// missing paths are dropped here (loadData already warns + skips).
+func resolveExtraDefaults() []string {
+	var out []string
+	if v := os.Getenv("BENCH_EXTRA_DATA"); v != "" {
+		out = append(out, v)
+	}
+	if p := firstExisting(defaultExtraCandidates); p != "" {
+		out = append(out, p)
+	}
+	seen := make(map[string]bool)
+	kept := out[:0]
+	dataAbs, _ := filepath.Abs(dataPath)
+	for _, p := range out {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			abs = p
+		}
+		if seen[abs] {
+			continue
+		}
+		if dataAbs != "" && abs == dataAbs {
+			continue // same file already loaded as -data
+		}
+		seen[abs] = true
+		kept = append(kept, p)
+	}
+	return kept
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 func main() {
 	distPath := flag.String("dist", "../dist", "path to SPA build output directory")
-	flag.StringVar(&dataPath, "data", "", "path to results JSON file (required)")
-	extraFlag := flag.String("extra", "", "comma-separated extra result/matrix JSON paths (or BENCH_EXTRA_DATA)")
+	flag.StringVar(&dataPath, "data", "", "path to results JSON file (auto-resolved if empty)")
+	extraFlag := flag.String("extra", "", "comma-separated extra result/matrix JSON paths (auto-appends BENCH_EXTRA_DATA + canonical minimax-m3)")
 	port := flag.Int("port", 8090, "listen port")
 	flag.Parse()
 
 	if dataPath == "" {
-		log.Fatal("flag -data is required")
+		dataPath = resolveDataPath()
+	}
+	if dataPath == "" {
+		log.Fatal("no results file found: pass -data, set BENCH_DATA, or place a V5 report under data/ or fixtures/")
 	}
 	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
 		log.Fatalf("data file not found: %s", dataPath)
 	}
 	extraPaths = parseExtraPaths(*extraFlag)
+	extraPaths = append(extraPaths, resolveExtraDefaults()...)
 
 	if *distPath != "" {
 		distDir = *distPath
@@ -831,12 +931,21 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 	}
 
+	// Preflight: if another cockpit instance already serves this port, exit
+	// cleanly (rc 0) — the launcher script relies on this to reuse it instead
+	// of spawning a duplicate that dies on bind.
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Printf("cockpit already listening on %s — reusing the existing instance", addr)
+		os.Exit(0)
+	}
+
 	// Start server in a goroutine so we can listen for shutdown.
 	go func() {
 		log.Printf("listening on %s", addr)
 		fmt.Printf("Dashboard -> http://localhost%s\n", addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("listen: %v", err)
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("serve: %v", err)
 		}
 	}()
 

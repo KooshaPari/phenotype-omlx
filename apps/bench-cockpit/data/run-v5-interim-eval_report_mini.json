@@ -1,0 +1,113 @@
+{
+  "contract_version": "0.1",
+  "artifact_kind": "evaluation_report",
+  "schema_hash": "test",
+  "producer": {"repo": "test", "head": "test", "branch": "main", "dirty_paths": [], "host": {}},
+  "run": {
+    "run_id": "00000000-0000-0000-0000-000000000001",
+    "started_at": "2026-01-01T00:00:00Z",
+    "stopped_at": "2026-01-01T00:00:00Z",
+    "variant": "stock",
+    "model": "unknown",
+    "judge_mode": "deterministic",
+    "energy_source": "none",
+    "executed_by": "test",
+    "command": "test",
+    "evidence_label": "reported"
+  },
+  "matrix": {},
+  "suites": [
+    {
+      "suite": "mmlu-pro",
+      "n": 1,
+      "passed": 1,
+      "pass_at_1": 1.0,
+      "evidence_label": "reported",
+      "task_results": [
+        {
+          "task_id": "mmlu-easy-00",
+          "status": "ok",
+          "judge": "deterministic",
+          "wall_clock_s": 1.5,
+          "tokens_in": 10,
+          "tokens_out": 20,
+          "first_token_latency_s": 0.2,
+          "energy_joules": 1.0,
+          "raw_score": 1.0,
+          "failure_reason": ["pass"],
+          "additionalProperties": {
+            "synthetic": true,
+            "model_slug": "qwen35-08b",
+            "tokens_per_second": 40.0,
+            "pass_at_1": 1.0,
+            "partial_credit": 1.0,
+            "judge_score": 0.0,
+            "format_compliance_rate": 1.0,
+            "task_title": "mmlu-easy-00",
+            "task_description": "mmlu-pro multiple-choice knowledge item.",
+            "acceptance": "Reply with the correct letter only.",
+            "rubric": "Reply with the correct letter only.",
+            "prompt": "Which option is correct? A B C D",
+            "reply": "B",
+            "reply_full": "B",
+            "progress_trace": [
+              {"kind": "turn", "turn": 0, "role": "user", "content": "Which option is correct? A B C D"},
+              {"kind": "llm", "model": "qwen35-08b", "tokens_in": 10, "tokens_out": 20},
+              {"kind": "turn", "turn": 1, "role": "assistant", "content": "B"}
+            ],
+            "chat_trace": [
+              {"kind": "turn", "turn": 0, "role": "user", "content": "Which option is correct? A B C D"},
+              {"kind": "llm", "model": "qwen35-08b", "tokens_in": 10, "tokens_out": 20},
+              {"kind": "turn", "turn": 1, "role": "assistant", "content": "B"}
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "suite": "mmlu-pro",
+      "n": 1,
+      "passed": 1,
+      "pass_at_1": 1.0,
+      "evidence_label": "reported",
+      "task_results": [
+        {
+          "task_id": "mmlu-easy-00",
+          "status": "ok",
+          "judge": "deterministic",
+          "wall_clock_s": 1.1,
+          "tokens_in": 10,
+          "tokens_out": 22,
+          "first_token_latency_s": 0.15,
+          "energy_joules": 0.8,
+          "raw_score": 1.0,
+          "failure_reason": ["pass"],
+          "additionalProperties": {
+            "synthetic": true,
+            "model_slug": "qwen35-08b",
+            "tokens_per_second": 70.0,
+            "pass_at_1": 1.0,
+            "partial_credit": 1.0,
+            "judge_score": 0.0,
+            "format_compliance_rate": 1.0,
+            "task_title": "mmlu-easy-00",
+            "task_description": "mmlu-pro multiple-choice knowledge item.",
+            "acceptance": "Reply with the correct letter only.",
+            "rubric": "Reply with the correct letter only.",
+            "prompt": "Which option is correct? A B C D",
+            "reply": "B",
+            "reply_full": "B",
+            "chat_trace": [
+              {"kind": "turn", "turn": 0, "role": "user", "content": "Which option is correct? A B C D"},
+              {"kind": "tool", "tool_name": "lookup", "ok": true},
+              {"kind": "turn", "turn": 1, "role": "assistant", "content": "B"}
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "totals": {"cells": 2, "passed": 2, "pass_at_1": 1.0, "evidence_label": "reported"},
+  "comparator": {},
+  "hash_chain": []
+}
