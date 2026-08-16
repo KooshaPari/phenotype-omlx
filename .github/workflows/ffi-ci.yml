@@ -113,3 +113,44 @@ jobs:
           assert len(decoded) == 3
           assert all(abs(actual - expected) <= 0.14 for actual, expected in zip(decoded, [-1.0, 0.0, 1.0]))
           PY
+
+  ffi-freethreaded:
+    name: Free-threaded CPython 3.14 FFI
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install free-threaded CPython 3.14
+        id: python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14t"
+
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build CPython 3.14t release wheel
+        working-directory: python/ffi
+        run: |
+          python --version
+          python -m pip install --upgrade pip "maturin>=1.9,<2"
+          maturin build --release --locked --features extension-module \
+            --interpreter "${{ steps.python.outputs.python-path }}" \
+            --out ../../dist/ffi-wheels-freethreaded
+
+      - name: Install and exercise the free-threaded wheel
+        working-directory: python/ffi
+        run: |
+          python -m venv .venv-ffi-freethreaded
+          .venv-ffi-freethreaded/bin/python -m pip install --upgrade pip
+          .venv-ffi-freethreaded/bin/python -m pip install --no-deps ../../dist/ffi-wheels-freethreaded/*.whl
+          .venv-ffi-freethreaded/bin/python -X gil=0 - <<'PY'
+          import sys
+          import _perf
+
+          assert not sys._is_gil_enabled()
+          assert _perf.turbo_quant_label_for_bits(4) == "asym4 (K=FP16, V=4bit)"
+          plan = _perf.PyTreePlan(2, 2)
+          assert plan.total_nodes() == 7
+          PY

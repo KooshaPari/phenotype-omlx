@@ -52,15 +52,16 @@ pull_request_rules:
       merge:
         method: squash
 
-  # Add reviewers based on changed paths
-  - name: Request review from team
+  # Personal repositories cannot request organization teams.  For external
+  # contributions, request the repository owner; owner-authored PRs remain
+  # pending an independently requested reviewer and cannot self-approve.
+  - name: Request review from repository owner for external PRs
     conditions:
       - -closed
       - -draft
+      - author != KooshaPari
     actions:
       request_reviews:
-        teams:
-          - phenotype/core
         users:
           - KooshaPari
 
