@@ -1,4 +1,5 @@
 [env]
 # Miniforge on this macOS host exposes only a static libpython, which cannot
-# load a PyO3 Rust test binary. Use the installed framework build for tests.
-PYO3_PYTHON = { value = "/opt/homebrew/opt/python@3.14/bin/python3.14", force = true }
+# load a PyO3 Rust test binary. Use the installed framework build by default,
+# but let Maturin select a requested target interpreter for wheel builds.
+PYO3_PYTHON = { value = "/opt/homebrew/opt/python@3.14/bin/python3.14", force = false }

@@ -28,8 +28,6 @@ fleet-proto = { path = "../../perf-core/fleet-proto" }
 
 [profile.release]
 opt-level = 3
-# Fat LTO produces a CPython 3.14t extension whose init function returns an
-# uninitialized object; thin LTO retains cross-crate optimization and imports.
-lto = "thin"
+lto = true
 codegen-units = 1
 strip = true
