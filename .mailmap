@@ -1,0 +1,26 @@
+# Canonical author attribution
+# Maps bot/auto identities to a single operator identity.
+# Non-destructive: git will render the canonical name without rewriting history.
+KooshaPari <kooshapari@gmail.com>
+KooshaPari <kooshapari@phenotype.ai>
+KooshaPari <kooshapari@phenotype.local>
+KooshaPari <forge@phenotype.dev>
+KooshaPari <forge@KooshaPari.local>
+KooshaPari <forge@phenotype.local>
+KooshaPari <agent@phenotype.local>
+KooshaPari <airlock@phenoforge.local>
+KooshaPari <airlock@phenotype.local>
+KooshaPari <airlock-v2-auto@MacBookPro.lan1.local>
+KooshaPari <autocommit@KooshaPari.dev>
+KooshaPari <ci-fix@tracera.local>
+KooshaPari <claude@anthropic.com>
+KooshaPari <claude@phenotype.ai>
+KooshaPari <claude@phenotype.local>
+KooshaPari <kooshapari@KooshaPari.local>
+KooshaPari <claude@KooshaPari.local>
+KooshaPari <codex-agent@phenotype.local>
+KooshaPari <codex@openai.com>
+KooshaPari <noreply@openai.com>
+KooshaPari <cursoragent@cursor.com>
+KooshaPari <Coral@gastown.local>
+KooshaPari <anthropic-agent@anthropic.local>
