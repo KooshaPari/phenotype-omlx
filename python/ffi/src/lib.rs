@@ -24,7 +24,7 @@ use tree_attention::{tree_causal_mask, TreePlan};
 mod turbo_quant_ffi;
 use turbo_quant_ffi::{turbo_quant_decode, turbo_quant_encode, turbo_quant_label_for_bits};
 
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 struct PyDraftMode {
     inner: RustDraftMode,
@@ -99,10 +99,10 @@ impl PySpecDecodeConfig {
 }
 
 /// Real MLX target backend. Stores the model and EOS token ids as
-/// PyObjects (cloned into spawn_blocking closures via Arc, then
-/// re-acquired under the GIL via `Python::with_gil`).
+/// Python objects (cloned into spawn_blocking closures via Arc, then
+/// re-attached via `Python::attach`).
 struct MlxTargetBackend {
-    model: Arc<PyObject>,
+    model: Arc<Py<PyAny>>,
     model_id: String,
     eos_token_ids: Arc<Vec<u32>>,
     kv_cache_kind: Option<String>,
@@ -111,12 +111,12 @@ struct MlxTargetBackend {
 impl MlxTargetBackend {
     /// Build a new MlxTargetBackend from a model id / local path.
     fn build(model_id: &str, kv_cache_kind: Option<String>) -> PyResult<Self> {
-        Python::with_gil(|py| {
-            let mlx_lm = py.import_bound("mlx_lm")?;
+        Python::attach(|py| {
+            let mlx_lm = py.import("mlx_lm")?;
             let load = mlx_lm.getattr("load")?;
             let pair = load.call1((model_id,))?;
-            let model: PyObject = pair.get_item(0)?.into();
-            let tokenizer: PyObject = pair.get_item(1)?.into();
+            let model: Py<PyAny> = pair.get_item(0)?.into();
+            let tokenizer: Py<PyAny> = pair.get_item(1)?.into();
 
             // Pull EOS token ids from the tokenizer (some tokenizers expose
             // `.eos_token_id`; mlx_lm wraps with a TokenizerWrapper that has
@@ -155,17 +155,18 @@ impl TargetBackend for MlxTargetBackend {
     async fn forward(&self, token_ids: &[u32]) -> Result<TargetOutput, String> {
         // We need to drop the GIL for MLX work and yield back to the
         // tokio runtime so other tasks can run. `spawn_blocking` plus
-        // `Python::with_gil` is the canonical pattern.
+        // `Python::attach` is the canonical pattern.
         let model = Arc::clone(&self.model);
         let eos = Arc::clone(&self.eos_token_ids);
         let ids: Vec<u32> = token_ids.to_vec();
 
         tokio::task::spawn_blocking(move || -> Result<TargetOutput, String> {
-            Python::with_gil(|py| -> Result<TargetOutput, String> {
+            Python::attach(|py| -> Result<TargetOutput, String> {
                 let mx = py
-                    .import_bound("mlx.core")
+                    .import("mlx.core")
                     .map_err(|e| format!("import mlx.core: {e}"))?;
-                let ids_py = PyList::new_bound(py, ids.iter().copied());
+                let ids_py = PyList::new(py, ids.iter().copied())
+                    .map_err(|e| format!("build token id list: {e}"))?;
                 // mx.array(ids) -> shape [seq]
                 let prompt = mx
                     .call_method1("array", (ids_py,))
@@ -181,7 +182,8 @@ impl TargetBackend for MlxTargetBackend {
                     .bind(py)
                     .call1((batched,))
                     .map_err(|e| format!("model forward: {e}"))?;
-                let index = PyTuple::new_bound(py, [0_i32, -1_i32]);
+                let index = PyTuple::new(py, [0_i32, -1_i32])
+                    .map_err(|e| format!("build logits index: {e}"))?;
                 let last = logits
                     .call_method1("__getitem__", (index,))
                     .map_err(|e| format!("logits[0, -1]: {e}"))?;
@@ -228,7 +230,7 @@ impl TargetBackend for MlxTargetBackend {
 }
 
 /// Python wrapper around MlxTargetBackend.
-#[pyclass(name = "MlxTargetBackend")]
+#[pyclass(name = "MlxTargetBackend", from_py_object)]
 #[derive(Clone)]
 struct PyMlxTargetBackend {
     inner: Arc<MlxTargetBackend>,
@@ -391,11 +393,11 @@ fn tree_attn_causal_mask(
     tree_width: usize,
     tree_depth: usize,
     offset: usize,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let m = tree_causal_mask(seq_len, tree_width, tree_depth, offset);
-    let outer = pyo3::types::PyList::empty_bound(py);
+    let outer = pyo3::types::PyList::empty(py);
     for row in m {
-        let inner = pyo3::types::PyList::new_bound(py, row.iter().copied());
+        let inner = pyo3::types::PyList::new(py, row.iter().copied())?;
         outer.append(inner)?;
     }
     Ok(outer.into())
@@ -423,8 +425,8 @@ fn py_to_exec_request(req: &Bound<'_, PyDict>) -> PyResult<RustExecRequest> {
     })
 }
 
-fn exec_result_to_py(py: Python, r: RustExecResult) -> PyResult<PyObject> {
-    let d = PyDict::new_bound(py);
+fn exec_result_to_py(py: Python, r: RustExecResult) -> PyResult<Py<PyAny>> {
+    let d = PyDict::new(py);
     d.set_item("text", r.text)?;
     d.set_item("tokens", r.tokens)?;
     d.set_item("elapsed_ms", r.elapsed_ms)?;
@@ -450,7 +452,7 @@ fn run_latentmas(
     n_agents: usize,
     req: &Bound<'_, PyDict>,
     device: Option<String>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let backend = LatentMasBackend::new(n_agents, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;
@@ -469,7 +471,7 @@ fn run_tidar(
     diff_steps: usize,
     req: &Bound<'_, PyDict>,
     device: Option<String>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let backend = TidarAgent::drafter(draft_len, diff_steps, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;
@@ -488,7 +490,7 @@ fn run_jetspec(
     tree_depth: usize,
     req: &Bound<'_, PyDict>,
     device: Option<String>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let backend = JetSpecBackend::new(tree_width, tree_depth, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;
@@ -506,7 +508,7 @@ fn run_ssd(
     gamma: usize,
     req: &Bound<'_, PyDict>,
     device: Option<String>,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let backend = SsdBackend::new(gamma, device_arc(device));
     let exec_req = py_to_exec_request(req)?;
     let rt = runtime()?;

@@ -32,9 +32,9 @@ pub fn tree_attn_causal_mask(
     offset: usize,
 ) -> PyResult<Py<PyAny>> {
     let mask = tree_causal_mask(seq_len, tree_width, tree_depth, offset);
-    let outer = PyList::empty_bound(py);
+    let outer = PyList::empty(py);
     for row in mask {
-        outer.append(PyList::new_bound(py, row.iter().copied())?)?;
+        outer.append(PyList::new(py, row.iter().copied())?)?;
     }
     Ok(outer.into_any().unbind())
 }

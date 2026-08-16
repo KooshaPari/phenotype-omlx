@@ -17,7 +17,7 @@ default = []
 extension-module = ["pyo3/extension-module"]
 
 [dependencies]
-pyo3 = { version = "0.22", features = ["abi3-py311", "auto-initialize"] }
+pyo3 = { version = "0.29", features = ["abi3-py311", "auto-initialize"] }
 async-trait = "0.1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 spec-decode = { path = "../../perf-core/spec-decode" }
@@ -28,6 +28,8 @@ fleet-proto = { path = "../../perf-core/fleet-proto" }
 
 [profile.release]
 opt-level = 3
-lto = true
+# Fat LTO produces a CPython 3.14t extension whose init function returns an
+# uninitialized object; thin LTO retains cross-crate optimization and imports.
+lto = "thin"
 codegen-units = 1
 strip = true
