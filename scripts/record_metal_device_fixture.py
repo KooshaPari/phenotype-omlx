@@ -22,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from metal_artifact_contract import require_manifest_allows_artifact
+
 FIXTURES = {
     "diffusion": ("diffusion_dispatch", "diffusion_three_stage_fixture_matches_oracle"),
     "ternary-small": ("ternary", "metal_matches_scalar_reference"),
@@ -384,6 +386,7 @@ def record_fixture(
     output = _require_external_output(output, repo_root)
     head, branch = _require_clean_head(repo_root)
     _load_compile_provenance(compile_provenance, head, artifact)
+    require_manifest_allows_artifact(manifest, artifact)
     command, fixed_environment = _fixture_command(repo_root, fixture)
     resource_governor = _require_admissible_resources(
         (resource_observer or _observe_host_resources)()
