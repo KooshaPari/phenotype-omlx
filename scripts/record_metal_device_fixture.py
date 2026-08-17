@@ -22,7 +22,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from metal_artifact_contract import require_manifest_allows_artifact
+if __package__:
+    from .metal_artifact_contract import require_manifest_allows_artifact
+else:
+    from metal_artifact_contract import require_manifest_allows_artifact
 
 FIXTURES = {
     "diffusion": ("diffusion_dispatch", "diffusion_three_stage_fixture_matches_oracle"),
@@ -85,7 +88,9 @@ def _load_compile_provenance(
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise RuntimeError("compile provenance must be readable UTF-8 JSON") from exc
     if not isinstance(document, dict):
-        raise RuntimeError("compile provenance root must be an object")
+        # This is a user-supplied evidence-contract violation; ``main`` maps
+        # RuntimeError to a deterministic nonzero CLI result.
+        raise RuntimeError("compile provenance root must be an object")  # noqa: TRY004
     if (
         document.get("candidate_source_head") != current_head
         or document.get("build_checkout_head") != current_head

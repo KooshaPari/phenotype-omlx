@@ -440,6 +440,91 @@ def test_record_fixture_rejects_a_malformed_unrelated_manifest_entry(
     assert cargo_calls == []
 
 
+def test_record_fixture_accepts_an_uppercase_manifest_digest(tmp_path: Path) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["artifacts"][0]["sha256"] = document["artifacts"][0]["sha256"].upper()
+    manifest.write_text(json.dumps(document) + "\n", encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        return subprocess.CompletedProcess(
+            args[0], 0, stdout="fixture passed", stderr=""
+        )
+
+    record = recorder.record_fixture(
+        repo,
+        provenance,
+        artifact,
+        manifest,
+        output,
+        "diffusion",
+        90,
+        resource_observer=lambda: recorder.ResourceSnapshot(
+            logical_cpu_count=8,
+            load_average_1m=1.0,
+            available_memory_bytes=8 * 1024**3,
+            source="test",
+        ),
+        command_runner=cargo_runner,
+    )
+
+    assert len(cargo_calls) == 1
+    assert (
+        record["metallib_sha256"]
+        == __import__("hashlib").sha256(artifact.read_bytes()).hexdigest()
+    )
+
+
+def test_record_fixture_rejects_a_same_name_wrong_digest_before_cargo(
+    tmp_path: Path,
+) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["artifacts"][0]["sha256"] = "0" * 64
+    manifest.write_text(json.dumps(document) + "\n", encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        raise AssertionError("manifest mismatch must prevent fixture dispatch")
+
+    with pytest.raises(RuntimeError, match="manifest does not allow supplied artifact"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=cargo_runner,
+        )
+
+    assert cargo_calls == []
+
+
+def test_recorder_supports_python_module_invocation() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.record_metal_device_fixture", "--help"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_rejects_compile_provenance_from_a_different_head(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _git_repository(repo)
