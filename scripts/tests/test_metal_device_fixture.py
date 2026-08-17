@@ -15,6 +15,8 @@ RECORDER = ROOT / "scripts" / "record_metal_device_fixture.py"
 
 
 def _load_recorder():
+    if str(RECORDER.parent) not in sys.path:
+        sys.path.insert(0, str(RECORDER.parent))
     spec = importlib.util.spec_from_file_location(
         "record_metal_device_fixture", RECORDER
     )
@@ -63,7 +65,22 @@ def _valid_inputs(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     artifact = tmp_path / "metal-runtime.metallib"
     artifact.write_bytes(b"fixture")
     manifest = tmp_path / "metal-runtime-manifest.json"
-    manifest.write_text('{"artifacts":[]}\n', encoding="utf-8")
+    manifest.write_text(
+        json.dumps(
+            {
+                "artifacts": [
+                    {
+                        "name": artifact.name,
+                        "sha256": __import__("hashlib")
+                        .sha256(artifact.read_bytes())
+                        .hexdigest(),
+                    }
+                ]
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     provenance = tmp_path / "provenance.json"
     provenance.write_text(
         json.dumps(
@@ -307,7 +324,6 @@ def test_preflight_records_missing_fixture_contract_without_dispatch(
             repo,
             output,
             "diffusion",
-
             resource_observer=lambda: recorder.ResourceSnapshot(
                 logical_cpu_count=8,
                 load_average_1m=1.0,
@@ -352,6 +368,209 @@ def test_record_fixture_refuses_a_race_created_output(tmp_path: Path) -> None:
         )
 
     assert output.read_text(encoding="utf-8") == "preserve-raced-evidence"
+
+
+def test_record_fixture_rejects_missing_fixture_contract_before_cargo(
+    tmp_path: Path,
+) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    fixture_source = (
+        repo / "perf-core" / "metal-runtime" / "tests" / "diffusion_dispatch.rs"
+    )
+    fixture_source.write_text("// stale fixture source\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", str(fixture_source)], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-qm", "stale fixture source"],
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
+    provenance_document = json.loads(provenance.read_text(encoding="utf-8"))
+    provenance_document["candidate_source_head"] = head
+    provenance_document["build_checkout_head"] = head
+    provenance.write_text(json.dumps(provenance_document), encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        raise AssertionError("invalid fixture contract must prevent Cargo dispatch")
+
+    with pytest.raises(RuntimeError, match="fixture source contract unavailable"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=cargo_runner,
+        )
+
+    assert cargo_calls == []
+
+
+def test_record_fixture_rejects_unlisted_artifact_before_cargo(tmp_path: Path) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    manifest.write_text('{"artifacts":[]}\n', encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        return subprocess.CompletedProcess(
+            args[0], 0, stdout="fixture passed", stderr=""
+        )
+
+    with pytest.raises(RuntimeError, match="manifest does not allow supplied artifact"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=cargo_runner,
+        )
+
+    assert cargo_calls == []
+
+
+def test_record_fixture_rejects_a_malformed_unrelated_manifest_entry(
+    tmp_path: Path,
+) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["artifacts"].append({"name": "../escape.metallib", "sha256": "0" * 64})
+    manifest.write_text(json.dumps(document) + "\n", encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        return subprocess.CompletedProcess(
+            args[0], 0, stdout="fixture passed", stderr=""
+        )
+
+    with pytest.raises(RuntimeError, match="manifest does not allow supplied artifact"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=cargo_runner,
+        )
+
+    assert cargo_calls == []
+
+
+def test_record_fixture_accepts_an_uppercase_manifest_digest(tmp_path: Path) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["artifacts"][0]["sha256"] = document["artifacts"][0]["sha256"].upper()
+    manifest.write_text(json.dumps(document) + "\n", encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        return subprocess.CompletedProcess(
+            args[0], 0, stdout="fixture passed", stderr=""
+        )
+
+    record = recorder.record_fixture(
+        repo,
+        provenance,
+        artifact,
+        manifest,
+        output,
+        "diffusion",
+        90,
+        resource_observer=lambda: recorder.ResourceSnapshot(
+            logical_cpu_count=8,
+            load_average_1m=1.0,
+            available_memory_bytes=8 * 1024**3,
+            source="test",
+        ),
+        command_runner=cargo_runner,
+    )
+
+    assert len(cargo_calls) == 1
+    assert (
+        record["metallib_sha256"]
+        == __import__("hashlib").sha256(artifact.read_bytes()).hexdigest()
+    )
+
+
+def test_record_fixture_rejects_a_same_name_wrong_digest_before_cargo(
+    tmp_path: Path,
+) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["artifacts"][0]["sha256"] = "0" * 64
+    manifest.write_text(json.dumps(document) + "\n", encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        raise AssertionError("manifest mismatch must prevent fixture dispatch")
+
+    with pytest.raises(RuntimeError, match="manifest does not allow supplied artifact"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=cargo_runner,
+        )
+
+    assert cargo_calls == []
+
+
+def test_recorder_supports_python_module_invocation() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "scripts.record_metal_device_fixture", "--help"],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_rejects_compile_provenance_from_a_different_head(tmp_path: Path) -> None:
