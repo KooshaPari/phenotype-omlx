@@ -190,9 +190,9 @@ jobs:
           while IFS= read -r file; do
             ruff format --check "$file"
           done < "$RUNNER_TEMP/python-files"
-      - name: install project dependencies
+      - name: install project and test dependencies
         if: steps.python-changes.outputs.changed == 'true'
-        run: python -m pip install --quiet -e python
+        run: python -m pip install --quiet -e python pytest
       - name: pytest
         if: steps.python-changes.outputs.changed == 'true'
         run: |
