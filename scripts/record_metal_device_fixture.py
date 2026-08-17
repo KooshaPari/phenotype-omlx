@@ -391,6 +391,7 @@ def record_fixture(
     output = _require_external_output(output, repo_root)
     head, branch = _require_clean_head(repo_root)
     _load_compile_provenance(compile_provenance, head, artifact)
+    _require_fixture_source_contract(repo_root, fixture)
     require_manifest_allows_artifact(manifest, artifact)
     command, fixed_environment = _fixture_command(repo_root, fixture)
     resource_governor = _require_admissible_resources(
