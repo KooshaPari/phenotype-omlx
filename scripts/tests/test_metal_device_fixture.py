@@ -370,6 +370,54 @@ def test_record_fixture_refuses_a_race_created_output(tmp_path: Path) -> None:
     assert output.read_text(encoding="utf-8") == "preserve-raced-evidence"
 
 
+def test_record_fixture_rejects_missing_fixture_contract_before_cargo(
+    tmp_path: Path,
+) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    fixture_source = (
+        repo / "perf-core" / "metal-runtime" / "tests" / "diffusion_dispatch.rs"
+    )
+    fixture_source.write_text("// stale fixture source\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", str(fixture_source)], check=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-qm", "stale fixture source"],
+        check=True,
+    )
+    head = subprocess.check_output(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
+    provenance_document = json.loads(provenance.read_text(encoding="utf-8"))
+    provenance_document["candidate_source_head"] = head
+    provenance_document["build_checkout_head"] = head
+    provenance.write_text(json.dumps(provenance_document), encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        raise AssertionError("invalid fixture contract must prevent Cargo dispatch")
+
+    with pytest.raises(RuntimeError, match="fixture source contract unavailable"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=cargo_runner,
+        )
+
+    assert cargo_calls == []
+
+
 def test_record_fixture_rejects_unlisted_artifact_before_cargo(tmp_path: Path) -> None:
     recorder = _load_recorder()
     repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
