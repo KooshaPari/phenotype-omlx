@@ -51,7 +51,7 @@ def require_manifest_allows_artifact(manifest: Path, artifact: Path) -> None:
         ):
             raise RuntimeError("manifest does not allow supplied artifact")
         names.add(name)
-        if entry == expected:
+        if name == expected["name"] and digest.lower() == expected["sha256"]:
             found = True
     if not found:
         raise RuntimeError("manifest does not allow supplied artifact")
