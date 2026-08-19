@@ -17,6 +17,10 @@ function mean(a: number[]): number {
 function perSuite(cells: Cell[]): Map<string, { stock: Cell[]; ours: Cell[] }> {
   const m = new Map<string, { stock: Cell[]; ours: Cell[] }>();
   for (const c of cells) {
+    // Experiment arms (e.g. minimax-m3 from -extra matrix.json) are not
+    // stock/ours — they render via suiteExtras/byArm below. Indexing the
+    // fixed {stock, ours} bucket with any other variant is undefined.
+    if (c.variant !== 'stock' && c.variant !== 'ours') continue;
     if (!m.has(c.suite)) m.set(c.suite, { stock: [], ours: [] });
     m.get(c.suite)![c.variant as 'stock' | 'ours'].push(c);
   }
@@ -26,6 +30,7 @@ function perSuite(cells: Cell[]): Map<string, { stock: Cell[]; ours: Cell[] }> {
 function perDiff(cells: Cell[]): Map<string, { stock: Cell[]; ours: Cell[] }> {
   const m = new Map<string, { stock: Cell[]; ours: Cell[] }>();
   for (const c of cells) {
+    if (c.variant !== 'stock' && c.variant !== 'ours') continue;
     if (!m.has(c.difficulty)) m.set(c.difficulty, { stock: [], ours: [] });
     m.get(c.difficulty)![c.variant as 'stock' | 'ours'].push(c);
   }
