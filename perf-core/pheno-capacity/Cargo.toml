@@ -1,0 +1,11 @@
+[package]
+name = "pheno-capacity"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Embedded VRAM / model-fit / Chinchilla math (ADR-035A / ADR-006)"
+
+[dependencies]
+
+[dev-dependencies]
