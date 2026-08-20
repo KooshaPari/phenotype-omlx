@@ -44,3 +44,11 @@ rust_out
 
 # Quarantined NIAH scratch (out of envelope)
 research/.archive/*.json
+
+# platform-shell build artifacts (Tauri/bun — local, regenerated)
+apps/platform-shell/node_modules/
+apps/platform-shell/src-tauri/target/
+apps/platform-shell/msi-build.log
+apps/platform-shell/bun.lockb
+apps/bench-cockpit/server/.run_test_bin.exe
+apps/bench-cockpit/server/*.log

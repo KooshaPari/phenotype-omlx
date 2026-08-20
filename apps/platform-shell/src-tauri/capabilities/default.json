@@ -1,0 +1,13 @@
+[
+  {
+    "identifier": "default",
+    "description": "Default platform-shell capabilities",
+    "windows": ["main"],
+    "permissions": [
+      "core:default",
+      "core:window:allow-show",
+      "core:window:allow-close",
+      "core:webview:allow-create-webview-window"
+    ]
+  }
+]
