@@ -50,6 +50,7 @@ def _valid_inputs(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
     )
     fixture_source.parent.mkdir(parents=True)
     fixture_source.write_text(
+        "#[test]\n"
         '#[ignore = "fixture"]\n'
         "fn diffusion_three_stage_fixture_matches_oracle() {}\n"
         "// METAL_RUNTIME_TEST_ARTIFACT METAL_RUNTIME_TEST_MANIFEST\n",
