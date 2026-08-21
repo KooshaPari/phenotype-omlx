@@ -4,6 +4,7 @@
 This is an integrity/provenance gate only. It never downloads weights, imports MLX,
 starts a server, or runs an evaluation.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -11,6 +12,7 @@ import hashlib
 import json
 import os
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -74,6 +76,31 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _write_report_once(output: Path, report: dict[str, Any]) -> None:
+    """Atomically publish one snapshot report without replacing evidence."""
+    if output.exists() or output.is_symlink():
+        raise FileExistsError(f"snapshot report output already exists: {output}")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=output.parent, prefix=f".{output.name}.", suffix=".tmp"
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, output)
+        except FileExistsError as exc:
+            raise FileExistsError(
+                f"snapshot report output already exists: {output}"
+            ) from exc
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _safe_index_path(value: Any) -> str:
     """Return a safe snapshot-relative path or raise on traversal."""
     if not isinstance(value, str) or not value:
@@ -103,10 +130,14 @@ def _safetensors_payload_bytes(path: Path) -> int:
     for name, tensor in metadata.items():
         if name == "__metadata__":
             continue
-        if not isinstance(tensor, dict) or not isinstance(tensor.get("data_offsets"), list):
+        if not isinstance(tensor, dict) or not isinstance(
+            tensor.get("data_offsets"), list
+        ):
             raise ValueError(f"safetensors:invalid_tensor:{name!r}")
         raw_offsets = tensor["data_offsets"]
-        if len(raw_offsets) != 2 or not all(isinstance(item, int) for item in raw_offsets):
+        if len(raw_offsets) != 2 or not all(
+            isinstance(item, int) for item in raw_offsets
+        ):
             raise ValueError(f"safetensors:invalid_offsets:{name!r}")
         start, end = raw_offsets
         if start < 0 or end < start:
@@ -174,7 +205,9 @@ def verify_snapshot(
         except (OSError, ValueError, TypeError) as exc:
             message = str(exc)
             errors.append(
-                message if message.startswith("index:") else f"config:invalid:{type(exc).__name__}"
+                message
+                if message.startswith("index:")
+                else f"config:invalid:{type(exc).__name__}"
             )
 
     index_path = snapshot / "model.safetensors.index.json"
@@ -193,12 +226,19 @@ def verify_snapshot(
             weight_map = index.get("weight_map") or {}
             if not isinstance(weight_map, dict):
                 raise ValueError("index:weight_map_not_object")
-            indexed_files = sorted({_safe_index_path(value) for value in weight_map.values()})
+            indexed_files = sorted(
+                {_safe_index_path(value) for value in weight_map.values()}
+            )
             missing_indexed = [
-                relative for relative in indexed_files if not (snapshot / relative).is_file()
+                relative
+                for relative in indexed_files
+                if not (snapshot / relative).is_file()
             ]
             if missing_indexed:
-                errors.extend(f"index:missing_weight_file:{relative}" for relative in missing_indexed)
+                errors.extend(
+                    f"index:missing_weight_file:{relative}"
+                    for relative in missing_indexed
+                )
             for relative in indexed_files:
                 path = snapshot / relative
                 if path.is_file() and relative not in entries:
@@ -247,12 +287,20 @@ def verify_snapshot(
         except (OSError, ValueError, TypeError) as exc:
             message = str(exc)
             errors.append(
-                message if message.startswith("index:") else f"index:invalid:{type(exc).__name__}"
+                message
+                if message.startswith("index:")
+                else f"index:invalid:{type(exc).__name__}"
             )
     else:
         errors.append("index:missing")
 
-    status = "verified_with_sidecar_scope" if not errors and warnings else "verified" if not errors else "failed"
+    status = (
+        "verified_with_sidecar_scope"
+        if not errors and warnings
+        else "verified"
+        if not errors
+        else "failed"
+    )
     return {
         "schema_version": "0.1",
         "recorded_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
@@ -265,7 +313,9 @@ def verify_snapshot(
             "indexed_files": indexed_files,
             "index_total_size_bytes": index_total,
             "indexed_files_size_bytes": actual_total if index_path.is_file() else None,
-            "indexed_payload_size_bytes": payload_total if index_path.is_file() else None,
+            "indexed_payload_size_bytes": payload_total
+            if index_path.is_file()
+            else None,
             "indexed_payloads_bytes": payload_sizes if index_path.is_file() else {},
             "declared_sidecars": sorted(declared_sidecars),
             "index_scope": index_scope,
@@ -287,7 +337,9 @@ def main(argv: list[str] | None = None) -> int:
         if model_id != "mlx-community/Qwen3.5-0.8B-OptiQ-4bit":
             raise RuntimeError(f"unexpected readiness model: {model_id}")
         cache_root = _cache_root()
-        report = verify_snapshot(_snapshot_dir(model_id, cache_root), model_id, cache_root=cache_root)
+        report = verify_snapshot(
+            _snapshot_dir(model_id, cache_root), model_id, cache_root=cache_root
+        )
     except (OSError, RuntimeError, ValueError) as exc:
         report = {
             "schema_version": "0.1",
@@ -295,10 +347,17 @@ def main(argv: list[str] | None = None) -> int:
             "integrity": {"status": "failed", "errors": [str(exc)]},
             "workload_executed": False,
         }
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps({"status": report["integrity"]["status"], "output": str(args.output)}))
-    return 0 if report["integrity"]["status"] in {"verified", "verified_with_sidecar_scope"} else 1
+    _write_report_once(args.output, report)
+    print(
+        json.dumps(
+            {"status": report["integrity"]["status"], "output": str(args.output)}
+        )
+    )
+    return (
+        0
+        if report["integrity"]["status"] in {"verified", "verified_with_sidecar_scope"}
+        else 1
+    )
 
 
 if __name__ == "__main__":
