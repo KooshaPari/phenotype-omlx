@@ -19,6 +19,7 @@ import harbor_local_provenance
 from harbor_local_provenance import convert_local_harbor_run, main
 
 SOURCE_HEAD = "a" * 40
+APPROVED_MODEL = "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
 
 
 def _write(path: Path, value: dict) -> None:
@@ -66,12 +67,12 @@ def test_local_conversion_preserves_source_and_validates(tmp_path: Path) -> None
     run = _run_dir(tmp_path)
     source = (run / "result.json").read_bytes()
     report, validation = convert_local_harbor_run(
-        run, model="Qwen3.5-0.8B", commit_sha=SOURCE_HEAD
+        run, model=APPROVED_MODEL, commit_sha=SOURCE_HEAD
     )
     assert validation.valid, validation.errors
     assert (run / "result.json").read_bytes() == source
     assert report["telemetry"] == {"mode": "local_only", "remote_exported": False}
-    assert report["run"]["model"] == "Qwen3.5-0.8B"
+    assert report["run"]["model"] == APPROVED_MODEL
     assert report["suites"][0]["evidence_label"] == "live_verified"
     assert (
         report["hash_chain"]["task_ids_sorted_sha256"]
@@ -82,7 +83,7 @@ def test_local_conversion_preserves_source_and_validates(tmp_path: Path) -> None
 def test_local_report_binds_all_required_source_digests(tmp_path: Path) -> None:
     run = _run_dir(tmp_path)
     report, validation = convert_local_harbor_run(
-        run, model="Qwen3.5-0.8B", commit_sha=SOURCE_HEAD
+        run, model=APPROVED_MODEL, commit_sha=SOURCE_HEAD
     )
 
     assert validation.valid, validation.errors
@@ -97,6 +98,9 @@ def test_local_report_binds_all_required_source_digests(tmp_path: Path) -> None:
         == hashlib.sha256(
             harbor_local_provenance.HARBOR_JOB_CONFIG.read_bytes()
         ).hexdigest()
+    )
+    assert provenance["job_yaml"]["path"] == str(
+        REPO_ROOT / "evals" / "harbor" / "jobs" / "niah-qwen35-local.yaml"
     )
     assert (
         provenance["model_config"]["sha256"]
@@ -113,14 +117,25 @@ def test_local_conversion_fails_closed_when_required_model_config_is_missing(
 
     with pytest.raises(FileNotFoundError, match="required provenance source"):
         convert_local_harbor_run(
-            _run_dir(tmp_path), model="Qwen3.5-0.8B", commit_sha=SOURCE_HEAD
+            _run_dir(tmp_path), model=APPROVED_MODEL, commit_sha=SOURCE_HEAD
         )
 
 
 def test_local_conversion_rejects_noncanonical_source_head(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="40-character lowercase Git SHA"):
         convert_local_harbor_run(
-            _run_dir(tmp_path), model="Qwen3.5-0.8B", commit_sha="source-head"
+            _run_dir(tmp_path), model=APPROVED_MODEL, commit_sha="source-head"
+        )
+
+
+def test_local_conversion_rejects_an_unapproved_qwen35_variant(tmp_path: Path) -> None:
+    assert harbor_local_provenance.APPROVED_MODEL == APPROVED_MODEL
+
+    with pytest.raises(ValueError, match="approved Qwen3.5 model"):
+        convert_local_harbor_run(
+            _run_dir(tmp_path),
+            model="mlx-community/Qwen3.5-0.8B-OptiQ-4bit-unapproved",
+            commit_sha=SOURCE_HEAD,
         )
 
 
@@ -138,7 +153,7 @@ def test_cli_refuses_to_overwrite_or_follow_existing_report_output(
             [
                 str(run),
                 "--model",
-                "Qwen3.5-0.8B",
+                APPROVED_MODEL,
                 "--output",
                 str(output),
             ]
@@ -160,7 +175,7 @@ def test_local_conversion_discovers_single_timestamped_job_directory(
     source = (run / "result.json").read_bytes()
 
     report, validation = convert_local_harbor_run(
-        output_root, model="Qwen3.5-0.8B", commit_sha=SOURCE_HEAD
+        output_root, model=APPROVED_MODEL, commit_sha=SOURCE_HEAD
     )
 
     assert validation.valid, validation.errors
@@ -177,13 +192,13 @@ def test_local_conversion_rejects_ambiguous_output_root(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="multiple Harbor job directories"):
         convert_local_harbor_run(
-            output_root, model="Qwen3.5-0.8B", commit_sha=SOURCE_HEAD
+            output_root, model=APPROVED_MODEL, commit_sha=SOURCE_HEAD
         )
 
 
 def test_local_report_has_no_remote_trace_or_session_fields(tmp_path: Path) -> None:
     report, _ = convert_local_harbor_run(
-        _run_dir(tmp_path), model="Qwen3.5-0.8B", commit_sha=SOURCE_HEAD
+        _run_dir(tmp_path), model=APPROVED_MODEL, commit_sha=SOURCE_HEAD
     )
     serialized = json.dumps(report).lower()
     assert "langfuse" not in serialized
