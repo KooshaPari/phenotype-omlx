@@ -18,7 +18,7 @@ from pathlib import Path
 def build_manifest(artifact_dir: Path) -> dict[str, list[dict[str, str]]]:
     artifacts = []
     for path in sorted(artifact_dir.glob("*.metallib"), key=lambda item: item.name):
-        if not path.is_file():
+        if not path.is_file() or path.is_symlink():
             continue
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         artifacts.append({"name": path.name, "sha256": digest})

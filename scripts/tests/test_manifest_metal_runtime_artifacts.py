@@ -37,3 +37,15 @@ def test_manifest_publication_refuses_existing_or_symlink_output(
         module.write_manifest_once(output, module.build_manifest(artifacts))
 
     assert protected.read_text(encoding="utf-8") == "preserve-me"
+
+
+def test_manifest_refuses_symlinked_artifacts(tmp_path: Path) -> None:
+    module = _load_module()
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    outside = tmp_path / "outside.metallib"
+    outside.write_bytes(b"out-of-tree artifact")
+    (artifacts / "fixture.metallib").symlink_to(outside)
+
+    with pytest.raises(SystemExit, match="no .metallib artifacts found"):
+        module.build_manifest(artifacts)
