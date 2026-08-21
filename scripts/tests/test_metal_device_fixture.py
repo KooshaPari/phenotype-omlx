@@ -452,6 +452,43 @@ def test_record_fixture_rejects_unlisted_artifact_before_cargo(tmp_path: Path) -
     assert cargo_calls == []
 
 
+def test_record_fixture_rejects_wrong_digest_for_named_artifact_before_cargo(
+    tmp_path: Path,
+) -> None:
+    recorder = _load_recorder()
+    repo, artifact, manifest, provenance, output = _valid_inputs(tmp_path)
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    document["artifacts"][0]["sha256"] = "0" * 64
+    manifest.write_text(json.dumps(document) + "\n", encoding="utf-8")
+    cargo_calls: list[object] = []
+
+    def cargo_runner(*args, **kwargs):
+        cargo_calls.append((args, kwargs))
+        return subprocess.CompletedProcess(
+            args[0], 0, stdout="fixture passed", stderr=""
+        )
+
+    with pytest.raises(RuntimeError, match="manifest does not allow supplied artifact"):
+        recorder.record_fixture(
+            repo,
+            provenance,
+            artifact,
+            manifest,
+            output,
+            "diffusion",
+            90,
+            resource_observer=lambda: recorder.ResourceSnapshot(
+                logical_cpu_count=8,
+                load_average_1m=1.0,
+                available_memory_bytes=8 * 1024**3,
+                source="test",
+            ),
+            command_runner=cargo_runner,
+        )
+
+    assert cargo_calls == []
+
+
 def test_record_fixture_rejects_a_malformed_unrelated_manifest_entry(
     tmp_path: Path,
 ) -> None:
