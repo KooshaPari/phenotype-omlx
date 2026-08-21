@@ -88,8 +88,7 @@ def _load_compile_provenance(
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
         raise RuntimeError("compile provenance must be readable UTF-8 JSON") from exc
     if not isinstance(document, dict):
-        # This is a user-supplied evidence-contract violation; ``main`` maps
-        # RuntimeError to a deterministic nonzero CLI result.
+        # CLI contract violation; ``main`` maps this to its deterministic exit 2.
         raise RuntimeError("compile provenance root must be an object")  # noqa: TRY004
     if (
         document.get("candidate_source_head") != current_head
@@ -274,16 +273,22 @@ def _fixture_command(repo_root: Path, fixture: str) -> tuple[list[str], dict[str
 
 
 def _require_fixture_source_contract(repo_root: Path, fixture: str) -> None:
-    """Require the exact ignored test and environment interface before admission."""
-
     target, test_name = FIXTURES[fixture]
     source = repo_root / "perf-core" / "metal-runtime" / "tests" / f"{target}.rs"
     try:
         text = source.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         raise RuntimeError("fixture source contract unavailable") from exc
-    required = ("#[ignore", f"fn {test_name}", *FIXTURE_ENVIRONMENT_KEYS[fixture])
-    if any(token not in text for token in required):
+    match = re.search(
+        rf"(?ms)(?P<attributes>(?:\s*#\[[^\n]*\]\s*)*)fn\s+{re.escape(test_name)}\s*\(",
+        text,
+    )
+    if (
+        not match
+        or "#[test]" not in match["attributes"]
+        or not re.search(r"#\[\s*ignore(?:\s|=|\])", match["attributes"])
+        or any(key not in text for key in FIXTURE_ENVIRONMENT_KEYS[fixture])
+    ):
         raise RuntimeError("fixture source contract unavailable")
 
 
