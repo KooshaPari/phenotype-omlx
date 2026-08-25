@@ -68,11 +68,20 @@ def snapshot() -> dict[str, Any]:
 
 
 def publish_local(path: str | Path | None = None) -> Path:
-    """Write heartbeat JSON for hub ingest (MinIO/NATS bridge later)."""
-    out = Path(path or os.environ.get("HWLEDGER_HEARTBEAT_PATH", "platform/federation/out/heartbeat.json"))
+    """Publish one heartbeat without overwriting an existing evidence file."""
+    out = Path(
+        path
+        or os.environ.get(
+            "HWLEDGER_HEARTBEAT_PATH", "platform/federation/out/heartbeat.json"
+        )
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     data = snapshot()
-    out.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    payload = (json.dumps(data, indent=2) + "\n").encode("utf-8")
+    with out.open("xb") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
     return out
 
 
