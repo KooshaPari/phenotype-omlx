@@ -19,8 +19,11 @@ capacity / fleet plane of the same platform.
 Always use **bun** (never npm/yarn/pnpm):
 
 # Prefer V5 EvaluationReport when present; override with BENCH_DATA.
+
 # Clean smoke (no vacuous lint ERROR): BENCH_DATA=fixtures/smoke_results.json …
+
 # Lint detector demo: BENCH_DATA=fixtures/smoke_lint_demo.json …
+
 # Overview shows one Calibration chip (not ERROR banner spam); full lints on Calib view.
 
 ```bash
