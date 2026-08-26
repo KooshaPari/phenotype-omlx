@@ -139,8 +139,17 @@ func TestResolveDataPath_RepoCandidateFallback(t *testing.T) {
 		t.Fatalf("chdir: %v", err)
 	}
 	t.Cleanup(func() { _ = os.Chdir(origWd) })
-	if got := resolveDataPath(); got != candidatePath {
-		t.Fatalf("repo candidate fallback: got %q want %q", got, candidatePath)
+	got := resolveDataPath()
+	gotReal, err := filepath.EvalSymlinks(got)
+	if err != nil {
+		t.Fatalf("resolve path should exist: %v", err)
+	}
+	wantReal, err := filepath.EvalSymlinks(candidatePath)
+	if err != nil {
+		t.Fatalf("candidate path should exist: %v", err)
+	}
+	if gotReal != wantReal {
+		t.Fatalf("repo candidate fallback: got %q want %q", gotReal, wantReal)
 	}
 }
 
