@@ -102,8 +102,8 @@ export default function VerdictStrip({
   statusLevel,
   passAt1Untrusted = false,
 }: VerdictStripProps) {
-  const s = (summary.stock ?? {}) as Record<string, number>;
-  const o = (summary.ours ?? {}) as Record<string, number>;
+  const s = summary.stock ?? EMPTY_VARIANT_SUMMARY;
+  const o = summary.ours ?? EMPTY_VARIANT_SUMMARY;
   const metrics = [...BASE_METRICS, passMetric(passAt1Untrusted, s, o)];
   const passKey = metrics[metrics.length - 1].key;
   const passUntrusted = passAt1Untrusted && passKey === 'pass_at_1';

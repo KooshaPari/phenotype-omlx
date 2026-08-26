@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { useBenchState } from './state/useBenchState';
 import SummaryBar from './components/SummaryBar';
-import VerdictStrip from './components/VerdictStrip';
+import VerdictStrip, { EMPTY_VARIANT_SUMMARY } from './components/VerdictStrip';
 import Overview from './components/Overview';
 import Suites from './components/Suites';
 import CellsTable from './components/CellsTable';
@@ -11,7 +11,6 @@ import Calibration from './components/Calibration';
 import Throughput from './components/Throughput';
 import RLVRPanel from './components/RLVRPanel';
 import Audit from './components/Audit';
-import LangSmithPanel from './components/LangSmithPanel';
 import { LangfusePanel } from './components/LangfusePanel';
 import SuitePage from './components/SuitePage';
 import TaskPage from './components/TaskPage';
@@ -382,8 +381,6 @@ export default function App() {
         return <Audit cells={allCells} seed={selected} />;
       case 'langfuse':
         return <LangfusePanel />;
-      case 'langsmith':
-        return <LangSmithPanel />;
     }
   };
 
@@ -426,10 +423,14 @@ export default function App() {
       <main className="main-panel">
         <div className="top-fixed">
           <VerdictStrip
-            summary={{
-              stock: (summary?.by_variant?.stock ?? {}) as Record<string, number>,
-              ours: (summary?.by_variant?.ours ?? {}) as Record<string, number>,
-            }}
+            summary={
+              summary
+                ? {
+                    stock: summary.by_variant.stock ?? EMPTY_VARIANT_SUMMARY,
+                    ours: summary.by_variant.ours ?? EMPTY_VARIANT_SUMMARY,
+                  }
+                : { stock: EMPTY_VARIANT_SUMMARY, ours: EMPTY_VARIANT_SUMMARY }
+            }
             statusText={statusText}
             statusLevel={statusLevel}
             passAt1Untrusted={(state.payload?.warnings ?? []).some(
@@ -492,7 +493,7 @@ export default function App() {
       />
       <CommandPalette 
         isOpen={paletteOpen}
-        views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit', 'langfuse', 'langsmith']}
+        views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit', 'langfuse']}
         actions={paletteActions}
         cells={cells}
         onSelect={(item) => {
