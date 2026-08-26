@@ -7,6 +7,7 @@ Does not run inference. Emits a JSON heartbeat suitable for
 from __future__ import annotations
 
 import json
+import csv
 import os
 import platform
 import socket
@@ -37,8 +38,8 @@ def _nvidia_smi() -> list[dict[str, str]]:
         except (OSError, subprocess.SubprocessError):
             continue
         gpus = []
-        for line in out.splitlines():
-            parts = [p.strip() for p in line.split(",")]
+        for parts in csv.reader(out.splitlines(), skipinitialspace=True):
+            parts = [p.strip() for p in parts]
             if len(parts) >= 4:
                 gpus.append(
                     {

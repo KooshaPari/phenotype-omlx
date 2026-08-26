@@ -12,5 +12,4 @@ requires    = []
 accelerator = "cpu,cuda,metal,rocm"
 precision   = "n/a"
 kv_cache    = "n/a"
-exists      = false
 best_for    = ["fleet_inventory", "capacity_planning", "control_plane"]

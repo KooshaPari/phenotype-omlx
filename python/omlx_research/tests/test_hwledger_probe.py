@@ -8,6 +8,22 @@ from pathlib import Path
 from omlx_research.nanovm.plugins import hwledger_probe
 
 
+def test_nvidia_smi_parses_quoted_commas(monkeypatch) -> None:
+    monkeypatch.setattr(
+        hwledger_probe.subprocess,
+        "check_output",
+        lambda *args, **kwargs: '"NVIDIA, Test", GPU-uuid, 4096 MiB, 535.1\n',
+    )
+    assert hwledger_probe._nvidia_smi() == [
+        {
+            "name": "NVIDIA, Test",
+            "uuid": "GPU-uuid",
+            "memory_total": "4096 MiB",
+            "driver": "535.1",
+        }
+    ]
+
+
 def test_snapshot_is_inventory_only(monkeypatch) -> None:
     monkeypatch.setattr(hwledger_probe, "_nvidia_smi", list)
     report = hwledger_probe.snapshot()
