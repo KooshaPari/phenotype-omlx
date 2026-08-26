@@ -7,4 +7,5 @@
 **Runtime:** Podman only — never Docker Engine.
 
 **Open (needs Mac online):**
+
 - Pull real V5 EvaluationReport → `apps/bench-cockpit/data` + `BENCH_DATA`

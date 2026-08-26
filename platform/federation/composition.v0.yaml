@@ -9,7 +9,7 @@ metadata:
   description: omlx core + hwLedger probe + cockpit + Langfuse (micro-federated)
 
 environment:
-  platform: windows  # override: linux | darwin
+  platform: windows # override: linux | darwin
   toolkit_version: "0.1.0"
   variables:
     LANGFUSE_BASE_URL: "https://us.cloud.langfuse.com"
@@ -21,7 +21,7 @@ environment:
 runtime:
   provider: podman
   service_lifecycle:
-    status: placeholder  # fail-closed until NanoVMS bridge lands
+    status: placeholder # fail-closed until NanoVMS bridge lands
   wsl:
     distro: Ubuntu-22.04
     status: available
@@ -62,7 +62,16 @@ services:
     kind: service
     description: Eval dashboard :8090
     depends_on: [omlx-core, langfuse-cloud]
-    command: ["go", "run", ".", "-data", "fixtures/smoke_results.json", "-port", "8090"]
+    command:
+      [
+        "go",
+        "run",
+        ".",
+        "-data",
+        "fixtures/smoke_results.json",
+        "-port",
+        "8090",
+      ]
     working_directory: apps/bench-cockpit/server
     cpu: 2
     memory: 2Gi
@@ -80,7 +89,7 @@ services:
       # Never Docker Engine. Win/Linux = Podman; Mac spoke overrides to apple-container.
       HARBOR_ENV: "docker"
       container_runtime: "podman"
-      PORTAGE_COMPAT_EXTERNAL_ENGINE: "docker"  # Harbor token; effective engine = podman
+      PORTAGE_COMPAT_EXTERNAL_ENGINE: "docker" # Harbor token; effective engine = podman
 
 actions:
   - name: cockpit-smoke

@@ -94,6 +94,7 @@ Proven 2026-07-22 tick#5: **fix-git** reward **1.0** (~4m25s) → `out/portage-t
 `uv run harbor run --help` agents include **`terminus` / `terminus-1` / `terminus-2`** and **`openhands` / `openhands-sdk`** (also `nop`, `oracle`, …). **Do not invent** agent names outside that list.
 
 Which `-a` need `-m`:
+
 - **Needs `-m`:** any LLM agent — e.g. `terminus`, `terminus-2`, `openhands` (LiteLLM model string).
 - **No `-m`:** `oracle`, `nop` (path proofs only; not a model cell).
 
@@ -102,6 +103,7 @@ Session hygiene (same as oracle/nop): **TEMP/TMP → `D:\koosh\tmp\harbor-temp`*
 **Agent eval policy (2026-07-23):** **local models only**. Prefer **SGLang Qwen3.5-9B** `@ :30000` over llama.cpp **0.8b** `@ :8000` (0.8b times out on TB2). Omniroute (`:20128`) is **out of scope**.
 
 **Windows launch hygiene (required):**
+
 - `PYTHONUTF8=1` + `PYTHONIOENCODING=utf-8` — Rich Live spinner crashes with `UnicodeEncodeError` on cp1252 when stdout is redirected (harbor exit -1).
 - Prefer a `.cmd` wrapper writing logs to files (see `out/portage-tb2-terminus-local3d/run.cmd`).
 - TEMP/TMP → `D:\koosh\tmp\harbor-temp`; PATH scrub; compose shim; **never Docker Engine**.
