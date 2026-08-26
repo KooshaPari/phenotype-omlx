@@ -6,8 +6,8 @@ Does not run inference. Emits a JSON heartbeat suitable for
 
 from __future__ import annotations
 
-import json
 import csv
+import json
 import os
 import platform
 import socket
