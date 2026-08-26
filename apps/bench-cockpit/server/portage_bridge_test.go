@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -39,10 +40,11 @@ func TestPortageCommandEnvironmentPrependsLocalBin(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin:/bin")
 
 	env := portageCommandEnvironment()
+	want := "PATH=/usr/local/bin" + string(os.PathListSeparator) + "/usr/bin:/bin"
 	for _, entry := range env {
 		if strings.HasPrefix(entry, "PATH=") {
-			if entry != "PATH=/usr/local/bin:/usr/bin:/bin" {
-				t.Fatalf("PATH entry=%q", entry)
+			if entry != want {
+				t.Fatalf("PATH entry=%q want %q", entry, want)
 			}
 			return
 		}
