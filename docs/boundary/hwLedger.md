@@ -1,7 +1,7 @@
 # Boundary: hwLedger (federated service)
 
-**Repo:** `KooshaPari/hwLedger`  
-**Role in synthetic monolith:** spoke / federated service + optional OS GUIs  
+**Repo:** `KooshaPari/hwLedger`
+**Role in synthetic monolith:** spoke / federated service + optional OS GUIs
 **Embed into omlx:** **no** (only `pheno-capacity` math embeds)
 
 ## In
