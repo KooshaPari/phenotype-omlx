@@ -1,29 +1,32 @@
 # phenotype-omlx
 
-**MLX-native, multi-backend, multi-platform OMLX research stack.**
+MLX-native, multi-backend OMLX research stack for local inference and evaluation.
 
-This is the **canonical** Phenotype oMLX repository
-([`KooshaPari/phenotype-omlx`](https://github.com/KooshaPari/phenotype-omlx)).
+> **Fork attribution:** `phenotype-omlx` is KooshaPari's fork of [jundot/omlx](https://github.com/jundot/omlx). Upstream OMLX remains its own project; this repository documents only the extensions maintained in this fork.
 
-| Local path | Role |
-| --- | --- |
-| `repos/phenotype-omlx` | Canonical clone — stay on `main`; pull / merge only |
-| `repos/worktrees/phenotype-omlx/<topic>` | Feature work, quality gates, PR prep |
+## What this fork does
+
+This fork extends the upstream OMLX application with a local research stack for multi-backend inference, policy-driven dispatch, model evaluation, and Rust performance experiments across MLX, Metal, vLLM, TensorRT, SGLang, and llama.cpp.
+
+## Meaningful extensions in this fork
+
+- Rust performance-core workspace for speculative decoding, concurrent execution, TurboQuant, tree attention, and fleet protocol work.
+- Python FFI and research launchers that connect local backends, evaluation surfaces, and agent experiments.
+- Multi-platform client and administration experiments around the upstream application.
+
+## Major capabilities
+
+- Local inference and evaluation across supported backends.
+- Speculative decoding, quantization, concurrent execution, and model-research workflows.
+- Apple-Silicon and Metal kernel experimentation alongside portable Rust/Python integration.
+
+## Quick start
 
 ```bash
-./scripts/worktree_add.sh <topic>   # → worktrees/phenotype-omlx/<topic>
+./scripts/phenotype-omlx-ready
+./cli/bin/omlx-research doctor
+./cli/bin/omlx-research inference --prompt "Hello" --policy auto
 ```
-
-Archived remotes/clones `zz-archive-phenotype-omlx-tmp` and
-`zz-archive-phenotype-omlx-temp` (legacy `phenotype-omlx-tmp` /
-`phenotype-omlx-temp`) are historical only — do not use. Details:
-[`docs/guides/CANONICAL_REPO_CUTOVER.md`](docs/guides/CANONICAL_REPO_CUTOVER.md).
-
-phenotype-omlx is a fork of OMLX (`/Applications/oMLX.app`) that adds
-performance cores, concurrent research agents, multi-backend support
-(MLX / Metal / vLLM / TensorRT / SGLang / llama.cpp), and multi-platform
-clients (macOS / Windows / Linux) on top of the upstream OMLX app.
-
 ## What's in this repo
 
 | Tier | Path | Purpose |
