@@ -2,6 +2,8 @@
 
 MLX-native, multi-backend OMLX research stack for local inference and evaluation.
 
+[![AI slop inside](https://sladge.net/badge.svg)](https://sladge.net) [![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/KooshaPari/phenotype-omlx/total)](https://github.com/KooshaPari/phenotype-omlx/releases)
+
 > **Fork attribution:** `phenotype-omlx` is KooshaPari's fork of [jundot/omlx](https://github.com/jundot/omlx). Upstream OMLX remains its own project; this repository documents only the extensions maintained in this fork.
 
 ## What this fork does
