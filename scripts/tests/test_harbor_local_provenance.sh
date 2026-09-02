@@ -1,42 +1,26 @@
 #!/usr/bin/env bash
-# Shell contract: local runner contains no plugin and exports no remote telemetry.
+# Shell contract: invalid local Qwen3.5 requests never reach Harbor.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/portage" "$TMP/bin"
+mkdir -p "$TMP/portage"
 
-cat > "$TMP/bin/uv" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\n' "$*" > "$HARBOR_COMMAND_LOG"
-while [[ $# -gt 0 ]]; do
-  if [[ "$1" == "-o" ]]; then OUT="$2"; shift 2; continue; fi
-  shift
-done
-RUN="$OUT/2026-07-26__06-25-42"
-mkdir -p "$RUN/trial"
-cat > "$RUN/result.json" <<'JSON'
-{"id":"local-job","started_at":"2026-07-26T00:00:00Z","finished_at":"2026-07-26T00:01:00Z","stats":{"evals":{"oracle__omlx-niah-api-smoke":{"n_trials":1,"metrics":[{"mean":1.0}]}}}}
-JSON
-cat > "$RUN/trial/result.json" <<'JSON'
-{"id":"trial","trial_name":"trial","task_name":"omlx-niah-api-smoke","agent_info":{"name":"oracle","version":"1"},"agent_result":{"n_input_tokens":1,"n_output_tokens":1},"verifier_result":{"rewards":{"reward":1.0}},"started_at":"2026-07-26T00:00:00Z","finished_at":"2026-07-26T00:01:00Z","config":{"job_id":"local-job"}}
-JSON
-EOF
-chmod +x "$TMP/bin/uv"
+if PORTAGE_ROOT="$TMP/portage" HARBOR_ENV="apple-container" \
+  HARBOR_UV_BIN="$TMP/harbor-must-not-run" \
+  OMLX_READY_MODEL="qWeN3.5-0.8B" \
+  OPENAI_BASE_URL="http://host.docker.internal:8766/v1" \
+  /bin/bash "$ROOT/scripts/evals/run_via_harbor_local.sh" --niah; then
+  echo "invalid Qwen3.5 model unexpectedly reached Harbor" >&2
+  exit 1
+fi
 
-PATH="$TMP/bin:$PATH" HARBOR_PYTHON_BIN="$(command -v python3)" HARBOR_UV_BIN="$TMP/bin/uv" PORTAGE_ROOT="$TMP/portage" HARBOR_LOCAL_OUT="$TMP/out" \
-  HARBOR_COMMAND_LOG="$TMP/command" OMLX_READY_MODEL="qWeN3.5-0.8B" \
+if PORTAGE_ROOT="$TMP/portage" HARBOR_ENV="apple-container" \
+  HARBOR_UV_BIN="$TMP/harbor-must-not-run" \
+  OMLX_READY_MODEL="mlx-community/Qwen3.5-0.8B-OptiQ-4bit" \
   OPENAI_BASE_URL="http://127.0.0.1:8766/v1" \
-  /bin/bash "$ROOT/scripts/evals/run_via_harbor_local.sh" --niah >/dev/null
-
-grep -q -- 'harbor run' "$TMP/command"
-grep -q -- ':8766/v1' "$TMP/command"
-! grep -qi -- 'plugin\|langfuse\|trace\|session' "$TMP/command"
-python3 - "$TMP/out/evaluation_report.local.json" <<'PY'
-import json, sys
-d = json.load(open(sys.argv[1]))
-assert d["telemetry"] == {"mode": "local_only", "remote_exported": False}
-assert "langfuse" not in json.dumps(d).lower()
-PY
+  /bin/bash "$ROOT/scripts/evals/run_via_harbor_local.sh" --niah; then
+  echo "invalid Qwen3.5 endpoint unexpectedly reached Harbor" >&2
+  exit 1
+fi

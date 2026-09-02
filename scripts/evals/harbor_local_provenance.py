@@ -21,8 +21,9 @@ from typing import Any
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
-HARBOR_JOB_CONFIG = REPO_ROOT / "evals" / "harbor" / "jobs" / "niah-qwen35.yaml"
+HARBOR_JOB_CONFIG = REPO_ROOT / "evals" / "harbor" / "jobs" / "niah-qwen35-local.yaml"
 MODEL_CONFIG = REPO_ROOT / "config" / "smoke_models.json"
+APPROVED_MODEL = "mlx-community/Qwen3.5-0.8B-OptiQ-4bit"
 sys.path.insert(0, str(SCRIPT_DIR))
 sys.path.insert(0, str(REPO_ROOT / "evals" / "harbor"))
 
@@ -78,8 +79,8 @@ def _top_level_hash(doc: dict[str, Any]) -> str:
 
 
 def _qwen35_only(model: str) -> None:
-    if "qwen3.5" not in model.lower():
-        raise ValueError("local Harbor provenance requires a Qwen3.5 model")
+    if model != APPROVED_MODEL:
+        raise ValueError("local Harbor provenance requires the approved Qwen3.5 model")
 
 
 def _source_head_only(commit_sha: str) -> None:

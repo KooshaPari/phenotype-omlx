@@ -1,0 +1,28 @@
+version: '3'
+
+tasks:
+  ci:
+    desc: "Run local CI checks (mirrors GitHub Actions)"
+    cmds:
+      - ./scripts/ci-local.sh
+
+  lint:
+    cmds:
+      - cargo clippy --workspace -- -D warnings
+
+  test:
+    cmds:
+      - cargo test --workspace
+
+  fmt:
+    cmds:
+      - cargo fmt
+
+  fmt:check:
+    cmds:
+      - cargo fmt --check
+
+  quality:
+    desc: "Run full quality pipeline"
+    cmds:
+      - task: ci
