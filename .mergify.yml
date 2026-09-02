@@ -20,6 +20,28 @@ pull_request_rules:
 
           Co-authored-by: {{ author }}
 
+
+  # Auto-merge owner PRs when CI passes (no self-review required)
+  - name: Auto-merge owner PRs + CI green
+    conditions:
+      - author=KooshaPari
+      - check-success=ci
+      - check-success=lint
+      - check-success=typecheck
+      - check-success=test
+      - -conflict
+      - -closed
+      - -draft
+    actions:
+      merge:
+        method: squash
+        commit_message_template: |
+          {{ title }} (#{{ number }})
+
+          Co-authored-by: {{ author }}
+      post_merge:
+        action: close
+
   # Auto-merge dependabot/Renovate PRs when CI passes
   - name: Auto-merge dependency updates
     conditions:
