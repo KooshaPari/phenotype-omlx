@@ -1,0 +1,115 @@
+# phenocompose.dev/v0 — synthetic monolith stack (hub)
+# Dry-run / planning contract. Aligns with PhenoCompose composition-manifest-v0.
+# Mutating apply stays placeholder until NanoVMS lifecycle is available on this host.
+
+apiVersion: phenocompose.dev/v0
+kind: Composition
+metadata:
+  name: phenotype-synthetic-monolith
+  description: omlx core + hwLedger probe + cockpit + Langfuse (micro-federated)
+
+environment:
+  platform: windows # override: linux | darwin
+  toolkit_version: "0.1.0"
+  variables:
+    LANGFUSE_BASE_URL: "https://us.cloud.langfuse.com"
+    OBSERVABILITY_BACKEND: langfuse
+    PORTAGE_ROOT: "C:/Users/koosh/portage"
+    OMLX_ROOT: "D:/koosh/phenotype-omlx"
+    HWLEDGER_ROOT: "D:/koosh/hwLedger"
+
+runtime:
+  provider: podman
+  service_lifecycle:
+    status: placeholder # fail-closed until NanoVMS bridge lands
+  wsl:
+    distro: Ubuntu-22.04
+    status: available
+
+providers:
+  - name: nanovm
+    status: available
+  - name: langfuse
+    status: available
+  - name: portage
+    status: available
+  - name: hwledger
+    status: available
+  - name: service_lifecycle
+    status: placeholder
+
+services:
+  - name: pheno-capacity
+    kind: embed
+    description: Pure VRAM/fit math (Cargo crate in perf-core)
+    depends_on: []
+
+  - name: omlx-core
+    kind: embed
+    description: perf-core + NanoVM plugin host
+    depends_on: [pheno-capacity]
+
+  - name: hwledger-probe
+    kind: plugin
+    plugin: hwledger-probe
+    description: Device heartbeat → pheno.device.heartbeat
+    depends_on: [omlx-core]
+    health:
+      type: process
+      retries: 3
+
+  - name: bench-cockpit
+    kind: service
+    description: Eval dashboard :8090
+    depends_on: [omlx-core, langfuse-cloud]
+    command:
+      [
+        "go",
+        "run",
+        ".",
+        "-data",
+        "fixtures/smoke_results.json",
+        "-port",
+        "8090",
+      ]
+    working_directory: apps/bench-cockpit/server
+    cpu: 2
+    memory: 2Gi
+
+  - name: langfuse-cloud
+    kind: external
+    description: US cloud Langfuse (Hobby satellite; self-host later)
+    depends_on: []
+
+  - name: portage
+    kind: service
+    description: Harbor adapters for Benchmark×Model×Variant pairings
+    depends_on: [bench-cockpit]
+    environment:
+      # Never Docker Engine. Win/Linux = Podman; Mac spoke overrides to apple-container.
+      HARBOR_ENV: "docker"
+      container_runtime: "podman"
+      PORTAGE_COMPAT_EXTERNAL_ENGINE: "docker" # Harbor token; effective engine = podman
+
+actions:
+  - name: cockpit-smoke
+    service: bench-cockpit
+    command: ["curl", "-sf", "http://127.0.0.1:8090/api/state"]
+    output_root: platform/federation/out/cockpit-smoke
+
+  - name: pairing-tick
+    service: portage
+    command: ["uv", "run", "harbor", "--help"]
+    output_root: platform/federation/out/pairing-tick
+
+teardown_order:
+  - portage
+  - bench-cockpit
+  - hwledger-probe
+  - omlx-core
+  - pheno-capacity
+  - langfuse-cloud
+
+provenance:
+  require_git_sha: true
+  require_langfuse_dataset: true

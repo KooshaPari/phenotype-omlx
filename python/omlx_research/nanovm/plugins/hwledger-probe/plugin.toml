@@ -1,0 +1,15 @@
+[plugin]
+name        = "hwledger-probe"
+kind        = "sidecar"
+module      = "omlx_research.nanovm.plugins.hwledger_probe"
+description = "Federated hwLedger device probe — inventory heartbeat for control-plane (NATS pheno.device.heartbeat)."
+version     = "0.1"
+runtime     = "hwledger"
+priority    = 50
+requires    = []
+
+# Not an inference backend. Discovers GPUs/host and publishes ledger heartbeats.
+accelerator = "cpu,cuda,metal,rocm"
+precision   = "n/a"
+kv_cache    = "n/a"
+best_for    = ["fleet_inventory", "capacity_planning", "control_plane"]
