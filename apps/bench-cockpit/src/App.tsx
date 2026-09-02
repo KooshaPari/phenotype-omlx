@@ -484,13 +484,13 @@ export default function App() {
       <Drawer
         cell={selected}
         paired={pairedCell}
+        metaModel={summary?.meta?.model}
         onClose={() => setSelected(null)}
         onAudit={(c) => {
           setSelected(c);
           dispatch({ type: 'SET_VIEW', view: 'audit' });
         }}
       />
-      
       <CommandPalette 
         isOpen={paletteOpen}
         views={['overview', 'suites', 'cells', 'comparison', 'failures', 'calibration', 'viz', 'throughput', 'rlvr', 'audit', 'langfuse']}

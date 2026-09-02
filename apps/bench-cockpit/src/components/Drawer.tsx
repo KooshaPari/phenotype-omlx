@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Cell } from '../types';
 import TraceView from './TraceView';
+import VramFit from './VramFit';
 
 interface Props {
   cell: Cell | null;
   paired: Cell | null;
+  metaModel?: string;
   onClose: () => void;
   onAudit?: (c: Cell) => void;
 }
 
-export default function Drawer({ cell, paired, onClose, onAudit }: Props) {
+export default function Drawer({ cell, paired, metaModel, onClose, onAudit }: Props) {
   const [showTrace, setShowTrace] = useState(false);
   if (!cell) return null;
 
@@ -78,6 +80,7 @@ export default function Drawer({ cell, paired, onClose, onAudit }: Props) {
           ['Seed', String(cell.seed ?? '—')],
           ['Created', cell.created_at?.slice(0, 19).replace('T', ' ') || '—'],
         ])}
+        <VramFit modelName={cell.model_name || metaModel || undefined} />
         {section('Cost & Tokens', [
           ['Tokens in', String(cell.total_tokens_in)],
           ['Tokens out', String(cell.total_tokens_out)],

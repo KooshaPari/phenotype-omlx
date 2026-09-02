@@ -19,8 +19,11 @@ capacity / fleet plane of the same platform.
 Always use **bun** (never npm/yarn/pnpm):
 
 # Prefer V5 EvaluationReport when present; override with BENCH_DATA.
+
 # Clean smoke (no vacuous lint ERROR): BENCH_DATA=fixtures/smoke_results.json …
+
 # Lint detector demo: BENCH_DATA=fixtures/smoke_lint_demo.json …
+
 # Overview shows one Calibration chip (not ERROR banner spam); full lints on Calib view.
 
 ```bash
@@ -50,6 +53,27 @@ second → `ours`. All-synthetic reports raise a `synthetic_100pct` lint error.
 
 Package manager is pinned via `"packageManager": "bun@…"` in `package.json`.
 
+## Windows (this box)
+
+```powershell
+# launch / reuse (builds once to .run\cockpit.exe, waits for /api/health,
+# writes .run\cockpit.pid, opens the dashboard)
+powershell -ExecutionPolicy Bypass -File scripts\start-dev-windows.ps1
+# or with overrides:
+$env:BENCH_DATA='C:\path\results.json'; $env:BENCH_EXTRA_DATA='C:\path\matrix.json'
+powershell -ExecutionPolicy Bypass -File scripts\start-dev-windows.ps1
+
+# stop the instance started by the script (refuses to touch a :8090 that
+# has no pid file — may belong to another launch path)
+powershell -ExecutionPolicy Bypass -File scripts\stop-dev-windows.ps1
+```
+
+The Go server now auto-resolves data when `-data` is omitted: `BENCH_DATA` env →
+canonical `C:\Users\koosh\pheno-harness\bench\results\minimax-m3-full\matrix.json`
+→ repo `data/` V5 copies → `fixtures/smoke_results.json`; extras default to the
+minimax-m3 matrix (deduped against the resolved data file). `go run .` with no
+flags just works.
+
 ## Suite coverage (stock + experiment arms)
 
 Default load: V5 `stock`/`ours` (10 suites) **plus** `minimax-m3-full/matrix.json`
@@ -62,9 +86,11 @@ BENCH_EXTRA_DATA=/path/to/minimax-m3-full/matrix.json
 bash scripts/start-dev.sh
 ```
 
-Overview → **Suite coverage** table shows paired stock/ours vs partial/missing
-(catalog includes `ycbench` as unimplemented gap). Full stock+ours for every suite
-still requires extending `pheno-harness` `stock_vs_ours.SUITES` and re-running.
+Overview → **Suite coverage** table shows paired stock/ours vs partial/missing.
+`ycbench` was **deferred** out of `KnownSuiteCatalog` (2026-07-22) until a
+Portage/pheno-harness adapter exists — see `DeferredSuites` in `matrix_import.go`.
+Full stock+ours for every suite still requires extending `pheno-harness`
+`stock_vs_ours.SUITES` and re-running.
 
 Agents / MCP / Cloud: `docs/guides/LANGFUSE_AGENTS_AND_SELFHOST.md`.
 Org integrations: `../../docs/guides/LANGFUSE_ORG_INTEGRATIONS.md`.

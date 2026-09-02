@@ -1,9 +1,7 @@
 import React from 'react';
 import { Cell, Summary, SuiteCoverageRow } from '../types';
 import { meanQualityPass, summaryQualityLabel, summaryQualityPass } from '../lib/metrics';
-import { auxRoleLabel, auxVariants, isAblationVariant } from '../lib/arms';
 import { SuiteCoverage } from './SuiteCoverage';
-import { EMPTY_VARIANT_SUMMARY } from './VerdictStrip';
 
 interface Props {
   cells: Cell[];
@@ -19,9 +17,12 @@ function mean(a: number[]): number {
 function perSuite(cells: Cell[]): Map<string, { stock: Cell[]; ours: Cell[] }> {
   const m = new Map<string, { stock: Cell[]; ours: Cell[] }>();
   for (const c of cells) {
+    // Experiment arms (e.g. minimax-m3 from -extra matrix.json) are not
+    // stock/ours — they render via suiteExtras/byArm below. Indexing the
+    // fixed {stock, ours} bucket with any other variant is undefined.
     if (c.variant !== 'stock' && c.variant !== 'ours') continue;
     if (!m.has(c.suite)) m.set(c.suite, { stock: [], ours: [] });
-    m.get(c.suite)![c.variant].push(c);
+    m.get(c.suite)![c.variant as 'stock' | 'ours'].push(c);
   }
   return m;
 }
@@ -31,15 +32,33 @@ function perDiff(cells: Cell[]): Map<string, { stock: Cell[]; ours: Cell[] }> {
   for (const c of cells) {
     if (c.variant !== 'stock' && c.variant !== 'ours') continue;
     if (!m.has(c.difficulty)) m.set(c.difficulty, { stock: [], ours: [] });
-    m.get(c.difficulty)![c.variant].push(c);
+    m.get(c.difficulty)![c.variant as 'stock' | 'ours'].push(c);
   }
   return m;
 }
 
+const emptyVariant = {
+  pass_at_1: 0,
+  gen_ok: 0,
+  verified_pass_at_1: 0,
+  mean_wall_clock_s: 0,
+  mean_partial_credit: 0,
+  mean_format_compliance: 0,
+  n_hallucinations: 0,
+  mean_tokens_read: 0,
+  mean_cost_usd: 0,
+  mean_peak_rss_mb: 0,
+  mean_energy_joules: 0,
+  mean_first_token_ms: 0,
+  mean_retry_count: 0,
+  success_rate: 0,
+  timeout_rate: 0,
+};
+
 export default function Overview({ cells, summary, onJumpToSuite, suiteCoverage }: Props) {
-  const s = summary.by_variant.stock ?? EMPTY_VARIANT_SUMMARY;
-  const o = summary.by_variant.ours ?? EMPTY_VARIANT_SUMMARY;
-  const extraArms = auxVariants(Object.keys(summary.by_variant || {}));
+  const s = summary.by_variant.stock ?? emptyVariant;
+  const o = summary.by_variant.ours ?? emptyVariant;
+  const extraArms = Object.keys(summary.by_variant || {}).filter((v) => v !== 'stock' && v !== 'ours');
   const suites = perSuite(cells);
   const dims = perDiff(cells);
   const DIFFS = ['easy', 'medium', 'hard', 'ultra'];
@@ -91,9 +110,8 @@ export default function Overview({ cells, summary, onJumpToSuite, suiteCoverage 
       </div>
 
       {extraArms.length > 0 && (
-        <p className="muted" style={{ marginBottom: 12 }} data-testid="aux-roles-banner">
-          Auxiliary roles in load (judge / evaluator / distiller — not peer models):{' '}
-          <code className="mono">{extraArms.map(auxRoleLabel).join(', ')}</code>
+        <p className="muted" style={{ marginBottom: 12 }}>
+          Extra experiment arms in load: <code className="mono">{extraArms.join(', ')}</code>
         </p>
       )}
 
@@ -109,7 +127,7 @@ export default function Overview({ cells, summary, onJumpToSuite, suiteCoverage 
           const dWall = oW - sW;
           const cls = dWall < 0 ? 'positive' : dWall > 0 ? 'negative' : 'neutral';
           const suiteExtras = cells.filter(
-            (c) => c.suite === suite && !isAblationVariant(c.variant),
+            (c) => c.suite === suite && c.variant !== 'stock' && c.variant !== 'ours',
           );
           const byArm = new Map<string, Cell[]>();
           for (const c of suiteExtras) {
@@ -119,7 +137,7 @@ export default function Overview({ cells, summary, onJumpToSuite, suiteCoverage 
           }
           return (
             <div key={suite} className="suite-card" onClick={() => onJumpToSuite(suite)}>
-              <div className="suite-name">{suite} <span className="n">{grp.stock.length + grp.ours.length}</span></div>
+              <div className="suite-name">{suite} <span className="n">{grp.stock.length + grp.ours.length + suiteExtras.length}</span></div>
               {grp.stock.length > 0 && (
                 <div className="suite-card-row"><span className="swatch stock" />stock <span className="suite-val">{sW.toFixed(2)}s · {(sP * 100).toFixed(0)}%</span></div>
               )}
@@ -127,11 +145,11 @@ export default function Overview({ cells, summary, onJumpToSuite, suiteCoverage 
                 <div className="suite-card-row"><span className="swatch ours" />ours <span className="suite-val">{oW.toFixed(2)}s · {(oP * 100).toFixed(0)}%</span><span className={`suite-delta ${cls}`}>{dWall >= 0 ? '+' : ''}{dWall.toFixed(2)}s</span></div>
               )}
               {[...byArm.entries()].map(([arm, armCells]) => (
-                <div key={arm} className="suite-card-row suite-aux-row faint">
-                  <span className="swatch" style={{ background: 'var(--muted, #888)', opacity: 0.5 }} />
-                  {auxRoleLabel(arm)}{' '}
+                <div key={arm} className="suite-card-row">
+                  <span className="swatch" style={{ background: 'var(--accent, #6cf)' }} />
+                  {arm}{' '}
                   <span className="suite-val">
-                    {armCells.length} cell{armCells.length === 1 ? '' : 's'} · aux
+                    {mean(armCells.map((c) => c.wall_clock_s)).toFixed(2)}s · {(meanQualityPass(armCells) * 100).toFixed(0)}%
                   </span>
                 </div>
               ))}
